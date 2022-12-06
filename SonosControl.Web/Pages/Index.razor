@@ -1,9 +1,206 @@
 ﻿@page "/"
 
-<PageTitle>Index</PageTitle>
+<PageTitle>Test</PageTitle>
 
-<h1>Hello, world!</h1>
 
-Welcome to your new app.
+@if (_settings is not null)
+{
+    <div class="container">
+        @if (_isPlaying)
+        {
+            <div class="list-group-item">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <strong class="mb-0">Is Playing</strong>
+                        <p class="text-muted mb-0">Click the button to manually stop playing music.</p>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-primary" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i></button>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="list-group-item">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <strong class="mb-0">Playing is paused</strong>
+                        <p class="text-muted mb-0">Click the button to manually start playing music.</p>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-primary" @onclick=@(async ()=>await Play(true))><i class="fa fa-play"></i></button>
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">IP Adress</strong>
+                    <p class="text-muted mb-0">Choose the IP Adress of your Sonos Speaker you want to control.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="text" @bind-value="IP_Adress" @bind-value:event="oninput" minlength="7" maxlength="15" size="15" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$">
+                </div>
+            </div>
+        </div>
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Volume</strong>
+                    <p class="text-muted mb-0">Choose any volume that fits your need.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="number" @bind-value="Volume" @bind-value:event="oninput" />
+                </div>
+            </div>
+        </div>
+        @*<div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Start Time</strong>
+                    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
+                </div>
+            </div>
+        </div>
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Stop Time</strong>
+                    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
+                </div>
+            </div>
+        </div>*@
+    </div>
+}
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+@code {
+    private static SonosSettings? _settings;
+    private static bool _isPlaying;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _settings = await _uow.ISettingsRepo.GetSettings();
+        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+        await SaveSettings();
+        _isPlaying = await IsPlaying();
+    }
+
+    private async Task Play(bool play)
+    {
+        if (play)
+        {
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+        }
+        else
+        {
+            await _uow.ISonosConnectorRepo.PausePlaying(_settings.IP_Adress);
+        }
+        _isPlaying = await IsPlaying();
+    }
+
+    private async Task<bool> IsPlaying()
+    {
+        return await _uow.ISonosConnectorRepo.IsPlaying(_settings!.IP_Adress);
+    }
+
+    private int Volume
+    {
+        get => _settings!.Volume;
+        set
+        {
+            _settings!.Volume = value;
+            _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
+            SaveSettings();
+        }
+    }
+
+    private TimeOnly StartTime
+    {
+        get => _settings!.StartTime;
+        set
+        {
+            _settings!.StartTime = value;
+            SaveSettings();
+        }
+    }
+
+    private TimeOnly StopTime
+    {
+        get => _settings!.StopTime;
+        set
+        {
+            _settings!.StopTime = value;
+            SaveSettings();
+        }
+    }
+
+    private string IP_Adress
+    {
+        get => _settings!.IP_Adress;
+        set
+        {
+            _settings!.IP_Adress = value;
+            SaveSettings();
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        await _uow.ISettingsRepo.WriteSettings(_settings!);
+    }
+}
+
+<style>
+    .container {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    input[type=checkbox] {
+        height: 20px;
+        width: 40px;
+    }
+
+    input:checked {
+        background: #bada55;
+    }
+
+    .data-display {
+        color: black;
+        font-size: large;
+        text-align: center;
+        display: block;
+        margin: 15px;
+    }
+
+    .header-display {
+        color: black;
+        font-weight: bold;
+        font-size: large;
+        text-align: center;
+        margin: 15px;
+    }
+
+    select {
+        margin: 15px;
+        width: 228px;
+        height: 33px;
+    }
+
+    .form-select {
+        margin: 15px;
+        width: 220px;
+        height: 33px;
+    }
+</style>

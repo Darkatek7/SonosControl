@@ -18,7 +18,7 @@ namespace SonosControl.DAL.Repos
         public async Task<SonosSettings?> GetSettings()
         {
             if (!File.Exists("./Data/config.json"))
-                return null;
+                return new();
 
             var jsonString = await File.ReadAllTextAsync("./Data/config.json");
             return JsonConvert.DeserializeObject<SonosSettings?>(jsonString);
