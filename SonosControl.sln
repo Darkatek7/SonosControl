@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33103.184
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonosControl.Web", "SonosControl.Web\SonosControl.Web.csproj", "{FDE357D3-3F16-46D3-9256-8692636D0212}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonosControl.DAL", "SonosControl.DAL\SonosControl.DAL.csproj", "{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FDE357D3-3F16-46D3-9256-8692636D0212}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDE357D3-3F16-46D3-9256-8692636D0212}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDE357D3-3F16-46D3-9256-8692636D0212}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDE357D3-3F16-46D3-9256-8692636D0212}.Release|Any CPU.Build.0 = Release|Any CPU
+		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5355A133-6E72-4987-A6D3-EE908821E155}
+	EndGlobalSection
+EndGlobal
