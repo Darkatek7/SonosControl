@@ -4,5 +4,6 @@
     {
         ISettingsRepo ISettingsRepo { get; }
         ISonosConnectorRepo ISonosConnectorRepo { get; }
+        IHolidayRepo IHolidayRepo { get; }
     }
 }
