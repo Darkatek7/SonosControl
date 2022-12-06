@@ -2,6 +2,6 @@
 {
     public interface IHolidayRepo
     {
-        Task GetHolidays();
+        Task<bool> IsHoliday();
     }
 }
