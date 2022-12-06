@@ -58,27 +58,27 @@
             </div>
         </div>
         @*<div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Start Time</strong>
-                    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
-                </div>
-            </div>
-        </div>
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Stop Time</strong>
-                    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
-                </div>
-            </div>
-        </div>*@
+    <div class="row align-items-center">
+    <div class="col">
+    <strong class="mb-0">Start Time</strong>
+    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
+    </div>
+    <div class="col-auto">
+    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
+    </div>
+    </div>
+    </div>
+    <div class="list-group-item">
+    <div class="row align-items-center">
+    <div class="col">
+    <strong class="mb-0">Stop Time</strong>
+    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
+    </div>
+    <div class="col-auto">
+    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
+    </div>
+    </div>
+    </div>*@
     </div>
 }
 
@@ -90,6 +90,10 @@
     {
         await base.OnInitializedAsync();
         _settings = await _uow.ISettingsRepo.GetSettings();
+
+        if (_settings.IP_Adress is "10.0.0.0")
+            return;
+
         _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
         await SaveSettings();
         _isPlaying = await IsPlaying();
