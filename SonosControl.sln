@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33103.184
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonosControl.Web", "SonosControl.Web\SonosControl.Web.csproj", "{FDE357D3-3F16-46D3-9256-8692636D0212}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SonosControl.Web", "SonosControl.Web\SonosControl.Web.csproj", "{FDE357D3-3F16-46D3-9256-8692636D0212}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonosControl.DAL", "SonosControl.DAL\SonosControl.DAL.csproj", "{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SonosControl.DAL", "SonosControl.DAL\SonosControl.DAL.csproj", "{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SonosControl.Testing", "SonosControl.Testing\SonosControl.Testing.csproj", "{A2C61640-5E9B-48DB-9E34-4D1946FF911A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{62A00D90-2FC3-4F10-9663-B7C24E96D1AF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2C61640-5E9B-48DB-9E34-4D1946FF911A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2C61640-5E9B-48DB-9E34-4D1946FF911A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2C61640-5E9B-48DB-9E34-4D1946FF911A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2C61640-5E9B-48DB-9E34-4D1946FF911A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

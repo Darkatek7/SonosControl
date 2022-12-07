@@ -39,7 +39,7 @@
             <div class="row align-items-center">
                 <div class="col">
                     <strong class="mb-0">IP Adress</strong>
-                    <p class="text-muted mb-0">Choose the IP Adress of your Sonos Speaker you want to control.</p>
+                    <p class="text-muted mb-0">Choose the IP Adress of your Sonos Speaker.</p>
                 </div>
                 <div class="col-auto">
                     <input type="text" @bind-value="IP_Adress" @bind-value:event="oninput" minlength="7" maxlength="15" size="15" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$">
@@ -57,41 +57,41 @@
                 </div>
             </div>
         </div>
-        @*<div class="list-group-item">
-    <div class="row align-items-center">
-    <div class="col">
-    <strong class="mb-0">Start Time</strong>
-    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
-    </div>
-    <div class="col-auto">
-    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
-    </div>
-    </div>
-    </div>
-    <div class="list-group-item">
-    <div class="row align-items-center">
-    <div class="col">
-    <strong class="mb-0">Stop Time</strong>
-    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
-    </div>
-    <div class="col-auto">
-    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
-    </div>
-    </div>
-    </div>*@
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Start Time</strong>
+                    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
+                </div>
+            </div>
+        </div>
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Stop Time</strong>
+                    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
+                </div>
+            </div>
+        </div>
     </div>
 }
 
 @code {
-    private static SonosSettings? _settings;
-    private static bool _isPlaying;
+    private SonosSettings? _settings;
+    private bool _isPlaying;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
         _settings = await _uow.ISettingsRepo.GetSettings();
 
-        if (_settings.IP_Adress is "10.0.0.0")
+        if (_settings!.IP_Adress is "10.0.0.0")
             return;
 
         _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
@@ -103,13 +103,15 @@
     {
         if (play)
         {
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
         }
         else
         {
-            await _uow.ISonosConnectorRepo.PausePlaying(_settings.IP_Adress);
+            await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
         }
+
         _isPlaying = await IsPlaying();
+        StateHasChanged();
     }
 
     private async Task<bool> IsPlaying()

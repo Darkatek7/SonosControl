@@ -1,5 +1,6 @@
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
+using SonosControl.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
+
+builder.Services.AddHostedService<SonosControlService>();
+builder.Services.AddSingleton<SonosControlService>();
 
 var app = builder.Build();
 

@@ -27,7 +27,15 @@ namespace SonosControl.DAL.Repos
         public async Task<bool> IsPlaying(string ip)
         {
             SonosController controller = new SonosControllerFactory().Create(ip);
-            return await controller.GetIsPlayingAsync();
+            bool result = false;
+
+            try
+            {
+                result = await controller.GetIsPlayingAsync();
+            }
+            catch { }
+
+            return result;
         }
 
         public async Task<int> GetVolume(string ip)

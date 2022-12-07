@@ -16,8 +16,4 @@
     <ProjectReference Include="..\SonosControl.DAL\SonosControl.DAL.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Services\" />
-  </ItemGroup>
-
 </Project>
