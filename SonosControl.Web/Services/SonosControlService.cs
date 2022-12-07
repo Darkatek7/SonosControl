@@ -41,7 +41,9 @@ namespace SonosControl.Web.Services
             }
             else
             {
-                Task.Delay(timeDifference).Wait();
+                var delayInMs = int.Parse(timeDifference.TotalMilliseconds.ToString().Substring(0, timeDifference.TotalMilliseconds.ToString().IndexOf(",") + 1).Replace(",", ""));
+
+                Task.Delay(delayInMs).Wait();
                 await _uow.ISonosConnectorRepo.StartPlaying(ip);
             }
         }
@@ -57,7 +59,9 @@ namespace SonosControl.Web.Services
             }
             else
             {
-                Task.Delay(timeDifference).Wait();
+                var delayInMs = int.Parse(timeDifference.TotalMilliseconds.ToString().Substring(0, timeDifference.TotalMilliseconds.ToString().IndexOf(",") + 1).Replace(",", ""));
+
+                Task.Delay(delayInMs).Wait();
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
             }
         }
