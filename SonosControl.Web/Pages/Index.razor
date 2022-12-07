@@ -1,7 +1,6 @@
 ﻿@page "/"
 
-<PageTitle>Test</PageTitle>
-
+<PageTitle>Sonos Control</PageTitle>
 
 @if (_settings is not null)
 {
@@ -15,7 +14,7 @@
                         <p class="text-muted mb-0">Click the button to manually stop playing music.</p>
                     </div>
                     <div class="col-auto">
-                        <button class="btn btn-primary" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i></button>
+                        <button class="btn btn-outline-primary" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i></button>
                     </div>
                 </div>
             </div>
@@ -29,7 +28,7 @@
                         <p class="text-muted mb-0">Click the button to manually start playing music.</p>
                     </div>
                     <div class="col-auto">
-                        <button class="btn btn-primary" @onclick=@(async ()=>await Play(true))><i class="fa fa-play"></i></button>
+                        <button class="btn btn-outline-primary" @onclick=@(async ()=>await Play(true))><i class="fa fa-play"></i></button>
                     </div>
                 </div>
             </div>
@@ -42,7 +41,7 @@
                     <p class="text-muted mb-0">Choose the IP Adress of your Sonos Speaker.</p>
                 </div>
                 <div class="col-auto">
-                    <input type="text" @bind-value="IP_Adress" @bind-value:event="oninput" minlength="7" maxlength="15" size="15" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$">
+                    <input type="text" class="form-control" @bind-value="IP_Adress" @bind-value:event="oninput" minlength="7" maxlength="15" size="15" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$">
                 </div>
             </div>
         </div>
@@ -53,7 +52,7 @@
                     <p class="text-muted mb-0">Choose any volume that fits your need.</p>
                 </div>
                 <div class="col-auto">
-                    <input type="number" @bind-value="Volume" @bind-value:event="oninput" />
+                    <input type="number" class="form-control" max="100" min="1" @bind-value="Volume" @bind-value:event="oninput" />
                 </div>
             </div>
         </div>
@@ -64,7 +63,7 @@
                     <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
                 </div>
                 <div class="col-auto">
-                    <input type="time" @bind-value="StartTime" @bind-value:event="oninput" />
+                    <input type="time" class="form-control" @bind-value="StartTime" @bind-value:event="oninput" />
                 </div>
             </div>
         </div>
@@ -75,7 +74,7 @@
                     <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
                 </div>
                 <div class="col-auto">
-                    <input type="time" @bind-value="StopTime" @bind-value:event="oninput" />
+                    <input type="time" class="form-control" @bind-value="StopTime" @bind-value:event="oninput" />
                 </div>
             </div>
         </div>
