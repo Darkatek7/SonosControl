@@ -70,6 +70,11 @@ namespace SonosControl.Web.Services
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
                 Console.WriteLine("Paused Playing");
             }
+
+            timeDifference = new TimeOnly(23, 59, 59, 999, 999) - timeNow;
+            var delay = (int)timeDifference.TotalMilliseconds;
+            Console.WriteLine("Waiting until next Day before Playing again");
+            Task.Delay(delay).Wait();
         }
     }
 }
