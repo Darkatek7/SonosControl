@@ -38,13 +38,16 @@ namespace SonosControl.Web.Services
             if (startTime <= timeNow)
             {
                 await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                Console.WriteLine("Started Playing");
             }
             else
             {
                 var delayInMs = (int)timeDifference.TotalMilliseconds;
 
+                Console.WriteLine("Starting in " + delayInMs + " ms.");
                 Task.Delay(delayInMs).Wait();
                 await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                Console.WriteLine("Started Playing");
             }
         }
 
@@ -56,13 +59,16 @@ namespace SonosControl.Web.Services
             if (stopTime <= timeNow)
             {
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                Console.WriteLine("Paused Playing");
             }
             else
             {
                 var delayInMs = (int)timeDifference.TotalMilliseconds;
 
+                Console.WriteLine("Running for "+ delayInMs+" ms.");
                 Task.Delay(delayInMs).Wait();
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                Console.WriteLine("Paused Playing");
             }
         }
     }
