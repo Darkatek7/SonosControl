@@ -8,6 +8,7 @@ EXPOSE 443
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["SonosControl.Web/SonosControl.Web.csproj", "SonosControl.Web/"]
+COPY ["SonosControl.DAL/SonosControl.DAL.csproj", "SonosControl.DAL/"]
 RUN dotnet restore "SonosControl.Web/SonosControl.Web.csproj"
 COPY . .
 WORKDIR "/src/SonosControl.Web"
