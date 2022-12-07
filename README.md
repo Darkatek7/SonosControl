@@ -15,8 +15,8 @@ services:
     ports:
       - 80:80                                   # port used for localhost ip
     restart: unless-stopped                     # restart policy
-    # environment:
-    #   - TZ:"Europe/Vienna"
+    environment:
+      - TZ:"Europe/Vienna"
     volumes:
       - ./Data:/app/Data
 ```
