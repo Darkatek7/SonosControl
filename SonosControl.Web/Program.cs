@@ -31,4 +31,9 @@ app.UseRouting();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
+app.UseRequestLocalization(new RequestLocalizationOptions()
+    .AddSupportedCultures(new[] { "de-AT", "en-US" })
+    .AddSupportedUICultures(new[] { "de-AT", "en-US" })
+    .SetDefaultCulture("de-AT"));
+
 app.Run();

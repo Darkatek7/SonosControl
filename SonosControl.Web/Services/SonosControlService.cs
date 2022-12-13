@@ -17,37 +17,56 @@ namespace SonosControl.Web.Services
             {
                 var settings = await _uow.ISettingsRepo.GetSettings();
 
-                await StartSpeaker(settings!.IP_Adress, settings!.StartTime);
+                await WaitUntilStartTime(settings!.StartTime, settings!.StopTime);
+
+                await StartSpeaker(settings!.IP_Adress);
 
                 await StopSpeaker(settings!.IP_Adress, settings!.StopTime);
             }
         }
 
-        private async Task StartSpeaker(string ip, TimeOnly startTime)
+        private async Task StartSpeaker(string ip)
         {
             DayOfWeek day = DateTime.Now.DayOfWeek;
 
             if (await _uow.IHolidayRepo.IsHoliday() || (day == DayOfWeek.Saturday) || (day == DayOfWeek.Sunday))
             {
+                if (await _uow.IHolidayRepo.IsHoliday())
+                {
+                    Console.WriteLine("Today is a holiday!");
+                }
+                else if ((day == DayOfWeek.Saturday))
+                {
+                    Console.WriteLine("Today is a Saturday!");
+                }
+                else if ((day == DayOfWeek.Sunday))
+                {
+                    Console.WriteLine("Today is a Sunday!");
+                }
                 return;
             }
 
+            await _uow.ISonosConnectorRepo.StartPlaying(ip);
+            Console.WriteLine("Started Playing");
+        }
+
+        private async Task WaitUntilStartTime(TimeOnly start, TimeOnly stop)
+        {
             TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
-            var timeDifference = startTime - timeNow;
+            var timeDifference = start - timeNow;
 
-            if (startTime <= timeNow)
+            if (timeNow >= stop || start >= timeNow)
             {
-                await _uow.ISonosConnectorRepo.StartPlaying(ip);
-                Console.WriteLine("Started Playing");
-            }
-            else
-            {
-                var delayInMs = (int)timeDifference.TotalMilliseconds;
+                var ms = (int)timeDifference.TotalMilliseconds;
+                TimeSpan t = TimeSpan.FromMilliseconds(ms);
+                string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
+                        t.Hours,
+                        t.Minutes,
+                        t.Seconds,
+                        t.Milliseconds);
 
-                Console.WriteLine("Starting in " + delayInMs + " ms.");
-                Task.Delay(delayInMs).Wait();
-                await _uow.ISonosConnectorRepo.StartPlaying(ip);
-                Console.WriteLine("Started Playing");
+                Console.WriteLine("Starting in " + delayInMs);
+                Task.Delay(ms).Wait();
             }
         }
 
@@ -63,18 +82,20 @@ namespace SonosControl.Web.Services
             }
             else
             {
-                var delayInMs = (int)timeDifference.TotalMilliseconds;
+                var ms = (int)timeDifference.TotalMilliseconds;
+                TimeSpan t = TimeSpan.FromMilliseconds(ms);
+                string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
+                        t.Hours,
+                        t.Minutes,
+                        t.Seconds,
+                        t.Milliseconds);
 
-                Console.WriteLine("Running for "+ delayInMs+" ms.");
-                Task.Delay(delayInMs).Wait();
+                Console.WriteLine("Pausing in " + delayInMs);
+                Task.Delay(ms).Wait();
+
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
                 Console.WriteLine("Paused Playing");
             }
-
-            timeDifference = new TimeOnly(23, 59, 59, 999, 999) - timeNow;
-            var delay = (int)timeDifference.TotalMilliseconds;
-            Console.WriteLine("Waiting until next Day before Playing again");
-            Task.Delay(delay).Wait();
         }
     }
 }
