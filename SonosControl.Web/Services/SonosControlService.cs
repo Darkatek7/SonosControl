@@ -1,4 +1,4 @@
-﻿using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Interfaces;
 
 namespace SonosControl.Web.Services
 {
@@ -47,7 +47,7 @@ namespace SonosControl.Web.Services
             }
 
             await _uow.ISonosConnectorRepo.StartPlaying(ip);
-            Console.WriteLine(DateTime.Now.ToString("g") + "Started Playing");
+            Console.WriteLine(DateTime.Now.ToString("g") + ": Started Playing");
         }
 
         private async Task WaitUntilStartTime(TimeOnly start, TimeOnly stop)
