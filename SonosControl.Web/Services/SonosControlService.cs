@@ -33,15 +33,15 @@ namespace SonosControl.Web.Services
             {
                 if (await _uow.IHolidayRepo.IsHoliday())
                 {
-                    Console.WriteLine(DateTime.Now.ToString("g") + "Today is a holiday!");
+                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a holiday!");
                 }
                 else if ((day == DayOfWeek.Saturday))
                 {
-                    Console.WriteLine(DateTime.Now.ToString("g") + "Today is a Saturday!");
+                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a Saturday!");
                 }
                 else if ((day == DayOfWeek.Sunday))
                 {
-                    Console.WriteLine(DateTime.Now.ToString("g") + "Today is a Sunday!");
+                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a Sunday!");
                 }
                 return;
             }
@@ -65,7 +65,7 @@ namespace SonosControl.Web.Services
                         t.Seconds,
                         t.Milliseconds);
 
-                Console.WriteLine(DateTime.Now.ToString("g") + "Starting in " + delayInMs);
+                Console.WriteLine(DateTime.Now.ToString("g") + ": Starting in " + delayInMs);
                 Task.Delay(ms).Wait();
             }
         }
@@ -78,7 +78,7 @@ namespace SonosControl.Web.Services
             if (stopTime <= timeNow)
             {
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
-                Console.WriteLine(DateTime.Now.ToString("g") + "Paused Playing");
+                Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
             else
             {
@@ -90,11 +90,11 @@ namespace SonosControl.Web.Services
                         t.Seconds,
                         t.Milliseconds);
 
-                Console.WriteLine(DateTime.Now.ToString("g") + "Pausing in " + delayInMs);
+                Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
                 Task.Delay(ms).Wait();
 
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
-                Console.WriteLine(DateTime.Now.ToString("g") + "Paused Playing");
+                Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
         }
     }
