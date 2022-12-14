@@ -14,6 +14,11 @@ ____
 * Docker
 * Uses UTC time
 ____
+
+## Mobile View
+![Screenshot 2022-12-14 084036](https://user-images.githubusercontent.com/50767771/207535102-0176c295-8d4f-49ca-90a4-a48dd46d42f9.png)
+
+____
 ## Usage
 ### Docker Compose ([click here for more info](https://docs.linuxserver.io/general/docker-compose))
 
@@ -66,3 +71,9 @@ and paste the following:
 }
 ```
 You can change the config to fit your needs or change it later in the UI.
+
+
+## TODO
+* Add option to change the days which the automation should run
+* Add option to change the holiday location
+* Create a nice UI (Currently I am only using a minimalistic UI that only displays nicely on mobile)
