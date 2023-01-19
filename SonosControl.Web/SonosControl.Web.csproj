@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.17.0" />
-    <PackageReference Include="Radzen.Blazor" Version="4.4.3" />
+    <PackageReference Include="Radzen.Blazor" Version="4.5.3" />
   </ItemGroup>
 
   <ItemGroup>
