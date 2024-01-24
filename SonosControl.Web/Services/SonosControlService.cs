@@ -29,13 +29,14 @@ namespace SonosControl.Web.Services
         {
             DayOfWeek day = DateTime.Now.DayOfWeek;
 
-            if (await _uow.IHolidayRepo.IsHoliday() || (day == DayOfWeek.Saturday) || (day == DayOfWeek.Sunday))
+            if ((day == DayOfWeek.Saturday) || (day == DayOfWeek.Sunday)) //await _uow.IHolidayRepo.IsHoliday() || 
             {
-                if (await _uow.IHolidayRepo.IsHoliday())
-                {
-                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a holiday!");
-                }
-                else if ((day == DayOfWeek.Saturday))
+                //if (await _uow.IHolidayRepo.IsHoliday())
+                //{
+                //    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a holiday!");
+                //}
+                //else 
+                if ((day == DayOfWeek.Saturday))
                 {
                     Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a Saturday!");
                 }
