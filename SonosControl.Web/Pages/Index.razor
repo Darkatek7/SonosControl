@@ -78,6 +78,17 @@
                 </div>
             </div>
         </div>
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Stop Time</strong>
+                    <p class="text-muted mb-0">Server time right now.</p>
+                </div>
+                <div class="col-auto">
+                    <input type="time" class="form-control" disabled @bind-value="TimeRightNow" />
+                </div>
+            </div>
+        </div>
     </div>
 }
 
@@ -148,6 +159,8 @@
             SaveSettings();
         }
     }
+
+    private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
 
     private string IP_Adress
     {
