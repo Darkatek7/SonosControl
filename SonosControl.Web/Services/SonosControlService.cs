@@ -48,7 +48,6 @@ namespace SonosControl.Web.Services
             }
 
             await _uow.ISonosConnectorRepo.StartPlaying(ip);
-            _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, 15);
             Console.WriteLine(DateTime.Now.ToString("g") + ": Started Playing");
         }
 
