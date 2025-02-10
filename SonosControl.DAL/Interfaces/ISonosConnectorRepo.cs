@@ -1,4 +1,4 @@
-﻿namespace SonosControl.DAL.Interfaces
+namespace SonosControl.DAL.Interfaces
 {
     public interface ISonosConnectorRepo
     {
@@ -8,5 +8,6 @@
         Task SetVolume(string ip, int volume);
         Task StartPlaying(string ip);
         Task StopPlaying(string ip);
+        Task SetTuneInStationAsync(string ip, string stationUri);
     }
 }
