@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 
 <PageTitle>Sonos Control</PageTitle>
 
@@ -89,12 +89,40 @@
                 </div>
             </div>
         </div>
+
+        <!-- Dropdown for TuneIn Stations -->
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Select TuneIn Station</strong>
+                    <p class="text-muted mb-0">Choose the radio station to play.</p>
+                </div>
+                <div class="col-auto">
+                    <select class="form-select" @bind="selectedStation">
+                        <option value="">--Select Station--</option>
+                        @foreach (var station in _stations)
+                        {
+                            <option value="@station.Value">@station.Key</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
 }
 
 @code {
     private SonosSettings? _settings;
     private bool _isPlaying;
+    private string? selectedStation;
+
+    private Dictionary<string, string> _stations = new()
+    {
+        { "Antenne Vorarlberg", "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
+        { "ORF Vorarlberg", "orf-live.ors-shoutcast.at/vbg-q2a" },
+        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" },
+        { "Radio Paloma", "stream.radiopaloma.de/radiopaloma" }
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -137,6 +165,14 @@
             _settings!.Volume = value;
             _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
             SaveSettings();
+        }
+    }
+    private async Task OnStationChanged(ChangeEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(selectedStation) && _stations.TryGetValue(selectedStation, out var url))
+        {
+            // Set the selected stream URL to the Sonos speaker
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, url);
         }
     }
 
