@@ -108,20 +108,47 @@
                 </div>
             </div>
         </div>
+
     </div>
 }
 
 @code {
     private SonosSettings? _settings;
     private bool _isPlaying;
-    private string? selectedStation;
+    
+    private string selectedStation
+    {
+        get => _selectedStation;
+        set
+        {
+            if (_selectedStation != value)
+            {
+                _selectedStation = value;
+                OnStationChanged();  // Call the station change handler
+            }
+        }
+    }
+
+    private string _selectedStation;
+
+    private async Task OnStationChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedStation) && _stations.ContainsValue(selectedStation))
+        {
+            // Set the selected stream URL to the Sonos speaker
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+
+        }
+    }
+
+
 
     private Dictionary<string, string> _stations = new()
     {
         { "Antenne Vorarlberg", "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
         { "ORF Vorarlberg", "orf-live.ors-shoutcast.at/vbg-q2a" },
-        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" },
-        { "Radio Paloma", "stream.radiopaloma.de/radiopaloma" }
+        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" }
     };
 
     protected override async Task OnInitializedAsync()
@@ -165,14 +192,6 @@
             _settings!.Volume = value;
             _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
             SaveSettings();
-        }
-    }
-    private async Task OnStationChanged(ChangeEventArgs e)
-    {
-        if (!string.IsNullOrEmpty(selectedStation) && _stations.TryGetValue(selectedStation, out var url))
-        {
-            // Set the selected stream URL to the Sonos speaker
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, url);
         }
     }
 
