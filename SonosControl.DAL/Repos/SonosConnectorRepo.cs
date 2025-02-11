@@ -6,6 +6,10 @@ using SonosControl.DAL.Interfaces;
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
+
 
 namespace SonosControl.DAL.Repos
 {
@@ -95,6 +99,89 @@ namespace SonosControl.DAL.Repos
                 Console.WriteLine($"Exception setting TuneIn station: {ex.Message}");
             }
         }
+
+        public async Task<string> GetCurrentTrackAsync(string ip)
+        {
+            using var httpClient = new HttpClient();
+            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+            var soapEnvelope = @"
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
+                    <s:Body>
+                        <u:GetPositionInfo xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                            <InstanceID>0</InstanceID>
+                        </u:GetPositionInfo>
+                    </s:Body>
+                </s:Envelope>";
+
+            var content = new StringContent(soapEnvelope);
+            content.Headers.Clear();
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
+
+            try
+            {
+                var response = await httpClient.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                var titleMatch = Regex.Match(responseBody, @"<TrackMetaData>.*?<dc:title>(.*?)</dc:title>", RegexOptions.Singleline);
+                var artistMatch = Regex.Match(responseBody, @"<dc:creator>(.*?)</dc:creator>", RegexOptions.Singleline);
+
+                var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Track";
+                var artist = artistMatch.Success ? artistMatch.Groups[1].Value : "Unknown Artist";
+
+                return $"{artist} - {title}";
+            }
+            catch (Exception ex)
+            {
+                return $"Error fetching track: {ex.Message}";
+            }
+        }
+
+        public async Task<string> GetCurrentStationAsync(string ip)
+        {
+            using var client = new HttpClient();
+
+            try
+            {
+                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+                var content = new StringContent(
+                    @"<?xml version=""1.0"" encoding=""utf-8""?>
+                    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                        s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                        <s:Body>
+                            <u:GetMediaInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                                <InstanceID>0</InstanceID>
+                            </u:GetMediaInfo>
+                        </s:Body>
+                    </s:Envelope>", Encoding.UTF8, "text/xml");
+
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo\"");
+
+                var response = await client.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+
+                var xml = await response.Content.ReadAsStringAsync();
+
+                // Extract the station title from the XML response using Regex
+                var match = Regex.Match(xml, @"<CurrentURI>(?<stationUrl>.*?)</CurrentURI>", RegexOptions.Singleline);
+
+                if (match.Success)
+                {
+                    return match.Groups["stationUrl"].Value;
+                }
+
+                return "Unknown Station";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: {ex.Message}";
+            }
+        }
+
 
     }
 }
