@@ -109,12 +109,45 @@
             </div>
         </div>
 
+        <!-- Currently Playing Station -->
+        <div class="list-group-item">
+            <div class="row align-items-center">
+                <div class="col">
+                    <strong class="mb-0">Currently Playing Station</strong>
+                    <p class="text-muted mb-0">@currentStationDisplay</p>
+                </div>
+            </div>
+        </div>
+
+
     </div>
 }
 
 @code {
     private SonosSettings? _settings;
     private bool _isPlaying;
+
+    private string currentStationUrl = "Loading...";
+    private string currentStationDisplay = "Loading...";
+    private Timer? _stationUpdateTimer;
+
+    private async Task LoadCurrentStation()
+    {
+        if (_settings is not null)
+        {
+            // Fetch the current station URL
+            var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+
+            // Remove the "x-rincon-mp3radio://" prefix if it exists
+            currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "");
+
+            // Lookup the station name from the dictionary or fall back to the stream URL
+            currentStationDisplay = _stations.FirstOrDefault(s => s.Value == currentStationUrl).Key ?? currentStationUrl;
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     
     private string selectedStation
     {
@@ -162,6 +195,7 @@
         _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
         await SaveSettings();
         _isPlaying = await IsPlaying();
+        _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 5000);
     }
 
     private async Task Play(bool play)
