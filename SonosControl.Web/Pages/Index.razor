@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 
 <PageTitle>Sonos Control</PageTitle>
 
@@ -180,8 +180,11 @@
     private Dictionary<string, string> _stations = new()
     {
         { "Antenne Vorarlberg", "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
-        { "ORF Vorarlberg", "orf-live.ors-shoutcast.at/vbg-q2a" },
-        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" }
+        { "Radio V", "orf-live.ors-shoutcast.at/vbg-q2a" },
+        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" },
+        { "Kronehit", "onair.krone.at/kronehit.mp3"},
+        { "Ö3", "orf-live.ors-shoutcast.at/oe3-q2a"},
+        { "Radio Paloma", "www3.radiopaloma.de/RP-Hauptkanal.pls"}
     };
 
     protected override async Task OnInitializedAsync()
