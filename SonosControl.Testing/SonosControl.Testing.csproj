@@ -7,4 +7,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SonosControl.DAL\SonosControl.DAL.csproj" />
+  </ItemGroup>
+
+
 </Project>
