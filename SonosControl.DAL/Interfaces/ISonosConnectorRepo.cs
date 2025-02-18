@@ -11,5 +11,7 @@ namespace SonosControl.DAL.Interfaces
         Task<string> GetCurrentTrackAsync(string ip);
         Task SetTuneInStationAsync(string ip, string stationUri);
         Task<string> GetCurrentStationAsync(string ip);
+        Task<string?> SearchSpotifyTrackAsync(string query, string accessToken);
+        Task PlaySpotifyTrackAsync(string ip, string spotifyUri);
     }
 }

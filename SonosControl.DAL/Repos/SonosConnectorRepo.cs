@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
 
 
 namespace SonosControl.DAL.Repos
@@ -179,6 +182,52 @@ namespace SonosControl.DAL.Repos
             catch (Exception ex)
             {
                 return $"Error: {ex.Message}";
+            }
+        }
+
+        public async Task<string?> SearchSpotifyTrackAsync(string query, string accessToken)
+        {
+            var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track&limit=1";
+            HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var response = await HttpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadAsStringAsync();
+            using JsonDocument doc = JsonDocument.Parse(json);
+            var trackUri = doc.RootElement
+                .GetProperty("tracks")
+                .GetProperty("items")[0]
+                .GetProperty("uri")
+                .GetString();
+
+            return trackUri;
+        }
+
+        public async Task PlaySpotifyTrackAsync(string ip, string spotifyUri)
+        {
+            string soapRequest = $@"
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" 
+                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+              <s:Body>
+                <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                  <InstanceID>0</InstanceID>
+                  <CurrentURI>{spotifyUri}</CurrentURI>
+                  <CurrentURIMetaData></CurrentURIMetaData>
+                </u:SetAVTransportURI>
+              </s:Body>
+            </s:Envelope>";
+        
+            using var client = new HttpClient();
+            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
+        
+            string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+            var response = await client.PostAsync(url, content);
+            
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Error setting Spotify track: {response.ReasonPhrase}");
             }
         }
 
