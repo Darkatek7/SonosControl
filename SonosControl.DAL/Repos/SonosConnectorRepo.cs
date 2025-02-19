@@ -213,6 +213,7 @@ namespace SonosControl.DAL.Repos
         {
             var trackMatch = Regex.Match(spotifyUrl, @"track/(?<trackId>[\w\d]+)");
             var playlistMatch = Regex.Match(spotifyUrl, @"playlist/(?<playlistId>[\w\d]+)");
+            var albumMatch = Regex.Match(spotifyUrl, @"album/(?<albumId>[\w\d]+)"); // Add regex for album
 
             string? rinconId = await GetRinconIdAsync(ip);
             if (rinconId == null)
@@ -230,8 +231,8 @@ namespace SonosControl.DAL.Repos
                 sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{trackId}";
 
                 metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
-                                           xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
-                                           xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
+                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
                                 <item id=""00032020spotify%3atrack%3a{trackId}"" 
                                       parentID=""00020000spotify"" restricted=""true"">
                                     <dc:title>Spotify Track</dc:title>
@@ -243,15 +244,31 @@ namespace SonosControl.DAL.Repos
             else if (playlistMatch.Success)
             {
                 string playlistId = playlistMatch.Groups["playlistId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}";  // Corrected URI format for playlist
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}"; 
 
                 metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
-                                           xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
-                                           xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
+                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
                                 <item id=""00020000spotify%3aplaylist%3a{playlistId}"" 
                                       parentID=""00020000spotify"" restricted=""true"">
                                     <dc:title>Spotify Playlist</dc:title>
                                     <upnp:class>object.container.playlistContainer</upnp:class>
+                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
+                                </item>
+                             </DIDL-Lite>";
+            }
+            else if (albumMatch.Success)
+            {
+                string albumId = albumMatch.Groups["albumId"].Value;
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{albumId}"; 
+
+                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
+                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
+                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                <item id=""00020000spotify%3aalbum%3a{albumId}"" 
+                                      parentID=""00020000spotify"" restricted=""true"">
+                                    <dc:title>Spotify Album</dc:title>
+                                    <upnp:class>object.container.album.musicAlbum</upnp:class>
                                     <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
                                 </item>
                              </DIDL-Lite>";
@@ -292,8 +309,9 @@ namespace SonosControl.DAL.Repos
             {
                 Console.WriteLine("Spotify playback started.");
             }
-        }
 
+            await StartPlaying(ip);
+        }
 
 
         private async Task<string?> GetRinconIdAsync(string ip)
