@@ -5,132 +5,76 @@
 @if (_settings is not null)
 {
     <div class="container">
-        @if (_isPlaying)
-        {
-            <div class="list-group-item">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <strong class="mb-0">Is Playing</strong>
-                        <p class="text-muted mb-0">Click the button to manually stop playing music.</p>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-outline-primary" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i></button>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="list-group-item">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <strong class="mb-0">Playing is paused</strong>
-                        <p class="text-muted mb-0">Click the button to manually start playing music.</p>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-outline-primary" @onclick=@(async ()=>await Play(true))><i class="fa fa-play"></i></button>
+        <div class="header-display">Sonos Control Panel</div>
+        <div class="row">
+            @if (_isPlaying)
+            {
+                <div class="col-12">
+                    <div class="alert alert-success" role="alert">
+                        <strong>Is Playing</strong>
+                        <p class="text-muted">Click the button to manually stop playing music.</p>
+                        <button class="btn btn-danger" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i> Pause</button>
                     </div>
                 </div>
-            </div>
-        }
+            }
+            else
+            {
+                <div class="col-12">
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Playing is paused</strong>
+                        <p class="text-muted">Click the button to manually start playing music.</p>
+                        <button class="btn btn-success" @onclick=@(async ()=>await Play(true))><i class="fa fa-play"></i> Play</button>
+                    </div>
+                </div>
+            }
+        </div>
 
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">IP Adress</strong>
-                    <p class="text-muted mb-0">Choose the IP Adress of your Sonos Speaker.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="text" class="form-control" @bind-value="IP_Adress" @bind-value:event="oninput" minlength="7" maxlength="15" size="15" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$">
-                </div>
+        <div class="form-section">
+            <h5>Speaker Settings</h5>
+            <div class="form-group">
+                <label>IP Address</label>
+                <input type="text" class="form-control" @bind-value="IP_Adress" @bind-value:event="oninput" placeholder="Enter IP Address" pattern="^((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])\.){3}(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])$" />
             </div>
-        </div>
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Volume</strong>
-                    <p class="text-muted mb-0">Choose any volume that fits your need.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="number" class="form-control" max="100" min="1" @bind-value="Volume" @bind-value:event="oninput" />
-                </div>
+            <div class="form-group">
+                <label>Volume</label>
+                <input type="number" class="form-control" max="100" min="1" @bind-value="Volume" @bind-value:event="oninput" />
             </div>
-        </div>
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Start Time</strong>
-                    <p class="text-muted mb-0">Choose when the speaker should start playing daily.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="time" class="form-control" @bind-value="StartTime" @bind-value:event="oninput" />
-                </div>
+            <div class="form-group">
+                <label>Start Time</label>
+                <input type="time" class="form-control" @bind-value="StartTime" @bind-value:event="oninput" />
             </div>
-        </div>
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Stop Time</strong>
-                    <p class="text-muted mb-0">Choose when the speaker should stop playing daily.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="time" class="form-control" @bind-value="StopTime" @bind-value:event="oninput" />
-                </div>
+            <div class="form-group">
+                <label>Stop Time</label>
+                <input type="time" class="form-control" @bind-value="StopTime" @bind-value:event="oninput" />
             </div>
-        </div>
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-    using System.Runtime.InteropServices;
-                    <strong class="mb-0">Server Time</strong>
-                    <p class="text-muted mb-0">Server time right now.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="time" class="form-control" disabled @bind-value="TimeRightNow" />
-                </div>
+            <div class="form-group">
+                <label>Server Time</label>
+                <input type="time" class="form-control" disabled @bind-value="TimeRightNow" />
             </div>
         </div>
 
         <!-- Dropdown for TuneIn Stations -->
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Select TuneIn Station</strong>
-                    <p class="text-muted mb-0">Choose the radio station to play.</p>
-                </div>
-                <div class="col-auto">
-                    <select class="form-select" @bind="selectedStation">
-                        <option value="">--Select Station--</option>
-                        @foreach (var station in _stations)
-                        {
-                            <option value="@station.Value">@station.Key</option>
-                        }
-                    </select>
-                </div>
-            </div>
+        <div class="form-section">
+            <h5>Select TuneIn Station</h5>
+            <select class="form-select" @bind="selectedStation">
+                <option value="">--Select Station--</option>
+                @foreach (var station in _stations)
+                {
+                    <option value="@station.Value">@station.Key</option>
+                }
+            </select>
         </div>
 
         <!-- Currently Playing Station -->
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Currently Playing Station</strong>
-                    <p class="text-muted mb-0">@currentStationDisplay</p>
-                </div>
-            </div>
+        <div class="form-section">
+            <h5>Currently Playing Station</h5>
+            <p>@currentStationDisplay</p>
         </div>
 
         <!-- Spotify URL Input Field -->
-        <div class="list-group-item">
-            <div class="row align-items-center">
-                <div class="col">
-                    <strong class="mb-0">Spotify URL</strong>
-                    <p class="text-muted mb-0">Enter a Spotify track or playlist URL to play.</p>
-                </div>
-                <div class="col-auto">
-                    <input type="text" class="form-control" @bind-value="spotifyUrl" @bind-value:event="oninput" @onkeyup="HandleKeyPress" onin placeholder="Enter Spotify URL" />
-                </div>
-            </div>
+        <div class="form-section">
+            <h5>Spotify URL</h5>
+            <input type="text" class="form-control" @bind-value="spotifyUrl" @bind-value:event="oninput" @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL" />
         </div>
     </div>
 }
@@ -170,8 +114,6 @@
         }
     }
 
-
-    
     private string selectedStation
     {
         get => _selectedStation;
@@ -313,46 +255,49 @@
 
 <style>
     .container {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    input[type=checkbox] {
-        height: 20px;
-        width: 40px;
-    }
-
-    input:checked {
-        background: #bada55;
-    }
-
-    .data-display {
-        color: black;
-        font-size: large;
-        text-align: center;
-        display: block;
-        margin: 15px;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     }
 
     .header-display {
-        color: black;
+        color: #333;
         font-weight: bold;
-        font-size: large;
+        font-size: 24px;
         text-align: center;
-        margin: 15px;
+        margin-bottom: 20px;
     }
 
-    select {
-        margin: 15px;
-        width: 228px;
-        height: 33px;
+    .form-section {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        font-weight: bold;
+    }
+
+    .form-control {
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
     }
 
     .form-select {
-        margin: 15px;
-        width: 220px;
-        height: 33px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .alert {
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+
+    .btn {
+        width: 100%;
+        margin-top: 10px;
     }
 </style>
