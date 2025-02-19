@@ -12,6 +12,11 @@ using System.Text.RegularExpressions;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ByteDev.Sonos.Upnp.Services;
+using System;
+using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 
 
 namespace SonosControl.DAL.Repos
@@ -204,33 +209,115 @@ namespace SonosControl.DAL.Repos
             return trackUri;
         }
 
-        public async Task PlaySpotifyTrackAsync(string ip, string spotifyUri)
+        public async Task PlaySpotifyTrackAsync(string ip, string spotifyUrl)
         {
+            var trackMatch = Regex.Match(spotifyUrl, @"track/(?<trackId>[\w\d]+)");
+            var playlistMatch = Regex.Match(spotifyUrl, @"playlist/(?<playlistId>[\w\d]+)");
+
+            string? rinconId = await GetRinconIdAsync(ip);
+            if (rinconId == null)
+            {
+                Console.WriteLine("Could not retrieve RINCON ID.");
+                return;
+            }
+
+            string sonosUri;
+            string metadata;
+
+            if (trackMatch.Success)
+            {
+                string trackId = trackMatch.Groups["trackId"].Value;
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{trackId}";
+
+                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
+                                           xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
+                                           xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                <item id=""00032020spotify%3atrack%3a{trackId}"" 
+                                      parentID=""00020000spotify"" restricted=""true"">
+                                    <dc:title>Spotify Track</dc:title>
+                                    <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
+                                </item>
+                             </DIDL-Lite>";
+            }
+            else if (playlistMatch.Success)
+            {
+                string playlistId = playlistMatch.Groups["playlistId"].Value;
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}";  // Corrected URI format for playlist
+
+                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
+                                           xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
+                                           xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                <item id=""00020000spotify%3aplaylist%3a{playlistId}"" 
+                                      parentID=""00020000spotify"" restricted=""true"">
+                                    <dc:title>Spotify Playlist</dc:title>
+                                    <upnp:class>object.container.playlistContainer</upnp:class>
+                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
+                                </item>
+                             </DIDL-Lite>";
+            }
+            else
+            {
+                Console.WriteLine("Invalid Spotify URL.");
+                return;
+            }
+
+            await SetTuneInStationAsync(ip, "web.radio.antennevorarlberg.at/av-live/stream/mp3");
+
+            // Build SOAP request
             string soapRequest = $@"
             <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" 
                          s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
               <s:Body>
                 <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
                   <InstanceID>0</InstanceID>
-                  <CurrentURI>{spotifyUri}</CurrentURI>
-                  <CurrentURIMetaData></CurrentURIMetaData>
+                  <CurrentURI>{sonosUri}</CurrentURI>
+                  <CurrentURIMetaData>{System.Security.SecurityElement.Escape(metadata)}</CurrentURIMetaData>
                 </u:SetAVTransportURI>
               </s:Body>
             </s:Envelope>";
-        
+
             using var client = new HttpClient();
             var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-        
+
             string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
             var response = await client.PostAsync(url, content);
-            
+
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"Error setting Spotify track: {response.ReasonPhrase}");
+                Console.WriteLine($"Error setting Spotify playback: {response.ReasonPhrase}");
+            }
+            else
+            {
+                Console.WriteLine("Spotify playback started.");
             }
         }
 
 
+
+        private async Task<string?> GetRinconIdAsync(string ip)
+        {
+            try
+            {
+                string url = $"http://{ip}:1400/xml/device_description.xml";
+
+                using var client = new HttpClient();
+                var response = await client.GetStringAsync(url);
+
+                // Extract the RINCON ID from the UDN field
+                var match = Regex.Match(response, @"<UDN>uuid:RINCON_([A-F0-9]+)</UDN>");
+                if (match.Success)
+                {
+                    return match.Groups[1].Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching RINCON ID: {ex.Message}");
+            }
+
+            return null;
+        }
     }
 }
