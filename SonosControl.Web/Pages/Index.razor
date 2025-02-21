@@ -254,17 +254,22 @@
 }
 
 <style>
+    body {
+        background-color: #121212;
+        color: #e0e0e0;
+    }
+
     .container {
         max-width: 600px;
         margin: 0 auto;
         padding: 20px;
-        background-color: #f9f9f9;
+        background-color: #1e1e1e;
         border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
     .header-display {
-        color: #333;
+        color: #ffffff;
         font-weight: bold;
         font-size: 24px;
         text-align: center;
@@ -277,18 +282,28 @@
 
     .form-group label {
         font-weight: bold;
+        color: #bbbbbb;
     }
 
-    .form-control {
-        border: 1px solid #ccc;
+    .form-control, .form-select {
+        background-color: #333333;
+        border: 1px solid #555555;
+        color: #ffffff;
         border-radius: 5px;
         padding: 10px;
     }
 
-    .form-select {
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        padding: 10px;
+    .form-control:disabled {
+        background-color: #333333 !important;
+        color: #bbbbbb !important;
+        border: 1px solid #555555 !important;
+        opacity: 1; /* Prevents browsers from making it look faded */
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #888888;
+        outline: none;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
     }
 
     .alert {
@@ -296,8 +311,45 @@
         margin-bottom: 15px;
     }
 
+    .alert-success {
+        background-color: #2e7d32;
+        color: #ffffff;
+        border: 1px solid #1b5e20;
+    }
+
+    .alert-warning {
+        background-color: #b8860b;
+        color: #ffffff;
+        border: 1px solid #8b6508;
+    }
+
     .btn {
         width: 100%;
         margin-top: 10px;
+        border-radius: 5px;
+    }
+
+    .btn-danger {
+        background-color: #d32f2f;
+        border: 1px solid #b71c1c;
+        color: #ffffff;
+    }
+
+    .btn-danger:hover {
+        background-color: #b71c1c;
+    }
+
+    .btn-success {
+        background-color: #388e3c;
+        border: 1px solid #2e7d32;
+        color: #ffffff;
+    }
+
+    .btn-success:hover {
+        background-color: #2e7d32;
+    }
+
+    .text-muted {
+        color: #ffffff !important;
     }
 </style>
