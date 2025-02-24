@@ -13,7 +13,14 @@
                     <div class="alert alert-success" role="alert">
                         <strong>Is Playing</strong>
                         <p class="text-muted">Click the button to manually stop playing music.</p>
-                        <button class="btn btn-danger" @onclick=@(async ()=>await Play(false))><i class="fa fa-pause"></i> Pause</button>
+
+                        <div class="d-flex align-items-center">
+                            <button class="btn btn-danger me-2" @onclick="@((async () => await Play(false)))"><i class="fa fa-pause"></i> Pause</button>
+                            @if (_isSpotifyPlaying)
+                            {
+                                <button class="btn btn-primary" style="flex-shrink: 0; width: 80px;" @onclick="NextTrack"><i class="fa fa-forward"></i></button>
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -28,6 +35,7 @@
                 </div>
             }
         </div>
+
 
         <div class="form-section">
             <h5>Speaker Settings</h5>
@@ -67,7 +75,7 @@
 
         <!-- Currently Playing Station -->
         <div class="form-section">
-            <h5>Currently Playing Station</h5>
+            <h5>Currently Playing</h5>
             <p>@currentStationDisplay</p>
         </div>
 
@@ -76,38 +84,39 @@
             <h5>Spotify URL</h5>
             <input type="text" class="form-control" @bind-value="spotifyUrl" @bind-value:event="oninput" @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL" />
         </div>
+
     </div>
 }
 
 @code {
     private SonosSettings? _settings;
     private bool _isPlaying;
+    private bool _isSpotifyPlaying;
     
     private string? spotifyUrl;
 
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
     private Timer? _stationUpdateTimer;
+    
+    private List<string> queue = new ();
 
     private async Task LoadCurrentStation()
     {
         if (_settings is not null)
         {
-            // Fetch the current station URL
             var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-
-            // Remove the "x-rincon-mp3radio://" prefix if it exists
             currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "");
 
-            // Check if the URL contains "spotify" and set the display name accordingly
             if (currentStationUrl.Contains("spotify"))
             {
                 currentStationDisplay = "Spotify";
+                _isSpotifyPlaying = true;
             }
             else
             {
-                // Lookup the station name from the dictionary or fall back to the stream URL
                 currentStationDisplay = _stations.FirstOrDefault(s => s.Value == currentStationUrl).Key ?? currentStationUrl;
+                _isSpotifyPlaying = false;
             }
 
             await InvokeAsync(StateHasChanged);
@@ -160,6 +169,38 @@
         }
     }
 
+    private async Task PreviousTrack()
+    {
+        await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
+    }
+    
+    private async Task NextTrack()
+    {
+        await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
+    }
+
+    private async Task LoadQueue()
+    {
+        if (currentStationDisplay == "Spotify") // Check if playing Spotify
+        {
+            //var currentTrack = await _uow.ISonosConnectorRepo.GetCurrentTrack(_settings!.IP_Adress);
+            //queue = new List<string> { currentTrack };
+        }
+        else
+        {
+            queue = await _uow.ISonosConnectorRepo.GetQueue(_settings!.IP_Adress);
+        }
+    
+        await InvokeAsync(StateHasChanged);
+    }
+
+    
+    private async Task ClearQueue()
+    {
+        await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
+        queue.Clear();
+    }
+
     private Dictionary<string, string> _stations = new()
     {
         { "Antenne Vorarlberg", "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
@@ -182,6 +223,7 @@
         await SaveSettings();
         _isPlaying = await IsPlaying();
         _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 5000);
+        //await LoadQueue();
     }
 
     private async Task Play(bool play)
@@ -189,14 +231,16 @@
         if (play)
         {
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            _isPlaying = true;
         }
         else
         {
             await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
+            _isPlaying = false;
         }
 
-        _isPlaying = await IsPlaying();
-        StateHasChanged();
+        //_isPlaying = await IsPlaying();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task<bool> IsPlaying()

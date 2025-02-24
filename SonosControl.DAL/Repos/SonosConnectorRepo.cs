@@ -17,6 +17,8 @@ using System;
 using System.Threading.Tasks;
 using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json.Linq;
+using System.Xml;
+
 
 
 namespace SonosControl.DAL.Repos
@@ -337,5 +339,157 @@ namespace SonosControl.DAL.Repos
 
             return null;
         }
+
+        public async Task ClearQueue(string ip)
+        {
+            using var httpClient = new HttpClient();
+            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+            var soapEnvelope = @"
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
+                    <s:Body>
+                        <u:RemoveAllTracksFromQueue xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                            <InstanceID>0</InstanceID>
+                        </u:RemoveAllTracksFromQueue>
+                    </s:Body>
+                </s:Envelope>";
+
+            var content = new StringContent(soapEnvelope);
+            content.Headers.Clear();
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"");
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
+
+            try
+            {
+                var response = await httpClient.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine("Queue cleared successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error clearing queue: {ex.Message}");
+            }
+        }
+
+
+        public async Task<List<string>> GetQueue(string ip)
+        {
+            var queue = new List<string>();
+
+            using var httpClient = new HttpClient();
+            var url = $"http://{ip}:1400/MediaRenderer/ContentDirectory/Control";
+
+            var soapEnvelope = @"
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
+                    <s:Body>
+                        <u:Browse xmlns:u='urn:schemas-upnp-org:service:ContentDirectory:1'>
+                            <ObjectID>Q:0</ObjectID>
+                            <BrowseFlag>BrowseDirectChildren</BrowseFlag>
+                            <Filter>*</Filter>
+                            <StartingIndex>0</StartingIndex>
+                            <RequestedCount>100</RequestedCount>
+                            <SortCriteria></SortCriteria>
+                        </u:Browse>
+                    </s:Body>
+                </s:Envelope>";
+
+            var content = new StringContent(soapEnvelope);
+            content.Headers.Clear();
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:ContentDirectory:1#Browse\"");
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
+
+            try
+            {
+                var response = await httpClient.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                // Extract track titles using Regex
+                var matches = Regex.Matches(responseBody, @"<dc:title>(.*?)</dc:title>");
+
+                foreach (Match match in matches)
+                {
+                    if (match.Success)
+                    {
+                        queue.Add(match.Groups[1].Value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching queue: {ex.Message}");
+            }
+
+            return queue;
+        }
+
+
+        public async Task PreviousTrack(string ip)
+        {
+            await PausePlaying(ip);
+            await Task.Delay(500); // Small delay to ensure command is processed
+
+            await SendAvTransportCommand(ip, "Previous");
+        }
+
+        public async Task NextTrack(string ip)
+        {
+            await SendAvTransportCommand(ip, "Next");
+        }
+
+        private async Task SendAvTransportCommand(string ip, string action)
+        {
+            using var httpClient = new HttpClient();
+            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+            var soapEnvelope = $@"
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
+                    <s:Body>
+                        <u:{action} xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                            <InstanceID>0</InstanceID>
+                        </u:{action}>
+                    </s:Body>
+                </s:Envelope>";
+
+            var content = new StringContent(soapEnvelope);
+            content.Headers.Clear();
+            content.Headers.Add("SOAPACTION", $"\"urn:schemas-upnp-org:service:AVTransport:1#{action}\"");
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
+
+            try
+            {
+                var response = await httpClient.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine($"{action} command sent successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending {action} command: {ex.Message}");
+            }
+        }
+
+
+        private async Task<string> SendSoapRequest(string url, string soapRequest, string soapAction)
+        {
+            using var client = new HttpClient();
+            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Clear();
+            content.Headers.Add("SOAPACTION", $"\"{soapAction}\"");
+
+            var response = await client.PostAsync(url, content);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                Console.WriteLine($"Error: {response.ReasonPhrase}");
+                return $"Error: {response.ReasonPhrase}";
+            }
+        }
+
     }
 }
