@@ -75,5 +75,3 @@ You can change the config to fit your needs or change it later in the UI.
 
 ## TODO
 * Add option to change the days which the automation should run
-* Add option to change the holiday location
-* Create a nice UI (Currently I am only using a minimalistic UI that only displays nicely on mobile)
