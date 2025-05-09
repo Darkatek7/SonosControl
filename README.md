@@ -16,7 +16,8 @@ ____
 ____
 
 ## Mobile View
-![Screenshot 2022-12-14 084036](https://user-images.githubusercontent.com/50767771/207535102-0176c295-8d4f-49ca-90a4-a48dd46d42f9.png)
+![image](https://github.com/user-attachments/assets/08561ba0-3198-44a4-8074-3f5bf7858116)
+
 
 ____
 ## Usage
