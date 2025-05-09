@@ -10,7 +10,7 @@ The App also supports playing predefined TuneIn Stations ord Spotifiy Songs/Play
 ____
 
 ## Info
-* Blazor Server Application (.Net 7)
+* Blazor Server Application (.Net 9)
 * Docker
 ____
 
