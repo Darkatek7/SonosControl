@@ -6,7 +6,7 @@ ____
 
 ## Description
 This Self hosted application is used to automate the process of turning on/off a Sonos Speaker daily using on a Start/Stop Time (UTC) set in the config file or the UI.
-When using my Docker Image the application doesn't start the Sonos Speaker on Weekends and on Austrian holidays. I will add an option to change this behavior in the UI in near future. For now you have to manually adjust the code.
+The App also supports playing predefined TuneIn Stations ord Spotifiy Songs/Playlists/Albums.
 ____
 
 ## Info
