@@ -12,7 +12,6 @@ ____
 ## Info
 * Blazor Server Application (.Net 7)
 * Docker
-* Uses UTC time
 ____
 
 ## Mobile View
