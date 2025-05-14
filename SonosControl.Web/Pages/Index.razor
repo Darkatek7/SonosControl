@@ -1,4 +1,5 @@
 ﻿@page "/"
+@using System.Text.RegularExpressions
 
 <PageTitle>Sonos Control</PageTitle>
 
@@ -61,17 +62,90 @@
             </div>
         </div>
 
-        <!-- Dropdown for TuneIn Stations -->
+        <!-- TuneIn Station Control Section -->
+        <!-- TuneIn Station Control Section -->
         <div class="form-section">
-            <h5>Select TuneIn Station</h5>
-            <select class="form-select" @bind="selectedStation">
-                <option value="">--Select Station--</option>
-                @foreach (var station in _stations)
-                {
-                    <option value="@station.Value">@station.Key</option>
-                }
-            </select>
+            <!-- Title and Edit Button Inline -->
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="mb-0">Select TuneIn Station</h5>
+                <button
+                    class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                    style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                    @onclick="() => isEditMode = !isEditMode">
+                    <i class="fa fa-pencil"></i>
+                    @(isEditMode ? "Done" : "Edit")
+                </button>
+            </div>
+
+    @if (isEditMode)
+    {
+        <!-- Add Station Form -->
+        <div class="form-section mb-3">
+            @if (!string.IsNullOrEmpty(addStationErrorMessage))
+            {
+                <div class="alert alert-danger mt-2" role="alert">
+                    @addStationErrorMessage
+                </div>
+            }
+
+            <h6>Add New Station</h6>
+            <div class="form-group">
+                <label>Station Name</label>
+                <input class="form-control" 
+                       @bind="newStationName" 
+                       @bind:event="oninput"
+                       placeholder="Antenne Vorarlberg"/>
+            </div>
+            <div class="form-group">
+                <label>Station URL</label>
+                <input class="form-control"
+                       @bind="newStationUrl"
+                       @bind:event="oninput"
+                       placeholder="e.g. web.radio.antennevorarlberg.at/av-live/stream/mp3"
+                       pattern="@stationUrlPattern"
+                       title="Enter a valid station URL like web.radio.antennevorarlberg.at/av-live/stream/mp3"/>
+            </div>
+            <button class="btn btn-success mt-2"
+                    @onclick="AddStation"
+                    disabled="@(!CanAddStation)">
+                Add Station
+            </button>
         </div>
+
+        <!-- Station List with Compact Remove Button -->
+        <ul class="list-group">
+            @foreach (var station in _stations)
+            {
+                <li class="list-group-item bg-dark text-white px-3 py-2">
+                    <div class="row align-items-center">
+                        <div class="col-10 text-truncate">
+                            @station.Name
+                        </div>
+                        <div class="col-2 text-end">
+                            <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
+                                    title="Remove"
+                                    @onclick="() => RemoveStation(station)">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <!-- Regular Dropdown for Selection -->
+        <select class="form-select mt-2" @bind="selectedStation">
+            <option value="">--Select Station--</option>
+            @foreach (var station in _stations)
+            {
+                <option value="@station.Url">@station.Name</option>
+            }
+        </select>
+    }
+
+</div>
 
         <!-- Currently Playing Station -->
         <div class="form-section">
@@ -92,12 +166,18 @@
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
-    
     private string? spotifyUrl;
-
+    
+    private bool isEditMode = false;
+    private string newStationName = "";
+    private string newStationUrl = "";
+    
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
     private Timer? _stationUpdateTimer;
+    private string? addStationErrorMessage;
+    
+    private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
     
     private List<string> queue = new ();
 
@@ -115,7 +195,7 @@
             }
             else
             {
-                currentStationDisplay = _stations.FirstOrDefault(s => s.Value == currentStationUrl).Key ?? currentStationUrl;
+                currentStationDisplay = _stations.FirstOrDefault(s => s.Url == currentStationUrl)?.Name ?? currentStationUrl;
                 _isSpotifyPlaying = false;
             }
 
@@ -135,12 +215,14 @@
             }
         }
     }
+    private bool CanAddStation => 
+        !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
 
     private string _selectedStation;
 
     private async Task OnStationChanged()
     {
-        if (!string.IsNullOrEmpty(selectedStation) && _stations.ContainsValue(selectedStation))
+        if (!string.IsNullOrEmpty(selectedStation) && _stations.Any(s => s.Url == selectedStation))
         {
             // Set the selected stream URL to the Sonos speaker
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
@@ -201,15 +283,7 @@
         queue.Clear();
     }
 
-    private Dictionary<string, string> _stations = new()
-    {
-        { "Antenne Vorarlberg", "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
-        { "Radio V", "orf-live.ors-shoutcast.at/vbg-q2a" },
-        { "Rock Antenne Bayern", "stream.rockantenne.bayern/80er-rock/stream/mp3" },
-        { "Kronehit", "onair.krone.at/kronehit.mp3"},
-        { "Ö3", "orf-live.ors-shoutcast.at/oe3-q2a"},
-        { "Radio Paloma", "www3.radiopaloma.de/RP-Hauptkanal.pls"}
-    };
+    private List<TuneInStation> _stations => _settings?.Stations ?? new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -295,6 +369,48 @@
     {
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
+    
+    private async Task AddStation()
+    {
+        if (string.IsNullOrWhiteSpace(newStationName))
+        {
+            addStationErrorMessage = "Station name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newStationUrl))
+        {
+            addStationErrorMessage = "Station URL is required.";
+            return;
+        }
+
+        //if (!Regex.IsMatch(newStationUrl, stationUrlPattern))
+        //{
+        //    addStationErrorMessage = "Station URL format is invalid.";
+        //    return;
+        //}
+
+        // Clear error message on success
+        addStationErrorMessage = null;
+
+        _settings ??= new SonosSettings();
+        _settings.Stations ??= new List<TuneInStation>();
+        _settings.Stations.Add(new TuneInStation { Name = newStationName, Url = newStationUrl });
+        newStationName = newStationUrl = "";
+
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+    
+    private async Task RemoveStation(TuneInStation station)
+    {
+        if (_settings == null) return;
+
+        _settings.Stations?.Remove(station);
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
 }
 
 <style>
@@ -395,5 +511,26 @@
 
     .text-muted {
         color: #ffffff !important;
+    }
+
+    .list-group-item {
+        border: 1px solid #555;
+    }
+
+    .station-remove-btn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+    }
+
+    .station-remove-btn {
+        font-size: 0.8rem;
+        line-height: 1;
+        padding: 2px 6px;
+    }
+
+    .btn-inline {
+        width: auto !important;
+        margin-top: 0 !important;
     }
 </style>

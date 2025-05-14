@@ -1,0 +1,137 @@
+﻿@page "/lookup"
+@using System.Net.Http.Json
+@inject IJSRuntime JS
+
+<h4>📻 Station Lookup</h4>
+
+<div class="form-group mb-2">
+    <input class="form-control"
+           @bind-value="searchTerm"
+           @bind-value:event="oninput"
+           placeholder="Search for a radio station..."
+           @onkeydown="HandleKeyDown" />
+</div>
+<button class="btn btn-primary mb-3" @onclick="SearchStations" disabled="@string.IsNullOrWhiteSpace(searchTerm)">
+    Search
+</button>
+
+@if (isLoading)
+{
+    <p>🔍 Searching...</p>
+}
+else if (results?.Any() == true)
+{
+    <ul class="list-group">
+        @foreach (var station in results)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-start">
+                <div class="me-2">
+                    <strong>@station.Name</strong><br />
+                    <small class="text-muted">@station.Url</small>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
+                        🔊 Play
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="() => CopyFormatted(station)">
+                        📋 Copy
+                    </button>
+                </div>
+            </li>
+        }
+    </ul>
+}
+else if (results is not null)
+{
+    <p>No stations found.</p>
+}
+
+@code {
+    private SonosSettings? _settings;
+    private string searchTerm;
+    private List<RadioStation> results;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _settings = await _uow.ISettingsRepo.GetSettings();
+    }
+    
+    private async Task SearchStations()
+    {
+        isLoading = true;
+        results = null;
+
+        try
+        {
+            var http = new HttpClient();
+            string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm)}";
+            results = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error fetching stations: " + ex.Message);
+        }
+
+        isLoading = false;
+    }
+    
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Check if the pressed key is the "Enter" key
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(searchTerm))
+        {
+            await SearchStations();
+        }
+    }
+
+    private async Task CopyFormatted(RadioStation station)
+    {
+        if (!string.IsNullOrWhiteSpace(station.Url))
+        {
+            try
+            {
+                var uri = new Uri(station.Url);
+                // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
+                var cleanUrl = uri.Host + uri.AbsolutePath;
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", cleanUrl);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Invalid URL: {station.Url} - {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("URL is null or empty.");
+        }
+    }
+
+    private string GetCleanUrl(string url)
+    {
+        var uri = new Uri(url);
+        // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
+        var cleanUrl = uri.Host + uri.AbsolutePath;
+        Console.WriteLine(cleanUrl);
+        
+        return cleanUrl;
+    }
+    
+    private async Task PlayStation(string url)
+    {
+        if (_settings is not null)
+        {
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, GetCleanUrl(url));
+        }
+    }
+
+    public class RadioStation
+    {
+        public string Name { get; set; }
+        public string Url { get; set; }  // ✅ Use this field
+        public string Country { get; set; }
+        public string Tags { get; set; }
+    }
+}
