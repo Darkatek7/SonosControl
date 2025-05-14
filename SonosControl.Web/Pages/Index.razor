@@ -557,6 +557,8 @@
         await SaveSettings();
         
         addStationErrorMessage = null;
+        newTrackName = newStationUrl ="";
+        
         await InvokeAsync(StateHasChanged);
     }
 
