@@ -6,17 +6,17 @@ ____
 
 ## Description
 This Self hosted application is used to automate the process of turning on/off a Sonos Speaker daily using on a Start/Stop Time (UTC) set in the config file or the UI.
-When using my Docker Image the application doesn't start the Sonos Speaker on Weekends and on Austrian holidays. I will add an option to change this behavior in the UI in near future. For now you have to manually adjust the code.
+The App also supports playing predefined TuneIn Stations ord Spotifiy Songs/Playlists/Albums.
 ____
 
 ## Info
-* Blazor Server Application (.Net 7)
+* Blazor Server Application (.Net 9)
 * Docker
-* Uses UTC time
 ____
 
 ## Mobile View
-![Screenshot 2022-12-14 084036](https://user-images.githubusercontent.com/50767771/207535102-0176c295-8d4f-49ca-90a4-a48dd46d42f9.png)
+![image](https://github.com/user-attachments/assets/08561ba0-3198-44a4-8074-3f5bf7858116)
+
 
 ____
 ## Usage
@@ -75,5 +75,3 @@ You can change the config to fit your needs or change it later in the UI.
 
 ## TODO
 * Add option to change the days which the automation should run
-* Add option to change the holiday location
-* Create a nice UI (Currently I am only using a minimalistic UI that only displays nicely on mobile)
