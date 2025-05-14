@@ -2,49 +2,54 @@
 @using System.Net.Http.Json
 @inject IJSRuntime JS
 
-<h4>📻 Station Lookup</h4>
+<div class="container d-flex justify-content-center align-items-center min-vh-100">
+    <div class="col-12 col-md-6">
+        <h4 class="text-center mb-4">📻 Station Lookup</h4>
 
-<div class="form-group mb-2">
-    <input class="form-control"
-           @bind-value="searchTerm"
-           @bind-value:event="oninput"
-           placeholder="Search for a radio station..."
-           @onkeydown="HandleKeyDown" />
-</div>
-<button class="btn btn-primary mb-3" @onclick="SearchStations" disabled="@string.IsNullOrWhiteSpace(searchTerm)">
-    Search
-</button>
+        <div class="form-group mb-2">
+            <input class="form-control"
+                   @bind-value="searchTerm"
+                   @bind-value:event="oninput"
+                   placeholder="Search for a radio station..."
+                   @onkeydown="HandleKeyDown" />
+        </div>
 
-@if (isLoading)
-{
-    <p>🔍 Searching...</p>
-}
-else if (results?.Any() == true)
-{
-    <ul class="list-group">
-        @foreach (var station in results)
+        <button class="btn btn-primary mb-3 w-100" @onclick="SearchStations" disabled="@string.IsNullOrWhiteSpace(searchTerm)">
+            Search
+        </button>
+
+        @if (isLoading)
         {
-            <li class="list-group-item d-flex justify-content-between align-items-start">
-                <div class="me-2">
-                    <strong>@station.Name</strong><br />
-                    <small class="text-muted">@station.Url</small>
-                </div>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
-                        🔊 Play
-                    </button>
-                    <button class="btn btn-outline-secondary" @onclick="() => CopyFormatted(station)">
-                        📋 Copy
-                    </button>
-                </div>
-            </li>
+            <p class="text-center">🔍 Searching...</p>
         }
-    </ul>
-}
-else if (results is not null)
-{
-    <p>No stations found.</p>
-}
+        else if (results?.Any() == true)
+        {
+            <ul class="list-group">
+                @foreach (var station in results)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="me-2">
+                            <strong>@station.Name</strong><br />
+                            <small class="text-muted">@station.Url</small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
+                                🔊 Play
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="() => CopyFormatted(station)">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+        else if (results is not null)
+        {
+            <p class="text-center">No stations found.</p>
+        }
+    </div>
+</div>
 
 @code {
     private SonosSettings? _settings;
@@ -57,7 +62,7 @@ else if (results is not null)
         await base.OnInitializedAsync();
         _settings = await _uow.ISettingsRepo.GetSettings();
     }
-    
+
     private async Task SearchStations()
     {
         isLoading = true;
@@ -68,7 +73,6 @@ else if (results is not null)
             var http = new HttpClient();
             string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm)}";
             results = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
-            
         }
         catch (Exception ex)
         {
@@ -77,7 +81,7 @@ else if (results is not null)
 
         isLoading = false;
     }
-    
+
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         // Check if the pressed key is the "Enter" key
@@ -115,10 +119,10 @@ else if (results is not null)
         // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
         var cleanUrl = uri.Host + uri.AbsolutePath;
         Console.WriteLine(cleanUrl);
-        
+
         return cleanUrl;
     }
-    
+
     private async Task PlayStation(string url)
     {
         if (_settings is not null)
