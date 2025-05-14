@@ -155,12 +155,92 @@
 
         <!-- Spotify URL Input Field -->
         <div class="form-section">
-            <h5>Spotify URL</h5>
+            <h5>Play Spotify URL</h5>
             <input type="text" class="form-control" @bind-value="spotifyUrl" @bind-value:event="oninput" @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL" />
         </div>
+        
+        
+        <!-- Title and Edit Button Inline -->
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0">Spotify Tracks</h5>
+            <button
+                class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                @onclick="() => isSpotifyEditMode = !isSpotifyEditMode">
+                <i class="fa fa-pencil"></i>
+                @(isEditMode ? "Done" : "Edit")
+            </button>
+        </div>
+
+        @if (isSpotifyEditMode)
+        {
+            <ul class="list-group">
+                <ul class="list-group">
+                    @foreach (var track in _tracks)
+                    {
+                        <li class="list-group-item bg-dark text-white px-3 py-2">
+                            <div class="row align-items-center">
+                                <div class="col-10 text-truncate">
+                                    @track.Name
+                                </div>
+                                <div class="col-2 text-end">
+                                    <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
+                                            title="Remove"
+                                            @onclick="() => RemoveSpotifyTrack(track)">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </ul>
+            
+            <div class="form-section mb-3">
+                @if (!string.IsNullOrEmpty(addStationErrorMessage))
+                {
+                    <div class="alert alert-danger mt-2" role="alert">
+                        @addTrackErrorMessage
+                    </div>
+                }
+                <hr/>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-control" 
+                           @bind="newTrackName" 
+                           @bind:event="oninput"
+                           placeholder="Crunchyroll Anime Essentials"/>
+                </div>
+                <div class="form-group">
+                    <label>Spotify URL</label>
+                    <input class="form-control"
+                           @bind="newTrackUrl"
+                           @bind:event="oninput"
+                           placeholder="e.g. https://open.spotify.com/playlist/37i9dQZF1DXcUJyJZNonKS"
+                           title="Enter a valid station URL like https://open.spotify.com/playlist/37i9dQZF1DXcUJyJZNonKS"/>
+                </div>
+                <button class="btn btn-success mt-2"
+                        @onclick="AddNewSpotifyTrack"
+                        disabled="@(!CanAddTrack)">
+                    Add Spotify Object
+                </button>
+            </div>
+        }
+        else
+        {
+            <!-- Regular Dropdown for Selection -->
+            <select class="form-select mt-2" @bind="selectedTrack">
+                <option value="">--Select Spotify Object--</option>
+                @foreach (var track in _tracks)
+                {
+                    <option value="@track.Url">@track.Name</option>
+                }
+            </select>
+        }
 
     </div>
 }
+
 
 @code {
     private SonosSettings? _settings;
@@ -170,12 +250,18 @@
     
     private bool isEditMode = false;
     private string newStationName = "";
+    private string newTrackName = "";
     private string newStationUrl = "";
+    private string newTrackUrl = "";
+    
+    
+    private bool isSpotifyEditMode = false;
     
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
     private Timer? _stationUpdateTimer;
     private string? addStationErrorMessage;
+    private string? addTrackErrorMessage;
     
     private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
     
@@ -215,10 +301,26 @@
             }
         }
     }
-    private bool CanAddStation => 
-        !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
+    private bool CanAddStation => !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
+    private bool CanAddTrack => !string.IsNullOrWhiteSpace(newTrackName) && !string.IsNullOrWhiteSpace(newTrackUrl);
 
     private string _selectedStation;
+    
+    
+    private string selectedTrack
+    {
+        get => _selectedTrack;
+        set
+        {
+            if (_selectedTrack != value)
+            {
+                _selectedTrack = value;
+                OnTrackChanged();  // Call the station change handler
+            }
+        }
+    }
+
+    private string _selectedTrack;
 
     private async Task OnStationChanged()
     {
@@ -228,6 +330,16 @@
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
 
+        }
+    }
+    
+    private async Task OnTrackChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedTrack) && _tracks.Any(s => s.Url == selectedTrack))
+        {
+            // Set the selected stream URL to the Sonos speaker
+            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
         }
     }
 
@@ -284,6 +396,8 @@
     }
 
     private List<TuneInStation> _stations => _settings?.Stations ?? new();
+    
+    private List<SpotifyObject> _tracks => _settings?.SpotifyTracks ?? new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -408,6 +522,41 @@
 
         _settings.Stations?.Remove(station);
         await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Remove Spotify track
+    private async Task RemoveSpotifyTrack(SpotifyObject track)
+    {
+        _settings.SpotifyTracks.Remove(track);
+        // You may also want to save the settings after removing it
+        Console.WriteLine($"Removed track: {track.Name}");
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Add a new Spotify track
+    private async Task AddNewSpotifyTrack()
+    {
+        if (string.IsNullOrWhiteSpace(newTrackName))
+        {
+            addStationErrorMessage = "Station name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newTrackUrl))
+        {
+            addStationErrorMessage = "Station URL is required.";
+            return;
+        }
+        
+        // Example: Open a form to add a new track
+        _settings.SpotifyTracks.Add(new SpotifyObject(){Name = newTrackName, Url = newTrackUrl});
+        Console.WriteLine("Added new Spotify track.");
+        
+        await SaveSettings();
+        
+        addStationErrorMessage = null;
         await InvokeAsync(StateHasChanged);
     }
 

@@ -17,5 +17,10 @@ namespace SonosControl.DAL.Models
             new TuneInStation { Name = "Ö3", Url = "orf-live.ors-shoutcast.at/oe3-q2a" },
             new TuneInStation { Name = "Radio Paloma", Url = "www3.radiopaloma.de/RP-Hauptkanal.pls" }
         };
+        public List<SpotifyObject> SpotifyTracks { get; set; } = new()
+        {
+            new SpotifyObject { Name = "Top 50 Global", Url = "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF" },
+            new SpotifyObject { Name = "Astroworld", Url = "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I" }
+        };
     }
 }
