@@ -75,17 +75,24 @@ namespace SonosControl.DAL.Repos
 
         public async Task SetTuneInStationAsync(string ip, string stationUri)
         {
+            // Decide which URI to send:
+            //  - If the stationUri already contains "://", use it as-is.
+            //  - Otherwise assume it's a plain TuneIn stream and prefix with x-rincon-mp3radio://
+            string currentUri = stationUri.Contains("://") 
+                ? stationUri 
+                : $"x-rincon-mp3radio://{stationUri}";
+
             string soapRequest = $@"
-            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-              <s:Body>
-                <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                  <InstanceID>0</InstanceID>
-                  <CurrentURI>x-rincon-mp3radio://{stationUri}</CurrentURI>
-                  <CurrentURIMetaData></CurrentURIMetaData>
-                </u:SetAVTransportURI>
-              </s:Body>
-            </s:Envelope>";
+    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" 
+                s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+      <s:Body>
+        <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+          <InstanceID>0</InstanceID>
+          <CurrentURI>{currentUri}</CurrentURI>
+          <CurrentURIMetaData></CurrentURIMetaData>
+        </u:SetAVTransportURI>
+      </s:Body>
+    </s:Envelope>";
 
             var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
@@ -95,20 +102,17 @@ namespace SonosControl.DAL.Repos
             try
             {
                 var response = await HttpClient.PostAsync(url, content);
-                if (response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine("Station set successfully!");
-                }
-                else
-                {
-                    Console.WriteLine($"Error setting station: {response.ReasonPhrase}");
-                }
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine("Station set successfully!");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception setting TuneIn station: {ex.Message}");
+                Console.WriteLine($"Error setting station: {ex.Message}");
             }
+
+            await StartPlaying(ip);
         }
+
 
         public async Task<string> GetCurrentTrackAsync(string ip)
         {

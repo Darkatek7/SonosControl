@@ -21,7 +21,12 @@ namespace SonosControl.DAL.Repos
                 return new();
 
             var jsonString = await File.ReadAllTextAsync("./Data/config.json");
-            return JsonConvert.DeserializeObject<SonosSettings?>(jsonString);
+            var settings = JsonConvert.DeserializeObject<SonosSettings?>(jsonString, new JsonSerializerSettings
+            {
+                ObjectCreationHandling = ObjectCreationHandling.Replace
+            });
+            
+            return settings;
         }
     }
 }
