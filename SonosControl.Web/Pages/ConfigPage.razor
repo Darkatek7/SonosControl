@@ -1,0 +1,159 @@
+﻿@page "/config"
+
+@if (_settings is null)
+{
+    <p class="text-muted">Loading settings...</p>
+}
+else
+{
+    <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
+        <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
+
+        <div class="mb-3">
+            <label class="form-label">💻 IP Address</label>
+            <input type="text" class="form-control bg-secondary text-light border-0" 
+                   @bind-value="IP_Adress" 
+                   @bind-value:event="oninput" 
+                   placeholder="Enter IP Address" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">🔉 Volume</label>
+            <input type="number" class="form-control bg-secondary text-light border-0" 
+                   max="100" min="1" 
+                   @bind-value="Volume" 
+                   @bind-value:event="oninput" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">⏰ Start Time</label>
+            <input type="time" class="form-control bg-secondary text-light border-0" 
+                   @bind-value="StartTime" 
+                   @bind-value:event="oninput" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">🛑 Stop Time</label>
+            <input type="time" class="form-control bg-secondary text-light border-0" 
+                   @bind-value="StopTime" 
+                   @bind-value:event="oninput" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">📅 Server Time</label>
+            <input type="time" class="form-control bg-secondary text-light border-0" 
+                   disabled 
+                   @bind-value="TimeRightNow" />
+        </div>
+    </div>
+
+}
+
+
+@code {
+    private SonosSettings? _settings;
+    private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        _settings = await _uow.ISettingsRepo.GetSettings();
+
+        if (_settings!.IP_Adress is "10.0.0.0")
+            return;
+        //await LoadQueue();
+    }
+
+    private TimeOnly StartTime
+    {
+        get => _settings!.StartTime;
+        set
+        {
+            _settings!.StartTime = value;
+            SaveSettings();
+        }
+    }
+
+    private TimeOnly StopTime
+    {
+        get => _settings!.StopTime;
+        set
+        {
+            _settings!.StopTime = value;
+            SaveSettings();
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        await _uow.ISettingsRepo.WriteSettings(_settings!);
+    }
+    
+    private int Volume
+    {
+        get => _settings!.Volume;
+        set
+        {
+            _settings!.Volume = value;
+            _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
+            SaveSettings();
+        }
+    }
+    
+    private string IP_Adress
+    {
+        get => _settings!.IP_Adress;
+        set
+        {
+            _settings!.IP_Adress = value;
+            SaveSettings();
+        }
+    }
+}
+
+
+<style>
+    body {
+        background-color: #121212;
+        color: #e0e0e0;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #1e1e1e;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-section {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        font-weight: bold;
+        color: #bbbbbb;
+    }
+
+    .form-control, .form-select {
+        background-color: #333333;
+        border: 1px solid #555555;
+        color: #ffffff;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .form-control:disabled {
+        background-color: #333333 !important;
+        color: #bbbbbb !important;
+        border: 1px solid #555555 !important;
+        opacity: 1; /* Prevents browsers from making it look faded */
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #888888;
+        outline: none;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    }
+</style>
