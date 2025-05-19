@@ -109,7 +109,7 @@
                         <li class="list-group-item bg-dark text-white px-3 py-2">
                             <div class="row align-items-center">
                                 <div class="col-10 text-truncate">
-                                    @station.Name
+                                    @(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)
                                 </div>
                                 <div class="col-2 text-end">
                                     <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
@@ -129,7 +129,7 @@
                     <option value="">-- Select Station --</option>
                     @foreach (var station in _stations)
                     {
-                        <option value="@station.Url">@station.Name</option>
+                        <option value="@station.Url">@(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)</option>
                     }
                 </select>
             }
@@ -200,7 +200,7 @@
                     <option value="">-- Select Spotify Track --</option>
                     @foreach (var track in _tracks)
                     {
-                        <option value="@track.Url">@track.Name</option>
+                        <option value="@track.Url">@(track.Name.Length > 33 ? track.Name.Substring(0, 33) + "..." : track.Name)</option>
                     }
                 </select>
             }
