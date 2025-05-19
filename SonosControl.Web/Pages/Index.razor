@@ -17,9 +17,9 @@
                         <strong>Now Playing</strong>
                         <p class="mb-0 text-light-emphasis">Click to pause playback.</p>
                     </div>
-                    <div>
+                    <div class="d-flex align-items-center">
                         <button class="btn btn-danger me-2" @onclick="@(() => Play(false))">
-                            <i class="fa fa-pause"></i> Pause
+                            <i class="fa fa-pause"></i>
                         </button>
                         @if (_isSpotifyPlaying)
                         {
@@ -27,6 +27,9 @@
                                 <i class="fa fa-forward"></i>
                             </button>
                         }
+                        <button class="btn btn-primary me-2" @onclick="ShuffleStation" title="Shuffle">
+                            🔀
+                        </button>
                     </div>
                 </div>
             }
@@ -37,9 +40,14 @@
                         <strong>Playback Paused</strong>
                         <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
                     </div>
-                    <button class="btn btn-success" @onclick="() => Play(true)">
-                        <i class="fa fa-play"></i> Play
-                    </button>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-success me-2" @onclick="() => Play(true)">
+                            <i class="fa fa-play"></i>
+                        </button>
+                        <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
+                            🔀
+                        </button>
+                    </div>
                 </div>
             }
         </div>
@@ -242,22 +250,38 @@
         if (_settings is not null)
         {
             var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-            currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "");
+            currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "").Trim();
 
-            if (currentStationUrl.Contains("spotify"))
+            if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
             {
                 currentStationDisplay = "Spotify";
                 _isSpotifyPlaying = true;
             }
             else
             {
-                currentStationDisplay = _stations.FirstOrDefault(s => s.Url == currentStationUrl)?.Name ?? currentStationUrl;
+                // Try to match with saved stations first
+                var matched = _stations.FirstOrDefault(s => s.Url == currentStationUrl);
+                if (matched != null)
+                {
+                    currentStationDisplay = matched.Name;
+                }
+                else
+                {
+                    // Try to get a clean name from metadata (reverse lookup)
+                    currentStationDisplay = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+
+                    // Optional: fallback to showing the URL if still unknown
+                    if (string.IsNullOrWhiteSpace(currentStationDisplay))
+                        currentStationDisplay = currentStationUrl;
+                }
+
                 _isSpotifyPlaying = false;
             }
 
             await InvokeAsync(StateHasChanged);
         }
     }
+
 
     private string selectedStation
     {
@@ -488,7 +512,18 @@
         
         await InvokeAsync(StateHasChanged);
     }
+    
+    private Random _random = new();
 
+    private async Task ShuffleStation()
+    {
+        if (_settings?.Stations != null && _settings.Stations.Any())
+        {
+            var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
+            selectedStation = randomStation; // This triggers OnStationChanged()
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
+        }
+    }
 }
 
 <style>
@@ -612,4 +647,5 @@
         width: auto;
         white-space: nowrap;
     }
+
 </style>
