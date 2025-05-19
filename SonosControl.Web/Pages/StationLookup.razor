@@ -5,6 +5,20 @@
 <div class="container d-flex justify-content-center align-items-center min-vh-100">
     <div class="col-12 col-md-6">
         <h4 class="text-center mb-4">📻 Station Lookup</h4>
+        
+        @if (!string.IsNullOrEmpty(saveSuccessMessage))
+        {
+            <div class="alert alert-success" role="alert">
+                @saveSuccessMessage
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(addStationErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                @addStationErrorMessage
+            </div>
+        }
+
 
         <div class="form-group mb-2">
             <input class="form-control"
@@ -29,15 +43,15 @@
                 {
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="me-2">
-                            <strong>@station.Name</strong><br />
-                            <small class="text-muted">@station.Url</small>
+                            <strong>@(station.Name.Length > 50 ? station.Name.Substring(0, 50) + "..." : station.Name)</strong><br />
+                            <small class="text-muted">@GetCleanUrl(station.Url)</small>
                         </div>
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
                                 🔊 Play
                             </button>
-                            <button class="btn btn-outline-secondary" @onclick="() => CopyFormatted(station)">
-                                📋 Copy
+                            <button class="btn btn-outline-primary" @onclick="() => SaveStation(station)">
+                                💾 Save
                             </button>
                         </div>
                     </li>
@@ -46,7 +60,7 @@
         }
         else if (results is not null)
         {
-            <p class="text-center">No stations found.</p>
+            <p class="text-center text-white">No stations found.</p>
         }
     </div>
 </div>
@@ -56,6 +70,7 @@
     private string searchTerm;
     private List<RadioStation> results;
     private bool isLoading = false;
+    private string? saveSuccessMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -118,7 +133,6 @@
         var uri = new Uri(url);
         // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
         var cleanUrl = uri.Host + uri.AbsolutePath;
-        Console.WriteLine(cleanUrl);
 
         return cleanUrl;
     }
@@ -128,6 +142,7 @@
         if (_settings is not null)
         {
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, GetCleanUrl(url));
+            Console.WriteLine($@"Station {url} played successfully.");
         }
     }
 
@@ -138,4 +153,74 @@
         public string Country { get; set; }
         public string Tags { get; set; }
     }
+    
+    private string? addStationErrorMessage;
+
+    private async Task SaveStation(RadioStation station)
+    {
+        addStationErrorMessage = null;
+        saveSuccessMessage = null;
+
+        if (_settings == null)
+        {
+            _settings = new SonosSettings();
+        }
+
+        if (_settings.Stations == null)
+        {
+            _settings.Stations = new List<TuneInStation>();
+        }
+
+        try
+        {
+            string normalizedUrl = NormalizeUrl(station.Url);
+            string normalizedName = station.Name.Trim().ToLowerInvariant();
+
+            bool alreadyExists = _settings.Stations.Any(s =>
+                NormalizeUrl(s.Url) == normalizedUrl ||
+                s.Name.Trim().ToLowerInvariant() == normalizedName);
+
+            if (alreadyExists)
+            {
+                addStationErrorMessage = "Station is already saved.";
+                return;
+            }
+
+            _settings.Stations.Add(new TuneInStation { Name = station.Name, Url = station.Url });
+            await SaveSettings();
+
+            saveSuccessMessage = $"✅ \"{station.Name}\" saved!";
+            Console.WriteLine($@"Station {station.Name} saved successfully.");
+
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(3000);
+            saveSuccessMessage = null;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            addStationErrorMessage = $"Error saving station: {ex.Message}";
+        }
+    }
+
+    private string NormalizeUrl(string url)
+    {
+        try
+        {
+            var uri = new Uri(url);
+            return uri.Host.ToLowerInvariant().TrimEnd('/') + uri.AbsolutePath.ToLowerInvariant().TrimEnd('/');
+        }
+        catch
+        {
+            return url?.Trim().ToLowerInvariant() ?? "";
+        }
+    }
+
+
+    private async Task SaveSettings()
+    {
+        // Implement your settings saving logic here, for example:
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+    }
+
 }
