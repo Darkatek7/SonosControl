@@ -14,9 +14,16 @@ ____
 * Docker
 ____
 
-## Mobile View
-![image](https://github.com/user-attachments/assets/08561ba0-3198-44a4-8074-3f5bf7858116)
+## UI
+### Index
+![image](https://github.com/user-attachments/assets/91de85bb-c1ca-434d-9480-57eb02fd9ea6)
 
+### Config
+![image](https://github.com/user-attachments/assets/88e804df-c6a1-458e-8ed3-0f1ddef2d4ee)
+
+### Station Lookup
+![image](https://github.com/user-attachments/assets/263a3161-c104-4060-88b5-89e7f93f7066)
+![image](https://github.com/user-attachments/assets/e3a156f9-2af2-4fdf-96f0-07c78efc4f4f)
 
 ____
 ## Usage
@@ -38,7 +45,7 @@ services:
     container_name: sonos
     image: darkatek7/sonoscontrol:latest        # docker image
     ports:
-      - 80:80                                   # port used for localhost ip
+      - 8080:8080                               # port used for localhost ip
     restart: unless-stopped                     # restart policy
     environment:
       - TZ:"Europe/Vienna"
