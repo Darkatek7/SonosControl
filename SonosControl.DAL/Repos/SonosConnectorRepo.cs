@@ -163,14 +163,14 @@ namespace SonosControl.DAL.Repos
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
                 var content = new StringContent(
                     @"<?xml version=""1.0"" encoding=""utf-8""?>
-            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-                <s:Body>
-                    <u:GetMediaInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                        <InstanceID>0</InstanceID>
-                    </u:GetMediaInfo>
-                </s:Body>
-            </s:Envelope>", Encoding.UTF8, "text/xml");
+                        <s:Body>
+                            <u:GetMediaInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                                <InstanceID>0</InstanceID>
+                            </u:GetMediaInfo>
+                        </s:Body>
+                    </s:Envelope>", Encoding.UTF8, "text/xml");
 
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo\"");
@@ -180,18 +180,12 @@ namespace SonosControl.DAL.Repos
 
                 var xml = await response.Content.ReadAsStringAsync();
 
-                // Extract metadata, often contains the station title
-                var metadataMatch = Regex.Match(xml, @"<CurrentURIMetaData>(?<meta>.*?)</CurrentURIMetaData>", RegexOptions.Singleline);
-                if (metadataMatch.Success)
-                {
-                    var metadata = System.Net.WebUtility.HtmlDecode(metadataMatch.Groups["meta"].Value);
+                // Extract the station title from the XML response using Regex
+                var match = Regex.Match(xml, @"<CurrentURI>(?<stationUrl>.*?)</CurrentURI>", RegexOptions.Singleline);
 
-                    // Search for <dc:title> or <r:streamContent>
-                    var titleMatch = Regex.Match(metadata, @"<dc:title>(?<title>.*?)</dc:title>");
-                    if (titleMatch.Success)
-                    {
-                        return titleMatch.Groups["title"].Value.Trim(); // You can now search Radio-Browser with this
-                    }
+                if (match.Success)
+                {
+                    return match.Groups["stationUrl"].Value;
                 }
 
                 return "Unknown Station";
@@ -201,7 +195,6 @@ namespace SonosControl.DAL.Repos
                 return $"Error: {ex.Message}";
             }
         }
-
 
         public async Task<string?> SearchSpotifyTrackAsync(string query, string accessToken)
         {
