@@ -1,0 +1,82 @@
+﻿@{
+    Layout = null; // No master layout, full standalone page
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        form {
+            max-width: 320px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        div.form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        input[type=text], input[type=password] {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        .error-message {
+            color: red;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #0078d4;
+            color: white;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <form method="post" action="/auth/login">
+        <h2 style="text-align:center;">Login</h2>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="error-message">@ViewBag.Error</div>
+        }
+
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" required autofocus />
+        </div>
+
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required />
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center;">
+            <input id="rememberMe" name="rememberMe" type="checkbox" />
+            <label for="rememberMe" style="margin-left: 5px;">Remember Me</label>
+        </div>
+
+        <button type="submit">Log In</button>
+    </form>
+</body>
+</html>

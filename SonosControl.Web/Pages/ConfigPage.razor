@@ -1,5 +1,7 @@
 ﻿@page "/config"
-
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@if (isAuthenticated)
+{
 @if (_settings is null)
 {
     <p class="text-muted">Loading settings...</p>
@@ -48,20 +50,35 @@ else
     </div>
 
 }
-
+}
+else
+{
+<div class="alert alert-warning">
+    You must be logged in to view this page.
+</div>
+}
 
 @code {
     private SonosSettings? _settings;
     private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
+    private bool isAuthenticated;
     
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        _settings = await _uow.ISettingsRepo.GetSettings();
+        
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
 
-        if (_settings!.IP_Adress is "10.0.0.0")
-            return;
-        //await LoadQueue();
+        if (isAuthenticated)
+        {
+            _settings = await _uow.ISettingsRepo.GetSettings();
+
+            if (_settings!.IP_Adress is "10.0.0.0")
+                return;
+            //await LoadQueue();
+        }
     }
 
     private TimeOnly StartTime

@@ -349,3 +349,4 @@ healthchecksdb
 MigrationBackup/
 .Data/
 config.json
+app.db

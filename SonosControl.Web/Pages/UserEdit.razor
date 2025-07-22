@@ -1,0 +1,120 @@
+﻿@page "/useredit/{UserId}"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager NavigationManager
+
+<h3>Edit User</h3>
+
+@if (user == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div>
+            <label>First Name:</label>
+            <InputText @bind-Value="editModel.FirstName" />
+        </div>
+        <div>
+            <label>Last Name:</label>
+            <InputText @bind-Value="editModel.LastName" />
+        </div>
+        <div>
+            <label>Email:</label>
+            <InputText @bind-Value="editModel.Email" />
+        </div>
+        <div>
+            <label>Username:</label>
+            <InputText @bind-Value="editModel.UserName" />
+        </div>
+
+        <button type="submit">Save</button>
+        <button type="button" @onclick="Cancel">Cancel</button>
+    </EditForm>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <p>@statusMessage</p>
+    }
+}
+
+@code {
+    [Parameter]
+    public string UserId { get; set; }
+
+    private ApplicationUser user;
+    private EditUserModel editModel = new();
+    private string statusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserManager.FindByIdAsync(UserId);
+
+        if (user != null)
+        {
+            editModel = new EditUserModel
+            {
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Email = user.Email,
+                UserName = user.UserName
+            };
+        }
+        else
+        {
+            statusMessage = "User not found.";
+        }
+    }
+
+    private async Task HandleUpdate()
+    {
+        if (user == null)
+        {
+            statusMessage = "User not loaded.";
+            return;
+        }
+
+        // Update user properties
+        user.FirstName = editModel.FirstName;
+        user.LastName = editModel.LastName;
+        user.Email = editModel.Email;
+        user.UserName = editModel.UserName;
+
+        // Update user in database
+        var result = await UserManager.UpdateAsync(user);
+        if (result.Succeeded)
+        {
+            statusMessage = "User updated successfully!";
+            // Optionally redirect
+            // NavigationManager.NavigateTo("/users");
+        }
+        else
+        {
+            statusMessage = "Error updating user: " + string.Join(", ", result.Errors.Select(e => e.Description));
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/users"); // Adjust redirect as needed
+    }
+
+    public class EditUserModel
+    {
+        [Required]
+        public string FirstName { get; set; }
+        [Required]
+        public string LastName { get; set; }
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; }
+        [Required]
+        public string UserName { get; set; }
+    }
+}
