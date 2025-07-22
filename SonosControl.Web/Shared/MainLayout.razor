@@ -1,4 +1,9 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>SonosControl.Web</PageTitle>
 
@@ -8,8 +13,21 @@
     </div>
 
     <main>
-        <!-- <div class="top-row px-4"></div> -->
+        <div class="top-row px-4 d-flex justify-content-end align-items-center" style="height: 50px;">
+            @if (!isAuthenticated)
+            {
+                <a href="/auth/login" class="top-link me-3">Login</a>
+                <!-- <a href="/register" class="top-link btn-primary px-3 py-1 rounded">Register</a> -->
+            }
+            else
+            {
+                <span class="me-3">Hello, @firstName!</span>
 
+                <form method="post" action="/auth/logout" style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger">Logout</button>
+                </form>
+            }
+        </div>
 
         <article class="content px-4">
             @Body
@@ -17,10 +35,75 @@
     </main>
 </div>
 
+@code {
+    private string? firstName;
+    private bool isAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
+        if (isAuthenticated)
+        {
+            var appUser = await UserManager.GetUserAsync(user);
+            firstName = appUser?.FirstName ?? user.Identity?.Name;
+        }
+    }
+
+    private async Task Logout(MouseEventArgs e)
+    {
+        // POST logout via JS fetch
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        var response = await http.PostAsync("auth/logout", null);
+        if (response.IsSuccessStatusCode)
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+}
+
 <style>
     .top-row {
-    background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
-    border-bottom: 1px solid #333333;
-}
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+        border-bottom: 1px solid #333333;
+        height: 50px;
+    }
+    .top-link {
+        color: #e0e0e0;
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-weight: 500;
+        transition: background-color 0.3s ease;
+        cursor: pointer;
+        display: inline-block;
+    }
+    .top-link:hover {
+        background-color: #555;
+        color: #fff;
+        text-decoration: none;
+    }
+    .btn-primary {
+        background-color: #007bff;
+        border: none;
+    }
+    .btn-primary:hover {
+        background-color: #0056b3;
+        color: #fff;
+    }
+    .logout-link {
+        background-color: #dc3545;
+        border-radius: 4px;
+        padding: 6px 12px;
+    }
+    .logout-link:hover {
+        background-color: #b02a37;
+        color: white;
+    }
 </style>

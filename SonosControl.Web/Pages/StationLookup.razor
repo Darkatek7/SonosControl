@@ -2,6 +2,9 @@
 @using System.Net.Http.Json
 @inject IJSRuntime JS
 
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@if (isAuthenticated)
+{
 <div class="container d-flex justify-content-center align-items-center min-vh-100">
     <div class="col-12 col-md-6">
         <h4 class="text-center mb-4">📻 Station Lookup</h4>
@@ -64,6 +67,13 @@
         }
     </div>
 </div>
+}}
+else
+{
+<div class="alert alert-warning">
+    You must be logged in to view this page.
+</div>
+}
 
 @code {
     private SonosSettings? _settings;
@@ -71,11 +81,20 @@
     private List<RadioStation> results;
     private bool isLoading = false;
     private string? saveSuccessMessage;
+    private bool isAuthenticated;
 
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        _settings = await _uow.ISettingsRepo.GetSettings();
+        
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
+        if (isAuthenticated)
+        {
+            _settings = await _uow.ISettingsRepo.GetSettings();
+        }
     }
 
     private async Task SearchStations()

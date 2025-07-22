@@ -1,0 +1,20 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Logging out...</title>
+</head>
+<body>
+<form method="post" action="/auth/logout">
+    <button type="submit">Click here if you are not redirected automatically</button>
+</form>
+
+<script>
+        // Auto-submit form on page load to logout immediately
+        document.forms[0].submit();
+    </script>
+</body>
+</html>

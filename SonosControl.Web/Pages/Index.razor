@@ -1,8 +1,11 @@
 ﻿@page "/"
 @using System.Text.RegularExpressions
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
 
 <PageTitle>Sonos Control</PageTitle>
-
+@if (isAuthenticated)
+{
 @if (_settings is not null)
 {
     <div class="container p-4 bg-dark text-light rounded-4 shadow">
@@ -216,6 +219,12 @@
                    @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL" />
         </div>
     </div>
+}}
+else
+{
+    <div class="alert alert-warning">
+        You must be logged in to view this page.
+    </div>
 }
 
 
@@ -225,6 +234,8 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+    
+    private bool isAuthenticated;
     
     private bool isEditMode = false;
     private string newStationName = "";
@@ -395,17 +406,23 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await base.OnInitializedAsync();
-        _settings = await _uow.ISettingsRepo.GetSettings();
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
 
-        if (_settings!.IP_Adress is "10.0.0.0")
-            return;
+        if (isAuthenticated)
+        {
+            // Load your settings and initialize page as before
+            _settings = await _uow.ISettingsRepo.GetSettings();
 
-        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
-        await SaveSettings();
-        _isPlaying = await IsPlaying();
-        _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 5000);
-        //await LoadQueue();
+            if (_settings!.IP_Adress is "10.0.0.0")
+                return;
+
+            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+            await SaveSettings();
+            _isPlaying = await IsPlaying();
+            _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 5000);
+        }
     }
 
     private async Task Play(bool play)
