@@ -64,3 +64,126 @@
             .ToList();
     }
 }
+
+<style>
+    body {
+        background-color: #121212;
+        color: #e0e0e0;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #1e1e1e;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-section {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        font-weight: bold;
+        color: #bbbbbb;
+    }
+
+    .form-control, .form-select {
+        background-color: #333333;
+        border: 1px solid #555555;
+        color: #ffffff;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .form-control:disabled {
+        background-color: #333333 !important;
+        color: #bbbbbb !important;
+        border: 1px solid #555555 !important;
+        opacity: 1; /* Prevents browsers from making it look faded */
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #888888;
+        outline: none;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    }
+
+    .alert {
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+
+    .alert-success {
+        background-color: #2e7d32;
+        color: #ffffff;
+        border: 1px solid #1b5e20;
+    }
+
+    .alert-warning {
+        background-color: #b8860b;
+        color: #ffffff;
+        border: 1px solid #8b6508;
+    }
+
+    .btn {
+        width: 100%;
+        border-radius: 5px;
+    }
+
+    .btn-danger {
+        background-color: #d32f2f;
+        border: 1px solid #b71c1c;
+        color: #ffffff;
+    }
+
+    .btn-danger:hover {
+        background-color: #b71c1c;
+    }
+
+    .btn-success {
+        background-color: #388e3c;
+        border: 1px solid #2e7d32;
+        color: #ffffff;
+    }
+
+    .btn-success:hover {
+        background-color: #2e7d32;
+    }
+
+    .list-group-item {
+        border: 1px solid #555;
+    }
+
+    input.form-control.bg-secondary::placeholder {
+        color: rgba(255, 255, 255, 0.6); /* soft white */
+    }
+
+    .station-remove-btn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+    }
+
+    .station-remove-btn {
+        font-size: 0.8rem;
+        line-height: 1;
+        padding: 2px 6px;
+    }
+
+    .btn-inline {
+        width: auto !important;
+        margin-top: 0 !important;
+    }
+
+    .station-remove-btn,
+    .spotify-remove-btn {
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        line-height: 1;
+        width: auto;
+        white-space: nowrap;
+    }
+
+</style>
