@@ -95,10 +95,54 @@ nano Data/config.json
 and paste the following:
 ```
 {
-    "Volume": 14,
-    "StartTime": "06:00:00",
-    "StopTime": "18:00:00",
-    "IP_Adress": "10.0.0.1"
+  "Volume": 15,
+  "StartTime": "06:45:00",
+  "StopTime": "17:30:00",
+  "IP_Adress": "10.0.0.1",
+  "Stations": [
+    {
+      "Name": "Antenne Vorarlberg",
+      "Url": "web.radio.antennevorarlberg.at/av-live/stream/mp3"
+    },
+    {
+      "Name": "Radio V",
+      "Url": "orf-live.ors-shoutcast.at/vbg-q2a"
+    },
+    {
+      "Name": "Rock Antenne Bayern",
+      "Url": "stream.rockantenne.bayern/80er-rock/stream/mp3"
+    },
+    {
+      "Name": "Kronehit",
+      "Url": "onair.krone.at/kronehit.mp3"
+    },
+    {
+      "Name": "Ö3",
+      "Url": "orf-live.ors-shoutcast.at/oe3-q2a"
+    },
+    {
+      "Name": "Radio Paloma",
+      "Url": "www3.radiopaloma.de/RP-Hauptkanal.pls"
+    },
+    {
+      "Name": "365 days christmas",
+      "Url": "us3.streamingpulse.com/ssl/7038"
+    },
+    {
+      "Name": "__BREAKZ.FM__ by rautemusik (rm.fm)",
+      "Url": "breakz-high.rautemusik.fm/"
+    }
+  ],
+  "SpotifyTracks": [
+    {
+      "Name": "Top 50 Global",
+      "Url": "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF"
+    },
+    {
+      "Name": "Astroworld",
+      "Url": "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I"
+    }
+  ]
 }
 ```
 You can change the config to fit your needs or change it later in the UI.
