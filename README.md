@@ -35,8 +35,9 @@ ____
 ![image](https://github.com/user-attachments/assets/88e804df-c6a1-458e-8ed3-0f1ddef2d4ee)
 
 ### Station Lookup
-![image](https://github.com/user-attachments/assets/263a3161-c104-4060-88b5-89e7f93f7066)
-![image](https://github.com/user-attachments/assets/e3a156f9-2af2-4fdf-96f0-07c78efc4f4f)
+<img width="977" height="1581" alt="image" src="https://github.com/user-attachments/assets/170d5aeb-a887-4e93-be20-f66020cad955" />
+
+
 
 ____
 ## Usage
