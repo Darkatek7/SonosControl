@@ -1,62 +1,63 @@
 ﻿@page "/config"
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@if (isAuthenticated)
-{
-@if (_settings is null)
-{
-    <p class="text-muted">Loading settings...</p>
-}
-else
-{
-    <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
-        <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
 
-        <div class="mb-3">
-            <label class="form-label">💻 IP Address</label>
-            <input type="text" class="form-control bg-secondary text-light border-0" 
-                   @bind-value="IP_Adress" 
-                   @bind-value:event="oninput" 
-                   placeholder="Enter IP Address" />
+<AuthorizeView Roles="admin,operator">
+    <Authorized>
+        @if (_settings is null)
+        {
+            <p class="text-muted">Loading settings...</p>
+        }
+        else
+        {
+            <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
+                <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
+        
+                <div class="mb-3">
+                    <label class="form-label">💻 IP Address</label>
+                    <input type="text" class="form-control bg-secondary text-light border-0" 
+                           @bind-value="IP_Adress" 
+                           @bind-value:event="oninput" 
+                           placeholder="Enter IP Address" />
+                </div>
+        
+                <div class="mb-3">
+                    <label class="form-label">🔉 Volume</label>
+                    <input type="number" class="form-control bg-secondary text-light border-0" 
+                           max="100" min="1" 
+                           @bind-value="Volume" 
+                           @bind-value:event="oninput" />
+                </div>
+        
+                <div class="mb-3">
+                    <label class="form-label">⏰ Start Time</label>
+                    <input type="time" class="form-control bg-secondary text-light border-0" 
+                           @bind-value="StartTime" 
+                           @bind-value:event="oninput" />
+                </div>
+        
+                <div class="mb-3">
+                    <label class="form-label">🛑 Stop Time</label>
+                    <input type="time" class="form-control bg-secondary text-light border-0" 
+                           @bind-value="StopTime" 
+                           @bind-value:event="oninput" />
+                </div>
+        
+                <div class="mb-3">
+                    <label class="form-label">📅 Server Time</label>
+                    <input type="time" class="form-control bg-secondary text-light border-0" 
+                           disabled 
+                           @bind-value="TimeRightNow" />
+                </div>
+            </div>
+        
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            You must be logged in as an admin or operator to view this page.
         </div>
-
-        <div class="mb-3">
-            <label class="form-label">🔉 Volume</label>
-            <input type="number" class="form-control bg-secondary text-light border-0" 
-                   max="100" min="1" 
-                   @bind-value="Volume" 
-                   @bind-value:event="oninput" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">⏰ Start Time</label>
-            <input type="time" class="form-control bg-secondary text-light border-0" 
-                   @bind-value="StartTime" 
-                   @bind-value:event="oninput" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">🛑 Stop Time</label>
-            <input type="time" class="form-control bg-secondary text-light border-0" 
-                   @bind-value="StopTime" 
-                   @bind-value:event="oninput" />
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">📅 Server Time</label>
-            <input type="time" class="form-control bg-secondary text-light border-0" 
-                   disabled 
-                   @bind-value="TimeRightNow" />
-        </div>
-    </div>
-
-}
-}
-else
-{
-<div class="alert alert-warning">
-    You must be logged in to view this page.
-</div>
-}
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
     private SonosSettings? _settings;

@@ -1,231 +1,232 @@
 ﻿@page "/"
 @using System.Text.RegularExpressions
 @inject AuthenticationStateProvider AuthenticationStateProvider
-
+@attribute [Authorize(Roles = "admin,operator")]
 
 <PageTitle>Sonos Control</PageTitle>
-@if (isAuthenticated)
-{
-@if (_settings is not null)
-{
-    <div class="container p-4 bg-dark text-light rounded-4 shadow">
-        <h3 class="mb-4 border-bottom pb-2">🎛️ Sonos Control Panel</h3>
-
-        <!-- Playback Status -->
-        <div class="mb-4">
-            @if (_isPlaying)
-            {
-                <div class="alert alert-success d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>Now Playing</strong>
-                        <p class="mb-0 text-light-emphasis">Click to pause playback.</p>
+<AuthorizeView Roles="admin,operator">
+    <Authorized>
+        @if (_settings is not null)
+        {
+            <div class="container p-4 bg-dark text-light rounded-4 shadow">
+                <h3 class="mb-4 border-bottom pb-2">🎛️ Sonos Control Panel</h3>
+        
+                <!-- Playback Status -->
+                <div class="mb-4">
+                    @if (_isPlaying)
+                    {
+                        <div class="alert alert-success d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Now Playing</strong>
+                                <p class="mb-0 text-light-emphasis">Click to pause playback.</p>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-danger me-2" @onclick="@(() => Play(false))">
+                                    <i class="fa fa-pause"></i>
+                                </button>
+                                @if (_isSpotifyPlaying)
+                                {
+                                    <button class="btn btn-primary" @onclick="NextTrack">
+                                        <i class="fa fa-forward"></i>
+                                    </button>
+                                }
+                                <button class="btn btn-primary me-2" @onclick="ShuffleStation" title="Shuffle">
+                                    🔀
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Playback Paused</strong>
+                                <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-success me-2" @onclick="() => Play(true)">
+                                    <i class="fa fa-play"></i>
+                                </button>
+                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
+                                    🔀
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+        
+                <!-- Now Playing Card -->
+                <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="me-3 display-6">🎵</div>
+                        <div>
+                            <h5 class="mb-1">Currently Playing</h5>
+                            <p class="mb-0 text-light-emphasis">@currentStationDisplay</p>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center">
-                        <button class="btn btn-danger me-2" @onclick="@(() => Play(false))">
-                            <i class="fa fa-pause"></i>
+                </div>
+        
+                <!-- TuneIn Station Section -->
+                <div class="form-section mb-5">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">📻 TuneIn Stations</h5>
+                        <button
+                            class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                            style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                            @onclick="() => isEditMode = !isEditMode">
+                            <i class="fa fa-pencil"></i>
+                            @(isEditMode ? "Done" : "Edit")
                         </button>
-                        @if (_isSpotifyPlaying)
+                    </div>
+        
+                    @if (isEditMode)
+                    {
+                        @if (!string.IsNullOrEmpty(addStationErrorMessage))
                         {
-                            <button class="btn btn-primary" @onclick="NextTrack">
-                                <i class="fa fa-forward"></i>
-                            </button>
+                            <div class="alert alert-danger">@addStationErrorMessage</div>
                         }
-                        <button class="btn btn-primary me-2" @onclick="ShuffleStation" title="Shuffle">
-                            🔀
-                        </button>
-                    </div>
-                </div>
-            }
-            else
-            {
-                <div class="alert alert-warning d-flex justify-content-between align-items-center">
-                    <div>
-                        <strong>Playback Paused</strong>
-                        <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <button class="btn btn-success me-2" @onclick="() => Play(true)">
-                            <i class="fa fa-play"></i>
-                        </button>
-                        <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
-                            🔀
-                        </button>
-                    </div>
-                </div>
-            }
-        </div>
-
-        <!-- Now Playing Card -->
-        <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
-            <div class="card-body d-flex align-items-center">
-                <div class="me-3 display-6">🎵</div>
-                <div>
-                    <h5 class="mb-1">Currently Playing</h5>
-                    <p class="mb-0 text-light-emphasis">@currentStationDisplay</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- TuneIn Station Section -->
-        <div class="form-section mb-5">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">📻 TuneIn Stations</h5>
-                <button
-                    class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
-                    style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
-                    @onclick="() => isEditMode = !isEditMode">
-                    <i class="fa fa-pencil"></i>
-                    @(isEditMode ? "Done" : "Edit")
-                </button>
-            </div>
-
-            @if (isEditMode)
-            {
-                @if (!string.IsNullOrEmpty(addStationErrorMessage))
-                {
-                    <div class="alert alert-danger">@addStationErrorMessage</div>
-                }
-
-                <div class="mb-3">
-                    <h6>Add New Station</h6>
-                    <div class="mb-2">
-                        <label>Station Name</label>
-                        <input class="form-control bg-secondary text-light border-0"
-                               @bind="newStationName" @bind:event="oninput"
-                               placeholder="Antenne Vorarlberg" />
-                    </div>
-                    <div class="mb-2">
-                        <label>Station URL</label>
-                        <input class="form-control bg-secondary text-light border-0"
-                               @bind="newStationUrl" @bind:event="oninput"
-                               placeholder="web.radio.example.com/stream"
-                               pattern="@stationUrlPattern" />
-                    </div>
-                    <button class="btn btn-success mt-2" @onclick="AddStation" disabled="@(!CanAddStation)">
-                        Add Station
-                    </button>
-                </div>
-
-                <ul class="list-group">
-                    @foreach (var station in _stations)
-                    {
-                        <li class="list-group-item bg-dark text-white px-3 py-2">
-                            <div class="row align-items-center">
-                                <div class="col-10 text-truncate">
-                                    @(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)
-                                </div>
-                                <div class="col-2 text-end">
-                                    <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
-                                            title="Remove"
-                                            @onclick="() => RemoveStation(station)">
-                                        <i class="fa fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </li>
-                    }
-                </ul>
-            }
-            else
-            {
-                <select class="form-select bg-secondary text-light border-0 mt-2" @bind="selectedStation">
-                    <option value="">-- Select Station --</option>
-                    @foreach (var station in _stations)
-                    {
-                        <option value="@station.Url">@(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)</option>
-                    }
-                </select>
-            }
-        </div>
-
-        <!-- Spotify Tracks Section -->
-        <div class="form-section">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">🎶 Spotify Tracks</h5>
-                <button
-                    class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
-                    style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
-                    @onclick="() => isSpotifyEditMode = !isSpotifyEditMode">
-                    <i class="fa fa-pencil"></i>
-                    @(isEditMode ? "Done" : "Edit")
-                </button>
-            </div>
-
-            @if (isSpotifyEditMode)
-            {
-                @if (!string.IsNullOrEmpty(addTrackErrorMessage))
-                {
-                    <div class="alert alert-danger">@addTrackErrorMessage</div>
-                }
-
-                <ul class="list-group mb-3">
-                    @foreach (var track in _tracks)
-                    {
-                        <li class="list-group-item bg-dark text-white px-3 py-2">
-                            <div class="row align-items-center">
-                                <div class="col-10 text-truncate">
-                                    @track.Name
-                                </div>
-                                <div class="col-2 text-end">
-                                    <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
-                                            title="Remove"
-                                            @onclick="() => RemoveSpotifyTrack(track)">
-                                        <i class="fa fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </li>
-                    }
-                </ul>
-
-                <div>
-                    <div class="mb-2">
-                        <label>Name</label>
-                        <input class="form-control bg-secondary text-light border-0"
-                               @bind="newTrackName" @bind:event="oninput"
-                               placeholder="Crunchyroll Anime Essentials" />
-                    </div>
-                    <div class="mb-2">
-                        <label>Spotify URL</label>
-                        <input class="form-control bg-secondary text-light border-0"
-                               @bind="newTrackUrl" @bind:event="oninput"
-                               placeholder="https://open.spotify.com/playlist/..."
-                               title="Valid Spotify link required" />
-                    </div>
-                    <button class="btn btn-success mt-2" @onclick="AddNewSpotifyTrack" disabled="@(!CanAddTrack)">
-                        Add Spotify Track
-                    </button>
-                </div>
-            }
-            else
-            {
-                <select class="form-select bg-secondary text-light border-0 mt-2" @bind="selectedTrack">
-                    <option value="">-- Select Spotify Track --</option>
-                    @foreach (var track in _tracks)
-                    {
-                        <option value="@track.Url">@(track.Name.Length > 33 ? track.Name.Substring(0, 33) + "..." : track.Name)</option>
-                    }
-                </select>
-            }
-        </div>
         
-        <hr/>
+                        <div class="mb-3">
+                            <h6>Add New Station</h6>
+                            <div class="mb-2">
+                                <label>Station Name</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newStationName" @bind:event="oninput"
+                                       placeholder="Antenne Vorarlberg"/>
+                            </div>
+                            <div class="mb-2">
+                                <label>Station URL</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newStationUrl" @bind:event="oninput"
+                                       placeholder="web.radio.example.com/stream"
+                                       pattern="@stationUrlPattern"/>
+                            </div>
+                            <button class="btn btn-success mt-2" @onclick="AddStation" disabled="@(!CanAddStation)">
+                                Add Station
+                            </button>
+                        </div>
         
-        <!-- Spotify URL Section -->
-        <div class="form-section mb-5">
-            <h5 class="mb-2">🎧 Play Spotify URL</h5>
-            <input type="text" class="form-control bg-secondary text-light border-0"
-                   @bind-value="spotifyUrl" @bind-value:event="oninput"
-                   @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL" />
+                        <ul class="list-group">
+                            @foreach (var station in _stations)
+                            {
+                                <li class="list-group-item bg-dark text-white px-3 py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-10 text-truncate">
+                                            @(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
+                                                    title="Remove"
+                                                    @onclick="() => RemoveStation(station)">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <select class="form-select bg-secondary text-light border-0 mt-2" @bind="selectedStation">
+                            <option value="">-- Select Station --</option>
+                            @foreach (var station in _stations)
+                            {
+                                <option value="@station.Url">@(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)</option>
+                            }
+                        </select>
+                    }
+                </div>
+        
+                <!-- Spotify Tracks Section -->
+                <div class="form-section">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">🎶 Spotify Tracks</h5>
+                        <button
+                            class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                            style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                            @onclick="() => isSpotifyEditMode = !isSpotifyEditMode">
+                            <i class="fa fa-pencil"></i>
+                            @(isEditMode ? "Done" : "Edit")
+                        </button>
+                    </div>
+        
+                    @if (isSpotifyEditMode)
+                    {
+                        @if (!string.IsNullOrEmpty(addTrackErrorMessage))
+                        {
+                            <div class="alert alert-danger">@addTrackErrorMessage</div>
+                        }
+        
+                        <ul class="list-group mb-3">
+                            @foreach (var track in _tracks)
+                            {
+                                <li class="list-group-item bg-dark text-white px-3 py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-10 text-truncate">
+                                            @track.Name
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
+                                                    title="Remove"
+                                                    @onclick="() => RemoveSpotifyTrack(track)">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+        
+                        <div>
+                            <div class="mb-2">
+                                <label>Name</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newTrackName" @bind:event="oninput"
+                                       placeholder="Crunchyroll Anime Essentials"/>
+                            </div>
+                            <div class="mb-2">
+                                <label>Spotify URL</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newTrackUrl" @bind:event="oninput"
+                                       placeholder="https://open.spotify.com/playlist/..."
+                                       title="Valid Spotify link required"/>
+                            </div>
+                            <button class="btn btn-success mt-2" @onclick="AddNewSpotifyTrack" disabled="@(!CanAddTrack)">
+                                Add Spotify Track
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <select class="form-select bg-secondary text-light border-0 mt-2" @bind="selectedTrack">
+                            <option value="">-- Select Spotify Track --</option>
+                            @foreach (var track in _tracks)
+                            {
+                                <option value="@track.Url">@(track.Name.Length > 33 ? track.Name.Substring(0, 33) + "..." : track.Name)</option>
+                            }
+                        </select>
+                    }
+                </div>
+        
+                <hr/>
+        
+                <!-- Spotify URL Section -->
+                <div class="form-section mb-5">
+                    <h5 class="mb-2">🎧 Play Spotify URL</h5>
+                    <input type="text" class="form-control bg-secondary text-light border-0"
+                           @bind-value="spotifyUrl" @bind-value:event="oninput"
+                           @onkeyup="HandleKeyPress" placeholder="Enter Spotify URL"/>
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            You must be logged in as an admin or operator to view this page.
         </div>
-    </div>
-}}
-else
-{
-    <div class="alert alert-warning">
-        You must be logged in to view this page.
-    </div>
-}
+    </NotAuthorized>
+</AuthorizeView>
 
 
 
@@ -236,6 +237,8 @@ else
     private string? spotifyUrl;
     
     private bool isAuthenticated;
+    private bool isAdmin;
+    private bool isOperator;
     
     private bool isEditMode = false;
     private string newStationName = "";

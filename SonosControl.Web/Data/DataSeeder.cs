@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.DependencyInjection;
-using SonosControl.Web.Models; // Your ApplicationUser
+using SonosControl.Web.Models;
 
 public static class DataSeeder
 {
@@ -9,18 +8,21 @@ public static class DataSeeder
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-        string adminRoleName = "admin";
-        string adminUserName = "admin";
-        string adminEmail = "admin@example.com"; // optional
-        string adminPassword = "ESPmtZ7&LW2z&xHF";
+        string[] roles = { "admin", "operator" };
 
-        // Create admin role if it doesn't exist
-        if (!await roleManager.RoleExistsAsync(adminRoleName))
+        // Ensure all roles exist
+        foreach (var role in roles)
         {
-            await roleManager.CreateAsync(new IdentityRole(adminRoleName));
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new IdentityRole(role));
+            }
         }
 
-        // Create admin user if it doesn't exist
+        string adminUserName = "admin";
+        string adminEmail = "admin@example.com";
+        string adminPassword = "ESPmtZ7&LW2z&xHF";
+
         var adminUser = await userManager.FindByNameAsync(adminUserName);
         if (adminUser == null)
         {
@@ -28,9 +30,9 @@ public static class DataSeeder
             {
                 UserName = adminUserName,
                 Email = adminEmail,
-                EmailConfirmed = true, // optional
-                FirstName = "Admin",   // <-- Added
-                LastName = "User"      // <-- Added
+                EmailConfirmed = true,
+                FirstName = "Admin",
+                LastName = "User"
             };
 
             var result = await userManager.CreateAsync(adminUser, adminPassword);
@@ -40,10 +42,10 @@ public static class DataSeeder
             }
         }
 
-        // Add admin user to admin role if not already in it
-        if (!await userManager.IsInRoleAsync(adminUser, adminRoleName))
+        // Ensure user is in admin role
+        if (!await userManager.IsInRoleAsync(adminUser, "admin"))
         {
-            await userManager.AddToRoleAsync(adminUser, adminRoleName);
+            await userManager.AddToRoleAsync(adminUser, "admin");
         }
     }
 }

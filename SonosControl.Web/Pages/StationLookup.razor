@@ -1,79 +1,79 @@
 ﻿@page "/lookup"
 @using System.Net.Http.Json
 @inject IJSRuntime JS
-
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@if (isAuthenticated)
-{
-<div class="container d-flex justify-content-center align-items-center min-vh-100">
-    <div class="col-12 col-md-6">
-        <h4 class="text-center mb-4">📻 Station Lookup</h4>
-        
-        @if (!string.IsNullOrEmpty(saveSuccessMessage))
-        {
-            <div class="alert alert-success" role="alert">
-                @saveSuccessMessage
-            </div>
-        }
-        @if (!string.IsNullOrEmpty(addStationErrorMessage))
-        {
-            <div class="alert alert-danger" role="alert">
-                @addStationErrorMessage
-            </div>
-        }
 
-
-        <div class="form-group mb-2">
-            <input class="form-control"
-                   @bind-value="searchTerm"
-                   @bind-value:event="oninput"
-                   placeholder="Search for a radio station..."
-                   @onkeydown="HandleKeyDown" />
-        </div>
-
-        <button class="btn btn-primary mb-3 w-100" @onclick="SearchStations" disabled="@string.IsNullOrWhiteSpace(searchTerm)">
-            Search
-        </button>
-
-        @if (isLoading)
-        {
-            <p class="text-center">🔍 Searching...</p>
-        }
-        else if (results?.Any() == true)
-        {
-            <ul class="list-group">
-                @foreach (var station in results)
+<AuthorizeView Roles="admin,operator">
+    <Authorized>
+        <div class="container d-flex justify-content-center align-items-center min-vh-100">
+            <div class="col-12 col-md-6">
+                <h4 class="text-center mb-4">📻 Station Lookup</h4>
+                
+                @if (!string.IsNullOrEmpty(saveSuccessMessage))
                 {
-                    <li class="list-group-item d-flex justify-content-between align-items-start">
-                        <div class="me-2">
-                            <strong>@(station.Name.Length > 50 ? station.Name.Substring(0, 50) + "..." : station.Name)</strong><br />
-                            <small class="text-muted">@GetCleanUrl(station.Url)</small>
-                        </div>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
-                                🔊 Play
-                            </button>
-                            <button class="btn btn-outline-primary" @onclick="() => SaveStation(station)">
-                                💾 Save
-                            </button>
-                        </div>
-                    </li>
+                    <div class="alert alert-success" role="alert">
+                        @saveSuccessMessage
+                    </div>
                 }
-            </ul>
-        }
-        else if (results is not null)
-        {
-            <p class="text-center text-white">No stations found.</p>
-        }
-    </div>
-</div>
-}}
-else
-{
-<div class="alert alert-warning">
-    You must be logged in to view this page.
-</div>
-}
+                @if (!string.IsNullOrEmpty(addStationErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        @addStationErrorMessage
+                    </div>
+                }
+        
+        
+                <div class="form-group mb-2">
+                    <input class="form-control"
+                           @bind-value="searchTerm"
+                           @bind-value:event="oninput"
+                           placeholder="Search for a radio station..."
+                           @onkeydown="HandleKeyDown" />
+                </div>
+        
+                <button class="btn btn-primary mb-3 w-100" @onclick="SearchStations" disabled="@string.IsNullOrWhiteSpace(searchTerm)">
+                    Search
+                </button>
+        
+                @if (isLoading)
+                {
+                    <p class="text-center">🔍 Searching...</p>
+                }
+                else if (results?.Any() == true)
+                {
+                    <ul class="list-group">
+                        @foreach (var station in results)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="me-2">
+                                    <strong>@(station.Name.Length > 50 ? station.Name.Substring(0, 50) + "..." : station.Name)</strong><br />
+                                    <small class="text-muted">@GetCleanUrl(station.Url)</small>
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
+                                        🔊 Play
+                                    </button>
+                                    <button class="btn btn-outline-primary" @onclick="() => SaveStation(station)">
+                                        💾 Save
+                                    </button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (results is not null)
+                {
+                    <p class="text-center text-white">No stations found.</p>
+                }
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            You must be logged in as an admin or operator to view this page.
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
     private SonosSettings? _settings;
