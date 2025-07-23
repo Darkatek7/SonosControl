@@ -17,6 +17,8 @@ builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
 
 builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddSingleton<SonosControlService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ActionLogger>();
 
 builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews();
