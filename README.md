@@ -9,6 +9,19 @@ This Self hosted application is used to automate the process of turning on/off a
 The App also supports playing predefined TuneIn Stations ord Spotifiy Songs/Playlists/Albums.
 ____
 
+## What's New
+### Version July 2025
+- ✅ **User Authentication Added**  
+  You can now register and log in to the app using a simple authentication system.  
+  ➤ Visit [`/register`](http://localhost:8080/register) to create new user accounts.
+
+- 🛠 Improved UI and Station Lookup
+- 🔧 Minor bug fixes and backend optimizations
+
+> Want to see what’s coming next? Check the [TODO section](#todo) below.
+
+___
+
 ## Info
 * Blazor Server Application (.Net 9)
 * Docker
