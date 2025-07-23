@@ -1,5 +1,5 @@
 ﻿@{
-    Layout = null; // No master layout, full standalone page
+    Layout = null;
 }
 
 <!DOCTYPE html>
@@ -7,76 +7,91 @@
 <head>
     <meta charset="utf-8" />
     <title>Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
+            background: linear-gradient(180deg, #000000 0%, #555555 100%);
+            color: #e0e0e0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        form {
-            max-width: 320px;
-            margin: auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
+
+        .login-card {
+            background-color: #1e1e1e;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 400px;
         }
-        div.form-group {
-            margin-bottom: 15px;
-        }
+
         label {
-            display: block;
-            font-weight: bold;
+            font-weight: 500;
             margin-bottom: 5px;
         }
-        input[type=text], input[type=password] {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
+
+        .form-control {
+            background-color: #2c2c2c;
+            color: #fff;
+            border: 1px solid #444;
         }
+
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.1rem #007bff55;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
         .error-message {
-            color: red;
+            color: #ff6b6b;
             margin-bottom: 15px;
             text-align: center;
         }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #0078d4;
-            color: white;
-            font-size: 1em;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #005a9e;
+
+        h2 {
+            text-align: center;
+            margin-bottom: 25px;
         }
     </style>
 </head>
 <body>
-    <form method="post" action="/auth/login">
-        <h2 style="text-align:center;">Login</h2>
+    <form method="post" action="/auth/login" class="login-card">
+        <h2>🔒 Login</h2>
 
         @if (ViewBag.Error != null)
         {
             <div class="error-message">@ViewBag.Error</div>
         }
 
-        <div class="form-group">
-            <label for="username">Username</label>
-            <input id="username" name="username" type="text" required autofocus />
+        <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input id="username" name="username" type="text" class="form-control" required autofocus />
         </div>
 
-        <div class="form-group">
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" required />
+        <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input id="password" name="password" type="password" class="form-control" required />
         </div>
 
-        <div class="form-group" style="display: flex; align-items: center;">
-            <input id="rememberMe" name="rememberMe" type="checkbox" />
-            <label for="rememberMe" style="margin-left: 5px;">Remember Me</label>
+        <div class="form-check mb-3">
+            <input id="rememberMe" name="rememberMe" type="checkbox" class="form-check-input" />
+            <label for="rememberMe" class="form-check-label">Remember Me</label>
         </div>
 
-        <button type="submit">Log In</button>
+        <button type="submit" class="btn btn-primary w-100">Log In</button>
     </form>
 </body>
 </html>
