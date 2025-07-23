@@ -66,6 +66,16 @@ services:
       - ./Data:/app/Data
 ```
 
+Login using the default admin user:
+```
+admin
+```
+
+password:
+```
+ESPmtZ7&LW2z&xHF
+```
+
 ### *This is optional. You only have to do this if you get a config.json error for some reason.*
 
 At first create a folder called **Data**.
@@ -103,4 +113,4 @@ You can change the config to fit your needs or change it later in the UI.
 - [ ] Enable shuffle toggle for Spotify and Stations
 - [ ] Add logs tab to show history of play/stop events with user associated
 - [ ] Enable / disable user registration
-- [ ] Add role-based access (e.g., admin vs. operator)
+- [x] Add role-based access (e.g., admin vs. operator)
