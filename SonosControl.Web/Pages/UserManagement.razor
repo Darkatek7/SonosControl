@@ -5,6 +5,9 @@
 @inject RoleManager<IdentityRole> RoleManager
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@using SonosControl.Web.Data
+@inject ApplicationDbContext Db
+@using SonosControl.Web.Models;
 
 <PageTitle>User Management</PageTitle>
 
@@ -131,6 +134,7 @@
             userRoles.Remove(user.Id);
             errorMessage = null;
             StateHasChanged();
+            AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
         }
         else
         {
@@ -164,12 +168,14 @@
             // Deactivate user: enable lockout and set LockoutEnd far in the future
             user.LockoutEnabled = true;
             user.LockoutEnd = DateTimeOffset.MaxValue;
+            await AddLog("User deactivated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
         }
         else
         {
             // Reactivate user: disable lockout and clear LockoutEnd
             user.LockoutEnd = null;
             user.LockoutEnabled = false;
+            await AddLog("User activated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
         }
 
         var result = await UserManager.UpdateAsync(user);
@@ -236,6 +242,24 @@
     private bool IsCurrentUser(ApplicationUser user)
     {
         return string.Equals(user.UserName, currentUserName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task AddLog(string action, string? details = null)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name ?? "Unknown";
+
+        var log = new LogEntry
+        {
+            Action = action,
+            PerformedBy = username,
+            Timestamp = DateTime.UtcNow,
+            Details = details
+        };
+
+        Db.Logs.Add(log);
+        await Db.SaveChangesAsync();
     }
 }
 

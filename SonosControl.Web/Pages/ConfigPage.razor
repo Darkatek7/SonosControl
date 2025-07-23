@@ -1,5 +1,8 @@
 ﻿@page "/config"
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@using SonosControl.Web.Data
+@inject ApplicationDbContext Db
+@using SonosControl.Web.Models;
 
 <AuthorizeView Roles="admin,operator">
     <Authorized>
@@ -11,45 +14,44 @@
         {
             <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
                 <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
-        
+
                 <div class="mb-3">
                     <label class="form-label">💻 IP Address</label>
-                    <input type="text" class="form-control bg-secondary text-light border-0" 
-                           @bind-value="IP_Adress" 
-                           @bind-value:event="oninput" 
-                           placeholder="Enter IP Address" />
+                    <input type="text" class="form-control bg-secondary text-light border-0"
+                           @bind-value="IP_Adress"
+                           @bind-value:event="oninput"
+                           placeholder="Enter IP Address"/>
                 </div>
-        
+
                 <div class="mb-3">
                     <label class="form-label">🔉 Volume</label>
-                    <input type="number" class="form-control bg-secondary text-light border-0" 
-                           max="100" min="1" 
-                           @bind-value="Volume" 
-                           @bind-value:event="oninput" />
+                    <input type="number" class="form-control bg-secondary text-light border-0"
+                           max="100" min="1"
+                           @bind-value="Volume"
+                           @bind-value:event="oninput"/>
                 </div>
-        
+
                 <div class="mb-3">
                     <label class="form-label">⏰ Start Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0" 
-                           @bind-value="StartTime" 
-                           @bind-value:event="oninput" />
+                    <input type="time" class="form-control bg-secondary text-light border-0"
+                           @bind-value="StartTime"
+                           @bind-value:event="oninput"/>
                 </div>
-        
+
                 <div class="mb-3">
                     <label class="form-label">🛑 Stop Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0" 
-                           @bind-value="StopTime" 
-                           @bind-value:event="oninput" />
+                    <input type="time" class="form-control bg-secondary text-light border-0"
+                           @bind-value="StopTime"
+                           @bind-value:event="oninput"/>
                 </div>
-        
+
                 <div class="mb-3">
                     <label class="form-label">📅 Server Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0" 
-                           disabled 
-                           @bind-value="TimeRightNow" />
+                    <input type="time" class="form-control bg-secondary text-light border-0"
+                           disabled
+                           @bind-value="TimeRightNow"/>
                 </div>
             </div>
-        
         }
     </Authorized>
     <NotAuthorized>
@@ -63,11 +65,11 @@
     private SonosSettings? _settings;
     private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
     private bool isAuthenticated;
-    
+
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
@@ -89,6 +91,7 @@
         {
             _settings!.StartTime = value;
             SaveSettings();
+            AddLog("Starttime Changed", $"Time: {value}");
         }
     }
 
@@ -99,6 +102,7 @@
         {
             _settings!.StopTime = value;
             SaveSettings();
+            AddLog("Stoptime Changed", $"Time: {value}");
         }
     }
 
@@ -106,7 +110,7 @@
     {
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
-    
+
     private int Volume
     {
         get => _settings!.Volume;
@@ -115,9 +119,10 @@
             _settings!.Volume = value;
             _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
             SaveSettings();
+            //AddLog("Volume Changed", $"Volume: {value}");
         }
     }
-    
+
     private string IP_Adress
     {
         get => _settings!.IP_Adress;
@@ -125,8 +130,28 @@
         {
             _settings!.IP_Adress = value;
             SaveSettings();
+            AddLog("IP-Adress Changed", $"IP: {value}");
         }
     }
+
+    private async Task AddLog(string action, string? details = null)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name ?? "Unknown";
+
+        var log = new LogEntry
+        {
+            Action = action,
+            PerformedBy = username,
+            Timestamp = DateTime.UtcNow,
+            Details = details
+        };
+
+        Db.Logs.Add(log);
+        await Db.SaveChangesAsync();
+    }
+
 }
 
 

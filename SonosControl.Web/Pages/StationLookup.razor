@@ -2,6 +2,9 @@
 @using System.Net.Http.Json
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@using SonosControl.Web.Data
+@inject ApplicationDbContext Db
+@using SonosControl.Web.Models;
 
 <AuthorizeView Roles="admin,operator">
     <Authorized>
@@ -23,7 +26,7 @@
                        @bind-value="searchTerm"
                        @bind-value:event="oninput"
                        placeholder="Search for a radio station..."
-                       @onkeydown="HandleKeyDown" />
+                       @onkeydown="HandleKeyDown"/>
             </div>
 
             <button class="btn btn-primary w-100 mb-3"
@@ -43,7 +46,7 @@
                     {
                         <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start border-secondary">
                             <div class="me-2">
-                                <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong><br />
+                                <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong><br/>
                                 <small class="text-muted">@GetCleanUrl(station.Url)</small>
                             </div>
                             <div class="btn-group btn-group-sm">
@@ -82,7 +85,7 @@
     protected override async Task OnInitializedAsync()
     {
         await base.OnInitializedAsync();
-        
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
@@ -158,17 +161,18 @@
         {
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, GetCleanUrl(url));
             Console.WriteLine($@"Station {url} played successfully.");
+            await AddLog("Playing Station", $"station: {url}");
         }
     }
 
     public class RadioStation
     {
         public string Name { get; set; }
-        public string Url { get; set; }  // ✅ Use this field
+        public string Url { get; set; } // ✅ Use this field
         public string Country { get; set; }
         public string Tags { get; set; }
     }
-    
+
     private string? addStationErrorMessage;
 
     private async Task SaveStation(RadioStation station)
@@ -203,6 +207,7 @@
 
             _settings.Stations.Add(new TuneInStation { Name = station.Name, Url = station.Url });
             await SaveSettings();
+            await AddLog("Added Station", $"station: {station.Name}, ({station.Url})");
 
             saveSuccessMessage = $"✅ \"{station.Name}\" saved!";
             Console.WriteLine($@"Station {station.Name} saved successfully.");
@@ -236,6 +241,24 @@
     {
         // Implement your settings saving logic here, for example:
         await _uow.ISettingsRepo.WriteSettings(_settings);
+    }
+
+    private async Task AddLog(string action, string? details = null)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name ?? "Unknown";
+
+        var log = new LogEntry
+        {
+            Action = action,
+            PerformedBy = username,
+            Timestamp = DateTime.UtcNow,
+            Details = details
+        };
+
+        Db.Logs.Add(log);
+        await Db.SaveChangesAsync();
     }
 
 }
