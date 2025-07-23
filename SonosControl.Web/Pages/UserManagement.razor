@@ -1,0 +1,365 @@
+﻿@page "/admin/users"
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>User Management</PageTitle>
+
+<AuthorizeView Roles="admin,operator">
+    <Authorized>
+        <div class="container p-4 bg-dark text-light rounded-4 shadow">
+            <h3 class="mb-4 border-bottom pb-2">👥 User Management</h3>
+        
+            @if (isLoading)
+            {
+                <p>Loading users...</p>
+            }
+            else
+            {
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+        
+                <table class="table table-dark table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>User Name</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th style="min-width: 240px;">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var user in users)
+                    {
+                        <tr>
+                            <td>@user.UserName</td>
+                            <td>@user.Email</td>
+                            <td>
+                                @foreach (var role in userRoles[user.Id])
+                                {
+                                    <span class="badge bg-secondary me-1">@role</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-danger btn-sm me-2"
+                                        @onclick="() => DeleteUser(user)"
+                                        disabled="@IsCurrentUser(user)">
+                                    Delete
+                                </button>
+        
+                                <button class="btn btn-outline-primary btn-sm me-1"
+                                        @onclick='() => ToggleRole(user, "admin")'
+                                        disabled="@IsCurrentUser(user)">
+                                    @(userRoles[user.Id].Contains("admin") ? "Remove Admin" : "Make Admin")
+                                </button>
+        
+                                <button class="btn btn-outline-secondary btn-sm"
+                                        @onclick='() => ToggleRole(user, "operator")'
+                                        disabled="@IsCurrentUser(user)">
+                                    @(userRoles[user.Id].Contains("operator") ? "Remove Operator" : "Make Operator")
+                                </button>
+                                    
+                                <button class="btn btn-sm me-2 @(IsUserActive(user) ? "btn-warning" : "btn-success")"
+                                        @onclick='() => ToggleUserActivation(user)'
+                                        disabled="@IsCurrentUser(user)">
+                                    @(IsUserActive(user) ? "Deactivate" : "Reactivate")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="alert alert-warning">
+            You must be logged in as an admin or operator to view this page.
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private List<ApplicationUser> users = new();
+    private Dictionary<string, IList<string>> userRoles = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? currentUserName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserName = authState.User.Identity?.Name;
+
+        try
+        {
+            users = UserManager.Users.ToList();
+
+            foreach (var user in users)
+            {
+                var roles = await UserManager.GetRolesAsync(user);
+                userRoles[user.Id] = roles;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading users: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task DeleteUser(ApplicationUser user)
+    {
+        if (IsCurrentUser(user))
+        {
+            errorMessage = "You cannot delete your own user account.";
+            return;
+        }
+
+        var result = await UserManager.DeleteAsync(user);
+        if (result.Succeeded)
+        {
+            users.Remove(user);
+            userRoles.Remove(user.Id);
+            errorMessage = null;
+            StateHasChanged();
+        }
+        else
+        {
+            errorMessage = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+        }
+    }
+    
+    private bool IsUserActive(ApplicationUser user)
+    {
+        // If LockoutEnabled is false, user is active.
+        // Or if LockoutEnd is in the past or null, user is active.
+        if (!user.LockoutEnabled)
+            return true;
+
+        if (user.LockoutEnd == null)
+            return true;
+
+        return user.LockoutEnd <= DateTimeOffset.UtcNow;
+    }
+
+    private async Task ToggleUserActivation(ApplicationUser user)
+    {
+        if (IsCurrentUser(user))
+        {
+            errorMessage = "You cannot deactivate/reactivate your own user account.";
+            return;
+        }
+
+        if (IsUserActive(user))
+        {
+            // Deactivate user: enable lockout and set LockoutEnd far in the future
+            user.LockoutEnabled = true;
+            user.LockoutEnd = DateTimeOffset.MaxValue;
+        }
+        else
+        {
+            // Reactivate user: disable lockout and clear LockoutEnd
+            user.LockoutEnd = null;
+            user.LockoutEnabled = false;
+        }
+
+        var result = await UserManager.UpdateAsync(user);
+
+        if (result.Succeeded)
+        {
+            errorMessage = null;
+            // Update the local user list to reflect changes
+            var index = users.FindIndex(u => u.Id == user.Id);
+            if (index >= 0)
+                users[index] = user;
+
+            StateHasChanged();
+        }
+        else
+        {
+            errorMessage = $"Failed to update user activation status: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+        }
+    }
+    
+    private async Task ToggleRole(ApplicationUser user, string role)
+    {
+        if (IsCurrentUser(user))
+        {
+            errorMessage = "You cannot modify your own roles.";
+            return;
+        }
+
+        if (!await RoleManager.RoleExistsAsync(role))
+        {
+            errorMessage = $"Role '{role}' does not exist.";
+            return;
+        }
+
+        if (userRoles[user.Id].Contains(role))
+        {
+            var removeResult = await UserManager.RemoveFromRoleAsync(user, role);
+            if (removeResult.Succeeded)
+            {
+                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
+                errorMessage = null;
+            }
+            else
+            {
+                errorMessage = $"Failed to remove role '{role}': {string.Join(", ", removeResult.Errors.Select(e => e.Description))}";
+            }
+        }
+        else
+        {
+            var addResult = await UserManager.AddToRoleAsync(user, role);
+            if (addResult.Succeeded)
+            {
+                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
+                errorMessage = null;
+            }
+            else
+            {
+                errorMessage = $"Failed to add role '{role}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}";
+            }
+        }
+        StateHasChanged();
+    }
+
+    private bool IsCurrentUser(ApplicationUser user)
+    {
+        return string.Equals(user.UserName, currentUserName, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+
+<style>
+    body {
+        background-color: #121212;
+        color: #e0e0e0;
+    }
+
+    .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #1e1e1e;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .form-section {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        font-weight: bold;
+        color: #bbbbbb;
+    }
+
+    .form-control, .form-select {
+        background-color: #333333;
+        border: 1px solid #555555;
+        color: #ffffff;
+        border-radius: 5px;
+        padding: 10px;
+    }
+
+    .form-control:disabled {
+        background-color: #333333 !important;
+        color: #bbbbbb !important;
+        border: 1px solid #555555 !important;
+        opacity: 1; /* Prevents browsers from making it look faded */
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #888888;
+        outline: none;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    }
+
+    .alert {
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+
+    .alert-success {
+        background-color: #2e7d32;
+        color: #ffffff;
+        border: 1px solid #1b5e20;
+    }
+
+    .alert-warning {
+        background-color: #b8860b;
+        color: #ffffff;
+        border: 1px solid #8b6508;
+    }
+
+    .btn {
+        width: 100%;
+        margin-top: 10px;
+        border-radius: 5px;
+    }
+
+    .btn-danger {
+        background-color: #d32f2f;
+        border: 1px solid #b71c1c;
+        color: #ffffff;
+    }
+
+    .btn-danger:hover {
+        background-color: #b71c1c;
+    }
+
+    .btn-success {
+        background-color: #388e3c;
+        border: 1px solid #2e7d32;
+        color: #ffffff;
+    }
+
+    .btn-success:hover {
+        background-color: #2e7d32;
+    }
+
+    .list-group-item {
+        border: 1px solid #555;
+    }
+
+    input.form-control.bg-secondary::placeholder {
+        color: rgba(255, 255, 255, 0.6); /* soft white */
+    }
+
+    .station-remove-btn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+    }
+
+    .station-remove-btn {
+        font-size: 0.8rem;
+        line-height: 1;
+        padding: 2px 6px;
+    }
+
+    .btn-inline {
+        width: auto !important;
+        margin-top: 0 !important;
+    }
+
+    .station-remove-btn,
+    .spotify-remove-btn {
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        line-height: 1;
+        width: auto;
+        white-space: nowrap;
+    }
+
+</style>
