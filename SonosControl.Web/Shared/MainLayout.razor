@@ -26,6 +26,10 @@
                 <form method="post" action="/auth/logout" style="display:inline;">
                     <button type="submit" class="btn btn-sm btn-danger">Logout</button>
                 </form>
+                
+                <a href="@($"/useredit")" class="top-link btn-primary px-3 py-1 rounded">
+                    <span class="oi oi-person" aria-hidden="true"></span>
+                </a>
             }
         </div>
 
@@ -38,6 +42,7 @@
 @code {
     private string? firstName;
     private bool isAuthenticated;
+    private string? userId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -50,6 +55,7 @@
         {
             var appUser = await UserManager.GetUserAsync(user);
             firstName = appUser?.FirstName ?? user.Identity?.Name;
+            userId = appUser?.Id;
         }
     }
 
@@ -63,7 +69,6 @@
             Navigation.NavigateTo("/");
         }
     }
-
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 }
 
@@ -105,5 +110,8 @@
     .logout-link:hover {
         background-color: #b02a37;
         color: white;
+    }
+    .top-row {
+        width: 100%;
     }
 </style>

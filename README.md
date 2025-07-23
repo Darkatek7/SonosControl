@@ -105,7 +105,7 @@ You can change the config to fit your needs or change it later in the UI.
 
 ## TODO
 - [x] Add user authentication  
-- [ ] Password Reset Page  
+- [x] Password Reset Page
 - [ ] Add option to change the days which the automation should run  
 - [ ] Add a "play this song/playlist/station" on startup  
 - [ ] Add play random station on startup toggle  
