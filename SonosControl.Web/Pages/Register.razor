@@ -82,7 +82,7 @@
         var result = await UserManager.CreateAsync(user, registerModel.Password);
         if (result.Succeeded)
         {
-            Navigation.NavigateTo("/auth/login");
+            Navigation.NavigateTo("/");
         }
         else
         {
@@ -92,7 +92,7 @@
 
     private void GoToLogin()
     {
-        Navigation.NavigateTo("/auth/login");
+        Navigation.NavigateTo("/");
     }
 
     public class RegisterModel
