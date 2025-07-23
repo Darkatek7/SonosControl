@@ -75,6 +75,10 @@ namespace SonosControl.DAL.Repos
 
         public async Task SetTuneInStationAsync(string ip, string stationUri)
         {
+            stationUri = stationUri
+                .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
+            
             // Decide which URI to send:
             //  - If the stationUri already contains "://", use it as-is.
             //  - Otherwise assume it's a plain TuneIn stream and prefix with x-rincon-mp3radio://
