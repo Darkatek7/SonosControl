@@ -94,4 +94,13 @@ You can change the config to fit your needs or change it later in the UI.
 
 
 ## TODO
-* Add option to change the days which the automation should run
+- [x] Add user authentication  
+- [ ] Password Reset Page  
+- [ ] Add option to change the days which the automation should run  
+- [ ] Add a "play this song/playlist/station" on startup  
+- [ ] Add play random station on startup toggle  
+- [ ] Support custom playback durations (e.g., "play for 1 hour after start time")
+- [ ] Enable shuffle toggle for Spotify and Stations
+- [ ] Add logs tab to show history of play/stop events with user associated
+- [ ] Enable / disable user registration
+- [ ] Add role-based access (e.g., admin vs. operator)
