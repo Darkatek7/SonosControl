@@ -1,5 +1,8 @@
 ﻿@page "/"
 @using System.Text.RegularExpressions
+@using SonosControl.Web.Data
+@inject ApplicationDbContext Db
+@using SonosControl.Web.Models;
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @attribute [Authorize(Roles = "admin,operator")]
 
@@ -340,6 +343,7 @@
             // Set the selected stream URL to the Sonos speaker
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("Station Changed", $"URL: {selectedStation}");
         }
     }
 
@@ -350,6 +354,7 @@
             // Set the selected stream URL to the Sonos speaker
             await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("Spotify Track Changed", $"URL: {selectedTrack}");
         }
     }
 
@@ -370,17 +375,20 @@
         if (_settings is not null)
         {
             await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+            await AddLog("Spotify URL Played", url);
         }
     }
 
     private async Task PreviousTrack()
     {
         await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
+        await AddLog("Previous Track");
     }
 
     private async Task NextTrack()
     {
         await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
+        await AddLog("Next Track");
     }
 
     private async Task LoadQueue()
@@ -398,11 +406,29 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private async Task AddLog(string action, string? details = null)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name ?? "Unknown";
+
+        var log = new LogEntry
+        {
+            Action = action,
+            PerformedBy = username,
+            Timestamp = DateTime.UtcNow,
+            Details = details
+        };
+
+        Db.Logs.Add(log);
+        await Db.SaveChangesAsync();
+    }
 
     private async Task ClearQueue()
     {
         await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
         queue.Clear();
+        await AddLog("Queue Cleared");
     }
 
     private List<TuneInStation> _stations => _settings?.Stations ?? new();
@@ -436,11 +462,13 @@
         {
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
             _isPlaying = true;
+            await AddLog("Playback Started");
         }
         else
         {
             await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
             _isPlaying = false;
+            await AddLog("Playback Started");
         }
 
         //_isPlaying = await IsPlaying();
@@ -471,13 +499,6 @@
             return;
         }
 
-        //if (!Regex.IsMatch(newStationUrl, stationUrlPattern))
-        //{
-        //    addStationErrorMessage = "Station URL format is invalid.";
-        //    return;
-        //}
-
-        // Clear error message on success
         addStationErrorMessage = null;
 
         _settings ??= new SonosSettings();
@@ -486,6 +507,7 @@
         newStationName = newStationUrl = "";
 
         await SaveSettings();
+        await AddLog("Station Added", $"{newStationName} ({newStationUrl})");
         await InvokeAsync(StateHasChanged);
     }
 
@@ -495,6 +517,8 @@
 
         _settings.Stations?.Remove(station);
         await SaveSettings();
+
+        await AddLog("Station Removed", $"{station.Name} ({station.Url})");
         await InvokeAsync(StateHasChanged);
     }
 
@@ -505,6 +529,8 @@
         // You may also want to save the settings after removing it
         Console.WriteLine($"Removed track: {track.Name}");
         await SaveSettings();
+
+        await AddLog("Spotify Track Removed", $"{track.Name} ({track.Url})");
         await InvokeAsync(StateHasChanged);
     }
 
@@ -528,6 +554,7 @@
         Console.WriteLine("Added new Spotify track.");
 
         await SaveSettings();
+        await AddLog("Spotify Track Added", $"{newTrackName} ({newTrackUrl})");
 
         addStationErrorMessage = null;
         newTrackName = newTrackUrl = "";
@@ -544,6 +571,7 @@
             var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
             selectedStation = randomStation; // This triggers OnStationChanged()
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
+            await AddLog("Shuffled Station", $"Selected: {selectedStation}");
         }
     }
 

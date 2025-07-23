@@ -12,15 +12,14 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
     }
 
+    public DbSet<LogEntry> Logs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
         // Change column type for ConcurrencyStamp in AspNetRoles to TEXT for SQLite
-        builder.Entity<IdentityRole>(entity =>
-        {
-            entity.Property(r => r.ConcurrencyStamp).HasColumnType("TEXT");
-        });
+        builder.Entity<IdentityRole>(entity => { entity.Property(r => r.ConcurrencyStamp).HasColumnType("TEXT"); });
 
         // Similarly, fix other properties if needed:
         builder.Entity<ApplicationUser>(entity =>
@@ -32,5 +31,4 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         // You may need to adjust other Identity entities similarly if errors come up
     }
-
 }
