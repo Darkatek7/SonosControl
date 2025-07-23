@@ -10,7 +10,7 @@
         {
             <div class="container p-4 bg-dark text-light rounded-4 shadow">
                 <h3 class="mb-4 border-bottom pb-2">🎛️ Sonos Control Panel</h3>
-        
+
                 <!-- Playback Status -->
                 <div class="mb-4">
                     @if (_isPlaying)
@@ -54,7 +54,7 @@
                         </div>
                     }
                 </div>
-        
+
                 <!-- Now Playing Card -->
                 <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
                     <div class="card-body d-flex align-items-center">
@@ -65,7 +65,7 @@
                         </div>
                     </div>
                 </div>
-        
+
                 <!-- TuneIn Station Section -->
                 <div class="form-section mb-5">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -78,14 +78,14 @@
                             @(isEditMode ? "Done" : "Edit")
                         </button>
                     </div>
-        
+
                     @if (isEditMode)
                     {
                         @if (!string.IsNullOrEmpty(addStationErrorMessage))
                         {
                             <div class="alert alert-danger">@addStationErrorMessage</div>
                         }
-        
+
                         <div class="mb-3">
                             <h6>Add New Station</h6>
                             <div class="mb-2">
@@ -105,7 +105,7 @@
                                 Add Station
                             </button>
                         </div>
-        
+
                         <ul class="list-group">
                             @foreach (var station in _stations)
                             {
@@ -132,12 +132,13 @@
                             <option value="">-- Select Station --</option>
                             @foreach (var station in _stations)
                             {
-                                <option value="@station.Url">@(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)</option>
+                                <option
+                                    value="@station.Url">@(station.Name.Length > 33 ? station.Name.Substring(0, 33) + "..." : station.Name)</option>
                             }
                         </select>
                     }
                 </div>
-        
+
                 <!-- Spotify Tracks Section -->
                 <div class="form-section">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -150,14 +151,14 @@
                             @(isEditMode ? "Done" : "Edit")
                         </button>
                     </div>
-        
+
                     @if (isSpotifyEditMode)
                     {
                         @if (!string.IsNullOrEmpty(addTrackErrorMessage))
                         {
                             <div class="alert alert-danger">@addTrackErrorMessage</div>
                         }
-        
+
                         <ul class="list-group mb-3">
                             @foreach (var track in _tracks)
                             {
@@ -177,7 +178,7 @@
                                 </li>
                             }
                         </ul>
-        
+
                         <div>
                             <div class="mb-2">
                                 <label>Name</label>
@@ -192,7 +193,8 @@
                                        placeholder="https://open.spotify.com/playlist/..."
                                        title="Valid Spotify link required"/>
                             </div>
-                            <button class="btn btn-success mt-2" @onclick="AddNewSpotifyTrack" disabled="@(!CanAddTrack)">
+                            <button class="btn btn-success mt-2" @onclick="AddNewSpotifyTrack"
+                                    disabled="@(!CanAddTrack)">
                                 Add Spotify Track
                             </button>
                         </div>
@@ -203,14 +205,15 @@
                             <option value="">-- Select Spotify Track --</option>
                             @foreach (var track in _tracks)
                             {
-                                <option value="@track.Url">@(track.Name.Length > 33 ? track.Name.Substring(0, 33) + "..." : track.Name)</option>
+                                <option
+                                    value="@track.Url">@(track.Name.Length > 33 ? track.Name.Substring(0, 33) + "..." : track.Name)</option>
                             }
                         </select>
                     }
                 </div>
-        
+
                 <hr/>
-        
+
                 <!-- Spotify URL Section -->
                 <div class="form-section mb-5">
                     <h5 class="mb-2">🎧 Play Spotify URL</h5>
@@ -235,29 +238,29 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
-    
+
     private bool isAuthenticated;
     private bool isAdmin;
     private bool isOperator;
-    
+
     private bool isEditMode = false;
     private string newStationName = "";
     private string newTrackName = "";
     private string newStationUrl = "";
     private string newTrackUrl = "";
-    
-    
+
+
     private bool isSpotifyEditMode = false;
-    
+
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
     private Timer? _stationUpdateTimer;
     private string? addStationErrorMessage;
     private string? addTrackErrorMessage;
-    
+
     private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
-    
-    private List<string> queue = new ();
+
+    private List<string> queue = new();
 
     private async Task LoadCurrentStation()
     {
@@ -305,16 +308,17 @@
             if (_selectedStation != value)
             {
                 _selectedStation = value;
-                OnStationChanged();  // Call the station change handler
+                OnStationChanged(); // Call the station change handler
             }
         }
     }
+
     private bool CanAddStation => !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
     private bool CanAddTrack => !string.IsNullOrWhiteSpace(newTrackName) && !string.IsNullOrWhiteSpace(newTrackUrl);
 
     private string _selectedStation;
-    
-    
+
+
     private string selectedTrack
     {
         get => _selectedTrack;
@@ -323,7 +327,7 @@
             if (_selectedTrack != value)
             {
                 _selectedTrack = value;
-                OnTrackChanged();  // Call the station change handler
+                OnTrackChanged(); // Call the station change handler
             }
         }
     }
@@ -337,10 +341,9 @@
             // Set the selected stream URL to the Sonos speaker
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
-
         }
     }
-    
+
     private async Task OnTrackChanged()
     {
         if (!string.IsNullOrEmpty(selectedTrack) && _tracks.Any(s => s.Url == selectedTrack))
@@ -375,7 +378,7 @@
     {
         await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
     }
-    
+
     private async Task NextTrack()
     {
         await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
@@ -392,11 +395,11 @@
         {
             queue = await _uow.ISonosConnectorRepo.GetQueue(_settings!.IP_Adress);
         }
-    
+
         await InvokeAsync(StateHasChanged);
     }
 
-    
+
     private async Task ClearQueue()
     {
         await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
@@ -404,7 +407,7 @@
     }
 
     private List<TuneInStation> _stations => _settings?.Stations ?? new();
-    
+
     private List<SpotifyObject> _tracks => _settings?.SpotifyTracks ?? new();
 
     protected override async Task OnInitializedAsync()
@@ -454,7 +457,7 @@
     {
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
-    
+
     private async Task AddStation()
     {
         if (string.IsNullOrWhiteSpace(newStationName))
@@ -486,7 +489,7 @@
         await SaveSettings();
         await InvokeAsync(StateHasChanged);
     }
-    
+
     private async Task RemoveStation(TuneInStation station)
     {
         if (_settings == null) return;
@@ -520,19 +523,19 @@
             addStationErrorMessage = "Station URL is required.";
             return;
         }
-        
+
         // Example: Open a form to add a new track
-        _settings.SpotifyTracks.Add(new SpotifyObject(){Name = newTrackName, Url = newTrackUrl});
+        _settings.SpotifyTracks.Add(new SpotifyObject() { Name = newTrackName, Url = newTrackUrl });
         Console.WriteLine("Added new Spotify track.");
-        
+
         await SaveSettings();
-        
+
         addStationErrorMessage = null;
-        newTrackName = newTrackUrl ="";
-        
+        newTrackName = newTrackUrl = "";
+
         await InvokeAsync(StateHasChanged);
     }
-    
+
     private Random _random = new();
 
     private async Task ShuffleStation()
@@ -544,6 +547,7 @@
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
         }
     }
+
 }
 
 <style>
