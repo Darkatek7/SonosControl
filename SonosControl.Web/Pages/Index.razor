@@ -318,7 +318,6 @@
 
     private string _selectedStation;
 
-
     private string selectedTrack
     {
         get => _selectedTrack;
@@ -336,7 +335,7 @@
 
     private async Task OnStationChanged()
     {
-        if (!string.IsNullOrEmpty(selectedStation) && _stations.Any(s => s.Url == selectedStation))
+        if (!string.IsNullOrEmpty(selectedStation))
         {
             // Set the selected stream URL to the Sonos speaker
             await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
