@@ -64,7 +64,8 @@
                         <div class="me-3 display-6">🎵</div>
                         <div>
                             <h5 class="mb-1">Currently Playing</h5>
-                            <p class="mb-0 text-light-emphasis">@currentStationDisplay</p>
+                            <p class="mb-0 text-light-emphasis currently-playing-text">@currentStationDisplay</p>
+
                         </div>
                     </div>
                 </div>
@@ -698,4 +699,25 @@
         white-space: nowrap;
     }
 
+    .currently-playing-text {
+        word-break: break-word;
+        overflow-wrap: break-word;
+        font-size: 0.9rem;
+        max-width: 100%;
+    }
+
+    @@media (max-width: 576px) {
+        .card-body {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+
+        .card-body .display-6 {
+            margin-bottom: 0.5rem;
+        }
+
+        .currently-playing-text {
+            font-size: 0.85rem;
+        }
+    }
 </style>
