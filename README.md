@@ -151,7 +151,7 @@ You can change the config to fit your needs or change it later in the UI.
 ## TODO
 - [x] Add user authentication  
 - [x] Password Reset Page
-- [ ] Add option to change the days which the automation should run  
+- [x] Add option to change the days which the automation should run  
 - [ ] Add a "play this song/playlist/station" on startup  
 - [ ] Add play random station on startup toggle  
 - [ ] Support custom playback durations (e.g., "play for 1 hour after start time")
