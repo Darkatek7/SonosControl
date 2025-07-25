@@ -54,16 +54,19 @@
 
                 <div class="mb-3">
                     <label class="form-label">📆 Active Days</label>
-                    <div class="btn-group d-flex flex-wrap gap-2" role="group">
-                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7)) // Monday–Sunday
+                    <div class="active-days-grid mt-2">
+                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7)) // Monday to Sunday
                         {
-                            <input type="checkbox"
-                                   class="btn-check"
-                                   id="btncheck-@day"
-                                   checked="@DaySelection[day]"
-                                   @onchange="(e => OnDayChanged(day, e.Value))"
-                            />
-                            <label class="btn btn-outline-light btn-sm" for="btncheck-@day">@day.ToString().Substring(0, 3)</label>
+                            <div>
+                                <input type="checkbox"
+                                       class="btn-check"
+                                       id="btncheck-@day"
+                                       checked="@DaySelection[day]"
+                                       @onchange="(e => OnDayChanged(day, e.Value))"/>
+                                <label class="btn btn-outline-light btn-sm w-100" for="btncheck-@day">
+                                    @day.ToString().Substring(0, 3)
+                                </label>
+                            </div>
                         }
                     </div>
                 </div>
@@ -244,4 +247,50 @@
         outline: none;
         box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
     }
+
+    .active-days-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .active-days-grid .btn {
+        font-size: 0.85rem;
+        padding: 0.45rem;
+        font-weight: 500;
+    }
+
+    .btn-check + .btn {
+        font-weight: 500;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    @@media (max-width: 400px) {
+    .col-4 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+    }
+
+    .active-days-grid {
+        display: grid;
+        gap: 0.5rem;
+        grid-template-columns: repeat(7, 1fr); /* exactly 7 buttons per row */
+    }
+
+    @@media (max-width: 576px) {
+    .active-days-grid {
+        grid-template-columns: repeat(3, 1fr); /* 3 per row on mobile */
+    }
+    }
+
+    .active-days-grid .btn {
+        font-size: 0.85rem;
+        padding: 0.45rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+
 </style>
