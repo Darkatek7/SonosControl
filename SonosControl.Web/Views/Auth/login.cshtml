@@ -1,11 +1,11 @@
 ﻿@{
-    Layout = null;
+Layout = null;
 }
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
 
@@ -14,25 +14,20 @@
             background: linear-gradient(180deg, #000000 0%, #555555 100%);
             color: #e0e0e0;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            margin: 0;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
         }
 
         .login-card {
             background-color: #1e1e1e;
             border-radius: 16px;
             padding: 30px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
             width: 100%;
             max-width: 400px;
-        }
-
-        label {
-            font-weight: 500;
-            margin-bottom: 5px;
         }
 
         .form-control {
@@ -55,6 +50,10 @@
             background-color: #0056b3;
         }
 
+        label {
+            font-weight: 500;
+        }
+
         .error-message {
             color: #ff6b6b;
             margin-bottom: 15px;
@@ -65,34 +64,43 @@
             text-align: center;
             margin-bottom: 25px;
         }
+
+        @@media (max-width: 576px) {
+        .login-card {
+            padding: 20px;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+        }
+        }
     </style>
 </head>
 <body>
-    <form method="post" action="/auth/login" class="login-card">
-        <h2>🔒 Login</h2>
+<form method="post" action="/auth/login" class="login-card">
+    <h2>🔒 Login</h2>
 
-        @if (ViewBag.Error != null)
-        {
-            <div class="error-message">@ViewBag.Error</div>
-            <div class="error-message">@ViewBag.Error</div>
-        }
+    @if (ViewBag.Error != null)
+    {
+    <div class="error-message">@ViewBag.Error</div>
+    }
 
-        <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <input id="username" name="username" type="text" class="form-control" required autofocus />
-        </div>
+    <div class="mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input id="username" name="username" type="text" class="form-control" required autofocus />
+    </div>
 
-        <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input id="password" name="password" type="password" class="form-control" required />
-        </div>
+    <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input id="password" name="password" type="password" class="form-control" required />
+    </div>
 
-        <div class="form-check mb-3">
-            <input id="rememberMe" name="rememberMe" type="checkbox" checked="checked" class="form-check-input" />
-            <label for="rememberMe" class="form-check-label">Remember Me</label>
-        </div>
+    <div class="form-check mb-3">
+        <input id="rememberMe" name="rememberMe" type="checkbox" checked class="form-check-input" />
+        <label for="rememberMe" class="form-check-label">Remember Me</label>
+    </div>
 
-        <button type="submit" class="btn btn-primary w-100">Log In</button>
-    </form>
+    <button type="submit" class="btn btn-primary w-100">Log In</button>
+</form>
 </body>
 </html>
