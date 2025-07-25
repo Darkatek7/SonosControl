@@ -77,10 +77,10 @@
                                             @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
                                         </button>
 
-                                        <button class="btn btn-sm @(IsUserActive(user) ? "btn-warning" : "btn-success")"
+                                        <button class="btn btn-sm @(IsUserActive(user) ? "btn-success" : "btn-warning")"
                                                 @onclick='() => ToggleUserActivation(user)'
                                                 disabled="@IsCurrentUser(user)">
-                                            @(IsUserActive(user) ? "⛔" : "✔")
+                                            @(IsUserActive(user) ? "✔" : "⛔")
                                         </button>
                                     </div>
                                 </td>
