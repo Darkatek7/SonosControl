@@ -22,5 +22,7 @@ namespace SonosControl.DAL.Models
             new SpotifyObject { Name = "Top 50 Global", Url = "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF" },
             new SpotifyObject { Name = "Astroworld", Url = "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I" }
         };
+        
+        public List<DayOfWeek> ActiveDays { get; set; } = new(); 
     }
 }

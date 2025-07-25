@@ -27,29 +27,19 @@ namespace SonosControl.Web.Services
 
         private async Task StartSpeaker(string ip)
         {
-            DayOfWeek day = DateTime.Now.DayOfWeek;
+            var settings = await _uow.ISettingsRepo.GetSettings();
+            DayOfWeek today = DateTime.Now.DayOfWeek;
 
-            if ((day == DayOfWeek.Saturday) || (day == DayOfWeek.Sunday)) //await _uow.IHolidayRepo.IsHoliday() || 
+            if (settings != null && !settings.ActiveDays.Contains(today))
             {
-                //if (await _uow.IHolidayRepo.IsHoliday())
-                //{
-                //    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a holiday!");
-                //}
-                //else 
-                if ((day == DayOfWeek.Saturday))
-                {
-                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a Saturday!");
-                }
-                else if ((day == DayOfWeek.Sunday))
-                {
-                    Console.WriteLine(DateTime.Now.ToString("g") + ": Today is a Sunday!");
-                }
+                Console.WriteLine($"{DateTime.Now:g}: Today ({today}) is not an active day.");
                 return;
             }
 
             await _uow.ISonosConnectorRepo.StartPlaying(ip);
-            Console.WriteLine(DateTime.Now.ToString("g") + ": Started Playing");
+            Console.WriteLine($"{DateTime.Now:g}: Started Playing");
         }
+
 
         private async Task WaitUntilStartTime(TimeOnly start, TimeOnly stop)
         {

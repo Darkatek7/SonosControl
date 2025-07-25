@@ -20,7 +20,6 @@ using Newtonsoft.Json.Linq;
 using System.Xml;
 
 
-
 namespace SonosControl.DAL.Repos
 {
     public class SonosConnectorRepo : ISonosConnectorRepo
@@ -52,7 +51,9 @@ namespace SonosControl.DAL.Repos
             {
                 result = await controller.GetIsPlayingAsync();
             }
-            catch { }
+            catch
+            {
+            }
 
             return result;
         }
@@ -78,12 +79,12 @@ namespace SonosControl.DAL.Repos
             stationUri = stationUri
                 .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
                 .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
-            
+
             // Decide which URI to send:
             //  - If the stationUri already contains "://", use it as-is.
             //  - Otherwise assume it's a plain TuneIn stream and prefix with x-rincon-mp3radio://
-            string currentUri = stationUri.Contains("://") 
-                ? stationUri 
+            string currentUri = stationUri.Contains("://")
+                ? stationUri
                 : $"x-rincon-mp3radio://{stationUri}";
 
             string soapRequest = $@"
@@ -144,7 +145,8 @@ namespace SonosControl.DAL.Repos
                 response.EnsureSuccessStatusCode();
                 var responseBody = await response.Content.ReadAsStringAsync();
 
-                var titleMatch = Regex.Match(responseBody, @"<TrackMetaData>.*?<dc:title>(.*?)</dc:title>", RegexOptions.Singleline);
+                var titleMatch = Regex.Match(responseBody, @"<TrackMetaData>.*?<dc:title>(.*?)</dc:title>",
+                    RegexOptions.Singleline);
                 var artistMatch = Regex.Match(responseBody, @"<dc:creator>(.*?)</dc:creator>", RegexOptions.Singleline);
 
                 var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Track";
@@ -254,7 +256,7 @@ namespace SonosControl.DAL.Repos
             else if (playlistMatch.Success)
             {
                 string playlistId = playlistMatch.Groups["playlistId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}"; 
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}";
 
                 metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
                                                xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
@@ -270,7 +272,7 @@ namespace SonosControl.DAL.Repos
             else if (albumMatch.Success)
             {
                 string albumId = albumMatch.Groups["albumId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{albumId}"; 
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{albumId}";
 
                 metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
                                                xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
@@ -365,7 +367,8 @@ namespace SonosControl.DAL.Repos
 
             var content = new StringContent(soapEnvelope);
             content.Headers.Clear();
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"");
+            content.Headers.Add("SOAPACTION",
+                "\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"");
             content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
 
             try
@@ -498,6 +501,5 @@ namespace SonosControl.DAL.Repos
                 return $"Error: {response.ReasonPhrase}";
             }
         }
-
     }
 }
