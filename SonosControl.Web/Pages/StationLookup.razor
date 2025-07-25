@@ -44,16 +44,17 @@
                 <ul class="list-group">
                     @foreach (var station in results)
                     {
-                        <li class="list-group-item bg-dark text-light d-flex justify-content-between align-items-start border-secondary">
-                            <div class="me-2">
+                        <li class="list-group-item bg-dark text-light border-secondary station-item">
+                            <div class="station-info">
                                 <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong><br/>
                                 <small class="text-muted">@GetCleanUrl(station.Url)</small>
                             </div>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-success" @onclick="() => PlayStation(station.Url)">
+                            <div class="station-actions">
+                                <button class="btn btn-outline-success btn-sm me-1"
+                                        @onclick="() => PlayStation(station.Url)">
                                     🔊
                                 </button>
-                                <button class="btn btn-outline-primary" @onclick="() => SaveStation(station)">
+                                <button class="btn btn-outline-primary btn-sm" @onclick="() => SaveStation(station)">
                                     💾
                                 </button>
                             </div>
@@ -384,5 +385,39 @@
         width: auto;
         white-space: nowrap;
     }
+
+    .station-item {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .station-info {
+        flex: 1 1 70%;
+        min-width: 200px;
+    }
+
+    .station-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    @@media (max-width: 576px) {
+        .station-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .station-actions {
+            width: 100%;
+            justify-content: flex-end;
+        }
+    }
+
 
 </style>
