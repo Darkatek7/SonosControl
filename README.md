@@ -17,6 +17,7 @@ ____
 
 - 🛠 Improved UI and Station Lookup
 - 🔧 Minor bug fixes and backend optimizations
+- 📱 Mobile friendly Design
 
 > Want to see what’s coming next? Check the [TODO section](#todo) below.
 
