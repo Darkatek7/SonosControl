@@ -9,12 +9,12 @@
 
 <AuthorizeView Roles="admin">
     <Authorized>
-        <div class="container p-4 bg-dark text-light rounded-4 shadow" style="max-width: 800px; margin-top: 3rem;">
+        <div class="container-fluid logs-container p-4 bg-dark text-light rounded-4 shadow mt-5">
             <h3 class="mb-4 border-bottom pb-2">📜 System Logs</h3>
 
             @if (logs == null)
             {
-                <p>Loading logs...</p>
+                <p class="text-muted">Loading logs...</p>
             }
             else if (!logs.Any())
             {
@@ -22,50 +22,58 @@
             }
             else
             {
-                <div class="mb-3 d-flex align-items-center gap-3">
-                    <label for="logCountSelect" class="form-label mb-0">Show:</label>
-                    <select class="form-select bg-secondary text-light border-0" style="width: auto;"
-                            @bind="selectedLogCount">
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                        <option value="500">500</option>
-                        <option value="1000">1000</option>
-                        <option value="-1">Custom</option>
-                    </select>
+                <div class="mb-4 row gx-3 align-items-center flex-wrap">
+                    <div class="col-auto">
+                        <label for="logCountSelect" class="form-label mb-0">Show:</label>
+                    </div>
+                    <div class="col-auto">
+                        <select id="logCountSelect"
+                                class="form-select form-select-sm bg-secondary text-light border-0"
+                                @bind="selectedLogCount">
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                            <option value="-1">Custom</option>
+                        </select>
+                    </div>
 
                     @if (selectedLogCount == -1)
                     {
-                        <input type="number"
-                               class="form-control bg-secondary text-light border-0"
-                               placeholder="Enter number"
-                               style="width: 120px;"
-                               @bind="customLogCount"
-                               @bind:event="onchange" />
-
+                        <div class="col-auto">
+                            <input type="number"
+                                   class="form-control form-control-sm bg-secondary text-light border-0"
+                                   placeholder="Enter number"
+                                   style="max-width: 120px;"
+                                   @bind="customLogCount"
+                                   @bind:event="onchange"/>
+                        </div>
                     }
                 </div>
 
-                <table class="table table-dark table-hover table-striped">
-                    <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>User</th>
-                        <th>Action</th>
-                        <th>Details</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    @foreach (var log in logs)
-                    {
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-striped align-middle">
+                        <thead class="table-secondary text-dark">
                         <tr>
-                            <td>@log.Timestamp.ToLocalTime().ToString("g")</td>
-                            <td>@log.PerformedBy</td>
-                            <td>@log.Action</td>
-                            <td>@log.Details</td>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th class="d-none d-sm-table-cell">Action</th>
+                            <th class="d-none d-md-table-cell">Details</th>
                         </tr>
-                    }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        @foreach (var log in logs)
+                        {
+                            <tr>
+                                <td>@log.Timestamp.ToLocalTime().ToString("g")</td>
+                                <td>@log.PerformedBy</td>
+                                <td class="d-none d-sm-table-cell">@log.Action</td>
+                                <td class="d-none d-md-table-cell">@log.Details</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     </Authorized>
@@ -107,7 +115,7 @@
             }
         }
     }
-    
+
     protected override async Task OnInitializedAsync()
     {
         await RefreshLogs();
@@ -246,5 +254,33 @@
         width: auto;
         white-space: nowrap;
     }
+
+    .table th, .table td {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .form-select-sm, .form-control-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    .logs-container {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    @@media (min-width: 992px) {
+    .logs-container {
+        max-width: 960px; /* Same as container-lg */
+    }
+    }
+
+    @@media (min-width: 1200px) {
+    .logs-container {
+        max-width: 1140px; /* Same as container-xl */
+    }
+    }
+
 
 </style>
