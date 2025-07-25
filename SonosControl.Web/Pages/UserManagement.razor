@@ -68,13 +68,13 @@
                                         <button class="btn btn-sm btn-outline-primary"
                                                 @onclick='() => ToggleRole(user, "admin")'
                                                 disabled="@IsCurrentUser(user)">
-                                            @(userRoles[user.Id].Contains("admin") ? "−A" : "+A")
+                                            @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
                                         </button>
 
                                         <button class="btn btn-sm btn-outline-secondary"
                                                 @onclick='() => ToggleRole(user, "operator")'
                                                 disabled="@IsCurrentUser(user)">
-                                            @(userRoles[user.Id].Contains("operator") ? "−O" : "+O")
+                                            @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
                                         </button>
 
                                         <button class="btn btn-sm @(IsUserActive(user) ? "btn-warning" : "btn-success")"
