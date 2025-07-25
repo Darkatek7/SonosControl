@@ -47,7 +47,9 @@
         </div>
 
         <button type="submit" class="btn btn-success w-100 mb-3">Register</button>
-        <button type="button" class="btn btn-outline-light w-100" @onclick="GoToLogin">Already have an account? Login</button>
+        <div class="text-center mt-3">
+            <a href="/auth/login?" class="text-decoration-none text-info">Already have an account? Login</a>
+        </div>
     </EditForm>
 </div>
 
@@ -92,7 +94,7 @@
 
     private void GoToLogin()
     {
-        Navigation.NavigateTo("/");
+        Navigation.NavigateTo("/auth/login?");
     }
 
     public class RegisterModel
