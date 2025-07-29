@@ -500,6 +500,7 @@
             return;
         }
 
+        await AddLog("Station Added", $"{newStationName} ({newStationUrl})");
         addStationErrorMessage = null;
 
         _settings ??= new SonosSettings();
@@ -508,7 +509,6 @@
         newStationName = newStationUrl = "";
 
         await SaveSettings();
-        await AddLog("Station Added", $"{newStationName} ({newStationUrl})");
         await InvokeAsync(StateHasChanged);
     }
 
