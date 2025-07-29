@@ -281,7 +281,7 @@
             else
             {
                 // Try to match with saved stations first
-                var matched = _stations.FirstOrDefault(s => s.Url == currentStationUrl);
+                var matched = _stations.FirstOrDefault(s => currentStationUrl?.Contains(s.Url, StringComparison.OrdinalIgnoreCase) == true);
                 if (matched != null)
                 {
                     currentStationDisplay = matched.Name;
