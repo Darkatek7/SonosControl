@@ -33,6 +33,23 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.SlidingExpiration = true;
+    options.ExpireTimeSpan = TimeSpan.FromDays(30); // Used *only* when RememberMe = true
+
+    // If RememberMe is false, the cookie will be non-persistent (session-based)
+    options.Events.OnSigningIn = context =>
+    {
+        var shouldPersist = context.Properties.IsPersistent;
+        if (!shouldPersist)
+        {
+            // Clear expiration => session cookie
+            context.Properties.ExpiresUtc = null;
+        }
+        return Task.CompletedTask;
+    };
+});
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
