@@ -119,46 +119,116 @@ namespace SonosControl.DAL.Repos
         }
 
 
-        public async Task<string> GetCurrentTrackAsync(string ip)
+        public async Task<string> GetCurrentTrackInfoAsync(string ip)
         {
-            using var httpClient = new HttpClient();
-            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-
-            var soapEnvelope = @"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
-                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                    <s:Body>
-                        <u:GetPositionInfo xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                            <InstanceID>0</InstanceID>
-                        </u:GetPositionInfo>
-                    </s:Body>
-                </s:Envelope>";
-
-            var content = new StringContent(soapEnvelope);
-            content.Headers.Clear();
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
-            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
+            using var client = new HttpClient();
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+                var content = new StringContent(
+                    @"<?xml version=""1.0"" encoding=""utf-8""?>
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                        s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                <s:Body>
+                    <u:GetPositionInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                        <InstanceID>0</InstanceID>
+                    </u:GetPositionInfo>
+                </s:Body>
+            </s:Envelope>", Encoding.UTF8, "text/xml");
+
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
+
+                var response = await client.PostAsync(url, content);
                 response.EnsureSuccessStatusCode();
-                var responseBody = await response.Content.ReadAsStringAsync();
 
-                var titleMatch = Regex.Match(responseBody, @"<TrackMetaData>.*?<dc:title>(.*?)</dc:title>",
-                    RegexOptions.Singleline);
-                var artistMatch = Regex.Match(responseBody, @"<dc:creator>(.*?)</dc:creator>", RegexOptions.Singleline);
+                var xml = await response.Content.ReadAsStringAsync();
 
-                var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Track";
-                var artist = artistMatch.Success ? artistMatch.Groups[1].Value : "Unknown Artist";
+                // Extract TrackMetaData block
+                var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
 
-                return $"{artist} - {title}";
+                if (match.Success)
+                {
+                    var metadataXml = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value); // Unescape XML
+
+                    // Extract the title from TrackMetaData
+                    var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
+                    var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
+
+                    var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Title";
+                    var artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "Unknown Artist";
+
+                    return $"{title} — {artist}";
+                }
+
+                return "No metadata available";
             }
             catch (Exception ex)
             {
-                return $"Error fetching track: {ex.Message}";
+                return $"Error: {ex.Message}";
             }
         }
+
+        public async Task<string> GetCurrentTrackAsync(string ip)
+        {
+            using var client = new HttpClient();
+
+            try
+            {
+                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+                var content = new StringContent(
+                    @"<?xml version=""1.0"" encoding=""utf-8""?>
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                        s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                <s:Body>
+                    <u:GetPositionInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                        <InstanceID>0</InstanceID>
+                    </u:GetPositionInfo>
+                </s:Body>
+            </s:Envelope>", Encoding.UTF8, "text/xml");
+
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
+
+                var response = await client.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+
+                var xml = await response.Content.ReadAsStringAsync();
+
+                // Extract <TrackMetaData> content
+                var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
+
+                if (match.Success)
+                {
+                    var metadataXml = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
+
+                    // Try dc:title first
+                    var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
+                    var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
+                    var streamContentMatch = Regex.Match(metadataXml, @"<r:streamContent>(.*?)</r:streamContent>");
+
+                    if (streamContentMatch.Success)
+                    {
+                        return streamContentMatch.Groups[1].Value; // Use this if available
+                    }
+
+                    var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Title";
+                    var artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "Unknown Artist";
+
+                    return $"{title} — {artist}";
+                }
+
+                return "No metadata available";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: {ex.Message}";
+            }
+        }
+
 
         public async Task<string> GetCurrentStationAsync(string ip)
         {
