@@ -30,7 +30,8 @@ ____
 
 ## UI
 ### Index
-![image](https://github.com/user-attachments/assets/91de85bb-c1ca-434d-9480-57eb02fd9ea6)
+<img width="940" height="1066" alt="image" src="https://github.com/user-attachments/assets/44a9e2a2-dcf2-4bda-bf45-eb289ff34472" />
+
 
 ### Config
 ![image](https://github.com/user-attachments/assets/88e804df-c6a1-458e-8ed3-0f1ddef2d4ee)
