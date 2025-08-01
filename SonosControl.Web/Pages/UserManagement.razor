@@ -121,7 +121,9 @@
 
         try
         {
-            users = UserManager.Users.ToList();
+            users = UserManager.Users
+                .OrderBy(u => u.UserName)
+                .ToList();
 
             foreach (var user in users)
             {

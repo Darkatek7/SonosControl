@@ -60,15 +60,20 @@
 
                 <!-- Now Playing Card -->
                 <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="me-3 display-6">🎵</div>
+                    <div class="card-body d-flex align-items-start gap-3">
+                        <div class="display-5">🎵</div>
                         <div>
-                            <h5 class="mb-1">Currently Playing</h5>
-                            <p class="mb-0 text-light-emphasis currently-playing-text">@currentStationDisplay</p>
-
+                            <h5 class="mb-2">Currently Playing</h5>
+                            <p class="mb-1 text-light-emphasis currently-playing-text">
+                                <strong>Station:</strong> @currentStationDisplay
+                            </p>
+                            <p class="mb-0 text-light-emphasis currently-playing-text">
+                                <strong>Track:</strong> @currentlyPlaying
+                            </p>
                         </div>
                     </div>
                 </div>
+
 
                 <!-- TuneIn Station Section -->
                 <div class="form-section mb-5">
@@ -258,10 +263,23 @@
 
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
+
+    private string currentlyPlaying = "Loading...";
+    private string currentyPlayingDisplay = "Loading...";
     private Timer? _stationUpdateTimer;
     private string? addStationErrorMessage;
     private string? addTrackErrorMessage;
 
+    private List<TuneInStation> _stations =>
+        (_settings?.Stations ?? new List<TuneInStation>())
+        .OrderBy(s => s.Name)
+        .ToList();
+
+    private List<SpotifyObject> _tracks =>
+        (_settings?.SpotifyTracks ?? new List<SpotifyObject>())
+        .OrderBy(t => t.Name)
+        .ToList();
+    
     private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
 
     private List<string> queue = new();
@@ -288,16 +306,13 @@
                 }
                 else
                 {
-                    // Try to get a clean name from metadata (reverse lookup)
-                    currentStationDisplay = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-
-                    // Optional: fallback to showing the URL if still unknown
-                    if (string.IsNullOrWhiteSpace(currentStationDisplay))
-                        currentStationDisplay = currentStationUrl;
+                    currentStationDisplay = currentStationUrl;
                 }
 
                 _isSpotifyPlaying = false;
             }
+
+            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
 
             await InvokeAsync(StateHasChanged);
         }
@@ -431,10 +446,6 @@
         queue.Clear();
         await AddLog("Queue Cleared");
     }
-
-    private List<TuneInStation> _stations => _settings?.Stations ?? new();
-
-    private List<SpotifyObject> _tracks => _settings?.SpotifyTracks ?? new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -720,4 +731,12 @@
             font-size: 0.85rem;
         }
     }
+
+    .currently-playing-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
 </style>
