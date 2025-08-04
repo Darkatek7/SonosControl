@@ -62,12 +62,12 @@
                 <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
                     <div class="card-body d-flex align-items-start gap-3">
                         <div class="display-5">🎵</div>
-                        <div>
+                        <div class="flex-grow-1 text-wrap">
                             <h5 class="mb-2">Currently Playing</h5>
-                            <p class="mb-1 text-light-emphasis currently-playing-text">
+                            <p class="mb-1 text-light-emphasis currently-playing-text text-break">
                                 <strong>Station:</strong> @currentStationDisplay
                             </p>
-                            <p class="mb-0 text-light-emphasis currently-playing-text">
+                            <p class="mb-0 text-light-emphasis currently-playing-text text-break">
                                 <strong>Track:</strong> @currentlyPlaying
                             </p>
                         </div>
@@ -733,10 +733,14 @@
     }
 
     .currently-playing-text {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        white-space: normal; /* allow wrapping */
+        overflow: visible;   /* let it grow naturally */
+        text-overflow: unset; /* remove ellipsis */
         max-width: 100%;
+        font-size: 0.9rem;
     }
+
 
 </style>
