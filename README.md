@@ -5,8 +5,8 @@ https://hub.docker.com/r/darkatek7/sonoscontrol
 ____
 
 ## Description
-This Self hosted application is used to automate the process of turning on/off a Sonos Speaker daily using on a Start/Stop Time (UTC) set in the config file or the UI.
-The App also supports playing predefined TuneIn Stations ord Spotifiy Songs/Playlists/Albums.
+This self-hosted application automates turning a Sonos speaker on and off at daily start and stop times (UTC) set in the config file or the UI.
+The app also supports playing predefined TuneIn stations or Spotify songs, playlists, and albums.
 ____
 
 ## What's New
