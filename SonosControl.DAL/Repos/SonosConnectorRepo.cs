@@ -229,6 +229,47 @@ namespace SonosControl.DAL.Repos
             }
         }
 
+        public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip)
+        {
+            using var client = new HttpClient();
+
+            try
+            {
+                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+                var content = new StringContent(
+                    @"<?xml version=\"1.0\" encoding=\"utf-8\"?>
+            <s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"
+                        s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">
+                <s:Body>
+                    <u:GetPositionInfo xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">
+                        <InstanceID>0</InstanceID>
+                    </u:GetPositionInfo>
+                </s:Body>
+            </s:Envelope>", Encoding.UTF8, "text/xml");
+
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
+
+                var response = await client.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+
+                var xml = await response.Content.ReadAsStringAsync();
+
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                TimeSpan.TryParse(doc.GetElementsByTagName("RelTime").Item(0)?.InnerText ?? "00:00:00", out var relTime);
+                TimeSpan.TryParse(doc.GetElementsByTagName("TrackDuration").Item(0)?.InnerText ?? "00:00:00", out var trackDuration);
+
+                return (relTime, trackDuration);
+            }
+            catch
+            {
+                return (TimeSpan.Zero, TimeSpan.Zero);
+            }
+        }
+
 
         public async Task<string> GetCurrentStationAsync(string ip)
         {
