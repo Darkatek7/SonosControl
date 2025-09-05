@@ -32,6 +32,26 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label">🎵 Auto Play</label>
+                    <select class="form-select bg-secondary text-light border-0"
+                            @bind="AutoPlaySelection" @bind:event="onchange">
+                        <option value="">-- None --</option>
+                        <optgroup label="Stations">
+                            @foreach (var station in _settings.Stations)
+                            {
+                                <option value="station:@station.Url">@station.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Spotify">
+                            @foreach (var track in _settings.SpotifyTracks)
+                            {
+                                <option value="spotify:@track.Url">@track.Name</option>
+                            }
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label">⏰ Start Time</label>
                     <input type="time" class="form-control bg-secondary text-light border-0"
                            @bind-value="StartTime"
@@ -69,6 +89,59 @@
                             </div>
                         }
                     </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">🗓️ Daily Schedule</label>
+                    <table class="table table-dark table-striped mb-0">
+                        <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Start</th>
+                            <th>Stop</th>
+                            <th>Play</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
+                        {
+                            if (!_settings.DailySchedules.ContainsKey(day))
+                                _settings.DailySchedules[day] = new DaySchedule();
+
+                            var schedule = _settings.DailySchedules[day];
+                            <tr>
+                                <td>@day.ToString().Substring(0,3)</td>
+                                <td>
+                                    <input type="time" class="form-control bg-secondary text-light border-0"
+                                           @bind-value="schedule.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                </td>
+                                <td>
+                                    <input type="time" class="form-control bg-secondary text-light border-0"
+                                           @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                </td>
+                                <td>
+                                    <select class="form-select bg-secondary text-light border-0"
+                                            value="@GetScheduleSelection(schedule)"
+                                            @onchange="e => SetScheduleSelection(schedule, e.Value?.ToString())">
+                                        <option value="">-- None --</option>
+                                        <optgroup label="Stations">
+                                            @foreach (var station in _settings.Stations)
+                                            {
+                                                <option value="station:@station.Url">@station.Name</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="Spotify">
+                                            @foreach (var track in _settings.SpotifyTracks)
+                                            {
+                                                <option value="spotify:@track.Url">@track.Name</option>
+                                            }
+                                        </optgroup>
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
                 </div>
 
             </div>
@@ -140,6 +213,32 @@
         }
     }
 
+    private string AutoPlaySelection
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(_settings!.AutoPlayStationUrl))
+                return $"station:{_settings.AutoPlayStationUrl}";
+            if (!string.IsNullOrEmpty(_settings.AutoPlaySpotifyUrl))
+                return $"spotify:{_settings.AutoPlaySpotifyUrl}";
+            return string.Empty;
+        }
+        set
+        {
+            _settings!.AutoPlayStationUrl = null;
+            _settings.AutoPlaySpotifyUrl = null;
+            if (!string.IsNullOrEmpty(value))
+            {
+                var parts = value.Split(':', 2);
+                if (parts[0] == "station")
+                    _settings.AutoPlayStationUrl = parts[1];
+                else if (parts[0] == "spotify")
+                    _settings.AutoPlaySpotifyUrl = parts[1];
+            }
+            SaveSettings();
+        }
+    }
+
     private async Task SaveSettings()
     {
         _settings.ActiveDays = DaySelection
@@ -148,6 +247,30 @@
             .ToList();
 
         await _uow.ISettingsRepo.WriteSettings(_settings!);
+    }
+
+    private string GetScheduleSelection(DaySchedule schedule)
+    {
+        if (!string.IsNullOrEmpty(schedule.StationUrl))
+            return $"station:{schedule.StationUrl}";
+        if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+            return $"spotify:{schedule.SpotifyUrl}";
+        return string.Empty;
+    }
+
+    private void SetScheduleSelection(DaySchedule schedule, string? value)
+    {
+        schedule.StationUrl = null;
+        schedule.SpotifyUrl = null;
+        if (!string.IsNullOrEmpty(value))
+        {
+            var parts = value.Split(':', 2);
+            if (parts[0] == "station")
+                schedule.StationUrl = parts[1];
+            else if (parts[0] == "spotify")
+                schedule.SpotifyUrl = parts[1];
+        }
+        SaveSettings();
     }
 
     private int Volume
