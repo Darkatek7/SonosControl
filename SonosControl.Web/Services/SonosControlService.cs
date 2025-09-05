@@ -1,4 +1,5 @@
 using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Models;
 
 namespace SonosControl.Web.Services
 {
@@ -16,27 +17,53 @@ namespace SonosControl.Web.Services
             while (!stoppingToken.IsCancellationRequested)
             {
                 var settings = await _uow.ISettingsRepo.GetSettings();
+                var today = DateTime.Now.DayOfWeek;
 
-                await WaitUntilStartTime(settings!.StartTime, settings!.StopTime);
+                DaySchedule? schedule = null;
+                if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var sched))
+                    schedule = sched;
 
-                await StartSpeaker(settings!.IP_Adress);
+                TimeOnly start = schedule?.StartTime ?? settings!.StartTime;
+                TimeOnly stop = schedule?.StopTime ?? settings!.StopTime;
 
-                await StopSpeaker(settings!.IP_Adress, settings!.StopTime);
+                await WaitUntilStartTime(start, stop);
+
+                await StartSpeaker(settings!.IP_Adress, schedule);
+
+                await StopSpeaker(settings!.IP_Adress, stop);
             }
         }
 
-        private async Task StartSpeaker(string ip)
+        private async Task StartSpeaker(string ip, DaySchedule? schedule)
         {
             var settings = await _uow.ISettingsRepo.GetSettings();
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
-            if (settings != null && !settings.ActiveDays.Contains(today))
+            if (schedule == null && (settings == null || !settings.ActiveDays.Contains(today)))
             {
                 Console.WriteLine($"{DateTime.Now:g}: Today ({today}) is not an active day.");
                 return;
             }
 
-            await _uow.ISonosConnectorRepo.StartPlaying(ip);
+            if (schedule != null)
+            {
+                if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
+                else if (!string.IsNullOrEmpty(schedule.StationUrl))
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, schedule.StationUrl);
+                else
+                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
+                else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, settings.AutoPlayStationUrl);
+                else
+                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+            }
+
             Console.WriteLine($"{DateTime.Now:g}: Started Playing");
         }
 
