@@ -4,6 +4,7 @@
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 @attribute [Authorize(Roles = "admin,operator")]
 
 <PageTitle>Sonos Control</PageTitle>
@@ -527,6 +528,9 @@
     {
         if (_settings == null) return;
 
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete station '{station.Name}'?");
+        if (!confirmed) return;
+
         _settings.Stations?.Remove(station);
         await SaveSettings();
 
@@ -537,6 +541,9 @@
     // Remove Spotify track
     private async Task RemoveSpotifyTrack(SpotifyObject track)
     {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete track '{track.Name}'?");
+        if (!confirmed) return;
+
         _settings.SpotifyTracks.Remove(track);
         // You may also want to save the settings after removing it
         Console.WriteLine($"Removed track: {track.Name}");
