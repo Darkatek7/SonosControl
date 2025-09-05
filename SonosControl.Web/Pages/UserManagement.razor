@@ -8,6 +8,7 @@
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
+@inject IJSRuntime JS
 
 <PageTitle>User Management</PageTitle>
 
@@ -148,6 +149,9 @@
             errorMessage = "You cannot delete your own user account.";
             return;
         }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete user '{user.UserName}'?");
+        if (!confirmed) return;
 
         var result = await UserManager.DeleteAsync(user);
         if (result.Succeeded)
