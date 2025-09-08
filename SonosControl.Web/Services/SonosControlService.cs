@@ -16,6 +16,7 @@ namespace SonosControl.Web.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                // Load settings to determine next start time
                 var settings = await _uow.ISettingsRepo.GetSettings();
                 var today = DateTime.Now.DayOfWeek;
 
@@ -23,14 +24,23 @@ namespace SonosControl.Web.Services
                 if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var sched))
                     schedule = sched;
 
-                TimeOnly start = schedule?.StartTime ?? settings!.StartTime;
-                TimeOnly stop = schedule?.StopTime ?? settings!.StopTime;
+                var start = schedule?.StartTime ?? settings.StartTime;
 
-                await WaitUntilStartTime(start, stop);
+                // Wait until the calculated start time
+                await WaitUntilStartTime(start);
 
-                await StartSpeaker(settings!.IP_Adress, schedule);
+                // Refresh settings after waiting in case the day changed
+                settings = await _uow.ISettingsRepo.GetSettings();
+                today = DateTime.Now.DayOfWeek;
+                schedule = null;
+                if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var refreshed))
+                    schedule = refreshed;
 
-                await StopSpeaker(settings!.IP_Adress, stop);
+                var stop = schedule?.StopTime ?? settings.StopTime;
+
+                await StartSpeaker(settings.IP_Adress, schedule);
+
+                await StopSpeaker(settings.IP_Adress, stop);
             }
         }
 
@@ -68,14 +78,12 @@ namespace SonosControl.Web.Services
         }
 
 
-        private async Task WaitUntilStartTime(TimeOnly start, TimeOnly stop)
+        private async Task WaitUntilStartTime(TimeOnly start)
         {
             TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
-            var timeDifference = start - timeNow;
-
-            if (timeNow >= stop || start >= timeNow)
+            if (start > timeNow)
             {
-                var ms = (int)timeDifference.TotalMilliseconds;
+                var ms = (int)(start - timeNow).TotalMilliseconds;
                 TimeSpan t = TimeSpan.FromMilliseconds(ms);
                 string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
                         t.Hours,
@@ -84,7 +92,7 @@ namespace SonosControl.Web.Services
                         t.Milliseconds);
 
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Starting in " + delayInMs);
-                Task.Delay(ms).Wait();
+                await Task.Delay(ms);
             }
         }
 
@@ -109,7 +117,7 @@ namespace SonosControl.Web.Services
                         t.Milliseconds);
 
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
-                Task.Delay(ms).Wait();
+                await Task.Delay(ms);
 
                 await _uow.ISonosConnectorRepo.StopPlaying(ip);
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
