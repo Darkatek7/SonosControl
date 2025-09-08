@@ -38,13 +38,16 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.SlidingExpiration = true;
-    options.ExpireTimeSpan = TimeSpan.FromDays(30); // Used *only* when RememberMe = true
+    options.ExpireTimeSpan = TimeSpan.FromDays(30);
 
-    // If RememberMe is false, the cookie will be non-persistent (session-based)
     options.Events.OnSigningIn = context =>
     {
-        var shouldPersist = context.Properties.IsPersistent;
-        if (!shouldPersist)
+        if (context.Properties.IsPersistent)
+        {
+            // Ensure persistent logins survive for the full 30 days
+            context.Properties.ExpiresUtc ??= DateTimeOffset.UtcNow.AddDays(30);
+        }
+        else
         {
             // Clear expiration => session cookie
             context.Properties.ExpiresUtc = null;
