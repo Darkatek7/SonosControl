@@ -71,6 +71,12 @@
                             <p class="mb-0 text-light-emphasis currently-playing-text text-break">
                                 <strong>Track:</strong> @currentlyPlaying
                             </p>
+                            @if (!string.IsNullOrWhiteSpace(trackProgress))
+                            {
+                                <p class="mb-0 text-light-emphasis currently-playing-text text-break">
+                                    <strong>Time:</strong> @trackProgress
+                                </p>
+                            }
                         </div>
                     </div>
                 </div>
@@ -267,6 +273,7 @@
 
     private string currentlyPlaying = "Loading...";
     private string currentyPlayingDisplay = "Loading...";
+    private string trackProgress = "";
     private Timer? _stationUpdateTimer;
     private string? addStationErrorMessage;
     private string? addTrackErrorMessage;
@@ -314,6 +321,8 @@
             }
 
             currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
+            var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+            trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
 
             await InvokeAsync(StateHasChanged);
         }
