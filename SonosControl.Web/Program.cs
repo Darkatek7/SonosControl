@@ -1,6 +1,7 @@
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
 using SonosControl.Web.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,7 @@ builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddSingleton<SonosControlService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
+builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
 
 builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews();
