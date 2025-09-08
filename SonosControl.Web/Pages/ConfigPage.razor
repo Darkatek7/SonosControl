@@ -122,7 +122,7 @@
                                 <td>
                                     <select class="form-select bg-secondary text-light border-0"
                                             value="@GetScheduleSelection(schedule)"
-                                            @onchange="e => SetScheduleSelection(schedule, e.Value?.ToString())">
+                                            @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
                                         <option value="">-- None --</option>
                                         <optgroup label="Stations">
                                             @foreach (var station in _settings.Stations)
@@ -258,7 +258,7 @@
         return string.Empty;
     }
 
-    private void SetScheduleSelection(DaySchedule schedule, string? value)
+    private async Task SetScheduleSelection(DaySchedule schedule, string? value)
     {
         schedule.StationUrl = null;
         schedule.SpotifyUrl = null;
@@ -270,7 +270,7 @@
             else if (parts[0] == "spotify")
                 schedule.SpotifyUrl = parts[1];
         }
-        SaveSettings();
+        await SaveSettings();
     }
 
     private int Volume
