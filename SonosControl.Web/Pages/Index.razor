@@ -484,7 +484,7 @@
             _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
             await SaveSettings();
             _isPlaying = await IsPlaying();
-            _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 5000);
+            _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 1000);
         }
     }
 
