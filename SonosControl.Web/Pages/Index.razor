@@ -322,7 +322,17 @@
 
             currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
             var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
-            trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
+
+            if (progress.Duration == TimeSpan.Zero)
+            {
+                trackProgress = progress.Position == TimeSpan.Zero
+                    ? string.Empty
+                    : $"{progress.Position:mm\\:ss}";
+            }
+            else
+            {
+                trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
+            }
 
             await InvokeAsync(StateHasChanged);
         }
