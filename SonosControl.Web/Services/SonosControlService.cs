@@ -16,37 +16,19 @@ namespace SonosControl.Web.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                // Load settings to determine next start time
-                var settings = await _uow.ISettingsRepo.GetSettings();
-                var today = DateTime.Now.DayOfWeek;
-
-                DaySchedule? schedule = null;
-                if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var sched))
-                    schedule = sched;
-
-                var start = schedule?.StartTime ?? settings.StartTime;
-
-                // Wait until the calculated start time
-                await WaitUntilStartTime(start);
-
-                // Refresh settings after waiting in case the day changed
-                settings = await _uow.ISettingsRepo.GetSettings();
-                today = DateTime.Now.DayOfWeek;
-                schedule = null;
-                if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var refreshed))
-                    schedule = refreshed;
+                // Continuously evaluate settings until start time is reached
+                var (settings, schedule) = await WaitUntilStartTime(stoppingToken);
 
                 var stop = schedule?.StopTime ?? settings.StopTime;
 
-                await StartSpeaker(settings.IP_Adress, schedule);
+                await StartSpeaker(settings.IP_Adress, settings, schedule);
 
                 await StopSpeaker(settings.IP_Adress, stop);
             }
         }
 
-        private async Task StartSpeaker(string ip, DaySchedule? schedule)
+        private async Task StartSpeaker(string ip, SonosSettings settings, DaySchedule? schedule)
         {
-            var settings = await _uow.ISettingsRepo.GetSettings();
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
             if (schedule == null && (settings == null || !settings.ActiveDays.Contains(today)))
@@ -78,22 +60,47 @@ namespace SonosControl.Web.Services
         }
 
 
-        private async Task WaitUntilStartTime(TimeOnly start)
+        private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(CancellationToken token)
         {
-            TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
-            if (start > timeNow)
-            {
-                var ms = (int)(start - timeNow).TotalMilliseconds;
-                TimeSpan t = TimeSpan.FromMilliseconds(ms);
-                string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
-                        t.Hours,
-                        t.Minutes,
-                        t.Seconds,
-                        t.Milliseconds);
+            TimeOnly? previousStart = null;
 
-                Console.WriteLine(DateTime.Now.ToString("g") + ": Starting in " + delayInMs);
-                await Task.Delay(ms);
+            while (!token.IsCancellationRequested)
+            {
+                var settings = await _uow.ISettingsRepo.GetSettings();
+                var today = DateTime.Now.DayOfWeek;
+
+                DaySchedule? schedule = null;
+                if (settings!.DailySchedules != null && settings.DailySchedules.TryGetValue(today, out var sched))
+                    schedule = sched;
+
+                var start = schedule?.StartTime ?? settings.StartTime;
+                var now = TimeOnly.FromDateTime(DateTime.Now);
+
+                if (start <= now)
+                    return (settings, schedule);
+
+                if (previousStart != start)
+                {
+                    var totalMs = (int)(start - now).TotalMilliseconds;
+                    TimeSpan t = TimeSpan.FromMilliseconds(totalMs);
+                    string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
+                            t.Hours,
+                            t.Minutes,
+                            t.Seconds,
+                            t.Milliseconds);
+
+                    Console.WriteLine(DateTime.Now.ToString("g") + ": Starting in " + delayInMs);
+                    previousStart = start;
+                }
+
+                var msRemaining = (int)(start - now).TotalMilliseconds;
+                // Poll settings at most once per minute to pick up schedule changes
+                var delay = Math.Max(1, Math.Min(msRemaining, 60_000));
+                await Task.Delay(delay, token);
             }
+
+            token.ThrowIfCancellationRequested();
+            return default;
         }
 
         private async Task StopSpeaker(string ip, TimeOnly stopTime)
