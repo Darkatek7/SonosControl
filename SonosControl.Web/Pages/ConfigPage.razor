@@ -4,7 +4,7 @@
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
 
-<AuthorizeView Roles="admin,operator">
+<AuthorizeView Roles="admin,operator,superadmin">
     <Authorized>
         @if (_settings is null)
         {
@@ -20,7 +20,8 @@
                     <input type="text" class="form-control bg-secondary text-light border-0"
                            @bind-value="IP_Adress"
                            @bind-value:event="oninput"
-                           placeholder="Enter IP Address"/>
+                           placeholder="Enter IP Address"
+                           disabled="@(!canEditIp)"/>
                 </div>
 
                 <div class="mb-3">
@@ -149,7 +150,7 @@
     </Authorized>
     <NotAuthorized>
         <div class="alert alert-warning">
-            You must be logged in as an admin or operator to view this page.
+            You must be logged in as an admin, superadmin, or operator to view this page.
         </div>
     </NotAuthorized>
 </AuthorizeView>
@@ -158,6 +159,7 @@
     private SonosSettings? _settings;
     private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
     private Dictionary<DayOfWeek, bool> DaySelection = new();
+    private bool canEditIp;
 
 
     protected override async Task OnInitializedAsync()
@@ -166,6 +168,7 @@
 
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
+        canEditIp = user.IsInRole("admin") || user.IsInRole("superadmin");
 
         if (user.Identity?.IsAuthenticated ?? false)
         {
@@ -299,6 +302,9 @@
         get => _settings!.IP_Adress;
         set
         {
+            if (!canEditIp)
+                return;
+
             _settings!.IP_Adress = value;
             SaveSettings();
             AddLog("IP-Adress Changed", $"IP: {value}");
