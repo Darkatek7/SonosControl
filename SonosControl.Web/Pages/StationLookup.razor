@@ -6,7 +6,7 @@
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
 
-<AuthorizeView Roles="admin,operator">
+<AuthorizeView Roles="admin,operator,superadmin">
     <Authorized>
         <div class="container p-4 bg-dark text-light rounded-4 shadow mt-4" style="max-width: 600px;">
             <h4 class="text-center mb-4 border-bottom pb-2">📻 Station Lookup</h4>
@@ -70,7 +70,7 @@
     </Authorized>
     <NotAuthorized>
         <div class="alert alert-warning mt-4 container">
-            You must be logged in as an admin or operator to view this page.
+            You must be logged in as an admin, superadmin, or operator to view this page.
         </div>
     </NotAuthorized>
 </AuthorizeView>
