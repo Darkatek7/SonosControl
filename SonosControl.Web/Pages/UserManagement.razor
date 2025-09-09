@@ -79,13 +79,13 @@
                                                     disabled="@IsCurrentUser(user)">
                                                 @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
                                             </button>
-
+                                      
                                             <button class="btn btn-sm btn-outline-warning"
                                                     @onclick='() => ToggleRole(user, "superadmin")'
                                                     disabled="@IsCurrentUser(user)">
                                                 @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
                                             </button>
-                                        }
+                                            }                                   
 
                                         <button class="btn btn-sm @(IsUserActive(user) ? "btn-success" : "btn-warning")"
                                                 @onclick='() => ToggleUserActivation(user)'
