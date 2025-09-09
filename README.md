@@ -79,6 +79,8 @@ password:
 ESPmtZ7&LW2z&xHF
 ```
 
+The default user is seeded with both **admin** and **superadmin** roles. Only a superadmin can assign roles to other users, and superadmin accounts cannot be deleted by non-superadmin users.
+
 ### *This is optional. You only have to do this if you get a config.json error for some reason.*
 
 At first create a folder called **Data**.

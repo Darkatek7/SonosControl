@@ -5,10 +5,10 @@
 @using SonosControl.Web.Models;
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
-@attribute [Authorize(Roles = "admin,operator")]
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Sonos Control</PageTitle>
-<AuthorizeView Roles="admin,operator">
+<AuthorizeView Roles="admin,operator,superadmin">
     <Authorized>
         @if (_settings is not null)
         {
@@ -242,7 +242,7 @@
     </Authorized>
     <NotAuthorized>
         <div class="alert alert-warning">
-            You must be logged in as an admin or operator to view this page.
+            You must be logged in as an admin, superadmin, or operator to view this page.
         </div>
     </NotAuthorized>
 </AuthorizeView>

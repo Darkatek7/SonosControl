@@ -8,7 +8,7 @@ public static class DataSeeder
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
-        string[] roles = { "admin", "operator" };
+        string[] roles = { "superadmin", "admin", "operator" };
 
         // Ensure all roles exist
         foreach (var role in roles)
@@ -42,10 +42,15 @@ public static class DataSeeder
             }
         }
 
-        // Ensure user is in admin role
+        // Ensure user is in admin and superadmin roles
         if (!await userManager.IsInRoleAsync(adminUser, "admin"))
         {
             await userManager.AddToRoleAsync(adminUser, "admin");
+        }
+
+        if (!await userManager.IsInRoleAsync(adminUser, "superadmin"))
+        {
+            await userManager.AddToRoleAsync(adminUser, "superadmin");
         }
     }
 }
