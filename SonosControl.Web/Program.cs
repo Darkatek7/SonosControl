@@ -4,6 +4,8 @@ using SonosControl.Web.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
+using System.IO;
 
 using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
@@ -55,6 +57,14 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
+
+// Configure persistent data protection keys so cookies survive restarts
+var keysDirectory = builder.Configuration.GetValue<string>("DataProtection:KeysDirectory")
+                   ?? Path.Combine(builder.Environment.ContentRootPath, "DataProtectionKeys");
+Directory.CreateDirectory(keysDirectory);
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysDirectory));
 
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
