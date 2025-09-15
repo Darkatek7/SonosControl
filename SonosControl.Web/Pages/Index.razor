@@ -8,10 +8,10 @@
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Sonos Control</PageTitle>
-<AuthorizeView Roles="admin,operator,superadmin">
-    <Authorized>
-        @if (_settings is not null)
-        {
+
+
+    @if (_settings is not null)
+    {
             <div class="container p-4 bg-dark text-light rounded-4 shadow">
                 <h3 class="mb-4 border-bottom pb-2">🎛️ Sonos Control Panel</h3>
 
@@ -239,13 +239,6 @@
                 </div>
             </div>
         }
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-warning">
-            You must be logged in as an admin, superadmin, or operator to view this page.
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
 
 
 
