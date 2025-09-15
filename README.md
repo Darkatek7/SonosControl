@@ -65,23 +65,17 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Europe/Vienna
+      - ADMIN_USERNAME=admin
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=ChangeMe!1
     volumes:
       - ./Data:/app/Data
       # persist data‑protection keys
       - ./dpkeys:/root/.aspnet/DataProtection-Keys
 ```
 
-Login using the default admin user:
-```
-admin
-```
-
-password:
-```
-ESPmtZ7&LW2z&xHF
-```
-
-The default user is seeded with both **admin** and **superadmin** roles. Only a superadmin can assign roles to other users, and superadmin accounts cannot be deleted by non-superadmin users.
+The application seeds its initial administrator using the values from the `ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` environment variables.
+All three variables must be provided and the password must meet the configured strength requirements or startup will fail. Use these credentials to sign in after deployment. The seeded user receives both **admin** and **superadmin** roles. Only a superadmin can assign roles to other users, and superadmin accounts cannot be deleted by non-superadmin users.
 
 ### *This is optional. You only have to do this if you get a config.json error for some reason.*
 
