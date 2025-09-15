@@ -78,6 +78,7 @@ Layout = null;
 </head>
 <body>
 <form method="post" action="/auth/login" class="login-card">
+    @Html.AntiForgeryToken()
     <h2>🔒 Login</h2>
 
     @if (ViewBag.Error != null)
