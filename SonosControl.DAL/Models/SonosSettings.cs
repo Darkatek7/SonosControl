@@ -29,5 +29,7 @@ namespace SonosControl.DAL.Models
         public Dictionary<DayOfWeek, DaySchedule> DailySchedules { get; set; } = new();
 
         public List<DayOfWeek> ActiveDays { get; set; } = new();
+
+        public bool AllowUserRegistration { get; set; } = true;
     }
 }

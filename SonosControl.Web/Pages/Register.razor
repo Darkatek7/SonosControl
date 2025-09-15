@@ -3,62 +3,85 @@
 @using SonosControl.Web.Models
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Navigation
+@inject IUnitOfWork _uow
 
 <div class="container p-4 bg-dark text-light rounded-4 shadow" style="max-width: 480px; margin-top: 3rem;">
     <h3 class="mb-4 border-bottom pb-2">🔐 Register New Account</h3>
 
-    <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" />
-        
-        @if (!string.IsNullOrEmpty(registerModel.statusMessage))
-        {
-            <p class="text-danger">@registerModel.statusMessage</p>
-        }
-
-        <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <InputText id="username" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.UserName" />
-        </div>
-
-        <div class="mb-3">
-            <label for="email" class="form-label">Email (optional)</label>
-            <InputText id="email" type="email" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Email" />
-        </div>
-        
-        <div class="mb-3">
-            <label for="firstname" class="form-label">Firstname</label>
-            <InputText id="firstname" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Firstname" />
-        </div>
-        
-        <div class="mb-3">
-            <label for="lastname" class="form-label">Lastname</label>
-            <InputText id="lastname" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Lastname" />
-        </div>
-
-        <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <InputText id="password" type="password" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Password" />
-        </div>
-
-        <div class="mb-4">
-            <label for="confirmPassword" class="form-label">Confirm Password</label>
-            <InputText id="confirmPassword" type="password" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.ConfirmPassword" />
-        </div>
-
-        <button type="submit" class="btn btn-success w-100 mb-3">Register</button>
+    @if (!allowRegistration)
+    {
+        <div class="alert alert-warning">User registration is currently disabled.</div>
         <div class="text-center mt-3">
-            <a href="/auth/login?" class="text-decoration-none text-info">Already have an account? Login</a>
+            <a href="/auth/login?" class="text-decoration-none text-info">Return to login</a>
         </div>
-    </EditForm>
+    }
+    else
+    {
+        <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            @if (!string.IsNullOrEmpty(registerModel.statusMessage))
+            {
+                <p class="text-danger">@registerModel.statusMessage</p>
+            }
+
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <InputText id="username" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.UserName" />
+            </div>
+
+            <div class="mb-3">
+                <label for="email" class="form-label">Email (optional)</label>
+                <InputText id="email" type="email" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Email" />
+            </div>
+
+            <div class="mb-3">
+                <label for="firstname" class="form-label">Firstname</label>
+                <InputText id="firstname" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Firstname" />
+            </div>
+
+            <div class="mb-3">
+                <label for="lastname" class="form-label">Lastname</label>
+                <InputText id="lastname" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Lastname" />
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <InputText id="password" type="password" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.Password" />
+            </div>
+
+            <div class="mb-4">
+                <label for="confirmPassword" class="form-label">Confirm Password</label>
+                <InputText id="confirmPassword" type="password" class="form-control bg-secondary text-light border-0" @bind-Value="registerModel.ConfirmPassword" />
+            </div>
+
+            <button type="submit" class="btn btn-success w-100 mb-3">Register</button>
+            <div class="text-center mt-3">
+                <a href="/auth/login?" class="text-decoration-none text-info">Already have an account? Login</a>
+            </div>
+        </EditForm>
+    }
 </div>
 
 @code {
     private RegisterModel registerModel = new();
+    private bool allowRegistration = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await _uow.ISettingsRepo.GetSettings();
+        allowRegistration = settings?.AllowUserRegistration ?? true;
+    }
 
     private async Task HandleRegister()
     {
         registerModel.statusMessage = "";
+        if (!allowRegistration)
+        {
+            registerModel.statusMessage = "Registration is disabled.";
+            return;
+        }
         if (registerModel.Password != registerModel.ConfirmPassword)
         {
             registerModel.statusMessage = "Passwords do not match.";
