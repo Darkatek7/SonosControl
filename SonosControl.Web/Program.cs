@@ -26,6 +26,7 @@ builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
 
 builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews();
+builder.Services.AddAntiforgery();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
