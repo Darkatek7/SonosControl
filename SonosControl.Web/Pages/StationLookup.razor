@@ -5,9 +5,9 @@
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
-<AuthorizeView Roles="admin,operator,superadmin">
-    <Authorized>
+
         <div class="container p-4 bg-dark text-light rounded-4 shadow mt-4" style="max-width: 600px;">
             <h4 class="text-center mb-4 border-bottom pb-2">📻 Station Lookup</h4>
 
@@ -67,13 +67,6 @@
                 <p class="text-center text-muted">No stations found.</p>
             }
         </div>
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-warning mt-4 container">
-            You must be logged in as an admin, superadmin, or operator to view this page.
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
 
 @code {
     private SonosSettings? _settings;
