@@ -156,7 +156,7 @@ You can change the config to fit your needs or change it later in the UI.
 - [x] Add user authentication  
 - [x] Password Reset Page
 - [x] Add option to change the days which the automation should run  
-- [ ] Add a "play this song/playlist/station" on startup  
+- [x] Add a "play this song/playlist/station" on startup  
 - [ ] Add play random station on startup toggle  
 - [ ] Support custom playback durations (e.g., "play for 1 hour after start time")
 - [ ] Enable shuffle toggle for Spotify and Stations
