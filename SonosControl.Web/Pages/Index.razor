@@ -5,6 +5,7 @@
 @using SonosControl.Web.Models;
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Sonos Control</PageTitle>
@@ -465,20 +466,22 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-
-        if (isAuthenticated)
+        if (!isAuthenticated)
         {
-            // Load your settings and initialize page as before
-            _settings = await _uow.ISettingsRepo.GetSettings();
-
-            if (_settings!.IP_Adress is "10.0.0.0")
-                return;
-
-            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
-            await SaveSettings();
-            _isPlaying = await IsPlaying();
-            _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 1000);
+            Navigation.NavigateTo("/auth/login?", true);
+            return;
         }
+
+        // Load your settings and initialize page as before
+        _settings = await _uow.ISettingsRepo.GetSettings();
+
+        if (_settings!.IP_Adress is "10.0.0.0")
+            return;
+
+        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+        await SaveSettings();
+        _isPlaying = await IsPlaying();
+        _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 1000);
     }
 
     private async Task Play(bool play)
