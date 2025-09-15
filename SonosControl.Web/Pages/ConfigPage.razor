@@ -3,9 +3,9 @@
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
-<AuthorizeView Roles="admin,operator,superadmin">
-    <Authorized>
+
         @if (_settings is null)
         {
             <p class="text-muted">Loading settings...</p>
@@ -151,13 +151,7 @@
 
             </div>
         }
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-warning">
-            You must be logged in as an admin, superadmin, or operator to view this page.
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
+
 
 @code {
     private SonosSettings? _settings;
