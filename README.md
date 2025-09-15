@@ -59,14 +59,16 @@ version: '3.4'
 services:
   sonos:
     container_name: sonos
-    image: darkatek7/sonoscontrol:latest        # docker image
+    image: darkatek7/sonoscontrol:latest
     ports:
-      - 8080:8080                               # port used for localhost ip
-    restart: unless-stopped                     # restart policy
+      - 8080:8080
+    restart: unless-stopped
     environment:
-      - TZ:"Europe/Vienna"
+      - TZ=Europe/Vienna
     volumes:
       - ./Data:/app/Data
+      # persist data‑protection keys
+      - ./dpkeys:/root/.aspnet/DataProtection-Keys
 ```
 
 Login using the default admin user:
