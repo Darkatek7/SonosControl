@@ -39,7 +39,23 @@ namespace SonosControl.Web.Services
 
             if (schedule != null)
             {
-                if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+                if (schedule.PlayRandomSpotify)
+                {
+                    var url = GetRandomSpotifyUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
+                else if (schedule.PlayRandomStation)
+                {
+                    var url = GetRandomStationUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
+                else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, schedule.StationUrl);
@@ -48,7 +64,23 @@ namespace SonosControl.Web.Services
             }
             else
             {
-                if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
+                if (settings.AutoPlayRandomSpotify)
+                {
+                    var url = GetRandomSpotifyUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
+                else if (settings.AutoPlayRandomStation)
+                {
+                    var url = GetRandomStationUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
+                else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, settings.AutoPlayStationUrl);
@@ -59,6 +91,24 @@ namespace SonosControl.Web.Services
             Console.WriteLine($"{DateTime.Now:g}: Started Playing");
         }
 
+
+        private string? GetRandomStationUrl(SonosSettings settings)
+        {
+            if (settings.Stations == null || settings.Stations.Count == 0)
+                return null;
+
+            var index = Random.Shared.Next(settings.Stations.Count);
+            return settings.Stations[index].Url;
+        }
+
+        private string? GetRandomSpotifyUrl(SonosSettings settings)
+        {
+            if (settings.SpotifyTracks == null || settings.SpotifyTracks.Count == 0)
+                return null;
+
+            var index = Random.Shared.Next(settings.SpotifyTracks.Count);
+            return settings.SpotifyTracks[index].Url;
+        }
 
         private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(CancellationToken token)
         {
