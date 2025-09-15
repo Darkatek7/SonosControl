@@ -37,6 +37,8 @@
                     <select class="form-select bg-secondary text-light border-0"
                             @bind="AutoPlaySelection" @bind:event="onchange">
                         <option value="">-- None --</option>
+                        <option value="randomStation">Random Station</option>
+                        <option value="randomSpotify">Random Spotify</option>
                         <optgroup label="Stations">
                             @foreach (var station in _settings.Stations)
                             {
@@ -120,16 +122,18 @@
                                     <input type="time" class="form-control bg-secondary text-light border-0"
                                            @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                 </td>
-                                <td>
-                                    <select class="form-select bg-secondary text-light border-0"
-                                            value="@GetScheduleSelection(schedule)"
-                                            @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
-                                        <option value="">-- None --</option>
-                                        <optgroup label="Stations">
-                                            @foreach (var station in _settings.Stations)
-                                            {
-                                                <option value="station:@station.Url">@station.Name</option>
-                                            }
+                                  <td>
+                                      <select class="form-select bg-secondary text-light border-0"
+                                              value="@GetScheduleSelection(schedule)"
+                                              @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
+                                          <option value="">-- None --</option>
+                                          <option value="randomStation">Random Station</option>
+                                          <option value="randomSpotify">Random Spotify</option>
+                                          <optgroup label="Stations">
+                                              @foreach (var station in _settings.Stations)
+                                              {
+                                                  <option value="station:@station.Url">@station.Name</option>
+                                              }
                                         </optgroup>
                                         <optgroup label="Spotify">
                                             @foreach (var track in _settings.SpotifyTracks)
@@ -216,31 +220,44 @@
         }
     }
 
-    private string AutoPlaySelection
-    {
-        get
-        {
-            if (!string.IsNullOrEmpty(_settings!.AutoPlayStationUrl))
-                return $"station:{_settings.AutoPlayStationUrl}";
-            if (!string.IsNullOrEmpty(_settings.AutoPlaySpotifyUrl))
-                return $"spotify:{_settings.AutoPlaySpotifyUrl}";
-            return string.Empty;
-        }
-        set
-        {
-            _settings!.AutoPlayStationUrl = null;
-            _settings.AutoPlaySpotifyUrl = null;
-            if (!string.IsNullOrEmpty(value))
-            {
-                var parts = value.Split(':', 2);
-                if (parts[0] == "station")
-                    _settings.AutoPlayStationUrl = parts[1];
-                else if (parts[0] == "spotify")
-                    _settings.AutoPlaySpotifyUrl = parts[1];
-            }
-            SaveSettings();
-        }
-    }
+      private string AutoPlaySelection
+      {
+          get
+          {
+              if (_settings!.AutoPlayRandomStation)
+                  return "randomStation";
+              if (_settings.AutoPlayRandomSpotify)
+                  return "randomSpotify";
+              if (!string.IsNullOrEmpty(_settings.AutoPlayStationUrl))
+                  return $"station:{_settings.AutoPlayStationUrl}";
+              if (!string.IsNullOrEmpty(_settings.AutoPlaySpotifyUrl))
+                  return $"spotify:{_settings.AutoPlaySpotifyUrl}";
+              return string.Empty;
+          }
+          set
+          {
+              _settings!.AutoPlayRandomStation = false;
+              _settings.AutoPlayRandomSpotify = false;
+              _settings.AutoPlayStationUrl = null;
+              _settings.AutoPlaySpotifyUrl = null;
+              if (!string.IsNullOrEmpty(value))
+              {
+                  if (value == "randomStation")
+                      _settings.AutoPlayRandomStation = true;
+                  else if (value == "randomSpotify")
+                      _settings.AutoPlayRandomSpotify = true;
+                  else
+                  {
+                      var parts = value.Split(':', 2);
+                      if (parts[0] == "station")
+                          _settings.AutoPlayStationUrl = parts[1];
+                      else if (parts[0] == "spotify")
+                          _settings.AutoPlaySpotifyUrl = parts[1];
+                  }
+              }
+              SaveSettings();
+          }
+      }
 
     private async Task SaveSettings()
     {
@@ -252,29 +269,42 @@
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
 
-    private string GetScheduleSelection(DaySchedule schedule)
-    {
-        if (!string.IsNullOrEmpty(schedule.StationUrl))
-            return $"station:{schedule.StationUrl}";
-        if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
-            return $"spotify:{schedule.SpotifyUrl}";
-        return string.Empty;
-    }
+      private string GetScheduleSelection(DaySchedule schedule)
+      {
+          if (schedule.PlayRandomStation)
+              return "randomStation";
+          if (schedule.PlayRandomSpotify)
+              return "randomSpotify";
+          if (!string.IsNullOrEmpty(schedule.StationUrl))
+              return $"station:{schedule.StationUrl}";
+          if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+              return $"spotify:{schedule.SpotifyUrl}";
+          return string.Empty;
+      }
 
-    private async Task SetScheduleSelection(DaySchedule schedule, string? value)
-    {
-        schedule.StationUrl = null;
-        schedule.SpotifyUrl = null;
-        if (!string.IsNullOrEmpty(value))
-        {
-            var parts = value.Split(':', 2);
-            if (parts[0] == "station")
-                schedule.StationUrl = parts[1];
-            else if (parts[0] == "spotify")
-                schedule.SpotifyUrl = parts[1];
-        }
-        await SaveSettings();
-    }
+      private async Task SetScheduleSelection(DaySchedule schedule, string? value)
+      {
+          schedule.PlayRandomStation = false;
+          schedule.PlayRandomSpotify = false;
+          schedule.StationUrl = null;
+          schedule.SpotifyUrl = null;
+          if (!string.IsNullOrEmpty(value))
+          {
+              if (value == "randomStation")
+                  schedule.PlayRandomStation = true;
+              else if (value == "randomSpotify")
+                  schedule.PlayRandomSpotify = true;
+              else
+              {
+                  var parts = value.Split(':', 2);
+                  if (parts[0] == "station")
+                      schedule.StationUrl = parts[1];
+                  else if (parts[0] == "spotify")
+                      schedule.SpotifyUrl = parts[1];
+              }
+          }
+          await SaveSettings();
+      }
 
     private int Volume
     {

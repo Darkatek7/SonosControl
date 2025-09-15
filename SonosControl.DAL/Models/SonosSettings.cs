@@ -25,6 +25,8 @@ namespace SonosControl.DAL.Models
 
         public string? AutoPlayStationUrl { get; set; }
         public string? AutoPlaySpotifyUrl { get; set; }
+        public bool AutoPlayRandomStation { get; set; }
+        public bool AutoPlayRandomSpotify { get; set; }
 
         public Dictionary<DayOfWeek, DaySchedule> DailySchedules { get; set; } = new();
 
