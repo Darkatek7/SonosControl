@@ -10,11 +10,10 @@
 @using SonosControl.Web.Models;
 @inject IJSRuntime JS
 @inject IUnitOfWork _uow
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>User Management</PageTitle>
 
-<AuthorizeView Roles="superadmin,admin,operator">
-    <Authorized>
         <div class="container container-lg p-4 bg-dark text-light rounded-4 shadow">
             <h3 class="mb-4 border-bottom pb-2">👥 User Management</h3>
 
@@ -118,13 +117,6 @@
                 </div>
             }
         </div>
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-warning">
-            You must be logged in as an admin, superadmin, or operator to view this page.
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
 
 @code {
     private List<ApplicationUser> users = new();

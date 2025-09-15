@@ -4,11 +4,11 @@
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>System Logs</PageTitle>
 
-<AuthorizeView Roles="admin,superadmin">
-    <Authorized>
+
         <div class="container-fluid logs-container p-4 bg-dark text-light rounded-4 shadow mt-5">
             <h3 class="mb-4 border-bottom pb-2">📜 System Logs</h3>
 
@@ -76,13 +76,6 @@
                 </div>
             }
         </div>
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-warning mt-4 container">
-            You must be an admin or superadmin to view logs.
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
 
 @code {
     private List<LogEntry>? logs;
