@@ -9,6 +9,7 @@
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
 @inject IJSRuntime JS
+@inject IUnitOfWork _uow
 
 <PageTitle>User Management</PageTitle>
 
@@ -16,6 +17,14 @@
     <Authorized>
         <div class="container container-lg p-4 bg-dark text-light rounded-4 shadow">
             <h3 class="mb-4 border-bottom pb-2">👥 User Management</h3>
+
+            @if (isAdmin)
+            {
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="allowRegSwitch" checked="@allowUserRegistration" @onchange="ToggleRegistration" />
+                    <label class="form-check-label" for="allowRegSwitch">Allow user registration</label>
+                </div>
+            }
 
             @if (isLoading)
             {
@@ -124,12 +133,16 @@
     private string? errorMessage;
     private string? currentUserName;
     private bool isSuperAdmin;
+    private bool isAdmin;
+    private bool allowUserRegistration;
+    private SonosSettings? _settings;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         currentUserName = authState.User.Identity?.Name;
         isSuperAdmin = authState.User.IsInRole("superadmin");
+        isAdmin = isSuperAdmin || authState.User.IsInRole("admin");
 
         try
         {
@@ -150,6 +163,20 @@
         finally
         {
             isLoading = false;
+        }
+
+        _settings = await _uow.ISettingsRepo.GetSettings();
+        allowUserRegistration = _settings?.AllowUserRegistration ?? true;
+    }
+
+    private async Task ToggleRegistration(ChangeEventArgs e)
+    {
+        allowUserRegistration = e.Value is bool b && b;
+        if (_settings is not null)
+        {
+            _settings.AllowUserRegistration = allowUserRegistration;
+            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await AddLog(allowUserRegistration ? "Registration enabled" : "Registration disabled");
         }
     }
 

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SonosControl.Web.Models;
+using SonosControl.DAL.Interfaces;
 
 namespace SonosControl.Web.Controllers
 {
@@ -8,10 +9,12 @@ namespace SonosControl.Web.Controllers
     public class AuthController : Controller
     {
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly IUnitOfWork _uow;
 
-        public AuthController(SignInManager<ApplicationUser> signInManager)
+        public AuthController(SignInManager<ApplicationUser> signInManager, IUnitOfWork uow)
         {
             _signInManager = signInManager;
+            _uow = uow;
         }
 
         [HttpGet("login")]
@@ -38,6 +41,18 @@ namespace SonosControl.Web.Controllers
         {
             await _signInManager.SignOutAsync();
             return Redirect("/");  // Redirect to home page or wherever
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register()
+        {
+            var settings = await _uow.ISettingsRepo.GetSettings();
+            if (settings?.AllowUserRegistration == false)
+            {
+                return Forbid();
+            }
+
+            return BadRequest();
         }
 
     }
