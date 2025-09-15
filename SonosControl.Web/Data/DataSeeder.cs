@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using SonosControl.Web.Models;
 
 public static class DataSeeder
@@ -19,9 +20,36 @@ public static class DataSeeder
             }
         }
 
-        string adminUserName = "admin";
-        string adminEmail = "admin@example.com";
-        string adminPassword = "ESPmtZ7&LW2z&xHF";
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+
+        string? adminUserName = configuration["Admin:UserName"]
+                                 ?? Environment.GetEnvironmentVariable("ADMIN_USERNAME");
+        string? adminEmail = configuration["Admin:Email"]
+                               ?? Environment.GetEnvironmentVariable("ADMIN_EMAIL");
+        string? adminPassword = configuration["Admin:Password"]
+                                  ?? Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
+
+        if (string.IsNullOrWhiteSpace(adminUserName) ||
+            string.IsNullOrWhiteSpace(adminEmail) ||
+            string.IsNullOrWhiteSpace(adminPassword))
+        {
+            throw new InvalidOperationException(
+                "Admin seeding requires ADMIN_USERNAME, ADMIN_EMAIL, and ADMIN_PASSWORD to be provided");
+        }
+
+        foreach (var validator in userManager.PasswordValidators)
+        {
+            var validationResult = await validator.ValidateAsync(
+                userManager,
+                new ApplicationUser { UserName = adminUserName, Email = adminEmail },
+                adminPassword);
+
+            if (!validationResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Admin password does not meet requirements: {string.Join(", ", validationResult.Errors.Select(e => e.Description))}");
+            }
+        }
 
         var adminUser = await userManager.FindByNameAsync(adminUserName);
         if (adminUser == null)
