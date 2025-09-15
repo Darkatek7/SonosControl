@@ -9,6 +9,7 @@
 </head>
 <body>
 <form method="post" action="/auth/logout">
+    @Html.AntiForgeryToken()
     <button type="submit">Click here if you are not redirected automatically</button>
 </form>
 
