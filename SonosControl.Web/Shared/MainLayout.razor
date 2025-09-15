@@ -1,9 +1,13 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Http
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
+@inject IAntiforgery Antiforgery
+@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>SonosControl.Web</PageTitle>
 
@@ -24,6 +28,7 @@
                 <span class="me-3">Hello, @firstName!</span>
 
                 <form method="post" action="/auth/logout" style="display:inline;">
+                    <input type="hidden" name="__RequestVerificationToken" value="@antiforgeryToken" />
                     <button type="submit" class="btn btn-sm btn-danger">Logout</button>
                 </form>
                 
@@ -43,9 +48,12 @@
     private string? firstName;
     private bool isAuthenticated;
     private string? userId;
+    private string? antiforgeryToken;
 
     protected override async Task OnInitializedAsync()
     {
+        antiforgeryToken = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!).RequestToken;
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
@@ -61,9 +69,10 @@
 
     private async Task Logout(MouseEventArgs e)
     {
-        // POST logout via JS fetch
         var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
-        var response = await http.PostAsync("auth/logout", null);
+        var request = new HttpRequestMessage(HttpMethod.Post, "auth/logout");
+        request.Headers.Add("RequestVerificationToken", antiforgeryToken);
+        var response = await http.SendAsync(request);
         if (response.IsSuccessStatusCode)
         {
             Navigation.NavigateTo("/");
