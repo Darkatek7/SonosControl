@@ -25,6 +25,7 @@ namespace SonosControl.Web.Controllers
         }
 
         [HttpPost("login")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(string username, string password, bool rememberMe)
         {
             var result = await _signInManager.PasswordSignInAsync(username, password, rememberMe, false);
@@ -37,6 +38,7 @@ namespace SonosControl.Web.Controllers
         }
 
         [HttpPost("logout")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();
@@ -44,6 +46,7 @@ namespace SonosControl.Web.Controllers
         }
 
         [HttpPost("register")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register()
         {
             var settings = await _uow.ISettingsRepo.GetSettings();
