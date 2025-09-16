@@ -2,10 +2,19 @@
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    <LayoutView Layout="@typeof(MainLayout)">
-                        <p class="alert alert-warning m-3">You are not authorized to access this page.</p>
-                    </LayoutView>
+                <NotAuthorized Context="routeViewContext">
+                    <AuthorizeView>
+                        <Authorized Context="authorizedState">
+                            <LayoutView Layout="@typeof(MainLayout)">
+                                <p class="alert alert-warning m-3">You are not authorized to access this page.</p>
+                            </LayoutView>
+                        </Authorized>
+                        <NotAuthorized Context="unauthorizedState">
+                            <LayoutView Layout="@typeof(MainLayout)">
+                                <RedirectToLogin />
+                            </LayoutView>
+                        </NotAuthorized>
+                    </AuthorizeView>
                 </NotAuthorized>
                 <Authorizing>
                     <LayoutView Layout="@typeof(MainLayout)">
