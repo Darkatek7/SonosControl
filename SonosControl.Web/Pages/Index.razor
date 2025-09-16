@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using System.Text.RegularExpressions
+@using System.Threading
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
@@ -29,13 +30,16 @@
                                 <button class="btn btn-danger me-2" @onclick="@(() => Play(false))">
                                     <i class="fa fa-pause"></i>
                                 </button>
+                                <button class="btn btn-outline-light me-2" @onclick="OpenTimerModal" title="Timed playback">
+                                    <i class="fa fa-clock-o"></i>
+                                </button>
                                 @if (_isSpotifyPlaying)
                                 {
-                                    <button class="btn btn-primary" @onclick="NextTrack">
+                                    <button class="btn btn-primary me-2" @onclick="NextTrack">
                                         <i class="fa fa-forward"></i>
                                     </button>
                                 }
-                                <button class="btn btn-primary me-2" @onclick="ShuffleStation" title="Shuffle">
+                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
                             </div>
@@ -52,6 +56,9 @@
                                 <button class="btn btn-success me-2" @onclick="() => Play(true)">
                                     <i class="fa fa-play"></i>
                                 </button>
+                                <button class="btn btn-outline-light me-2" @onclick="OpenTimerModal" title="Timed playback">
+                                    <i class="fa fa-clock-o"></i>
+                                </button>
                                 <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
@@ -59,6 +66,18 @@
                         </div>
                     }
                 </div>
+
+                @if (_timerEndTimeUtc is not null)
+                {
+                    var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
+                    <div class="alert alert-info d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <strong>Timed Playback Active</strong>
+                            <p class="mb-0 text-light-emphasis">@(_timerSelectionName ?? "Playback") will stop at @localStopTime.ToString("t").</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-light btn-sm" @onclick="CancelTimedPlayback">Cancel</button>
+                    </div>
+                }
 
                 <!-- Now Playing Card -->
                 <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
@@ -242,6 +261,58 @@
         }
 
 
+        @if (isTimerModalOpen)
+        {
+            <div class="timer-modal-backdrop">
+                <div class="timer-modal bg-dark text-light">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">⏱️ Timed Playback</h5>
+                        <button type="button" class="btn btn-sm btn-outline-light" @onclick="CloseTimerModal" title="Close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <p class="text-light-emphasis small mb-3">Choose how long to play and what to listen to. Playback will stop automatically when the timer ends.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Duration (minutes)</label>
+                        <input type="number" min="1" class="form-control bg-secondary text-light border-0"
+                               @bind-value="timerMinutes" @bind-value:event="oninput" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Station or Spotify</label>
+                        <select class="form-select bg-secondary text-light border-0" @bind="timerSelection">
+                            <option value="">-- Select Source --</option>
+                            @if (_stations.Any())
+                            {
+                                <optgroup label="TuneIn Stations">
+                                    @foreach (var station in _stations)
+                                    {
+                                        <option value="station|@station.Url">@(station.Name.Length > 40 ? station.Name.Substring(0, 40) + "..." : station.Name)</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (_tracks.Any())
+                            {
+                                <optgroup label="Spotify">
+                                    @foreach (var track in _tracks)
+                                    {
+                                        <option value="spotify|@track.Url">@(track.Name.Length > 40 ? track.Name.Substring(0, 40) + "..." : track.Name)</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(timerErrorMessage))
+                    {
+                        <div class="alert alert-danger py-2">@timerErrorMessage</div>
+                    }
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-outline-light" @onclick="CloseTimerModal">Cancel</button>
+                        <button type="button" class="btn btn-success" @onclick="StartTimedPlayback">Start Timer</button>
+                    </div>
+                </div>
+            </div>
+        }
+
 
 @code {
     private SonosSettings? _settings;
@@ -258,6 +329,14 @@
     private string newTrackName = "";
     private string newStationUrl = "";
     private string newTrackUrl = "";
+
+    private bool isTimerModalOpen;
+    private int timerMinutes = 60;
+    private string? timerSelection;
+    private string? timerErrorMessage;
+    private CancellationTokenSource? _playbackTimerCts;
+    private DateTime? _timerEndTimeUtc;
+    private string? _timerSelectionName;
 
 
     private bool isSpotifyEditMode = false;
@@ -434,6 +513,168 @@
         }
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenTimerModal()
+    {
+        timerErrorMessage = null;
+
+        if (timerMinutes <= 0)
+        {
+            timerMinutes = 60;
+        }
+
+        isTimerModalOpen = true;
+    }
+
+    private void CloseTimerModal()
+    {
+        isTimerModalOpen = false;
+        timerErrorMessage = null;
+    }
+
+    private async Task StartTimedPlayback()
+    {
+        timerErrorMessage = null;
+
+        if (_settings is null)
+        {
+            timerErrorMessage = "Settings are not loaded.";
+            return;
+        }
+
+        if (timerMinutes <= 0)
+        {
+            timerErrorMessage = "Please enter a duration greater than zero.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(timerSelection))
+        {
+            timerErrorMessage = "Please select a station or Spotify source.";
+            return;
+        }
+
+        var parts = timerSelection.Split('|', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            timerErrorMessage = "Invalid selection.";
+            return;
+        }
+
+        var selectionType = parts[0];
+        var selectionValue = parts[1];
+        string selectionName;
+        string logSource;
+
+        try
+        {
+            if (selectionType == "station")
+            {
+                var station = _stations.FirstOrDefault(s => s.Url == selectionValue);
+                selectionName = station?.Name ?? selectionValue;
+                logSource = $"Station: {selectionName}";
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectionValue);
+                _isSpotifyPlaying = false;
+            }
+            else if (selectionType == "spotify")
+            {
+                var track = _tracks.FirstOrDefault(t => t.Url == selectionValue);
+                selectionName = track?.Name ?? selectionValue;
+                logSource = $"Spotify: {selectionName}";
+                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, selectionValue);
+                _isSpotifyPlaying = true;
+            }
+            else
+            {
+                timerErrorMessage = "Invalid source selected.";
+                return;
+            }
+
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+            _isPlaying = true;
+
+            var minutes = timerMinutes;
+            var ip = _settings.IP_Adress;
+
+            _playbackTimerCts?.Cancel();
+            _playbackTimerCts?.Dispose();
+            _playbackTimerCts = null;
+
+            await AddLog("Timed Playback Started", $"{logSource} ({minutes} minutes)");
+
+            _timerSelectionName = selectionName;
+            _timerEndTimeUtc = DateTime.UtcNow.AddMinutes(minutes);
+
+            isTimerModalOpen = false;
+            timerSelection = null;
+            timerMinutes = 60;
+
+            _playbackTimerCts = new CancellationTokenSource();
+            var cts = _playbackTimerCts;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(minutes), cts.Token);
+                    await InvokeAsync(async () =>
+                    {
+                        await _uow.ISonosConnectorRepo.PausePlaying(ip);
+                        _isPlaying = false;
+                        _timerEndTimeUtc = null;
+                        _timerSelectionName = null;
+                        await AddLog("Timed Playback Completed", $"{logSource} ({minutes} minutes)");
+                        StateHasChanged();
+                    });
+                }
+                catch (TaskCanceledException)
+                {
+                }
+                finally
+                {
+                    if (ReferenceEquals(_playbackTimerCts, cts))
+                    {
+                        _playbackTimerCts = null;
+                    }
+
+                    cts.Dispose();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            timerErrorMessage = "Failed to start timed playback.";
+        }
+    }
+
+    private async Task CancelTimedPlayback()
+    {
+        var cts = _playbackTimerCts;
+        if (cts is not null)
+        {
+            _playbackTimerCts = null;
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        if (_timerEndTimeUtc is not null || _timerSelectionName is not null)
+        {
+            var stopInfo = _timerEndTimeUtc?.ToLocalTime().ToString("t");
+            var details = _timerSelectionName ?? "Timed playback";
+            if (!string.IsNullOrEmpty(stopInfo))
+            {
+                details += $" (scheduled stop at {stopInfo})";
+            }
+
+            await AddLog("Timed Playback Cancelled", details);
+        }
+
+        _timerEndTimeUtc = null;
+        _timerSelectionName = null;
+        isTimerModalOpen = false;
+        timerErrorMessage = null;
     }
 
     private async Task AddLog(string action, string? details = null)
@@ -762,6 +1003,45 @@
         text-overflow: unset; /* remove ellipsis */
         max-width: 100%;
         font-size: 0.9rem;
+    }
+
+    .timer-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 1rem;
+    }
+
+    .timer-modal {
+        width: 100%;
+        max-width: 420px;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.35);
+    }
+
+    .timer-modal .form-control,
+    .timer-modal .form-select {
+        background-color: #2b2b2b;
+        border: 1px solid #444;
+        color: #f5f5f5;
+    }
+
+    .timer-modal .form-control:focus,
+    .timer-modal .form-select:focus {
+        box-shadow: 0 0 0 0.2rem rgba(32, 201, 151, 0.25);
+        border-color: #20c997;
+    }
+
+    .timer-modal .btn-outline-light {
+        border-color: rgba(255, 255, 255, 0.4);
     }
 
 
