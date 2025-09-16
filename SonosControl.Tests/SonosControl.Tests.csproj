@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SonosControl.DAL\SonosControl.DAL.csproj" />
+    <ProjectReference Include="..\SonosControl.Web\SonosControl.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +19,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.69" />
   </ItemGroup>
 
 </Project>
