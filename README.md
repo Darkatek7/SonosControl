@@ -155,8 +155,7 @@ You can change the config to fit your needs or change it later in the UI.
 - [x] Add a "play this song/playlist/station" on startup  
 - [x] Add play random station on startup toggle
 - [x] Add play random Spotify on startup toggle
-- [ ] Support custom playback durations (e.g., "play for 1 hour after start time")
-- [ ] Enable shuffle toggle for Spotify and Stations
+- [x] Support custom playback durations (e.g., "play for 1 hour after start time")
 - [x] Add logs tab to show history of play/stop events with user associated
 - [x] Enable / disable user registration
 - [x] Add role-based access (e.g., admin vs. operator)
