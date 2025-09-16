@@ -1,34 +1,33 @@
-using System.Text;
-using ByteDev.Sonos;
-using ByteDev.Sonos.Models;
-using ByteDev.Sonos.Upnp;
-using SonosControl.DAL.Interfaces;
 using System;
-using System.Net.Http;
-using System.Threading.Tasks;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text.RegularExpressions;
-using System.Net.Http;
+using System.Security;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using ByteDev.Sonos.Upnp.Services;
-using System;
-using System.Threading.Tasks;
-using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json.Linq;
 using System.Xml;
+using ByteDev.Sonos;
+using ByteDev.Sonos.Models;
+using SonosControl.DAL.Interfaces;
 
 
 namespace SonosControl.DAL.Repos
 {
     public class SonosConnectorRepo : ISonosConnectorRepo
     {
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public SonosConnectorRepo(HttpClient? httpClient = null)
+        public SonosConnectorRepo(IHttpClientFactory httpClientFactory)
         {
-            _httpClient = httpClient ?? new HttpClient();
+            _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+        }
+
+        private HttpClient CreateClient()
+        {
+            return _httpClientFactory.CreateClient(nameof(SonosConnectorRepo));
         }
         public async Task PausePlaying(string ip)
         {
@@ -78,7 +77,7 @@ namespace SonosControl.DAL.Repos
             await controller.SetVolumeAsync(sonosVolume);
         }
 
-        public async Task SetTuneInStationAsync(string ip, string stationUri)
+        public virtual async Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default)
         {
             stationUri = stationUri
                 .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
@@ -92,7 +91,7 @@ namespace SonosControl.DAL.Repos
                 : $"x-rincon-mp3radio://{stationUri}";
 
             string soapRequest = $@"
-    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" 
+    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                 s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
       <s:Body>
         <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
@@ -103,35 +102,43 @@ namespace SonosControl.DAL.Repos
       </s:Body>
     </s:Envelope>";
 
-            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
 
+            bool success = false;
+
             try
             {
-                var response = await _httpClient.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
                 Console.WriteLine("Station set successfully!");
+                success = true;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error setting station: {ex.Message}");
             }
 
-            await StartPlaying(ip);
+            if (success)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await StartPlaying(ip);
+            }
         }
 
 
-        public async Task<string> GetCurrentTrackInfoAsync(string ip)
+        public async Task<string> GetCurrentTrackInfoAsync(string ip, CancellationToken cancellationToken = default)
         {
-            using var client = new HttpClient();
-
             try
             {
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
-                var content = new StringContent(
+                using var content = new StringContent(
                     @"<?xml version=""1.0"" encoding=""utf-8""?>
             <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
@@ -145,10 +152,11 @@ namespace SonosControl.DAL.Repos
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
-                var response = await client.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var xml = await response.Content.ReadAsStringAsync();
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Extract TrackMetaData block
                 var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
@@ -175,15 +183,13 @@ namespace SonosControl.DAL.Repos
             }
         }
 
-        public async Task<string> GetCurrentTrackAsync(string ip)
+        public async Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default)
         {
-            using var client = new HttpClient();
-
             try
             {
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
-                var content = new StringContent(
+                using var content = new StringContent(
                     @"<?xml version=""1.0"" encoding=""utf-8""?>
             <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
@@ -197,10 +203,11 @@ namespace SonosControl.DAL.Repos
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
-                var response = await client.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var xml = await response.Content.ReadAsStringAsync();
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Extract <TrackMetaData> content
                 var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
@@ -233,15 +240,13 @@ namespace SonosControl.DAL.Repos
             }
         }
 
-        public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip)
+        public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default)
         {
-            using var client = new HttpClient();
-
             try
             {
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
-                var content = new StringContent(
+                using var content = new StringContent(
                     @"<?xml version=""1.0"" encoding=""utf-8""?>
             <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
@@ -255,10 +260,11 @@ namespace SonosControl.DAL.Repos
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
-                var response = await client.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var xml = await response.Content.ReadAsStringAsync();
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 var doc = new XmlDocument();
                 doc.LoadXml(xml);
@@ -275,14 +281,12 @@ namespace SonosControl.DAL.Repos
         }
 
 
-        public async Task<string> GetCurrentStationAsync(string ip)
+        public async Task<string> GetCurrentStationAsync(string ip, CancellationToken cancellationToken = default)
         {
-            using var client = new HttpClient();
-
             try
             {
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-                var content = new StringContent(
+                using var content = new StringContent(
                     "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
                     "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" " +
                     "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +
@@ -296,10 +300,11 @@ namespace SonosControl.DAL.Repos
                 content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo\"");
 
-                var response = await client.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var xml = await response.Content.ReadAsStringAsync();
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Extract the station title from the XML response using Regex
                 var match = Regex.Match(xml, @"<CurrentURI>(?<stationUrl>.*?)</CurrentURI>", RegexOptions.Singleline);
@@ -317,15 +322,18 @@ namespace SonosControl.DAL.Repos
             }
         }
 
-        public async Task<string?> SearchSpotifyTrackAsync(string query, string accessToken)
+        public async Task<string?> SearchSpotifyTrackAsync(string query, string accessToken, CancellationToken cancellationToken = default)
         {
             var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track&limit=1";
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var client = CreateClient();
 
-            var response = await _httpClient.GetAsync(url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            var response = await client.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode) return null;
 
-            var json = await response.Content.ReadAsStringAsync();
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
             using JsonDocument doc = JsonDocument.Parse(json);
             var trackUri = doc.RootElement
                 .GetProperty("tracks")
@@ -336,13 +344,20 @@ namespace SonosControl.DAL.Repos
             return trackUri;
         }
 
-        public async Task PlaySpotifyTrackAsync(string ip, string spotifyUrl)
+        public async Task PlaySpotifyTrackAsync(string ip, string spotifyUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default)
         {
             var trackMatch = Regex.Match(spotifyUrl, @"track/(?<trackId>[\w\d]+)");
             var playlistMatch = Regex.Match(spotifyUrl, @"playlist/(?<playlistId>[\w\d]+)");
             var albumMatch = Regex.Match(spotifyUrl, @"album/(?<albumId>[\w\d]+)"); // Add regex for album
 
-            string? rinconId = await GetRinconIdAsync(ip);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!string.IsNullOrWhiteSpace(fallbackStationUri))
+            {
+                await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            }
+
+            string? rinconId = await GetRinconIdAsync(ip, cancellationToken);
             if (rinconId == null)
             {
                 Console.WriteLine("Could not retrieve RINCON ID.");
@@ -406,52 +421,52 @@ namespace SonosControl.DAL.Repos
                 return;
             }
 
-            await SetTuneInStationAsync(ip, "web.radio.antennevorarlberg.at/av-live/stream/mp3");
-
             // Build SOAP request
             string soapRequest = $@"
-            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" 
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
                          s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
               <s:Body>
                 <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
                   <InstanceID>0</InstanceID>
                   <CurrentURI>{sonosUri}</CurrentURI>
-                  <CurrentURIMetaData>{System.Security.SecurityElement.Escape(metadata)}</CurrentURIMetaData>
+                  <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
                 </u:SetAVTransportURI>
               </s:Body>
             </s:Envelope>";
 
-            using var client = new HttpClient();
-            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
 
             string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-            var response = await client.PostAsync(url, content);
+            var client = CreateClient();
+            var response = await client.PostAsync(url, content, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
                 Console.WriteLine($"Error setting Spotify playback: {response.ReasonPhrase}");
-            }
-            else
-            {
-                Console.WriteLine("Spotify playback started.");
+                return;
             }
 
+            Console.WriteLine("Spotify playback started.");
+
+            cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
         }
 
 
-        private async Task<string?> GetRinconIdAsync(string ip)
+        protected virtual async Task<string?> GetRinconIdAsync(string ip, CancellationToken cancellationToken = default)
         {
             try
             {
                 string url = $"http://{ip}:1400/xml/device_description.xml";
 
-                using var client = new HttpClient();
-                var response = await client.GetStringAsync(url);
+                var client = CreateClient();
+                using var response = await client.GetAsync(url, cancellationToken);
+                response.EnsureSuccessStatusCode();
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Extract the RINCON ID from the UDN field
-                var match = Regex.Match(response, @"<UDN>uuid:RINCON_([A-F0-9]+)</UDN>");
+                var match = Regex.Match(responseBody, @"<UDN>uuid:RINCON_([A-F0-9]+)</UDN>");
                 if (match.Success)
                 {
                     return match.Groups[1].Value;
@@ -465,13 +480,12 @@ namespace SonosControl.DAL.Repos
             return null;
         }
 
-        public async Task ClearQueue(string ip)
+        public async Task ClearQueue(string ip, CancellationToken cancellationToken = default)
         {
-            using var httpClient = new HttpClient();
             var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
             var soapEnvelope = @"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
                             s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
                     <s:Body>
                         <u:RemoveAllTracksFromQueue xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
@@ -480,7 +494,7 @@ namespace SonosControl.DAL.Repos
                     </s:Body>
                 </s:Envelope>";
 
-            var content = new StringContent(soapEnvelope);
+            using var content = new StringContent(soapEnvelope);
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION",
                 "\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"");
@@ -488,7 +502,8 @@ namespace SonosControl.DAL.Repos
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
                 Console.WriteLine("Queue cleared successfully.");
             }
@@ -499,14 +514,14 @@ namespace SonosControl.DAL.Repos
         }
 
 
-        public async Task<List<string>> GetQueue(string ip)
+        public async Task<List<string>> GetQueue(string ip, CancellationToken cancellationToken = default)
         {
             var queue = new List<string>();
 
             var url = $"http://{ip}:1400/MediaRenderer/ContentDirectory/Control";
 
             var soapEnvelope = @"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
                             s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
                     <s:Body>
                         <u:Browse xmlns:u='urn:schemas-upnp-org:service:ContentDirectory:1'>
@@ -520,16 +535,17 @@ namespace SonosControl.DAL.Repos
                     </s:Body>
                 </s:Envelope>";
 
-            var content = new StringContent(soapEnvelope);
+            using var content = new StringContent(soapEnvelope);
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:ContentDirectory:1#Browse\"");
             content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
 
             try
             {
-                var response = await _httpClient.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
-                var responseBody = await response.Content.ReadAsStringAsync();
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 // Extract track titles using Regex
                 var matches = Regex.Matches(responseBody, @"<dc:title>(.*?)</dc:title>");
@@ -551,25 +567,27 @@ namespace SonosControl.DAL.Repos
         }
 
 
-        public async Task PreviousTrack(string ip)
+        public async Task PreviousTrack(string ip, CancellationToken cancellationToken = default)
         {
             await PausePlaying(ip);
-            await Task.Delay(500); // Small delay to ensure command is processed
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(500, cancellationToken); // Small delay to ensure command is processed
 
-            await SendAvTransportCommand(ip, "Previous");
+            await SendAvTransportCommand(ip, "Previous", cancellationToken);
         }
 
-        public async Task NextTrack(string ip)
+        public async Task NextTrack(string ip, CancellationToken cancellationToken = default)
         {
-            await SendAvTransportCommand(ip, "Next");
+            cancellationToken.ThrowIfCancellationRequested();
+            await SendAvTransportCommand(ip, "Next", cancellationToken);
         }
 
-        private async Task SendAvTransportCommand(string ip, string action)
+        private async Task SendAvTransportCommand(string ip, string action, CancellationToken cancellationToken)
         {
             var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
             var soapEnvelope = $@"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/' 
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
                             s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
                     <s:Body>
                         <u:{action} xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
@@ -578,14 +596,15 @@ namespace SonosControl.DAL.Repos
                     </s:Body>
                 </s:Envelope>";
 
-            var content = new StringContent(soapEnvelope);
+            using var content = new StringContent(soapEnvelope);
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION", $"\"urn:schemas-upnp-org:service:AVTransport:1#{action}\"");
             content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
 
             try
             {
-                var response = await _httpClient.PostAsync(url, content);
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
                 Console.WriteLine($"{action} command sent successfully.");
             }
@@ -596,16 +615,17 @@ namespace SonosControl.DAL.Repos
         }
 
 
-        private async Task<string> SendSoapRequest(string url, string soapRequest, string soapAction)
+        private async Task<string> SendSoapRequest(string url, string soapRequest, string soapAction, CancellationToken cancellationToken = default)
         {
-            var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION", $"\"{soapAction}\"");
 
-            var response = await _httpClient.PostAsync(url, content);
+            var client = CreateClient();
+            var response = await client.PostAsync(url, content, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsStringAsync();
+                return await response.Content.ReadAsStringAsync(cancellationToken);
             }
             else
             {

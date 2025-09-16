@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Threading;
+
 namespace SonosControl.DAL.Interfaces
 {
     public interface ISonosConnectorRepo
@@ -8,15 +11,15 @@ namespace SonosControl.DAL.Interfaces
         Task SetVolume(string ip, int volume);
         Task StartPlaying(string ip);
         Task StopPlaying(string ip);
-        Task<string> GetCurrentTrackAsync(string ip);
-        Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip);
-        Task SetTuneInStationAsync(string ip, string stationUri);
-        Task<string> GetCurrentStationAsync(string ip);
-        Task<string?> SearchSpotifyTrackAsync(string query, string accessToken);
-        Task PlaySpotifyTrackAsync(string ip, string spotifyUri);
-        Task ClearQueue(string ip);
-        Task<List<string>> GetQueue(string ip);
-        Task PreviousTrack(string ip);
-        Task NextTrack(string ip);
+        Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default);
+        Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default);
+        Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default);
+        Task<string> GetCurrentStationAsync(string ip, CancellationToken cancellationToken = default);
+        Task<string?> SearchSpotifyTrackAsync(string query, string accessToken, CancellationToken cancellationToken = default);
+        Task PlaySpotifyTrackAsync(string ip, string spotifyUri, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
+        Task ClearQueue(string ip, CancellationToken cancellationToken = default);
+        Task<List<string>> GetQueue(string ip, CancellationToken cancellationToken = default);
+        Task PreviousTrack(string ip, CancellationToken cancellationToken = default);
+        Task NextTrack(string ip, CancellationToken cancellationToken = default);
     }
 }
