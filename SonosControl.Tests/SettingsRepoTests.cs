@@ -1,10 +1,39 @@
 using SonosControl.DAL.Models;
 using SonosControl.DAL.Repos;
+using Xunit;
 
-namespace SonosControl.Testing;
+namespace SonosControl.Tests;
 
 public class SettingsRepoTests
 {
+    [Fact]
+    public async Task WriteAndReadSettings_ReturnsPersistedValues()
+    {
+        var repo = new SettingsRepo();
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(tempDir);
+
+        try
+        {
+            var settings = new SonosSettings { IP_Adress = "1.2.3.4", Volume = 42 };
+            await repo.WriteSettings(settings);
+
+            var result = await repo.GetSettings();
+
+            Assert.NotNull(result);
+            Assert.Equal("1.2.3.4", result!.IP_Adress);
+            Assert.Equal(42, result.Volume);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDir);
+            Directory.Delete(tempDir, true);
+        }
+    }
+
     [Fact]
     public async Task ConcurrentReadsAndWrites_DoNotCorruptSettings()
     {
@@ -47,4 +76,3 @@ public class SettingsRepoTests
         }
     }
 }
-
