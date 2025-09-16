@@ -5,14 +5,10 @@
                 <NotAuthorized Context="routeViewContext">
                     <AuthorizeView>
                         <Authorized Context="authorizedState">
-                            <LayoutView Layout="@typeof(MainLayout)">
-                                <p class="alert alert-warning m-3">You are not authorized to access this page.</p>
-                            </LayoutView>
+                            <p class="alert alert-warning m-3">You are not authorized to access this page.</p>
                         </Authorized>
                         <NotAuthorized Context="unauthorizedState">
-                            <LayoutView Layout="@typeof(MainLayout)">
-                                <RedirectToLogin />
-                            </LayoutView>
+                            <RedirectToLogin />
                         </NotAuthorized>
                     </AuthorizeView>
                 </NotAuthorized>
