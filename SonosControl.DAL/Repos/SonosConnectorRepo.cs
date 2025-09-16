@@ -24,6 +24,12 @@ namespace SonosControl.DAL.Repos
 {
     public class SonosConnectorRepo : ISonosConnectorRepo
     {
+        private readonly HttpClient _httpClient;
+
+        public SonosConnectorRepo(HttpClient? httpClient = null)
+        {
+            _httpClient = httpClient ?? new HttpClient();
+        }
         public async Task PausePlaying(string ip)
         {
             SonosController controller = new SonosControllerFactory().Create(ip);
@@ -36,7 +42,7 @@ namespace SonosControl.DAL.Repos
             await controller.StopAsync();
         }
 
-        public async Task StartPlaying(string ip)
+        public virtual async Task StartPlaying(string ip)
         {
             SonosController controller = new SonosControllerFactory().Create(ip);
             await controller.PlayAsync();
@@ -72,8 +78,6 @@ namespace SonosControl.DAL.Repos
             await controller.SetVolumeAsync(sonosVolume);
         }
 
-        private static readonly HttpClient HttpClient = new();
-
         public async Task SetTuneInStationAsync(string ip, string stationUri)
         {
             stationUri = stationUri
@@ -106,7 +110,7 @@ namespace SonosControl.DAL.Repos
 
             try
             {
-                var response = await HttpClient.PostAsync(url, content);
+                var response = await _httpClient.PostAsync(url, content);
                 response.EnsureSuccessStatusCode();
                 Console.WriteLine("Station set successfully!");
             }
@@ -316,9 +320,9 @@ namespace SonosControl.DAL.Repos
         public async Task<string?> SearchSpotifyTrackAsync(string query, string accessToken)
         {
             var url = $"https://api.spotify.com/v1/search?q={Uri.EscapeDataString(query)}&type=track&limit=1";
-            HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-            var response = await HttpClient.GetAsync(url);
+            var response = await _httpClient.GetAsync(url);
             if (!response.IsSuccessStatusCode) return null;
 
             var json = await response.Content.ReadAsStringAsync();
@@ -499,7 +503,6 @@ namespace SonosControl.DAL.Repos
         {
             var queue = new List<string>();
 
-            using var httpClient = new HttpClient();
             var url = $"http://{ip}:1400/MediaRenderer/ContentDirectory/Control";
 
             var soapEnvelope = @"
@@ -524,7 +527,7 @@ namespace SonosControl.DAL.Repos
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var response = await _httpClient.PostAsync(url, content);
                 response.EnsureSuccessStatusCode();
                 var responseBody = await response.Content.ReadAsStringAsync();
 
@@ -563,7 +566,6 @@ namespace SonosControl.DAL.Repos
 
         private async Task SendAvTransportCommand(string ip, string action)
         {
-            using var httpClient = new HttpClient();
             var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
 
             var soapEnvelope = $@"
@@ -583,7 +585,7 @@ namespace SonosControl.DAL.Repos
 
             try
             {
-                var response = await httpClient.PostAsync(url, content);
+                var response = await _httpClient.PostAsync(url, content);
                 response.EnsureSuccessStatusCode();
                 Console.WriteLine($"{action} command sent successfully.");
             }
@@ -596,12 +598,11 @@ namespace SonosControl.DAL.Repos
 
         private async Task<string> SendSoapRequest(string url, string soapRequest, string soapAction)
         {
-            using var client = new HttpClient();
             var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
             content.Headers.Clear();
             content.Headers.Add("SOAPACTION", $"\"{soapAction}\"");
 
-            var response = await client.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadAsStringAsync();
