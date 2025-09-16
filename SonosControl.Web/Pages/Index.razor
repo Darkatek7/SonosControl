@@ -265,10 +265,11 @@
         {
             <div class="timer-modal-backdrop">
                 <div class="timer-modal bg-dark text-light">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">⏱️ Timed Playback</h5>
-                        <button type="button" class="btn btn-sm btn-outline-light" @onclick="CloseTimerModal" title="Close">
+                    <div class="timer-modal-header mb-3">
+                        <h5 class="timer-modal-title mb-0">⏱️ Timed Playback</h5>
+                        <button type="button" class="timer-modal-close" @onclick="CloseTimerModal" title="Close">
                             <i class="fa fa-times"></i>
+                            <span class="visually-hidden">Close</span>
                         </button>
                     </div>
                     <p class="text-light-emphasis small mb-3">Choose how long to play and what to listen to. Playback will stop automatically when the timer ends.</p>
@@ -1026,6 +1027,44 @@
         padding: 1.5rem;
         box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.35);
     }
+  
+    .timer-modal-header {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .timer-modal-title {
+        flex: 1;
+        font-size: 1.1rem;
+    }
+
+    .timer-modal-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: #bfbfbf;
+        font-size: 1.1rem;
+        line-height: 1;
+        padding: 0.25rem;
+        border-radius: 0.4rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .timer-modal-close:hover,
+    .timer-modal-close:focus {
+        color: #ffffff;
+        background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .timer-modal-close:focus {
+        outline: 2px solid rgba(255, 255, 255, 0.35);
+        outline-offset: 2px;
+    }
+
 
     .timer-modal .form-control,
     .timer-modal .form-select {
