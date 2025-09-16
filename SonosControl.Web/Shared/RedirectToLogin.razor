@@ -1,18 +1,8 @@
 @inject NavigationManager Navigation
 
-<p class="m-3">Redirecting to login...</p>
-
 @code {
-    private bool _hasNavigated;
-
-    protected override void OnAfterRender(bool firstRender)
+    protected override void OnInitialized()
     {
-        if (!firstRender || _hasNavigated)
-        {
-            return;
-        }
-
-        _hasNavigated = true;
         var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
 
         if (!string.IsNullOrEmpty(relativePath) && !relativePath.StartsWith("/"))
