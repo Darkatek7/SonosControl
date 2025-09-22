@@ -34,7 +34,8 @@ ____
 
 
 ### Config
-![image](https://github.com/user-attachments/assets/88e804df-c6a1-458e-8ed3-0f1ddef2d4ee)
+<img width="850" height="1677" alt="image" src="https://github.com/user-attachments/assets/0cc1ec9c-f97f-4c4e-a9ea-1379155af675" />
+
 
 ### Station Lookup
 <img width="977" height="1581" alt="image" src="https://github.com/user-attachments/assets/170d5aeb-a887-4e93-be20-f66020cad955" />
