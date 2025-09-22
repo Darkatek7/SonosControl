@@ -75,4 +75,59 @@ public class SettingsRepoTests
             Directory.Delete(tempDir, true);
         }
     }
+
+    [Fact]
+    public async Task GetSettings_ReturnsNewWhenFileMissing()
+    {
+        var repo = new SettingsRepo();
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(tempDir);
+
+        try
+        {
+            var result = await repo.GetSettings();
+
+            Assert.NotNull(result);
+            Assert.Equal("10.0.0.0", result!.IP_Adress);
+            Assert.Equal(10, result.Volume);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDir);
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task GetSettings_ReturnsNewWhenJsonCorrupted()
+    {
+        var repo = new SettingsRepo();
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(tempDir);
+
+        try
+        {
+            var dataDir = Path.Combine(tempDir, "Data");
+            Directory.CreateDirectory(dataDir);
+            var configPath = Path.Combine(dataDir, "config.json");
+            await File.WriteAllTextAsync(configPath, "{ invalid json }");
+
+            var result = await repo.GetSettings();
+
+            Assert.NotNull(result);
+            Assert.Equal("10.0.0.0", result!.IP_Adress);
+            Assert.Equal(10, result.Volume);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDir);
+            Directory.Delete(tempDir, true);
+        }
+    }
 }
