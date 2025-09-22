@@ -53,8 +53,8 @@ public class SonosControlServiceStartSpeakerTests
         {
             Stations = new List<TuneInStation>
             {
-                new() { Name = "Station A", Url = "http://station-a" },
-                new() { Name = "Station B", Url = "http://station-b" }
+                new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" },
+                new() { Name = "Radio Paloma", Url = "https://www3.radiopaloma.de/RP-Hauptkanal.pls" }
             }
         };
 
