@@ -1,5 +1,6 @@
 ﻿@page "/lookup"
 @using System.Net.Http.Json
+@using System.Linq
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
@@ -100,6 +101,19 @@
             var http = new HttpClient();
             string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm)}";
             results = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
+
+            if (results is null)
+            {
+                results = new List<RadioStation>();
+            }
+            else
+            {
+                results = results
+                    .Where(station => station is not null && !string.IsNullOrWhiteSpace(station.Url))
+                    .GroupBy(station => NormalizeUrl(station.Url))
+                    .Select(group => group.First())
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {
