@@ -3,7 +3,7 @@
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
-@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@attribute [Authorize(Roles = "admin,superadmin")]
 
 
         @if (_settings is null)
