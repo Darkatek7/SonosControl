@@ -79,12 +79,12 @@
                 @if (_timerEndTimeUtc is not null)
                 {
                     var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
-                    <div class="alert alert-info d-flex justify-content-between align-items-center mb-4">
+                    <div class="alert alert-info timed-playback-alert d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <strong>Timed Playback Active</strong>
-                            <p class="mb-0 text-light-emphasis">@(_timerSelectionName ?? "Playback") will stop at @localStopTime.ToString("t").</p>
+                            <p class="mb-0">@(_timerSelectionName ?? "Playback") will stop at @localStopTime.ToString("t").</p>
                         </div>
-                        <button type="button" class="btn btn-outline-light btn-sm" @onclick="CancelTimedPlayback">Cancel</button>
+                        <button type="button" class="btn btn-sm timed-playback-cancel btn-inline" @onclick="CancelTimedPlayback">Cancel</button>
                     </div>
                 }
 
@@ -945,6 +945,52 @@
         margin-bottom: 15px;
     }
 
+    .timed-playback-alert {
+        background: linear-gradient(135deg, #0b2538 0%, #123a52 55%, #1b5369 100%);
+        border: 1px solid rgba(148, 210, 255, 0.35);
+        color: #e3f6ff;
+        box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.25);
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .timed-playback-alert > div {
+        flex: 1 1 auto;
+    }
+
+    .timed-playback-alert strong {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: #f3fbff;
+    }
+
+    .timed-playback-alert p {
+        color: rgba(227, 246, 255, 0.85);
+    }
+
+    .timed-playback-cancel {
+        background-color: rgba(15, 76, 117, 0.35);
+        border: 1px solid rgba(148, 210, 255, 0.5);
+        color: #d0efff;
+        padding: 0.35rem 0.95rem;
+        border-radius: 999px;
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.25);
+    }
+
+    .timed-playback-cancel:hover,
+    .timed-playback-cancel:focus {
+        background-color: rgba(59, 130, 246, 0.25);
+        border-color: rgba(148, 210, 255, 0.8);
+        color: #f1fbff;
+        box-shadow: 0 0.65rem 1.4rem rgba(15, 76, 129, 0.35);
+    }
+
+    .timed-playback-cancel:focus {
+        outline: 2px solid rgba(148, 210, 255, 0.6);
+        outline-offset: 2px;
+    }
+
     .alert-success {
         background-color: #2e7d32;
         color: #ffffff;
@@ -963,7 +1009,7 @@
     }
 
     .playback-card {
-        background: linear-gradient(135deg, #1db954 0%, #1aa34a 45%, #1e90ff 100%);
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #0f766e 100%);
         border: none;
         color: #ffffff;
     }
