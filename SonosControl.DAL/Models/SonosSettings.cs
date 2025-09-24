@@ -4,7 +4,12 @@ namespace SonosControl.DAL.Models
 {
     public class SonosSettings
     {
+        public const string DefaultNowPlayingGradientStartColor = "#0f172a";
+        public const string DefaultNowPlayingGradientMidColor = "#1e3a8a";
+        public const string DefaultNowPlayingGradientEndColor = "#0f766e";
+
         public int Volume { get; set; } = 10;
+        public int MaxVolume { get; set; } = 100;
         public TimeOnly StartTime { get; set; } = new TimeOnly(6, 0);
         public TimeOnly StopTime { get; set; } = new TimeOnly(18, 0);
         public string IP_Adress { get; set; } = "10.0.0.0";
@@ -33,5 +38,9 @@ namespace SonosControl.DAL.Models
         public List<DayOfWeek> ActiveDays { get; set; } = new();
 
         public bool AllowUserRegistration { get; set; } = true;
+
+        public string NowPlayingGradientStartColor { get; set; } = DefaultNowPlayingGradientStartColor;
+        public string NowPlayingGradientMidColor { get; set; } = DefaultNowPlayingGradientMidColor;
+        public string NowPlayingGradientEndColor { get; set; } = DefaultNowPlayingGradientEndColor;
     }
 }
