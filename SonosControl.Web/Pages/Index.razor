@@ -19,73 +19,61 @@
 
                 <!-- Playback Status -->
                 <div class="mb-4">
-                    @if (_isPlaying)
-                    {
-                        <div class="alert alert-success d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>Now Playing</strong>
-                                <p class="mb-0 text-light-emphasis">Click to pause playback.</p>
-                            </div>
-                            <div class="playback-actions d-flex align-items-center flex-wrap justify-content-end gap-2">
-                                <button class="btn btn-danger" @onclick="@(() => Play(false))">
-                                    <i class="fa fa-pause"></i>
-                                </button>
-                                <button class="btn btn-outline-light" @onclick="OpenTimerModal" title="Timed playback">
-                                    <i class="fa fa-clock-o"></i>
-                                </button>
-                                @if (_isSpotifyPlaying)
-                                {
-                                    <button class="btn btn-primary" @onclick="NextTrack">
-                                        <i class="fa fa-forward"></i>
-                                    </button>
-                                }
-                                <div class="volume-control bg-secondary text-light rounded-pill d-flex align-items-center">
-                                    <i class="fa fa-volume-up text-light-emphasis"></i>
-                                    <input type="range"
-                                           class="form-range volume-slider"
-                                           min="0" max="100"
-                                           @bind-value="Volume"
-                                           @bind-value:event="oninput"
-                                           aria-label="Volume" />
-                                    <span class="volume-value">@($"{Volume}%")</span>
+                    <div class="@($"card playback-card shadow-sm border-0 rounded-4 text-white {(!_isPlaying ? "paused" : string.Empty)}")">
+                        <div class="card-body">
+                            <div class="d-flex flex-column flex-lg-row align-items-start gap-4">
+                                <div class="d-flex align-items-start gap-3 flex-grow-1">
+                                    <div class="playback-icon">
+                                        <i class="fa fa-music"></i>
+                                    </div>
+                                    <div class="playback-text">
+                                        <h5 class="mb-1">@(_isPlaying ? "Now Playing" : "Playback Paused")</h5>
+                                        <p class="mb-0">@(_isPlaying ? "Click to pause playback." : "Click to start playing music.")</p>
+                                    </div>
                                 </div>
-                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
-                                    🔀
-                                </button>
+                                <div class="playback-controls d-flex flex-column gap-3 ms-lg-auto w-100 align-items-lg-end">
+                                    <div class="d-flex flex-wrap justify-content-lg-end justify-content-start playback-control-row">
+                                        @if (_isPlaying)
+                                        {
+                                            <button class="btn btn-danger playback-action" @onclick="() => Play(false)" title="Pause">
+                                                <i class="fa fa-pause"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-success playback-action" @onclick="() => Play(true)" title="Play">
+                                                <i class="fa fa-play"></i>
+                                            </button>
+                                        }
+                                        <button class="btn btn-outline-light playback-action" @onclick="OpenTimerModal" title="Timed playback">
+                                            <i class="fa fa-clock-o"></i>
+                                        </button>
+                                        @if (_isSpotifyPlaying)
+                                        {
+                                            <button class="btn btn-primary playback-action" @onclick="NextTrack" title="Skip">
+                                                <i class="fa fa-forward"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div class="d-flex flex-wrap align-items-center justify-content-lg-end justify-content-start gap-3 playback-control-row">
+                                        <button class="btn btn-outline-light playback-action" @onclick="ShuffleStation" title="Shuffle">
+                                            <span class="fs-5">🔀</span>
+                                        </button>
+                                        <div class="playback-volume-control">
+                                            <i class="fa fa-volume-up"></i>
+                                            <input type="range"
+                                                   class="form-range playback-volume-slider"
+                                                   min="0" max="100"
+                                                   @bind-value="Volume"
+                                                   @bind-value:event="oninput"
+                                                   aria-label="Volume" />
+                                            <span class="playback-volume-value">@($"{Volume}%")</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    }
-                    else
-                    {
-                        <div class="alert alert-warning d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>Playback Paused</strong>
-                                <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
-                            </div>
-                            <div class="playback-actions d-flex align-items-center flex-wrap justify-content-end gap-2">
-                                <button class="btn btn-success" @onclick="() => Play(true)">
-                                    <i class="fa fa-play"></i>
-                                </button>
-                                <button class="btn btn-outline-light" @onclick="OpenTimerModal" title="Timed playback">
-                                    <i class="fa fa-clock-o"></i>
-                                </button>
-                                <div class="volume-control bg-secondary text-light rounded-pill d-flex align-items-center">
-                                    <i class="fa fa-volume-up text-light-emphasis"></i>
-                                    <input type="range"
-                                           class="form-range volume-slider"
-                                           min="0" max="100"
-                                           @bind-value="Volume"
-                                           @bind-value:event="oninput"
-                                           aria-label="Volume" />
-                                    <span class="volume-value">@($"{Volume}%")</span>
-                                </div>
-
-                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
-                                    🔀
-                                </button>
-                            </div>
-                        </div>
-                    }
+                    </div>
                 </div>
 
                 @if (_timerEndTimeUtc is not null)
@@ -964,90 +952,133 @@
         border-radius: 5px;
     }
 
-    .playback-actions .btn {
-        width: auto;
-        min-width: 2.5rem;
-        padding: 0.45rem 0.8rem;
-        display: inline-flex;
+    .playback-card {
+        background: linear-gradient(135deg, #1db954 0%, #1aa34a 45%, #1e90ff 100%);
+        border: none;
+        color: #ffffff;
+    }
+
+    .playback-card.paused {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    }
+
+    .playback-card .card-body {
+        padding: 1.75rem;
+    }
+
+    .playback-icon {
+        width: 3.25rem;
+        height: 3.25rem;
+        border-radius: 50%;
+        display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 0.65rem;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow: 0 0.65rem 1.2rem rgba(0, 0, 0, 0.25);
+        font-size: 1.35rem;
+        color: #ffffff;
     }
 
-    .playback-actions .btn:hover,
-    .playback-actions .btn:focus {
-        transform: translateY(-1px);
-        box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.25);
+    .playback-text h5 {
+        font-weight: 600;
     }
 
-    .volume-control {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.6rem;
-        padding: 0.4rem 0.85rem;
-        min-width: 170px;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.08), 0 6px 14px rgba(0, 0, 0, 0.35);
-    }
-
-    .volume-control .fa-volume-up {
-        font-size: 1rem;
+    .playback-text p {
         color: rgba(255, 255, 255, 0.8);
     }
 
-    .volume-slider {
+    .playback-controls {
+        min-width: 260px;
+    }
+
+    .playback-control-row {
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .playback-action {
+        width: auto;
+        min-width: 2.75rem;
+        padding: 0.5rem 0.9rem;
+        border-radius: 0.85rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.25);
+    }
+
+    .playback-action:hover,
+    .playback-action:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 0.75rem 1.3rem rgba(0, 0, 0, 0.3);
+    }
+
+    .playback-volume-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1);
+    }
+
+    .playback-volume-control i {
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .playback-volume-slider {
+        width: 160px;
+        min-width: 120px;
         flex: 1;
-        min-width: 110px;
         background: transparent;
         margin: 0;
-        accent-color: #0d6efd;
+        accent-color: #ffffff;
     }
 
-    .volume-slider::-webkit-slider-runnable-track {
+    .playback-volume-slider::-webkit-slider-runnable-track {
         height: 0.35rem;
         border-radius: 999px;
-        background: linear-gradient(90deg, #0d6efd, #6610f2);
+        background: rgba(255, 255, 255, 0.6);
     }
 
-    .volume-slider::-webkit-slider-thumb {
+    .playback-volume-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         width: 0.95rem;
         height: 0.95rem;
         margin-top: -0.3rem;
         border-radius: 50%;
         background: #ffffff;
-        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.45);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
         border: none;
     }
 
-    .volume-slider::-moz-range-track {
+    .playback-volume-slider::-moz-range-track {
         height: 0.35rem;
         border-radius: 999px;
-        background: linear-gradient(90deg, #0d6efd, #6610f2);
+        background: rgba(255, 255, 255, 0.6);
     }
 
-    .volume-slider::-moz-range-thumb {
+    .playback-volume-slider::-moz-range-thumb {
         width: 0.95rem;
         height: 0.95rem;
         border-radius: 50%;
         background: #ffffff;
-        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.45);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
         border: none;
     }
 
-    .volume-slider:focus {
+    .playback-volume-slider:focus {
         outline: none;
     }
 
-    .volume-value {
+    .playback-volume-value {
         font-weight: 600;
         font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.85);
+        color: rgba(255, 255, 255, 0.9);
         min-width: 3rem;
         text-align: right;
-
     }
 
     .btn-danger {
@@ -1112,33 +1143,33 @@
     }
 
     @@media (max-width: 576px) {
-        .card-body {
-            flex-direction: column;
-            align-items: flex-start !important;
+        .playback-card .card-body {
+            padding: 1.25rem;
         }
 
-        .card-body .display-6 {
-            margin-bottom: 0.5rem;
+        .playback-controls {
+            min-width: 0;
+            width: 100%;
+            align-items: stretch !important;
         }
 
-        .playback-actions {
+        .playback-control-row {
             justify-content: flex-start !important;
+        }
+
+        .playback-volume-control {
             width: 100%;
-            gap: 0.75rem;
+            justify-content: space-between;
         }
 
-        .volume-control {
-            width: 100%;
-            justify-content: center;
-        }
-
-        .volume-slider {
+        .playback-volume-slider {
             min-width: 0;
+            flex: 1;
         }
 
-        .volume-value {
+        .playback-volume-value {
             min-width: 0;
-            text-align: center;
+            text-align: right;
         }
 
         .currently-playing-text {
