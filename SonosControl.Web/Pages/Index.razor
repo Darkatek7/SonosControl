@@ -31,45 +31,33 @@
                                         <p class="mb-0">@(_isPlaying ? "Click to pause playback." : "Click to start playing music.")</p>
                                     </div>
                                 </div>
-                                <div class="playback-controls d-flex flex-column gap-3 ms-lg-auto w-100 align-items-lg-end">
-                                    <div class="d-flex flex-wrap justify-content-lg-end justify-content-start playback-control-row">
-                                        @if (_isPlaying)
-                                        {
-                                            <button class="btn btn-danger playback-action" @onclick="() => Play(false)" title="Pause">
-                                                <i class="fa fa-pause"></i>
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <button class="btn btn-success playback-action" @onclick="() => Play(true)" title="Play">
-                                                <i class="fa fa-play"></i>
-                                            </button>
-                                        }
-                                        <button class="btn btn-outline-light playback-action" @onclick="OpenTimerModal" title="Timed playback">
-                                            <i class="fa fa-clock-o"></i>
-                                        </button>
-                                        @if (_isSpotifyPlaying)
-                                        {
-                                            <button class="btn btn-primary playback-action" @onclick="NextTrack" title="Skip">
-                                                <i class="fa fa-forward"></i>
-                                            </button>
-                                        }
-                                    </div>
-                                    <div class="d-flex flex-wrap align-items-center justify-content-lg-end justify-content-start gap-3 playback-control-row">
-                                        <button class="btn btn-outline-light playback-action" @onclick="ShuffleStation" title="Shuffle">
-                                            <span class="fs-5">🔀</span>
-                                        </button>
-                                        <div class="playback-volume-control">
-                                            <i class="fa fa-volume-up"></i>
-                                            <input type="range"
-                                                   class="form-range playback-volume-slider"
-                                                   min="0" max="100"
-                                                   @bind-value="Volume"
-                                                   @bind-value:event="oninput"
-                                                   aria-label="Volume" />
-                                            <span class="playback-volume-value">@($"{Volume}%")</span>
-                                        </div>
-                                    </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Playback Paused</strong>
+                                <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
+                            </div>
+                            <div class="playback-actions d-flex align-items-center flex-wrap justify-content-end gap-2">
+                                <button class="btn btn-success" @onclick="() => Play(true)">
+                                    <i class="fa fa-play"></i>
+                                </button>
+                                <button class="btn btn-outline-light" @onclick="OpenTimerModal" title="Timed playback">
+                                    <i class="fa fa-clock-o"></i>
+                                </button>
+                                <div class="volume-control bg-secondary text-light rounded-pill d-flex align-items-center">
+                                    <i class="fa fa-volume-up text-light-emphasis"></i>
+                                    <input type="range"
+                                           class="form-range volume-slider"
+                                           min="0" max="100"
+                                           @bind-value="Volume"
+                                           @bind-value:event="oninput"
+                                           aria-label="Volume" />
+                                    <span class="volume-value">@($"{Volume}%")</span>
+
                                 </div>
                             </div>
                         </div>
@@ -115,13 +103,23 @@
                 <div class="form-section mb-5">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="mb-0">📻 TuneIn Stations</h5>
-                        <button
-                            class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
-                            style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
-                            @onclick="() => isEditMode = !isEditMode">
-                            <i class="fa fa-pencil"></i>
-                            @(isEditMode ? "Done" : "Edit")
-                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <button
+                                class="btn btn-primary btn-sm px-2 py-1"
+                                style="font-size: 0.75rem; width: auto; margin-top: 0;"
+                                @onclick="ShuffleStation"
+                                title="Shuffle stations"
+                                aria-label="Shuffle stations">
+                                🔀
+                            </button>
+                            <button
+                                class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                                style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                                @onclick="() => isEditMode = !isEditMode">
+                                <i class="fa fa-pencil"></i>
+                                @(isEditMode ? "Done" : "Edit")
+                            </button>
+                        </div>
                     </div>
 
                     @if (isEditMode)
