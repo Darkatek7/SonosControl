@@ -26,19 +26,29 @@
                                 <strong>Now Playing</strong>
                                 <p class="mb-0 text-light-emphasis">Click to pause playback.</p>
                             </div>
-                            <div class="d-flex align-items-center">
-                                <button class="btn btn-danger me-2" @onclick="@(() => Play(false))">
+                            <div class="playback-actions d-flex align-items-center flex-wrap justify-content-end gap-2">
+                                <button class="btn btn-danger" @onclick="@(() => Play(false))">
                                     <i class="fa fa-pause"></i>
                                 </button>
-                                <button class="btn btn-outline-light me-2" @onclick="OpenTimerModal" title="Timed playback">
+                                <button class="btn btn-outline-light" @onclick="OpenTimerModal" title="Timed playback">
                                     <i class="fa fa-clock-o"></i>
                                 </button>
                                 @if (_isSpotifyPlaying)
                                 {
-                                    <button class="btn btn-primary me-2" @onclick="NextTrack">
+                                    <button class="btn btn-primary" @onclick="NextTrack">
                                         <i class="fa fa-forward"></i>
                                     </button>
                                 }
+                                <div class="volume-control bg-secondary text-light rounded-pill d-flex align-items-center">
+                                    <i class="fa fa-volume-up text-light-emphasis"></i>
+                                    <input type="range"
+                                           class="form-range volume-slider"
+                                           min="0" max="100"
+                                           @bind-value="Volume"
+                                           @bind-value:event="oninput"
+                                           aria-label="Volume" />
+                                    <span class="volume-value">@($"{Volume}%")</span>
+                                </div>
                                 <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
@@ -52,13 +62,23 @@
                                 <strong>Playback Paused</strong>
                                 <p class="mb-0 text-light-emphasis">Click to start playing music.</p>
                             </div>
-                            <div class="d-flex align-items-center">
-                                <button class="btn btn-success me-2" @onclick="() => Play(true)">
+                            <div class="playback-actions d-flex align-items-center flex-wrap justify-content-end gap-2">
+                                <button class="btn btn-success" @onclick="() => Play(true)">
                                     <i class="fa fa-play"></i>
                                 </button>
-                                <button class="btn btn-outline-light me-2" @onclick="OpenTimerModal" title="Timed playback">
+                                <button class="btn btn-outline-light" @onclick="OpenTimerModal" title="Timed playback">
                                     <i class="fa fa-clock-o"></i>
                                 </button>
+                                <div class="volume-control bg-secondary text-light rounded-pill d-flex align-items-center">
+                                    <i class="fa fa-volume-up text-light-emphasis"></i>
+                                    <input type="range"
+                                           class="form-range volume-slider"
+                                           min="0" max="100"
+                                           @bind-value="Volume"
+                                           @bind-value:event="oninput"
+                                           aria-label="Volume" />
+                                    <span class="volume-value">@($"{Volume}%")</span>
+                                </div>
                                 <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
@@ -320,6 +340,29 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+
+    private int Volume
+    {
+        get => _settings?.Volume ?? 0;
+        set
+        {
+            if (_settings is null)
+            {
+                return;
+            }
+
+            var clamped = Math.Clamp(value, 0, 100);
+
+            if (_settings.Volume == clamped)
+            {
+                return;
+            }
+
+            _settings.Volume = clamped;
+            _ = _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, clamped);
+            _ = SaveSettings();
+        }
+    }
 
     private bool isAuthenticated;
     private bool isAdmin;
@@ -920,6 +963,91 @@
         border-radius: 5px;
     }
 
+    .playback-actions .btn {
+        width: auto;
+        min-width: 2.5rem;
+        padding: 0.45rem 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.65rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .playback-actions .btn:hover,
+    .playback-actions .btn:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.25);
+    }
+
+    .volume-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.4rem 0.85rem;
+        min-width: 170px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.08), 0 6px 14px rgba(0, 0, 0, 0.35);
+    }
+
+    .volume-control .fa-volume-up {
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .volume-slider {
+        flex: 1;
+        min-width: 110px;
+        background: transparent;
+        margin: 0;
+        accent-color: #0d6efd;
+    }
+
+    .volume-slider::-webkit-slider-runnable-track {
+        height: 0.35rem;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0d6efd, #6610f2);
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 0.95rem;
+        height: 0.95rem;
+        margin-top: -0.3rem;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.45);
+        border: none;
+    }
+
+    .volume-slider::-moz-range-track {
+        height: 0.35rem;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #0d6efd, #6610f2);
+    }
+
+    .volume-slider::-moz-range-thumb {
+        width: 0.95rem;
+        height: 0.95rem;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 2px 6px rgba(13, 110, 253, 0.45);
+        border: none;
+    }
+
+    .volume-slider:focus {
+        outline: none;
+    }
+
+    .volume-value {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.85);
+        min-width: 3rem;
+        text-align: right;
+    }
+
     .btn-danger {
         background-color: #d32f2f;
         border: 1px solid #b71c1c;
@@ -989,6 +1117,26 @@
 
         .card-body .display-6 {
             margin-bottom: 0.5rem;
+        }
+
+        .playback-actions {
+            justify-content: flex-start !important;
+            width: 100%;
+            gap: 0.75rem;
+        }
+
+        .volume-control {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .volume-slider {
+            min-width: 0;
+        }
+
+        .volume-value {
+            min-width: 0;
+            text-align: center;
         }
 
         .currently-playing-text {
