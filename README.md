@@ -278,7 +278,7 @@ Bug reports, feature requests, and documentation improvements are all welcome.
 ---
 
 ## License
-SonosControl is released under the [MIT License](LICENSE.md). Commercial and personal use are both encouraged—just retain the copyright notice.
+SonosControl is released under the [Don't Be a Dick Public License](LICENSE.md). Enjoy it freely and abide by the straightforward terms outlined in the license.
 
 ---
 
