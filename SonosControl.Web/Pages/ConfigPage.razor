@@ -25,14 +25,6 @@
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">🔉 Volume</label>
-                    <input type="number" class="form-control bg-secondary text-light border-0"
-                           max="100" min="1"
-                           @bind-value="Volume"
-                           @bind-value:event="oninput"/>
-                </div>
-
-                <div class="mb-3">
                     <label class="form-label">🎵 Auto Play</label>
                     <select class="form-select bg-secondary text-light border-0"
                             @bind="AutoPlaySelection" @bind:event="onchange">
@@ -299,18 +291,6 @@
           }
           await SaveSettings();
       }
-
-    private int Volume
-    {
-        get => _settings!.Volume;
-        set
-        {
-            _settings!.Volume = value;
-            _uow.ISonosConnectorRepo.SetVolume(_settings!.IP_Adress, value);
-            SaveSettings();
-            //AddLog("Volume Changed", $"Volume: {value}");
-        }
-    }
 
     private async Task OnDayChanged(DayOfWeek dayKey, object? value)
     {
