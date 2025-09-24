@@ -39,6 +39,12 @@
                                         <i class="fa fa-forward"></i>
                                     </button>
                                 }
+                                <input type="number"
+                                       class="form-control form-control-sm bg-secondary text-light border-0 me-2 volume-input"
+                                       min="0" max="100"
+                                       @bind-value="Volume"
+                                       @bind-value:event="oninput"
+                                       aria-label="Volume" />
                                 <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
@@ -59,6 +65,12 @@
                                 <button class="btn btn-outline-light me-2" @onclick="OpenTimerModal" title="Timed playback">
                                     <i class="fa fa-clock-o"></i>
                                 </button>
+                                <input type="number"
+                                       class="form-control form-control-sm bg-secondary text-light border-0 me-2 volume-input"
+                                       min="0" max="100"
+                                       @bind-value="Volume"
+                                       @bind-value:event="oninput"
+                                       aria-label="Volume" />
                                 <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
                                     🔀
                                 </button>
@@ -320,6 +332,29 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+
+    private int Volume
+    {
+        get => _settings?.Volume ?? 0;
+        set
+        {
+            if (_settings is null)
+            {
+                return;
+            }
+
+            var clamped = Math.Clamp(value, 0, 100);
+
+            if (_settings.Volume == clamped)
+            {
+                return;
+            }
+
+            _settings.Volume = clamped;
+            _ = _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, clamped);
+            _ = SaveSettings();
+        }
+    }
 
     private bool isAuthenticated;
     private bool isAdmin;
@@ -918,6 +953,10 @@
     .btn {
         width: 100%;
         border-radius: 5px;
+    }
+
+    .volume-input {
+        max-width: 90px;
     }
 
     .btn-danger {
