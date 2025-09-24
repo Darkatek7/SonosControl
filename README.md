@@ -216,6 +216,8 @@ The engine polls settings at most once per minute, reacts instantly to near-term
 - **TuneIn & Internet Radio:** Store any stream URL, or fetch new stations directly from Radio Browser.
 - **Localization:** Built-in support for `en-US` and `de-AT` cultures.
 
+> **Important:** Set up TuneIn and Spotify inside the official Sonos app before using those features in SonosControl. The dashboard relies on Sonos’s native integrations, so the services must already be linked in your Sonos account.
+
 ---
 
 ## Logging & Observability
