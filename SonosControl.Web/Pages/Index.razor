@@ -19,7 +19,7 @@
 
                 <!-- Playback Status -->
                 <div class="mb-4">
-                    <div class="@($"card playback-card shadow-sm border-0 rounded-4 text-white {(!_isPlaying ? "paused" : string.Empty)}")">
+                    <div class="@($"card playback-card shadow-sm border-0 rounded-4 text-white {(!_isPlaying ? "paused" : string.Empty)}")" style="@PlaybackCardStyle">
                         <div class="card-body">
                             <div class="d-flex flex-column gap-3">
                                 <div class="d-flex flex-column flex-lg-row align-items-start gap-3">
@@ -64,7 +64,7 @@
                                         <i class="fa fa-volume-up"></i>
                                         <input type="range"
                                                class="form-range playback-volume-slider"
-                                               min="0" max="100"
+                                               min="0" max="@MaxVolumeLimit"
                                                @bind-value="Volume"
                                                @bind-value:event="oninput"
                                                aria-label="Volume" />
@@ -342,7 +342,16 @@
 
     private int Volume
     {
-        get => _settings?.Volume ?? 0;
+        get
+        {
+            if (_settings is null)
+            {
+                return 0;
+            }
+
+            var limit = MaxVolumeLimit;
+            return Math.Min(_settings.Volume, limit);
+        }
         set
         {
             if (_settings is null)
@@ -350,7 +359,8 @@
                 return;
             }
 
-            var clamped = Math.Clamp(value, 0, 100);
+            var limit = MaxVolumeLimit;
+            var clamped = Math.Clamp(value, 0, limit);
 
             if (_settings.Volume == clamped)
             {
@@ -362,6 +372,12 @@
             _ = SaveSettings();
         }
     }
+
+    private int MaxVolumeLimit => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
+
+    private string? PlaybackCardStyle => !_isPlaying || _settings is null
+        ? null
+        : $"background: linear-gradient(135deg, {NormalizeColor(_settings.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor)} 0%, {NormalizeColor(_settings.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor)} 55%, {NormalizeColor(_settings.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor)} 100%);";
 
     private bool isAuthenticated;
     private bool isAdmin;
@@ -720,6 +736,38 @@
         timerErrorMessage = null;
     }
 
+    private static string NormalizeColor(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var trimmed = value.Trim();
+
+        if (!trimmed.StartsWith("#", System.StringComparison.Ordinal))
+        {
+            trimmed = $"#{trimmed.TrimStart('#')}";
+        }
+
+        if (trimmed.Length == 7)
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Length == 4)
+        {
+            return $"#{trimmed[1]}{trimmed[1]}{trimmed[2]}{trimmed[2]}{trimmed[3]}{trimmed[3]}";
+        }
+
+        if (trimmed.Length > 7)
+        {
+            return trimmed.Substring(0, 7);
+        }
+
+        return fallback;
+    }
+
     private async Task AddLog(string action, string? details = null)
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -763,6 +811,14 @@
             return;
 
         _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+
+        var maxVolumeLimit = MaxVolumeLimit;
+        if (_settings.Volume > maxVolumeLimit)
+        {
+            _settings.Volume = maxVolumeLimit;
+            await _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, maxVolumeLimit);
+        }
+
         await SaveSettings();
         _isPlaying = await IsPlaying();
         _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 1000);
