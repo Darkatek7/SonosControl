@@ -49,9 +49,6 @@
                                            aria-label="Volume" />
                                     <span class="volume-value">@($"{Volume}%")</span>
                                 </div>
-                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
-                                    🔀
-                                </button>
                             </div>
                         </div>
                     }
@@ -79,10 +76,6 @@
                                            aria-label="Volume" />
                                     <span class="volume-value">@($"{Volume}%")</span>
                                 </div>
-
-                                <button class="btn btn-primary" @onclick="ShuffleStation" title="Shuffle">
-                                    🔀
-                                </button>
                             </div>
                         </div>
                     }
@@ -127,13 +120,23 @@
                 <div class="form-section mb-5">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="mb-0">📻 TuneIn Stations</h5>
-                        <button
-                            class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
-                            style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
-                            @onclick="() => isEditMode = !isEditMode">
-                            <i class="fa fa-pencil"></i>
-                            @(isEditMode ? "Done" : "Edit")
-                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <button
+                                class="btn btn-primary btn-sm px-2 py-1"
+                                style="font-size: 0.75rem; width: auto; margin-top: 0;"
+                                @onclick="ShuffleStation"
+                                title="Shuffle stations"
+                                aria-label="Shuffle stations">
+                                🔀
+                            </button>
+                            <button
+                                class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                                style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                                @onclick="() => isEditMode = !isEditMode">
+                                <i class="fa fa-pencil"></i>
+                                @(isEditMode ? "Done" : "Edit")
+                            </button>
+                        </div>
                     </div>
 
                     @if (isEditMode)
