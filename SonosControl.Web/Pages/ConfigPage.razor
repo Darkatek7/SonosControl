@@ -47,6 +47,42 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label">🔊 Max Volume</label>
+                    <input type="number" class="form-control bg-secondary text-light border-0"
+                           min="0" max="100"
+                           @bind-value="MaxVolume"
+                           @bind-value:event="oninput" />
+                    <div class="form-text text-light text-opacity-75">
+                        Limits the highest volume that can be set from the main control panel.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">🎨 Now Playing Gradient</label>
+                    <div class="gradient-inputs d-flex flex-wrap gap-3">
+                        <div class="gradient-input text-center">
+                            <span class="text-uppercase small text-muted d-block">Start</span>
+                            <input type="color" class="form-control form-control-color"
+                                   @bind-value="GradientStartColor"
+                                   @bind-value:event="oninput" />
+                        </div>
+                        <div class="gradient-input text-center">
+                            <span class="text-uppercase small text-muted d-block">Middle</span>
+                            <input type="color" class="form-control form-control-color"
+                                   @bind-value="GradientMidColor"
+                                   @bind-value:event="oninput" />
+                        </div>
+                        <div class="gradient-input text-center">
+                            <span class="text-uppercase small text-muted d-block">End</span>
+                            <input type="color" class="form-control form-control-color"
+                                   @bind-value="GradientEndColor"
+                                   @bind-value:event="oninput" />
+                        </div>
+                    </div>
+                    <div class="gradient-preview mt-3" style="@GradientPreviewStyle"></div>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label">⏰ Start Time</label>
                     <input type="time" class="form-control bg-secondary text-light border-0"
                            @bind-value="StartTime"
@@ -245,12 +281,99 @@
           }
       }
 
+    private int MaxVolume
+    {
+        get => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
+        set
+        {
+            if (_settings is null)
+                return;
+
+            var clamped = Math.Clamp(value, 0, 100);
+
+            if (_settings.MaxVolume == clamped)
+                return;
+
+            _settings.MaxVolume = clamped;
+
+            if (_settings.Volume > clamped)
+            {
+                _settings.Volume = clamped;
+            }
+
+            SaveSettings();
+            _ = AddLog("Max Volume Changed", $"Value: {clamped}");
+        }
+    }
+
+    private string GradientStartColor
+    {
+        get => NormalizeColor(_settings?.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor);
+        set
+        {
+            if (_settings is null)
+                return;
+
+            var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientStartColor);
+
+            if (_settings.NowPlayingGradientStartColor == normalized)
+                return;
+
+            _settings.NowPlayingGradientStartColor = normalized;
+            SaveSettings();
+        }
+    }
+
+    private string GradientMidColor
+    {
+        get => NormalizeColor(_settings?.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor);
+        set
+        {
+            if (_settings is null)
+                return;
+
+            var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientMidColor);
+
+            if (_settings.NowPlayingGradientMidColor == normalized)
+                return;
+
+            _settings.NowPlayingGradientMidColor = normalized;
+            SaveSettings();
+        }
+    }
+
+    private string GradientEndColor
+    {
+        get => NormalizeColor(_settings?.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor);
+        set
+        {
+            if (_settings is null)
+                return;
+
+            var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientEndColor);
+
+            if (_settings.NowPlayingGradientEndColor == normalized)
+                return;
+
+            _settings.NowPlayingGradientEndColor = normalized;
+            SaveSettings();
+        }
+    }
+
+    private string GradientPreviewStyle => $"background: linear-gradient(135deg, {GradientStartColor} 0%, {GradientMidColor} 55%, {GradientEndColor} 100%);";
+
     private async Task SaveSettings()
     {
         _settings.ActiveDays = DaySelection
             .Where(kv => kv.Value)
             .Select(kv => kv.Key)
             .ToList();
+
+        _settings.MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
+        _settings.Volume = Math.Clamp(_settings.Volume, 0, _settings.MaxVolume);
+        _settings.NowPlayingGradientStartColor = NormalizeColor(_settings.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor);
+        _settings.NowPlayingGradientMidColor = NormalizeColor(_settings.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor);
+        _settings.NowPlayingGradientEndColor = NormalizeColor(_settings.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor);
 
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
@@ -298,6 +421,38 @@
         DaySelection[dayKey] = isChecked;
 
         await SaveSettings();
+    }
+
+    private static string NormalizeColor(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var trimmed = value.Trim();
+
+        if (!trimmed.StartsWith("#", System.StringComparison.Ordinal))
+        {
+            trimmed = $"#{trimmed.TrimStart('#')}";
+        }
+
+        if (trimmed.Length == 7)
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Length == 4)
+        {
+            return $"#{trimmed[1]}{trimmed[1]}{trimmed[2]}{trimmed[2]}{trimmed[3]}{trimmed[3]}";
+        }
+
+        if (trimmed.Length > 7)
+        {
+            return trimmed.Substring(0, 7);
+        }
+
+        return fallback;
     }
 
 
@@ -423,6 +578,26 @@
         padding: 0.45rem;
         font-weight: 500;
         white-space: nowrap;
+    }
+
+    .gradient-inputs .form-control-color {
+        width: 3rem;
+        height: 3rem;
+        padding: 0;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .gradient-input span {
+        letter-spacing: 0.05em;
+    }
+
+    .gradient-preview {
+        height: 2.5rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35);
     }
 
 
