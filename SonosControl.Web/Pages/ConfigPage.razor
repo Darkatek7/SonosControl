@@ -25,6 +25,23 @@
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label d-block">⚙️ Device Actions</label>
+                    <button class="btn btn-outline-warning"
+                            @onclick="SendRebootCommand"
+                            disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
+                        @if (_isRebooting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        }
+                        Reboot Speaker
+                    </button>
+                    @if (!string.IsNullOrEmpty(_rebootAlertMessage))
+                    {
+                        <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
+                    }
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label">🎵 Auto Play</label>
                     <select class="form-select bg-secondary text-light border-0"
                             @bind="AutoPlaySelection" @bind:event="onchange">
@@ -186,6 +203,9 @@
     private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
     private Dictionary<DayOfWeek, bool> DaySelection = new();
     private bool canEditIp;
+    private bool _isRebooting;
+    private string? _rebootAlertMessage;
+    private string _rebootAlertCss = "alert-info";
 
 
     protected override async Task OnInitializedAsync()
@@ -467,6 +487,48 @@
             _settings!.IP_Adress = value;
             SaveSettings();
             AddLog("IP-Adress Changed", $"IP: {value}");
+        }
+    }
+
+    private async Task SendRebootCommand()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_settings.IP_Adress))
+        {
+            _rebootAlertCss = "alert-warning";
+            _rebootAlertMessage = "Set a valid IP address before sending commands.";
+            return;
+        }
+
+        _isRebooting = true;
+        _rebootAlertMessage = null;
+
+        try
+        {
+            await _uow.ISonosConnectorRepo.RebootDeviceAsync(_settings.IP_Adress);
+            _rebootAlertCss = "alert-success";
+            _rebootAlertMessage = "Reboot command sent to the speaker.";
+            await AddLog("Reboot Command Sent", $"IP: {_settings.IP_Adress}");
+        }
+        catch (Exception ex)
+        {
+            _rebootAlertCss = "alert-danger";
+            _rebootAlertMessage = $"Failed to send reboot command: {ex.Message}";
+            try
+            {
+                await AddLog("Reboot Command Failed", $"IP: {_settings.IP_Adress}; Error: {ex.Message}");
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            _isRebooting = false;
         }
     }
 
