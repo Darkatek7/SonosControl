@@ -582,6 +582,20 @@ namespace SonosControl.DAL.Repos
             await SendAvTransportCommand(ip, "Next", cancellationToken);
         }
 
+        public async Task RebootDeviceAsync(string ip, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ip))
+            {
+                throw new ArgumentException("IP address must be provided.", nameof(ip));
+            }
+
+            var client = CreateClient();
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"http://{ip}:1400/reboot");
+            using var response = await client.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
         private async Task SendAvTransportCommand(string ip, string action, CancellationToken cancellationToken)
         {
             var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";

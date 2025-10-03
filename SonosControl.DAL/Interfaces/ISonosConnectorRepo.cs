@@ -21,5 +21,6 @@ namespace SonosControl.DAL.Interfaces
         Task<List<string>> GetQueue(string ip, CancellationToken cancellationToken = default);
         Task PreviousTrack(string ip, CancellationToken cancellationToken = default);
         Task NextTrack(string ip, CancellationToken cancellationToken = default);
+        Task RebootDeviceAsync(string ip, CancellationToken cancellationToken = default);
     }
 }
