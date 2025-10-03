@@ -195,4 +195,19 @@ public class SonosConnectorRepoTests
         Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
         Assert.Equal(0, repo.StartPlayingCallCount);
     }
+
+    [Fact]
+    public async Task RebootDeviceAsync_PostsToRebootEndpoint()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        await repo.RebootDeviceAsync("1.2.3.4");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("http://1.2.3.4:1400/reboot", request.Uri!.ToString());
+    }
 }
