@@ -48,6 +48,7 @@
                         <option value="">-- None --</option>
                         <option value="randomStation">Random Station</option>
                         <option value="randomSpotify">Random Spotify</option>
+                        <option value="randomYouTube">Random YouTube Music</option>
                         <optgroup label="Stations">
                             @foreach (var station in _settings.Stations)
                             {
@@ -58,6 +59,12 @@
                             @foreach (var track in _settings.SpotifyTracks)
                             {
                                 <option value="spotify:@track.Url">@track.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="YouTube Music">
+                            @foreach (var collection in _settings.YouTubeMusicCollections)
+                            {
+                                <option value="youtube:@collection.Url">@collection.Name</option>
                             }
                         </optgroup>
                     </select>
@@ -174,6 +181,7 @@
                                           <option value="">-- None --</option>
                                           <option value="randomStation">Random Station</option>
                                           <option value="randomSpotify">Random Spotify</option>
+                                          <option value="randomYouTube">Random YouTube Music</option>
                                           <optgroup label="Stations">
                                               @foreach (var station in _settings.Stations)
                                               {
@@ -184,6 +192,12 @@
                                             @foreach (var track in _settings.SpotifyTracks)
                                             {
                                                 <option value="spotify:@track.Url">@track.Name</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="YouTube Music">
+                                            @foreach (var collection in _settings.YouTubeMusicCollections)
+                                            {
+                                                <option value="youtube:@collection.Url">@collection.Name</option>
                                             }
                                         </optgroup>
                                     </select>
@@ -219,6 +233,7 @@
         if (user.Identity?.IsAuthenticated ?? false)
         {
             _settings = await _uow.ISettingsRepo.GetSettings();
+            _settings.YouTubeMusicCollections ??= new();
 
             // Default to weekdays if no ActiveDays are set
             if (_settings.ActiveDays == null || !_settings.ActiveDays.Any())
@@ -270,24 +285,32 @@
                   return "randomStation";
               if (_settings.AutoPlayRandomSpotify)
                   return "randomSpotify";
+              if (_settings.AutoPlayRandomYouTubeMusic)
+                  return "randomYouTube";
               if (!string.IsNullOrEmpty(_settings.AutoPlayStationUrl))
                   return $"station:{_settings.AutoPlayStationUrl}";
               if (!string.IsNullOrEmpty(_settings.AutoPlaySpotifyUrl))
                   return $"spotify:{_settings.AutoPlaySpotifyUrl}";
+              if (!string.IsNullOrEmpty(_settings.AutoPlayYouTubeMusicUrl))
+                  return $"youtube:{_settings.AutoPlayYouTubeMusicUrl}";
               return string.Empty;
           }
           set
           {
               _settings!.AutoPlayRandomStation = false;
               _settings.AutoPlayRandomSpotify = false;
+              _settings.AutoPlayRandomYouTubeMusic = false;
               _settings.AutoPlayStationUrl = null;
               _settings.AutoPlaySpotifyUrl = null;
+              _settings.AutoPlayYouTubeMusicUrl = null;
               if (!string.IsNullOrEmpty(value))
               {
                   if (value == "randomStation")
                       _settings.AutoPlayRandomStation = true;
                   else if (value == "randomSpotify")
                       _settings.AutoPlayRandomSpotify = true;
+                  else if (value == "randomYouTube")
+                      _settings.AutoPlayRandomYouTubeMusic = true;
                   else
                   {
                       var parts = value.Split(':', 2);
@@ -295,6 +318,8 @@
                           _settings.AutoPlayStationUrl = parts[1];
                       else if (parts[0] == "spotify")
                           _settings.AutoPlaySpotifyUrl = parts[1];
+                      else if (parts[0] == "youtube")
+                          _settings.AutoPlayYouTubeMusicUrl = parts[1];
                   }
               }
               SaveSettings();
@@ -404,10 +429,14 @@
               return "randomStation";
           if (schedule.PlayRandomSpotify)
               return "randomSpotify";
+          if (schedule.PlayRandomYouTubeMusic)
+              return "randomYouTube";
           if (!string.IsNullOrEmpty(schedule.StationUrl))
               return $"station:{schedule.StationUrl}";
           if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
               return $"spotify:{schedule.SpotifyUrl}";
+          if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
+              return $"youtube:{schedule.YouTubeMusicUrl}";
           return string.Empty;
       }
 
@@ -415,14 +444,18 @@
       {
           schedule.PlayRandomStation = false;
           schedule.PlayRandomSpotify = false;
+          schedule.PlayRandomYouTubeMusic = false;
           schedule.StationUrl = null;
           schedule.SpotifyUrl = null;
+          schedule.YouTubeMusicUrl = null;
           if (!string.IsNullOrEmpty(value))
           {
               if (value == "randomStation")
                   schedule.PlayRandomStation = true;
               else if (value == "randomSpotify")
                   schedule.PlayRandomSpotify = true;
+              else if (value == "randomYouTube")
+                  schedule.PlayRandomYouTubeMusic = true;
               else
               {
                   var parts = value.Split(':', 2);
@@ -430,6 +463,8 @@
                       schedule.StationUrl = parts[1];
                   else if (parts[0] == "spotify")
                       schedule.SpotifyUrl = parts[1];
+                  else if (parts[0] == "youtube")
+                      schedule.YouTubeMusicUrl = parts[1];
               }
           }
           await SaveSettings();
