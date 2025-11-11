@@ -453,6 +453,132 @@ namespace SonosControl.DAL.Repos
             await StartPlaying(ip);
         }
 
+        public async Task PlayYouTubeMusicTrackAsync(string ip, string youtubeMusicUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!string.IsNullOrWhiteSpace(fallbackStationUri))
+            {
+                await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            }
+
+            string trimmedUrl = youtubeMusicUrl.Trim();
+            string contentType = "track";
+            string? contentId = null;
+
+            if (trimmedUrl.StartsWith("ytm:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = trimmedUrl.Split(':', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 3)
+                {
+                    contentType = parts[1].ToLowerInvariant();
+                    contentId = parts[2];
+                }
+            }
+            else
+            {
+                var playlistMatch = Regex.Match(trimmedUrl, @"[?&]list=(?<id>[A-Za-z0-9_-]+)", RegexOptions.IgnoreCase);
+                var trackMatch = Regex.Match(trimmedUrl, @"[?&]v=(?<id>[A-Za-z0-9_-]{6,})", RegexOptions.IgnoreCase);
+
+                if (playlistMatch.Success)
+                {
+                    contentType = "playlist";
+                    contentId = playlistMatch.Groups["id"].Value;
+                }
+                else if (trackMatch.Success)
+                {
+                    contentType = "track";
+                    contentId = trackMatch.Groups["id"].Value;
+                }
+                else
+                {
+                    var customMatch = Regex.Match(trimmedUrl, @"youtube(?:music)?:(?<type>track|playlist):(?<id>[A-Za-z0-9_-]+)", RegexOptions.IgnoreCase);
+                    if (customMatch.Success)
+                    {
+                        contentType = customMatch.Groups["type"].Value.ToLowerInvariant();
+                        contentId = customMatch.Groups["id"].Value;
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(contentId))
+            {
+                Console.WriteLine("Invalid YouTube Music URL.");
+                return;
+            }
+
+            var rinconId = await GetRinconIdAsync(ip, cancellationToken);
+            if (rinconId == null)
+            {
+                Console.WriteLine("Could not retrieve RINCON ID.");
+                return;
+            }
+
+            string escapedId = Uri.EscapeDataString(contentId);
+            string sonosUri;
+            string metadata;
+
+            if (contentType.Equals("playlist", StringComparison.OrdinalIgnoreCase))
+            {
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:playlist:{contentId}";
+                metadata = $@"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\"
+                                               xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\"
+                                               xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">
+                                <item id=\"0006206cyoutubemusic%3aplaylist%3a{escapedId}\"
+                                      parentID=\"0006206cyoutubemusic\" restricted=\"true\">
+                                    <dc:title>YouTube Music Playlist</dc:title>
+                                    <upnp:class>object.container.playlistContainer</upnp:class>
+                                    <desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_RINCON51463_X_#Svc51463-0-Token</desc>
+                                </item>
+                             </DIDL-Lite>";
+            }
+            else
+            {
+                contentType = "track";
+                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:track:{contentId}";
+                metadata = $@"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\"
+                                               xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\"
+                                               xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">
+                                <item id=\"0004206cyoutubemusic%3atrack%3a{escapedId}\"
+                                      parentID=\"0004206cyoutubemusic\" restricted=\"true\">
+                                    <dc:title>YouTube Music Track</dc:title>
+                                    <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+                                    <desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_RINCON51463_X_#Svc51463-0-Token</desc>
+                                </item>
+                             </DIDL-Lite>";
+            }
+
+            string soapRequest = $@"
+            <s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"
+                         s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">
+              <s:Body>
+                <u:SetAVTransportURI xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">
+                  <InstanceID>0</InstanceID>
+                  <CurrentURI>{sonosUri}</CurrentURI>
+                  <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
+                </u:SetAVTransportURI>
+              </s:Body>
+            </s:Envelope>";
+
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
+
+            string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+            var client = CreateClient();
+            var response = await client.PostAsync(url, content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Error setting YouTube Music playback: {response.ReasonPhrase}");
+                return;
+            }
+
+            Console.WriteLine("YouTube Music playback started.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            await StartPlaying(ip);
+        }
+
 
         protected virtual async Task<string?> GetRinconIdAsync(string ip, CancellationToken cancellationToken = default)
         {

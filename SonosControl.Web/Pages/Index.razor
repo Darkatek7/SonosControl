@@ -203,7 +203,7 @@
                             style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
                             @onclick="() => isSpotifyEditMode = !isSpotifyEditMode">
                             <i class="fa fa-pencil"></i>
-                            @(isEditMode ? "Done" : "Edit")
+                            @(isSpotifyEditMode ? "Done" : "Edit")
                         </button>
                     </div>
 
@@ -267,6 +267,77 @@
                     }
                 </div>
 
+                <!-- YouTube Music Section -->
+                <div class="form-section">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="mb-0">▶️ YouTube Music</h5>
+                        <button
+                            class="btn btn-outline-light btn-sm d-flex align-items-center px-2 py-1 gap-1"
+                            style="white-space: nowrap; font-size: 0.75rem; width: auto; margin-top: 0;"
+                            @onclick="() => isYouTubeEditMode = !isYouTubeEditMode">
+                            <i class="fa fa-pencil"></i>
+                            @(isYouTubeEditMode ? "Done" : "Edit")
+                        </button>
+                    </div>
+
+                    @if (isYouTubeEditMode)
+                    {
+                        @if (!string.IsNullOrEmpty(addYouTubeErrorMessage))
+                        {
+                            <div class="alert alert-danger">@addYouTubeErrorMessage</div>
+                        }
+
+                        <ul class="list-group mb-3">
+                            @foreach (var entry in _youTubeCollections)
+                            {
+                                <li class="list-group-item bg-dark text-white px-3 py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-10 text-truncate">
+                                            @entry.Name
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            <button class="btn btn-sm btn-outline-danger px-2 py-1 station-remove-btn"
+                                                    title="Remove"
+                                                    @onclick="() => RemoveYouTubeMusicEntry(entry)">
+                                                <i class="fa fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+
+                        <div>
+                            <div class="mb-2">
+                                <label>Name</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newYouTubeName" @bind:event="oninput"
+                                       placeholder="Morning Flow" />
+                            </div>
+                            <div class="mb-2">
+                                <label>YouTube Music URL</label>
+                                <input class="form-control bg-secondary text-light border-0"
+                                       @bind="newYouTubeUrl" @bind:event="oninput"
+                                       placeholder="https://music.youtube.com/playlist?..." />
+                            </div>
+                            <button class="btn btn-success mt-2" @onclick="AddNewYouTubeMusicEntry"
+                                    disabled="@(!CanAddYouTubeEntry)">
+                                Add YouTube Music Link
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <select class="form-select bg-secondary text-light border-0 mt-2" @bind="selectedYouTubeEntry">
+                            <option value="">-- Select YouTube Music --</option>
+                            @foreach (var entry in _youTubeCollections)
+                            {
+                                <option value="@entry.Url">@(entry.Name.Length > 33 ? entry.Name.Substring(0, 33) + "..." : entry.Name)</option>
+                            }
+                        </select>
+                    }
+                </div>
+
                 <hr/>
 
                 <!-- Spotify URL Section -->
@@ -316,6 +387,15 @@
                                     @foreach (var track in _tracks)
                                     {
                                         <option value="spotify|@track.Url">@(track.Name.Length > 40 ? track.Name.Substring(0, 40) + "..." : track.Name)</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (_youTubeCollections.Any())
+                            {
+                                <optgroup label="YouTube Music">
+                                    @foreach (var entry in _youTubeCollections)
+                                    {
+                                        <option value="youtube|@entry.Url">@(entry.Name.Length > 40 ? entry.Name.Substring(0, 40) + "..." : entry.Name)</option>
                                     }
                                 </optgroup>
                             }
@@ -386,8 +466,10 @@
     private bool isEditMode = false;
     private string newStationName = "";
     private string newTrackName = "";
+    private string newYouTubeName = "";
     private string newStationUrl = "";
     private string newTrackUrl = "";
+    private string newYouTubeUrl = "";
 
     private bool isTimerModalOpen;
     private int timerMinutes = 60;
@@ -399,6 +481,7 @@
 
 
     private bool isSpotifyEditMode = false;
+    private bool isYouTubeEditMode = false;
 
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
@@ -409,6 +492,7 @@
     private Timer? _stationUpdateTimer;
     private string? addStationErrorMessage;
     private string? addTrackErrorMessage;
+    private string? addYouTubeErrorMessage;
 
     private List<TuneInStation> _stations =>
         (_settings?.Stations ?? new List<TuneInStation>())
@@ -417,6 +501,11 @@
 
     private List<SpotifyObject> _tracks =>
         (_settings?.SpotifyTracks ?? new List<SpotifyObject>())
+        .OrderBy(t => t.Name)
+        .ToList();
+
+    private List<YouTubeMusicObject> _youTubeCollections =>
+        (_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
         .OrderBy(t => t.Name)
         .ToList();
     
@@ -435,6 +524,11 @@
             {
                 currentStationDisplay = "Spotify";
                 _isSpotifyPlaying = true;
+            }
+            else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+            {
+                currentStationDisplay = "YouTube Music";
+                _isSpotifyPlaying = false;
             }
             else
             {
@@ -486,6 +580,7 @@
 
     private bool CanAddStation => !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
     private bool CanAddTrack => !string.IsNullOrWhiteSpace(newTrackName) && !string.IsNullOrWhiteSpace(newTrackUrl);
+    private bool CanAddYouTubeEntry => !string.IsNullOrWhiteSpace(newYouTubeName) && !string.IsNullOrWhiteSpace(newYouTubeUrl);
 
     private string _selectedStation;
 
@@ -503,6 +598,20 @@
     }
 
     private string _selectedTrack;
+    private string _selectedYouTubeEntry = string.Empty;
+
+    private string selectedYouTubeEntry
+    {
+        get => _selectedYouTubeEntry;
+        set
+        {
+            if (_selectedYouTubeEntry != value)
+            {
+                _selectedYouTubeEntry = value;
+                OnYouTubeSelectionChanged();
+            }
+        }
+    }
 
     private async Task OnStationChanged()
     {
@@ -523,6 +632,16 @@
             await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
             await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
             await AddLog("Spotify Track Changed", $"URL: {selectedTrack}");
+        }
+    }
+
+    private async Task OnYouTubeSelectionChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedYouTubeEntry) && _youTubeCollections.Any(s => s.Url == selectedYouTubeEntry))
+        {
+            await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings!.IP_Adress, selectedYouTubeEntry, _settings.AutoPlayStationUrl);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("YouTube Music Changed", $"URL: {selectedYouTubeEntry}");
         }
     }
 
@@ -610,7 +729,7 @@
 
         if (string.IsNullOrWhiteSpace(timerSelection))
         {
-            timerErrorMessage = "Please select a station or Spotify source.";
+            timerErrorMessage = "Please select a playback source.";
             return;
         }
 
@@ -643,6 +762,14 @@
                 logSource = $"Spotify: {selectionName}";
                 await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, selectionValue);
                 _isSpotifyPlaying = true;
+            }
+            else if (selectionType == "youtube")
+            {
+                var entry = _youTubeCollections.FirstOrDefault(t => t.Url == selectionValue);
+                selectionName = entry?.Name ?? selectionValue;
+                logSource = $"YouTube Music: {selectionName}";
+                await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, selectionValue, _settings.AutoPlayStationUrl);
+                _isSpotifyPlaying = false;
             }
             else
             {
@@ -806,6 +933,7 @@
 
         // Load your settings and initialize page as before
         _settings = await _uow.ISettingsRepo.GetSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
         if (_settings!.IP_Adress is "10.0.0.0")
             return;
@@ -932,6 +1060,47 @@
 
         addStationErrorMessage = null;
         newTrackName = newTrackUrl = "";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RemoveYouTubeMusicEntry(YouTubeMusicObject entry)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete link '{entry.Name}'?");
+        if (!confirmed) return;
+
+        _settings ??= new SonosSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+        _settings.YouTubeMusicCollections.Remove(entry);
+        await SaveSettings();
+
+        await AddLog("YouTube Music Link Removed", $"{entry.Name} ({entry.Url})");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddNewYouTubeMusicEntry()
+    {
+        if (string.IsNullOrWhiteSpace(newYouTubeName))
+        {
+            addYouTubeErrorMessage = "Name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newYouTubeUrl))
+        {
+            addYouTubeErrorMessage = "URL is required.";
+            return;
+        }
+
+        _settings ??= new SonosSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+        _settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = newYouTubeName, Url = newYouTubeUrl });
+
+        await SaveSettings();
+        await AddLog("YouTube Music Link Added", $"{newYouTubeName} ({newYouTubeUrl})");
+
+        addYouTubeErrorMessage = null;
+        newYouTubeName = newYouTubeUrl = "";
 
         await InvokeAsync(StateHasChanged);
     }
