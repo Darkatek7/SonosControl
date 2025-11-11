@@ -521,14 +521,14 @@ namespace SonosControl.DAL.Repos
             if (contentType.Equals("playlist", StringComparison.OrdinalIgnoreCase))
             {
                 sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:playlist:{contentId}";
-                metadata = $@"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\"
-                                               xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\"
-                                               xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">
-                                <item id=\"0006206cyoutubemusic%3aplaylist%3a{escapedId}\"
-                                      parentID=\"0006206cyoutubemusic\" restricted=\"true\">
+                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
+                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
+                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                <item id=""0006206cyoutubemusic%3aplaylist%3a{escapedId}""
+                                      parentID=""0006206cyoutubemusic"" restricted=""true"">
                                     <dc:title>YouTube Music Playlist</dc:title>
                                     <upnp:class>object.container.playlistContainer</upnp:class>
-                                    <desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_RINCON51463_X_#Svc51463-0-Token</desc>
+                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON51463_X_#Svc51463-0-Token</desc>
                                 </item>
                              </DIDL-Lite>";
             }
@@ -536,23 +536,23 @@ namespace SonosControl.DAL.Repos
             {
                 contentType = "track";
                 sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:track:{contentId}";
-                metadata = $@"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\"
-                                               xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\"
-                                               xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">
-                                <item id=\"0004206cyoutubemusic%3atrack%3a{escapedId}\"
-                                      parentID=\"0004206cyoutubemusic\" restricted=\"true\">
+                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
+                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
+                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                                <item id=""0004206cyoutubemusic%3atrack%3a{escapedId}""
+                                      parentID=""0004206cyoutubemusic"" restricted=""true"">
                                     <dc:title>YouTube Music Track</dc:title>
                                     <upnp:class>object.item.audioItem.musicTrack</upnp:class>
-                                    <desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_RINCON51463_X_#Svc51463-0-Token</desc>
+                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON51463_X_#Svc51463-0-Token</desc>
                                 </item>
                              </DIDL-Lite>";
             }
 
             string soapRequest = $@"
-            <s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"
-                         s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
               <s:Body>
-                <u:SetAVTransportURI xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">
+                <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
                   <InstanceID>0</InstanceID>
                   <CurrentURI>{sonosUri}</CurrentURI>
                   <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
