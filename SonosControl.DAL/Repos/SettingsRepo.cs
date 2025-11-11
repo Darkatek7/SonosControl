@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using System.Threading;
+using System.Linq;
 
 namespace SonosControl.DAL.Repos
 {
@@ -54,6 +55,20 @@ namespace SonosControl.DAL.Repos
                     {
                         ObjectCreationHandling = ObjectCreationHandling.Replace
                     });
+
+                    if (settings == null)
+                        return new();
+
+                    settings.Stations ??= new();
+                    settings.SpotifyTracks ??= new();
+                    settings.YouTubeMusicCollections ??= new();
+                    settings.DailySchedules ??= new();
+                    settings.ActiveDays ??= new();
+
+                    foreach (var key in settings.DailySchedules.Keys.ToList())
+                    {
+                        settings.DailySchedules[key] ??= new DaySchedule();
+                    }
 
                     return settings;
                 }

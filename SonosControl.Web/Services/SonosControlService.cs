@@ -52,6 +52,14 @@ namespace SonosControl.Web.Services
                     else
                         await _uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
+                else if (schedule.PlayRandomYouTubeMusic)
+                {
+                    var url = GetRandomYouTubeMusicUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
                 else if (schedule.PlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
@@ -62,6 +70,8 @@ namespace SonosControl.Web.Services
                 }
                 else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
+                else if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, schedule.StationUrl);
                 else
@@ -77,6 +87,14 @@ namespace SonosControl.Web.Services
                     else
                         await _uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
+                else if (settings.AutoPlayRandomYouTubeMusic)
+                {
+                    var url = GetRandomYouTubeMusicUrl(settings);
+                    if (url != null)
+                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                    else
+                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
                 else if (settings.AutoPlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
@@ -87,6 +105,8 @@ namespace SonosControl.Web.Services
                 }
                 else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
+                else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeMusicUrl))
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, settings.AutoPlayStationUrl);
                 else
@@ -113,6 +133,15 @@ namespace SonosControl.Web.Services
 
             var index = Random.Shared.Next(settings.SpotifyTracks.Count);
             return settings.SpotifyTracks[index].Url;
+        }
+
+        private string? GetRandomYouTubeMusicUrl(SonosSettings settings)
+        {
+            if (settings.YouTubeMusicCollections == null || settings.YouTubeMusicCollections.Count == 0)
+                return null;
+
+            var index = Random.Shared.Next(settings.YouTubeMusicCollections.Count);
+            return settings.YouTubeMusicCollections[index].Url;
         }
 
         private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(CancellationToken token)

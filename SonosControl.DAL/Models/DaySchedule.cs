@@ -6,7 +6,9 @@ namespace SonosControl.DAL.Models
         public TimeOnly StopTime { get; set; } = new TimeOnly(18, 0);
         public string? StationUrl { get; set; }
         public string? SpotifyUrl { get; set; }
+        public string? YouTubeMusicUrl { get; set; }
         public bool PlayRandomStation { get; set; }
         public bool PlayRandomSpotify { get; set; }
+        public bool PlayRandomYouTubeMusic { get; set; }
     }
 }

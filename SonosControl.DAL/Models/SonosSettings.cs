@@ -28,10 +28,18 @@ namespace SonosControl.DAL.Models
             new SpotifyObject { Name = "Astroworld", Url = "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I" }
         };
 
+        public List<YouTubeMusicObject> YouTubeMusicCollections { get; set; } = new()
+        {
+            new YouTubeMusicObject { Name = "Supermix", Url = "https://music.youtube.com/playlist?list=LM" },
+            new YouTubeMusicObject { Name = "Energize", Url = "https://music.youtube.com/watch?v=dQw4w9WgXcQ" }
+        };
+
         public string? AutoPlayStationUrl { get; set; }
         public string? AutoPlaySpotifyUrl { get; set; }
+        public string? AutoPlayYouTubeMusicUrl { get; set; }
         public bool AutoPlayRandomStation { get; set; }
         public bool AutoPlayRandomSpotify { get; set; }
+        public bool AutoPlayRandomYouTubeMusic { get; set; }
 
         public Dictionary<DayOfWeek, DaySchedule> DailySchedules { get; set; } = new();
 
