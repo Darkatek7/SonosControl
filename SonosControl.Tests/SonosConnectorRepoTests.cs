@@ -129,6 +129,7 @@ public class SonosConnectorRepoTests
         Assert.Equal(new[] { "Track1", "Track2" }, result.Items.Select(i => i.Title));
         Assert.False(result.HasMore);
         var request = Assert.Single(handler.Requests);
+        Assert.Equal("http://1.2.3.4:1400/MediaServer/ContentDirectory/Control", request.Uri!.ToString());
         Assert.Equal("\"urn:schemas-upnp-org:service:ContentDirectory:1#Browse\"", request.SoapAction);
     }
 

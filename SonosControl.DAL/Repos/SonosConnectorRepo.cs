@@ -653,7 +653,7 @@ namespace SonosControl.DAL.Repos
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var url = $"http://{ip}:1400/MediaRenderer/ContentDirectory/Control";
+            var url = $"http://{ip}:1400/MediaServer/ContentDirectory/Control";
 
             var soapEnvelope = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
