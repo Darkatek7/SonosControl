@@ -4,7 +4,10 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ADMIN_USERNAME": "admin",
+        "ADMIN_EMAIL": "admin@example.com",
+        "ADMIN_PASSWORD": "Test1234."
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5107"
@@ -13,7 +16,10 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ADMIN_USERNAME": "admin",
+        "ADMIN_EMAIL": "admin@example.com",
+        "ADMIN_PASSWORD": "Test1234."
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://localhost:7045;http://localhost:5107"
@@ -22,7 +28,10 @@
       "commandName": "IISExpress",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ADMIN_USERNAME": "admin",
+        "ADMIN_EMAIL": "admin@example.com",
+        "ADMIN_PASSWORD": "Test1234."
       }
     },
     "Docker": {
@@ -38,7 +47,10 @@
       "launchUrl": "https://localhost:7045",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "ASPNETCORE_URLS": "https://localhost:7045;http://localhost:5107"
+        "ASPNETCORE_URLS": "https://localhost:7045;http://localhost:5107",
+        "ADMIN_USERNAME": "admin",
+        "ADMIN_EMAIL": "admin@example.com",
+        "ADMIN_PASSWORD": "Test1234."
       },
       "distributionName": ""
     }
