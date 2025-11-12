@@ -20,6 +20,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.69" />
+    <PackageReference Include="bunit" Version="1.27.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.7" />
   </ItemGroup>
 
 </Project>
