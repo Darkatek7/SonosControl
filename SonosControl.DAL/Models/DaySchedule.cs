@@ -10,6 +10,5 @@ namespace SonosControl.DAL.Models
         public bool PlayRandomStation { get; set; }
         public bool PlayRandomSpotify { get; set; }
         public bool PlayRandomYouTubeMusic { get; set; }
-        public bool SkipPlayback { get; set; }
     }
 }

@@ -4,5 +4,6 @@ namespace SonosControl.DAL.Models
     {
         public DateOnly Date { get; set; }
         public string? Name { get; set; }
+        public bool SkipPlayback { get; set; }
     }
 }

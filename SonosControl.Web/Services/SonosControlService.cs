@@ -37,9 +37,12 @@ namespace SonosControl.Web.Services
         {
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
-            if (schedule != null && (schedule.SkipPlayback || !HasPlaybackTarget(schedule)))
+            if (schedule != null && ShouldSkipPlayback(schedule))
             {
-                Console.WriteLine($"{DateTime.Now:g}: Playback skipped because the schedule is set to Don’t play.");
+                if (schedule is HolidaySchedule holiday)
+                {
+                    Console.WriteLine($"{DateTime.Now:g}: Holiday override for {holiday.Date:yyyy-MM-dd} skips playback.");
+                }
                 return;
             }
 
@@ -172,7 +175,7 @@ namespace SonosControl.Web.Services
                 var todaySchedule = GetScheduleForDate(settings, todayDate);
                 var todayStart = todaySchedule?.StartTime ?? settings.StartTime;
 
-                if (todaySchedule != null && (todaySchedule.SkipPlayback || !HasPlaybackTarget(todaySchedule)))
+                if (todaySchedule != null && ShouldSkipPlayback(todaySchedule))
                 {
                     todaySchedule = null;
                 }
@@ -249,7 +252,7 @@ namespace SonosControl.Web.Services
                 var candidateDate = todayDate.AddDays(offset);
                 var schedule = GetScheduleForDate(settings, candidateDate);
 
-                if (schedule != null && (schedule.SkipPlayback || !HasPlaybackTarget(schedule)))
+                if (schedule != null && ShouldSkipPlayback(schedule))
                     continue;
 
                 var candidateStart = schedule?.StartTime ?? settings.StartTime;
@@ -283,6 +286,19 @@ namespace SonosControl.Web.Services
                    || !string.IsNullOrWhiteSpace(schedule.StationUrl)
                    || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
                    || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
+        }
+
+        private static bool ShouldSkipPlayback(DaySchedule schedule)
+        {
+            if (schedule is HolidaySchedule holiday)
+            {
+                if (holiday.SkipPlayback)
+                    return true;
+
+                return !HasPlaybackTarget(holiday);
+            }
+
+            return false;
         }
 
         private async Task StopSpeaker(string ip, TimeOnly stopTime)

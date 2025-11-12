@@ -264,7 +264,7 @@ public class SonosControlServiceTests
     }
 
     [Fact]
-    public async Task WaitUntilStartTime_SkipsSchedulesMarkedDontPlay()
+    public async Task WaitUntilStartTime_SkipsHolidaySchedulesMarkedDontPlay()
     {
         var initial = new DateTimeOffset(2024, 6, 1, 5, 0, 0, TimeSpan.Zero);
         var timeProvider = new ManualTimeProvider(initial);
@@ -272,9 +272,11 @@ public class SonosControlServiceTests
         var today = initial.DayOfWeek;
         var tomorrow = (DayOfWeek)(((int)today + 1) % 7);
 
-        var skipSchedule = new DaySchedule
+        var skipHoliday = new HolidaySchedule
         {
+            Date = DateOnly.FromDateTime(initial.Date),
             StartTime = new TimeOnly(5, 30),
+            StopTime = new TimeOnly(6, 30),
             SkipPlayback = true
         };
 
@@ -289,9 +291,9 @@ public class SonosControlServiceTests
             StartTime = new TimeOnly(7, 0),
             DailySchedules = new Dictionary<DayOfWeek, DaySchedule>
             {
-                [today] = skipSchedule,
                 [tomorrow] = tomorrowSchedule
-            }
+            },
+            HolidaySchedules = new List<HolidaySchedule> { skipHoliday }
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -314,7 +316,7 @@ public class SonosControlServiceTests
     }
 
     [Fact]
-    public async Task StartSpeaker_DoesNotTriggerPlaybackWhenScheduleIsSkip()
+    public async Task StartSpeaker_DoesNotTriggerPlaybackWhenHolidayScheduleIsSkip()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -327,7 +329,7 @@ public class SonosControlServiceTests
         var svc = new SonosControlService(uow.Object);
         var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        var schedule = new DaySchedule
+        var schedule = new HolidaySchedule
         {
             SkipPlayback = true,
             StartTime = new TimeOnly(6, 0),
