@@ -6,6 +6,7 @@
 @using SonosControl.Web.Services;
 @using System.Linq;
 @using System.Globalization;
+@using System;
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 <style>
@@ -25,10 +26,20 @@
         z-index: 1;
     }
 
-    @media (max-width: 576px) {
+    @@media (max-width: 576px) {
         .holiday-table-wrapper {
             max-height: 18rem;
         }
+    }
+
+    .holiday-table-wrapper table th,
+    .holiday-table-wrapper table td {
+        white-space: nowrap;
+    }
+
+    .holiday-table-wrapper .form-control,
+    .holiday-table-wrapper .form-select {
+        min-width: 12rem;
     }
 </style>
 
@@ -39,7 +50,7 @@
         }
         else
         {
-            <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
+            <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: min(100%, 960px);">
                 <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
 
                 <div class="mb-3">
@@ -72,7 +83,7 @@
                     <label class="form-label">🎵 Auto Play</label>
                     <select class="form-select bg-secondary text-light border-0"
                             @bind="AutoPlaySelection" @bind:event="onchange">
-                        <option value="">-- None --</option>
+                        <option value="">-- Don’t play --</option>
                         <option value="randomStation">Random Station</option>
                         <option value="randomSpotify">Random Spotify</option>
                         <option value="randomYouTube">Random YouTube Music</option>
@@ -201,19 +212,19 @@
                                     <input type="time" class="form-control bg-secondary text-light border-0"
                                            @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                 </td>
-                                  <td>
-                                      <select class="form-select bg-secondary text-light border-0"
-                                              value="@GetScheduleSelection(schedule)"
-                                              @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
-                                          <option value="">-- None --</option>
-                                          <option value="randomStation">Random Station</option>
-                                          <option value="randomSpotify">Random Spotify</option>
-                                          <option value="randomYouTube">Random YouTube Music</option>
-                                          <optgroup label="Stations">
-                                              @foreach (var station in _settings.Stations)
-                                              {
-                                                  <option value="station:@station.Url">@station.Name</option>
-                                              }
+                                <td>
+                                    <select class="form-select bg-secondary text-light border-0"
+                                            value="@GetScheduleSelection(schedule)"
+                                            @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
+                                        <option value="skip">-- Don’t play --</option>
+                                        <option value="randomStation">Random Station</option>
+                                        <option value="randomSpotify">Random Spotify</option>
+                                        <option value="randomYouTube">Random YouTube Music</option>
+                                        <optgroup label="Stations">
+                                            @foreach (var station in _settings.Stations)
+                                            {
+                                                <option value="station:@station.Url">@station.Name</option>
+                                            }
                                         </optgroup>
                                         <optgroup label="Spotify">
                                             @foreach (var track in _settings.SpotifyTracks)
@@ -269,7 +280,7 @@
                         <div class="col-12 col-md-3">
                             <label class="form-label small mb-1">Playback</label>
                             <select class="form-select bg-secondary text-light border-0" @bind="_holidayDraft.Selection">
-                                <option value="">-- None --</option>
+                                <option value="skip">-- Don’t play --</option>
                                 <option value="randomStation">Random Station</option>
                                 <option value="randomSpotify">Random Spotify</option>
                                 <option value="randomYouTube">Random YouTube Music</option>
@@ -326,7 +337,7 @@
                                         <tr>
                                             <td class="fw-semibold">@holiday.Date.ToString("yyyy-MM-dd")</td>
                                             <td>
-                                                <input type="text" class="form-control bg-secondary text-light border-0" value="@holiday.Name" maxlength="80" @onchange="async e => await OnHolidayNameChanged(holiday, e)" />
+                                                <input type="text" class="form-control bg-secondary text-light border-0" value="@holiday.Name" maxlength="80" @onchange="async e => await OnHolidayNameChanged(holiday, e)" title="@holiday.Name" />
                                             </td>
                                             <td>
                                                 <input type="time" class="form-control bg-secondary text-light border-0" @bind-value="holiday.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
@@ -336,7 +347,7 @@
                                             </td>
                                             <td>
                                                 <select class="form-select bg-secondary text-light border-0" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
-                                                    <option value="">-- None --</option>
+                                                    <option value="skip">-- Don’t play --</option>
                                                     <option value="randomStation">Random Station</option>
                                                     <option value="randomSpotify">Random Spotify</option>
                                                     <option value="randomYouTube">Random YouTube Music</option>
@@ -410,6 +421,8 @@
             _settings = await _uow.ISettingsRepo.GetSettings();
             _settings.YouTubeMusicCollections ??= new();
             _settings.HolidaySchedules ??= new();
+
+            NormalizeSchedules();
 
             // Default to weekdays if no ActiveDays are set
             if (_settings.ActiveDays == null || !_settings.ActiveDays.Any())
@@ -600,60 +613,103 @@
         _settings.HolidaySchedules ??= new();
         _settings.HolidaySchedules.Sort((a, b) => a.Date.CompareTo(b.Date));
 
+        NormalizeSchedules();
+
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
 
-      private string GetScheduleSelection(DaySchedule schedule)
-      {
-          if (schedule.PlayRandomStation)
-              return "randomStation";
-          if (schedule.PlayRandomSpotify)
-              return "randomSpotify";
-          if (schedule.PlayRandomYouTubeMusic)
-              return "randomYouTube";
-          if (!string.IsNullOrEmpty(schedule.StationUrl))
-              return $"station:{schedule.StationUrl}";
-          if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
-              return $"spotify:{schedule.SpotifyUrl}";
-          if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
-              return $"youtube:{schedule.YouTubeMusicUrl}";
-          return string.Empty;
-      }
+    private string GetScheduleSelection(DaySchedule schedule)
+    {
+        if (schedule.SkipPlayback || !HasPlaybackTarget(schedule))
+            return "skip";
+        if (schedule.PlayRandomStation)
+            return "randomStation";
+        if (schedule.PlayRandomSpotify)
+            return "randomSpotify";
+        if (schedule.PlayRandomYouTubeMusic)
+            return "randomYouTube";
+        if (!string.IsNullOrEmpty(schedule.StationUrl))
+            return $"station:{schedule.StationUrl}";
+        if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+            return $"spotify:{schedule.SpotifyUrl}";
+        if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
+            return $"youtube:{schedule.YouTubeMusicUrl}";
+        return "skip";
+    }
 
-      private void ApplyScheduleSelection(DaySchedule schedule, string? value)
-      {
-          schedule.PlayRandomStation = false;
-          schedule.PlayRandomSpotify = false;
-          schedule.PlayRandomYouTubeMusic = false;
-          schedule.StationUrl = null;
-          schedule.SpotifyUrl = null;
-          schedule.YouTubeMusicUrl = null;
-          if (!string.IsNullOrEmpty(value))
-          {
-              if (value == "randomStation")
-                  schedule.PlayRandomStation = true;
-              else if (value == "randomSpotify")
-                  schedule.PlayRandomSpotify = true;
-              else if (value == "randomYouTube")
-                  schedule.PlayRandomYouTubeMusic = true;
-              else
-              {
-                  var parts = value.Split(':', 2);
-                  if (parts[0] == "station")
-                      schedule.StationUrl = parts[1];
-                  else if (parts[0] == "spotify")
-                      schedule.SpotifyUrl = parts[1];
-                  else if (parts[0] == "youtube")
-                      schedule.YouTubeMusicUrl = parts[1];
-              }
-          }
-      }
+    private void ApplyScheduleSelection(DaySchedule schedule, string? value)
+    {
+        schedule.PlayRandomStation = false;
+        schedule.PlayRandomSpotify = false;
+        schedule.PlayRandomYouTubeMusic = false;
+        schedule.StationUrl = null;
+        schedule.SpotifyUrl = null;
+        schedule.YouTubeMusicUrl = null;
+        schedule.SkipPlayback = false;
 
-      private async Task SetScheduleSelection(DaySchedule schedule, string? value)
-      {
-          ApplyScheduleSelection(schedule, value);
-          await SaveSettings();
-      }
+        if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "skip", StringComparison.OrdinalIgnoreCase))
+        {
+            schedule.SkipPlayback = true;
+            return;
+        }
+
+        if (value == "randomStation")
+            schedule.PlayRandomStation = true;
+        else if (value == "randomSpotify")
+            schedule.PlayRandomSpotify = true;
+        else if (value == "randomYouTube")
+            schedule.PlayRandomYouTubeMusic = true;
+        else
+        {
+            var parts = value.Split(':', 2);
+            if (parts.Length == 2)
+            {
+                if (parts[0] == "station")
+                    schedule.StationUrl = parts[1];
+                else if (parts[0] == "spotify")
+                    schedule.SpotifyUrl = parts[1];
+                else if (parts[0] == "youtube")
+                    schedule.YouTubeMusicUrl = parts[1];
+            }
+        }
+    }
+
+    private static bool HasPlaybackTarget(DaySchedule schedule)
+    {
+        return schedule.PlayRandomStation
+               || schedule.PlayRandomSpotify
+               || schedule.PlayRandomYouTubeMusic
+               || !string.IsNullOrWhiteSpace(schedule.StationUrl)
+               || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+               || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
+    }
+
+    private async Task SetScheduleSelection(DaySchedule schedule, string? value)
+    {
+        ApplyScheduleSelection(schedule, value);
+        await SaveSettings();
+    }
+
+    private void NormalizeSchedules()
+    {
+        if (_settings?.DailySchedules != null)
+        {
+            foreach (var schedule in _settings.DailySchedules.Values)
+            {
+                if (!HasPlaybackTarget(schedule))
+                    schedule.SkipPlayback = true;
+            }
+        }
+
+        if (_settings?.HolidaySchedules != null)
+        {
+            foreach (var holiday in _settings.HolidaySchedules)
+            {
+                if (!HasPlaybackTarget(holiday))
+                    holiday.SkipPlayback = true;
+            }
+        }
+    }
 
     private async Task AddHolidayOverride()
     {
@@ -815,14 +871,15 @@
     {
         if (_settings is null)
         {
-            _holidayDraft = new HolidayEditorModel();
+            _holidayDraft = new HolidayEditorModel { Selection = "skip" };
             return;
         }
 
         _holidayDraft = new HolidayEditorModel
         {
             Start = _settings.StartTime.ToString("HH:mm"),
-            Stop = _settings.StopTime.ToString("HH:mm")
+            Stop = _settings.StopTime.ToString("HH:mm"),
+            Selection = "skip"
         };
     }
 

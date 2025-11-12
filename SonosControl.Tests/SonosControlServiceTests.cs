@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using Moq;
 using SonosControl.DAL.Interfaces;
@@ -260,6 +261,88 @@ public class SonosControlServiceTests
 
         Assert.Same(holidaySchedule, result.schedule);
         Assert.Equal(expectedStart, timeProvider.LocalNow);
+    }
+
+    [Fact]
+    public async Task WaitUntilStartTime_SkipsSchedulesMarkedDontPlay()
+    {
+        var initial = new DateTimeOffset(2024, 6, 1, 5, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(initial);
+
+        var today = initial.DayOfWeek;
+        var tomorrow = (DayOfWeek)(((int)today + 1) % 7);
+
+        var skipSchedule = new DaySchedule
+        {
+            StartTime = new TimeOnly(5, 30),
+            SkipPlayback = true
+        };
+
+        var tomorrowSchedule = new DaySchedule
+        {
+            StartTime = new TimeOnly(6, 0),
+            StationUrl = "station:morning"
+        };
+
+        var settings = new SonosSettings
+        {
+            StartTime = new TimeOnly(7, 0),
+            DailySchedules = new Dictionary<DayOfWeek, DaySchedule>
+            {
+                [today] = skipSchedule,
+                [tomorrow] = tomorrowSchedule
+            }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+
+        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+
+        var waitTask = InvokeWait(svc, CancellationToken.None);
+
+        var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(tomorrowSchedule.StartTime.ToTimeSpan()), initial.Offset);
+        timeProvider.Advance(expectedStart - timeProvider.LocalNow);
+
+        var result = await waitTask;
+
+        Assert.Same(tomorrowSchedule, result.schedule);
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
+    }
+
+    [Fact]
+    public async Task StartSpeaker_DoesNotTriggerPlaybackWhenScheduleIsSkip()
+    {
+        var sonosRepo = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(new SonosSettings());
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        var svc = new SonosControlService(uow.Object);
+        var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var schedule = new DaySchedule
+        {
+            SkipPlayback = true,
+            StartTime = new TimeOnly(6, 0),
+            StopTime = new TimeOnly(8, 0)
+        };
+
+        var settings = new SonosSettings
+        {
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
+        };
+
+        var task = (Task)method.Invoke(svc, new object[] { "127.0.0.1", settings, schedule })!;
+        await task;
+
+        sonosRepo.VerifyNoOtherCalls();
     }
 
     private sealed class ManualTimeProvider : TimeProvider

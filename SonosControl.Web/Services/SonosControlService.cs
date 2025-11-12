@@ -37,6 +37,12 @@ namespace SonosControl.Web.Services
         {
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
+            if (schedule != null && (schedule.SkipPlayback || !HasPlaybackTarget(schedule)))
+            {
+                Console.WriteLine($"{DateTime.Now:g}: Playback skipped because the schedule is set to Don’t play.");
+                return;
+            }
+
             if (schedule == null && (settings == null || !settings.ActiveDays.Contains(today)))
             {
                 Console.WriteLine($"{DateTime.Now:g}: Today ({today}) is not an active day.");
@@ -166,7 +172,12 @@ namespace SonosControl.Web.Services
                 var todaySchedule = GetScheduleForDate(settings, todayDate);
                 var todayStart = todaySchedule?.StartTime ?? settings.StartTime;
 
-                if (previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
+                if (todaySchedule != null && (todaySchedule.SkipPlayback || !HasPlaybackTarget(todaySchedule)))
+                {
+                    todaySchedule = null;
+                }
+
+                if (todaySchedule != null && previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
                     return (settings, todaySchedule);
 
                 var (target, schedule, start, startDay) = DetermineNextStart(settings, now);
@@ -230,29 +241,30 @@ namespace SonosControl.Web.Services
 
         private (DateTimeOffset target, DaySchedule? schedule, TimeOnly start, DayOfWeek day) DetermineNextStart(SonosSettings settings, DateTimeOffset now)
         {
-            var today = now.DayOfWeek;
             var todayDate = DateOnly.FromDateTime(now.LocalDateTime);
-            var todaySchedule = GetScheduleForDate(settings, todayDate);
-            var start = todaySchedule?.StartTime ?? settings.StartTime;
-            var startDateTime = new DateTimeOffset(now.Date.Add(start.ToTimeSpan()), now.Offset);
             var currentTime = TimeOnly.FromDateTime(now.LocalDateTime);
 
-            if (start < currentTime)
+            for (int offset = 0; offset <= 14; offset++)
             {
-                for (int offset = 1; offset <= 14; offset++)
-                {
-                    var candidateDate = todayDate.AddDays(offset);
-                    var schedule = GetScheduleForDate(settings, candidateDate);
-                    var nextStart = schedule?.StartTime ?? settings.StartTime;
-                    var nextDate = new DateTimeOffset(candidateDate.ToDateTime(nextStart), now.Offset);
-                    return (nextDate, schedule, nextStart, candidateDate.DayOfWeek);
-                }
+                var candidateDate = todayDate.AddDays(offset);
+                var schedule = GetScheduleForDate(settings, candidateDate);
+
+                if (schedule != null && (schedule.SkipPlayback || !HasPlaybackTarget(schedule)))
+                    continue;
+
+                var candidateStart = schedule?.StartTime ?? settings.StartTime;
+                var candidateDateTime = new DateTimeOffset(candidateDate.ToDateTime(candidateStart), now.Offset);
+
+                if (offset == 0 && candidateStart < currentTime)
+                    continue;
+
+                return (candidateDateTime, schedule, candidateStart, candidateDate.DayOfWeek);
             }
 
-            if (start == currentTime)
-                return (startDateTime, todaySchedule, start, today);
-
-            return (startDateTime, todaySchedule, start, today);
+            var fallbackDate = todayDate.AddDays(1);
+            var fallbackStart = settings.StartTime;
+            var fallbackDateTime = new DateTimeOffset(fallbackDate.ToDateTime(fallbackStart), now.Offset);
+            return (fallbackDateTime, null, fallbackStart, fallbackDate.DayOfWeek);
         }
 
         private static Task TaskDelay(TimeSpan delay, CancellationToken token)
@@ -261,6 +273,16 @@ namespace SonosControl.Web.Services
                 return Task.CompletedTask;
 
             return Task.Delay(delay, token);
+        }
+
+        private static bool HasPlaybackTarget(DaySchedule schedule)
+        {
+            return schedule.PlayRandomStation
+                   || schedule.PlayRandomSpotify
+                   || schedule.PlayRandomYouTubeMusic
+                   || !string.IsNullOrWhiteSpace(schedule.StationUrl)
+                   || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+                   || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
         }
 
         private async Task StopSpeaker(string ip, TimeOnly stopTime)
