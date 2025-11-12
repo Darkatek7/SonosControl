@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using SonosControl.DAL.Models.Json;
 using System.Threading;
 using System.Linq;
 
@@ -11,6 +12,12 @@ namespace SonosControl.DAL.Repos
         private const string DirectoryPath = "./Data";
         private const string FilePath = "./Data/config.json";
         private static readonly SemaphoreSlim _semaphore = new(1, 1);
+        private static readonly JsonSerializerSettings SerializerSettings = new()
+        {
+            Formatting = Formatting.Indented,
+            Converters = { new DateOnlyJsonConverter() },
+            ObjectCreationHandling = ObjectCreationHandling.Replace
+        };
 
         public async Task WriteSettings(SonosSettings? settings)
         {
@@ -23,7 +30,7 @@ namespace SonosControl.DAL.Repos
                 string jsonString;
                 try
                 {
-                    jsonString = JsonConvert.SerializeObject(settings, Formatting.Indented);
+                    jsonString = JsonConvert.SerializeObject(settings, SerializerSettings);
                 }
                 catch (JsonException ex)
                 {
@@ -51,10 +58,7 @@ namespace SonosControl.DAL.Repos
                 try
                 {
                     var jsonString = await File.ReadAllTextAsync(FilePath);
-                    var settings = JsonConvert.DeserializeObject<SonosSettings?>(jsonString, new JsonSerializerSettings
-                    {
-                        ObjectCreationHandling = ObjectCreationHandling.Replace
-                    });
+                    var settings = JsonConvert.DeserializeObject<SonosSettings?>(jsonString, SerializerSettings);
 
                     if (settings == null)
                         return new();
@@ -64,6 +68,7 @@ namespace SonosControl.DAL.Repos
                     settings.YouTubeMusicCollections ??= new();
                     settings.DailySchedules ??= new();
                     settings.ActiveDays ??= new();
+                    settings.HolidaySchedules ??= new();
 
                     foreach (var key in settings.DailySchedules.Keys.ToList())
                     {
