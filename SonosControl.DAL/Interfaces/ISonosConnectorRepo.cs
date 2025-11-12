@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading;
+using SonosControl.DAL.Models;
 
 namespace SonosControl.DAL.Interfaces
 {
@@ -19,7 +20,7 @@ namespace SonosControl.DAL.Interfaces
         Task PlaySpotifyTrackAsync(string ip, string spotifyUri, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
         Task PlayYouTubeMusicTrackAsync(string ip, string youtubeMusicUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
         Task ClearQueue(string ip, CancellationToken cancellationToken = default);
-        Task<List<string>> GetQueue(string ip, CancellationToken cancellationToken = default);
+        Task<SonosQueuePage> GetQueue(string ip, int startIndex = 0, int count = 100, CancellationToken cancellationToken = default);
         Task PreviousTrack(string ip, CancellationToken cancellationToken = default);
         Task NextTrack(string ip, CancellationToken cancellationToken = default);
         Task RebootDeviceAsync(string ip, CancellationToken cancellationToken = default);

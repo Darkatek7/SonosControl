@@ -98,18 +98,81 @@ public class SonosConnectorRepoTests
     public async Task GetQueue_ParsesTrackTitles()
     {
         var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <Result>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;Track1&lt;/dc:title&gt;
+        &lt;/item&gt;
+        &lt;item id='2'&gt;
+          &lt;dc:title&gt;Track2&lt;/dc:title&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</Result>
+      <NumberReturned>2</NumberReturned>
+      <TotalMatches>2</TotalMatches>
+      <UpdateID>1</UpdateID>
+    </u:BrowseResponse>
+  </s:Body>
+</s:Envelope>
+""";
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("<s:Envelope><s:Body><dc:title>Track1</dc:title><dc:title>Track2</dc:title></s:Body></s:Envelope>")
+            Content = new StringContent(soapResponse)
         });
         var client = new HttpClient(handler);
         var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
 
         var result = await repo.GetQueue("1.2.3.4");
 
-        Assert.Equal(new[] { "Track1", "Track2" }, result);
+        Assert.Equal(new[] { "Track1", "Track2" }, result.Items.Select(i => i.Title));
+        Assert.False(result.HasMore);
         var request = Assert.Single(handler.Requests);
+        Assert.Equal("http://1.2.3.4:1400/MediaServer/ContentDirectory/Control", request.Uri!.ToString());
         Assert.Equal("\"urn:schemas-upnp-org:service:ContentDirectory:1#Browse\"", request.SoapAction);
+    }
+
+    [Fact]
+    public async Task GetQueue_ParsesSpotifyMetadata()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <Result>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:r='urn:schemas-rinconnetworks-com:metadata-1-0/'&gt;
+        &lt;item id='3'&gt;
+          &lt;dc:title&gt;Placeholder&lt;/dc:title&gt;
+          &lt;r:resMD&gt;&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/'&gt;
+            &lt;item&gt;
+              &lt;dc:title&gt;Song Title&lt;/dc:title&gt;
+              &lt;dc:creator&gt;Artist Name&lt;/dc:creator&gt;
+              &lt;upnp:album&gt;Album Name&lt;/upnp:album&gt;
+            &lt;/item&gt;
+          &lt;/DIDL-Lite&gt;&lt;/r:resMD&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</Result>
+      <NumberReturned>1</NumberReturned>
+      <TotalMatches>1</TotalMatches>
+      <UpdateID>1</UpdateID>
+    </u:BrowseResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        var result = await repo.GetQueue("1.2.3.4");
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("Song Title", item.Title);
+        Assert.Equal("Artist Name", item.Artist);
+        Assert.Equal("Album Name", item.Album);
     }
 
     [Fact]

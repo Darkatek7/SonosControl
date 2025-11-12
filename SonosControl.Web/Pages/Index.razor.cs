@@ -1,0 +1,926 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.JSInterop;
+using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Models;
+using SonosControl.Web.Data;
+using SonosControl.Web.Models;
+
+namespace SonosControl.Web.Pages;
+
+public partial class Index : ComponentBase, IAsyncDisposable
+{
+    private SonosSettings? _settings;
+    private bool _isPlaying;
+    private bool _isSpotifyPlaying;
+    private string? spotifyUrl;
+
+    private int Volume
+    {
+        get
+        {
+            if (_settings is null)
+            {
+                return 0;
+            }
+
+            var limit = MaxVolumeLimit;
+            return Math.Min(_settings.Volume, limit);
+        }
+        set
+        {
+            if (_settings is null)
+            {
+                return;
+            }
+
+            var limit = MaxVolumeLimit;
+            var clamped = Math.Clamp(value, 0, limit);
+
+            if (_settings.Volume == clamped)
+            {
+                return;
+            }
+
+            _settings.Volume = clamped;
+            _ = _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, clamped);
+            _ = SaveSettings();
+        }
+    }
+
+    private int MaxVolumeLimit => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
+
+    private string? PlaybackCardStyle => !_isPlaying || _settings is null
+        ? null
+        : $"background: linear-gradient(135deg, {NormalizeColor(_settings.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor)} 0%, {NormalizeColor(_settings.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor)} 55%, {NormalizeColor(_settings.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor)} 100%);";
+
+    private bool isAuthenticated;
+    private bool isAdmin;
+    private bool isOperator;
+
+    private bool isEditMode = false;
+    private string newStationName = "";
+    private string newTrackName = "";
+    private string newYouTubeName = "";
+    private string newStationUrl = "";
+    private string newTrackUrl = "";
+    private string newYouTubeUrl = "";
+
+    private bool isTimerModalOpen;
+    private int timerMinutes = 60;
+    private string? timerSelection;
+    private string? timerErrorMessage;
+    private CancellationTokenSource? _playbackTimerCts;
+    private DateTime? _timerEndTimeUtc;
+    private string? _timerSelectionName;
+
+
+    private bool isSpotifyEditMode = false;
+    private bool isYouTubeEditMode = false;
+
+    private string currentStationUrl = "Loading...";
+    private string currentStationDisplay = "Loading...";
+
+    private string currentlyPlaying = "Loading...";
+    private string currentyPlayingDisplay = "Loading...";
+    private string trackProgress = "";
+    private Timer? _stationUpdateTimer;
+    private string? addStationErrorMessage;
+    private string? addTrackErrorMessage;
+    private string? addYouTubeErrorMessage;
+
+    private List<TuneInStation> _stations =>
+        (_settings?.Stations ?? new List<TuneInStation>())
+        .OrderBy(s => s.Name)
+        .ToList();
+
+    private List<SpotifyObject> _tracks =>
+        (_settings?.SpotifyTracks ?? new List<SpotifyObject>())
+        .OrderBy(t => t.Name)
+        .ToList();
+
+    private List<YouTubeMusicObject> _youTubeCollections =>
+        (_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
+        .OrderBy(t => t.Name)
+        .ToList();
+    
+    private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
+
+    private List<SonosQueueItem> queue = new();
+    private const int QueuePageSize = 50;
+    private int _queueNextIndex;
+    private bool _queueHasMore;
+    private bool _queueIsLoading;
+    private string? _queueErrorMessage;
+    private bool _queueAutoRefreshEnabled;
+    private readonly int[] _queueRefreshIntervals = new[] { 15, 30, 60, 120 };
+    private int _queueRefreshIntervalSeconds = 30;
+    private CancellationTokenSource? _queueRefreshCts;
+    private Task? _queueRefreshTask;
+
+    private bool ShouldShowQueueSection =>
+        _queueIsLoading ||
+        !string.IsNullOrEmpty(_queueErrorMessage) ||
+        queue.Count > 0;
+
+    private async Task LoadCurrentStation()
+    {
+        if (_settings is not null)
+        {
+            var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+            currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "").Trim();
+
+            if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+            {
+                currentStationDisplay = "Spotify";
+                _isSpotifyPlaying = true;
+            }
+            else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+            {
+                currentStationDisplay = "YouTube Music";
+                _isSpotifyPlaying = false;
+            }
+            else
+            {
+                // Try to match with saved stations first
+                var matched = _stations.FirstOrDefault(s => currentStationUrl?.Contains(s.Url, StringComparison.OrdinalIgnoreCase) == true);
+                if (matched != null)
+                {
+                    currentStationDisplay = matched.Name;
+                }
+                else
+                {
+                    currentStationDisplay = currentStationUrl;
+                }
+
+                _isSpotifyPlaying = false;
+            }
+
+            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
+            var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+
+            if (progress.Duration == TimeSpan.Zero)
+            {
+                trackProgress = progress.Position == TimeSpan.Zero
+                    ? string.Empty
+                    : $"{progress.Position:mm\\:ss}";
+            }
+            else
+            {
+                trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+
+    private string selectedStation
+    {
+        get => _selectedStation;
+        set
+        {
+            if (_selectedStation != value)
+            {
+                _selectedStation = value;
+                OnStationChanged(); // Call the station change handler
+            }
+        }
+    }
+
+    private bool CanAddStation => !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
+    private bool CanAddTrack => !string.IsNullOrWhiteSpace(newTrackName) && !string.IsNullOrWhiteSpace(newTrackUrl);
+    private bool CanAddYouTubeEntry => !string.IsNullOrWhiteSpace(newYouTubeName) && !string.IsNullOrWhiteSpace(newYouTubeUrl);
+
+    private string _selectedStation;
+
+    private string selectedTrack
+    {
+        get => _selectedTrack;
+        set
+        {
+            if (_selectedTrack != value)
+            {
+                _selectedTrack = value;
+                OnTrackChanged(); // Call the station change handler
+            }
+        }
+    }
+
+    private string _selectedTrack;
+    private string _selectedYouTubeEntry = string.Empty;
+
+    private string selectedYouTubeEntry
+    {
+        get => _selectedYouTubeEntry;
+        set
+        {
+            if (_selectedYouTubeEntry != value)
+            {
+                _selectedYouTubeEntry = value;
+                OnYouTubeSelectionChanged();
+            }
+        }
+    }
+
+    private async Task OnStationChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedStation))
+        {
+            // Set the selected stream URL to the Sonos speaker
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("Station Changed", $"URL: {selectedStation}");
+        }
+    }
+
+    private async Task OnTrackChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedTrack) && _tracks.Any(s => s.Url == selectedTrack))
+        {
+            // Set the selected stream URL to the Sonos speaker
+            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("Spotify Track Changed", $"URL: {selectedTrack}");
+        }
+    }
+
+    private async Task OnYouTubeSelectionChanged()
+    {
+        if (!string.IsNullOrEmpty(selectedYouTubeEntry) && _youTubeCollections.Any(s => s.Url == selectedYouTubeEntry))
+        {
+            await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings!.IP_Adress, selectedYouTubeEntry, _settings.AutoPlayStationUrl);
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await AddLog("YouTube Music Changed", $"URL: {selectedYouTubeEntry}");
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (!string.IsNullOrEmpty(spotifyUrl))
+            {
+                await PlaySpotifyTrack(spotifyUrl);
+                spotifyUrl = string.Empty; // Clear the input field after submission
+            }
+        }
+    }
+
+    private async Task PlaySpotifyTrack(string url)
+    {
+        if (_settings is not null)
+        {
+            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+            await AddLog("Spotify URL Played", url);
+        }
+    }
+
+    private async Task PreviousTrack()
+    {
+        await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
+        await AddLog("Previous Track");
+    }
+
+    private async Task NextTrack()
+    {
+        await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
+        await AddLog("Next Track");
+    }
+
+    private async Task LoadQueue(bool reset = false, CancellationToken cancellationToken = default)
+    {
+        if (_settings is null || _queueIsLoading)
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startIndex = reset ? 0 : _queueNextIndex;
+
+        try
+        {
+            _queueIsLoading = true;
+            _queueErrorMessage = null;
+
+            if (reset)
+            {
+                _queueNextIndex = 0;
+                _queueHasMore = false;
+            }
+
+            var page = await _uow.ISonosConnectorRepo.GetQueue(_settings.IP_Adress, startIndex, QueuePageSize, cancellationToken);
+
+            if (reset)
+            {
+                queue = new List<SonosQueueItem>(page.Items);
+            }
+            else if (page.StartIndex == startIndex)
+            {
+                queue.AddRange(page.Items);
+            }
+            else
+            {
+                queue = new List<SonosQueueItem>(page.Items);
+            }
+
+            _queueNextIndex = page.StartIndex + page.NumberReturned;
+            _queueHasMore = page.HasMore;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _queueErrorMessage = "Unable to load queue.";
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            _queueIsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Task LoadNextQueuePage()
+    {
+        if (!_queueHasMore)
+        {
+            return Task.CompletedTask;
+        }
+
+        return LoadQueue(reset: false);
+    }
+
+    private bool QueueAutoRefreshEnabled
+    {
+        get => _queueAutoRefreshEnabled;
+        set
+        {
+            if (_queueAutoRefreshEnabled == value)
+            {
+                return;
+            }
+
+            _queueAutoRefreshEnabled = value;
+
+            if (value)
+            {
+                StartQueueAutoRefresh();
+            }
+            else
+            {
+                StopQueueAutoRefresh();
+            }
+        }
+    }
+
+    private void OnQueueRefreshIntervalChanged(ChangeEventArgs args)
+    {
+        if (args.Value is string raw && int.TryParse(raw, out var seconds) && seconds > 0)
+        {
+            _queueRefreshIntervalSeconds = seconds;
+            if (_queueAutoRefreshEnabled)
+            {
+                StartQueueAutoRefresh();
+            }
+        }
+    }
+
+    private void StartQueueAutoRefresh()
+    {
+        CancelQueueAutoRefreshLoop();
+
+        var cts = new CancellationTokenSource();
+        _queueRefreshCts = cts;
+        var token = cts.Token;
+
+        _queueRefreshTask = Task.Run(async () =>
+        {
+            try
+            {
+                await InvokeAsync(() => LoadQueue(reset: true, cancellationToken: token));
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_queueRefreshIntervalSeconds));
+                while (await timer.WaitForNextTickAsync(token))
+                {
+                    await InvokeAsync(() => LoadQueue(reset: true, cancellationToken: token));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        });
+    }
+
+    private void StopQueueAutoRefresh(bool updateFlag = false)
+    {
+        CancelQueueAutoRefreshLoop();
+        if (updateFlag)
+        {
+            _queueAutoRefreshEnabled = false;
+        }
+    }
+
+    private void CancelQueueAutoRefreshLoop()
+    {
+        var cts = _queueRefreshCts;
+        if (cts is null)
+        {
+            return;
+        }
+
+        _queueRefreshCts = null;
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            cts.Dispose();
+        }
+    }
+
+    private static string FormatQueueItem(SonosQueueItem item)
+    {
+        var title = string.IsNullOrWhiteSpace(item.Title) ? "Unknown title" : item.Title;
+        return string.IsNullOrWhiteSpace(item.Artist)
+            ? title
+            : $"{item.Artist} – {title}";
+    }
+
+    private void OpenTimerModal()
+    {
+        timerErrorMessage = null;
+
+        if (timerMinutes <= 0)
+        {
+            timerMinutes = 60;
+        }
+
+        isTimerModalOpen = true;
+    }
+
+    private void CloseTimerModal()
+    {
+        isTimerModalOpen = false;
+        timerErrorMessage = null;
+    }
+
+    private async Task StartTimedPlayback()
+    {
+        timerErrorMessage = null;
+
+        if (_settings is null)
+        {
+            timerErrorMessage = "Settings are not loaded.";
+            return;
+        }
+
+        if (timerMinutes <= 0)
+        {
+            timerErrorMessage = "Please enter a duration greater than zero.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(timerSelection))
+        {
+            timerErrorMessage = "Please select a playback source.";
+            return;
+        }
+
+        var parts = timerSelection.Split('|', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            timerErrorMessage = "Invalid selection.";
+            return;
+        }
+
+        var selectionType = parts[0];
+        var selectionValue = parts[1];
+        string selectionName;
+        string logSource;
+
+        try
+        {
+            if (selectionType == "station")
+            {
+                var station = _stations.FirstOrDefault(s => s.Url == selectionValue);
+                selectionName = station?.Name ?? selectionValue;
+                logSource = $"Station: {selectionName}";
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectionValue);
+                _isSpotifyPlaying = false;
+            }
+            else if (selectionType == "spotify")
+            {
+                var track = _tracks.FirstOrDefault(t => t.Url == selectionValue);
+                selectionName = track?.Name ?? selectionValue;
+                logSource = $"Spotify: {selectionName}";
+                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, selectionValue);
+                _isSpotifyPlaying = true;
+            }
+            else if (selectionType == "youtube")
+            {
+                var entry = _youTubeCollections.FirstOrDefault(t => t.Url == selectionValue);
+                selectionName = entry?.Name ?? selectionValue;
+                logSource = $"YouTube Music: {selectionName}";
+                await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, selectionValue, _settings.AutoPlayStationUrl);
+                _isSpotifyPlaying = false;
+            }
+            else
+            {
+                timerErrorMessage = "Invalid source selected.";
+                return;
+            }
+
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+            _isPlaying = true;
+
+            var minutes = timerMinutes;
+            var ip = _settings.IP_Adress;
+
+            _playbackTimerCts?.Cancel();
+            _playbackTimerCts?.Dispose();
+            _playbackTimerCts = null;
+
+            await AddLog("Timed Playback Started", $"{logSource} ({minutes} minutes)");
+
+            _timerSelectionName = selectionName;
+            _timerEndTimeUtc = DateTime.UtcNow.AddMinutes(minutes);
+
+            isTimerModalOpen = false;
+            timerSelection = null;
+            timerMinutes = 60;
+
+            _playbackTimerCts = new CancellationTokenSource();
+            var cts = _playbackTimerCts;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(minutes), cts.Token);
+                    await InvokeAsync(async () =>
+                    {
+                        await _uow.ISonosConnectorRepo.PausePlaying(ip);
+                        _isPlaying = false;
+                        _timerEndTimeUtc = null;
+                        _timerSelectionName = null;
+                        await AddLog("Timed Playback Completed", $"{logSource} ({minutes} minutes)");
+                        StateHasChanged();
+                    });
+                }
+                catch (TaskCanceledException)
+                {
+                }
+                finally
+                {
+                    if (ReferenceEquals(_playbackTimerCts, cts))
+                    {
+                        _playbackTimerCts = null;
+                    }
+
+                    cts.Dispose();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            timerErrorMessage = "Failed to start timed playback.";
+        }
+    }
+
+    private async Task CancelTimedPlayback()
+    {
+        var cts = _playbackTimerCts;
+        if (cts is not null)
+        {
+            _playbackTimerCts = null;
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        if (_timerEndTimeUtc is not null || _timerSelectionName is not null)
+        {
+            var stopInfo = _timerEndTimeUtc?.ToLocalTime().ToString("t");
+            var details = _timerSelectionName ?? "Timed playback";
+            if (!string.IsNullOrEmpty(stopInfo))
+            {
+                details += $" (scheduled stop at {stopInfo})";
+            }
+
+            await AddLog("Timed Playback Cancelled", details);
+        }
+
+        _timerEndTimeUtc = null;
+        _timerSelectionName = null;
+        isTimerModalOpen = false;
+        timerErrorMessage = null;
+    }
+
+    private static string NormalizeColor(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var trimmed = value.Trim();
+
+        if (!trimmed.StartsWith("#", System.StringComparison.Ordinal))
+        {
+            trimmed = $"#{trimmed.TrimStart('#')}";
+        }
+
+        if (trimmed.Length == 7)
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Length == 4)
+        {
+            return $"#{trimmed[1]}{trimmed[1]}{trimmed[2]}{trimmed[2]}{trimmed[3]}{trimmed[3]}";
+        }
+
+        if (trimmed.Length > 7)
+        {
+            return trimmed.Substring(0, 7);
+        }
+
+        return fallback;
+    }
+
+    private async Task AddLog(string action, string? details = null)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name ?? "Unknown";
+
+        var log = new LogEntry
+        {
+            Action = action,
+            PerformedBy = username,
+            Timestamp = DateTime.UtcNow,
+            Details = details
+        };
+
+        Db.Logs.Add(log);
+        await Db.SaveChangesAsync();
+    }
+
+    private async Task ClearQueue()
+    {
+        await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
+        queue.Clear();
+        _queueNextIndex = 0;
+        _queueHasMore = false;
+        await AddLog("Queue Cleared");
+        await LoadQueue(reset: true);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+        if (!isAuthenticated)
+        {
+            Navigation.NavigateTo("/auth/login?", true);
+            return;
+        }
+
+        // Load your settings and initialize page as before
+        _settings = await _uow.ISettingsRepo.GetSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+
+        if (_settings!.IP_Adress is "10.0.0.0")
+            return;
+
+        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+
+        var maxVolumeLimit = MaxVolumeLimit;
+        if (_settings.Volume > maxVolumeLimit)
+        {
+            _settings.Volume = maxVolumeLimit;
+            await _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, maxVolumeLimit);
+        }
+
+        await SaveSettings();
+        _isPlaying = await IsPlaying();
+        await LoadCurrentStation();
+        await LoadQueue(reset: true);
+        _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 1000, 1000);
+    }
+
+    private async Task Play(bool play)
+    {
+        if (play)
+        {
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            _isPlaying = true;
+            await AddLog("Playback Started");
+        }
+        else
+        {
+            await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
+            _isPlaying = false;
+            await AddLog("Playback Started");
+        }
+
+        //_isPlaying = await IsPlaying();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<bool> IsPlaying()
+    {
+        return await _uow.ISonosConnectorRepo.IsPlaying(_settings!.IP_Adress);
+    }
+
+    private async Task SaveSettings()
+    {
+        await _uow.ISettingsRepo.WriteSettings(_settings!);
+    }
+
+    private async Task AddStation()
+    {
+        if (string.IsNullOrWhiteSpace(newStationName))
+        {
+            addStationErrorMessage = "Station name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newStationUrl))
+        {
+            addStationErrorMessage = "Station URL is required.";
+            return;
+        }
+
+        await AddLog("Station Added", $"{newStationName} ({newStationUrl})");
+        addStationErrorMessage = null;
+
+        _settings ??= new SonosSettings();
+        _settings.Stations ??= new List<TuneInStation>();
+        _settings.Stations.Add(new TuneInStation { Name = newStationName, Url = newStationUrl });
+        newStationName = newStationUrl = "";
+
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RemoveStation(TuneInStation station)
+    {
+        if (_settings == null) return;
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete station '{station.Name}'?");
+        if (!confirmed) return;
+
+        _settings.Stations?.Remove(station);
+        await SaveSettings();
+
+        await AddLog("Station Removed", $"{station.Name} ({station.Url})");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Remove Spotify track
+    private async Task RemoveSpotifyTrack(SpotifyObject track)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete track '{track.Name}'?");
+        if (!confirmed) return;
+
+        _settings.SpotifyTracks.Remove(track);
+        // You may also want to save the settings after removing it
+        Console.WriteLine($"Removed track: {track.Name}");
+        await SaveSettings();
+
+        await AddLog("Spotify Track Removed", $"{track.Name} ({track.Url})");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Add a new Spotify track
+    private async Task AddNewSpotifyTrack()
+    {
+        if (string.IsNullOrWhiteSpace(newTrackName))
+        {
+            addStationErrorMessage = "Station name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newTrackUrl))
+        {
+            addStationErrorMessage = "Station URL is required.";
+            return;
+        }
+
+        // Example: Open a form to add a new track
+        _settings.SpotifyTracks.Add(new SpotifyObject() { Name = newTrackName, Url = newTrackUrl });
+        Console.WriteLine("Added new Spotify track.");
+
+        await SaveSettings();
+        await AddLog("Spotify Track Added", $"{newTrackName} ({newTrackUrl})");
+
+        addStationErrorMessage = null;
+        newTrackName = newTrackUrl = "";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RemoveYouTubeMusicEntry(YouTubeMusicObject entry)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete link '{entry.Name}'?");
+        if (!confirmed) return;
+
+        _settings ??= new SonosSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+        _settings.YouTubeMusicCollections.Remove(entry);
+        await SaveSettings();
+
+        await AddLog("YouTube Music Link Removed", $"{entry.Name} ({entry.Url})");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AddNewYouTubeMusicEntry()
+    {
+        if (string.IsNullOrWhiteSpace(newYouTubeName))
+        {
+            addYouTubeErrorMessage = "Name is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newYouTubeUrl))
+        {
+            addYouTubeErrorMessage = "URL is required.";
+            return;
+        }
+
+        _settings ??= new SonosSettings();
+        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+        _settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = newYouTubeName, Url = newYouTubeUrl });
+
+        await SaveSettings();
+        await AddLog("YouTube Music Link Added", $"{newYouTubeName} ({newYouTubeUrl})");
+
+        addYouTubeErrorMessage = null;
+        newYouTubeName = newYouTubeUrl = "";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Random _random = new();
+
+    private async Task ShuffleStation()
+    {
+        if (_settings?.Stations != null && _settings.Stations.Any())
+        {
+            var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
+            selectedStation = randomStation; // This triggers OnStationChanged()
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
+            await AddLog("Shuffled Station", $"Selected: {selectedStation}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _stationUpdateTimer?.Dispose();
+        _stationUpdateTimer = null;
+
+        StopQueueAutoRefresh(true);
+        var refreshTask = _queueRefreshTask;
+        _queueRefreshTask = null;
+
+        var playbackCts = _playbackTimerCts;
+        if (playbackCts is not null)
+        {
+            _playbackTimerCts = null;
+            playbackCts.Cancel();
+            playbackCts.Dispose();
+        }
+
+        if (refreshTask is not null)
+        {
+            try
+            {
+                await refreshTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+    }
+}
