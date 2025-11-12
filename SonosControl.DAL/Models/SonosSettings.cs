@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 
 namespace SonosControl.DAL.Models
 {
@@ -45,10 +46,25 @@ namespace SonosControl.DAL.Models
 
         public List<DayOfWeek> ActiveDays { get; set; } = new();
 
+        public List<SonosGroup> Groups { get; set; } = new();
+
+        public string? ActiveGroupId { get; set; }
+
         public bool AllowUserRegistration { get; set; } = true;
 
         public string NowPlayingGradientStartColor { get; set; } = DefaultNowPlayingGradientStartColor;
         public string NowPlayingGradientMidColor { get; set; } = DefaultNowPlayingGradientMidColor;
         public string NowPlayingGradientEndColor { get; set; } = DefaultNowPlayingGradientEndColor;
+    }
+
+    public class SonosGroup
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+
+        public string Name { get; set; } = "New Group";
+
+        public string CoordinatorIp { get; set; } = string.Empty;
+
+        public List<string> MemberIps { get; set; } = new();
     }
 }

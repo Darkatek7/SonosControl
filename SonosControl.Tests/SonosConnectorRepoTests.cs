@@ -197,6 +197,87 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task DiscoverPlayersAsync_ParsesZonePlayers()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<ZonePlayers><ZonePlayer uuid=\"RINCON_000\" location=\"http://1.2.3.4:1400/xml/device_description.xml\">Kitchen</ZonePlayer><ZonePlayer uuid=\"RINCON_111\" location=\"http://5.6.7.8:1400/xml/device_description.xml\">Office</ZonePlayer></ZonePlayers>")
+        });
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        var players = await repo.DiscoverPlayersAsync("1.2.3.4");
+
+        Assert.Equal(2, players.Count);
+        Assert.Contains(players, p => p.IpAddress == "1.2.3.4" && p.Name == "Kitchen" && p.Uuid == "RINCON_000");
+        Assert.Contains(players, p => p.IpAddress == "5.6.7.8" && p.Name == "Office" && p.Uuid == "RINCON_111");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Equal("http://1.2.3.4:1400/status/topology", request.Uri!.ToString());
+    }
+
+    [Fact]
+    public async Task JoinGroupAsync_SendsJoinSoap()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<ZonePlayers><ZonePlayer uuid=\"RINCON_123\" location=\"http://1.1.1.1:1400/xml/device_description.xml\">Living Room</ZonePlayer></ZonePlayers>")
+        });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        await repo.JoinGroupAsync("1.1.1.1", "2.2.2.2");
+
+        Assert.Equal(2, handler.Requests.Count);
+        var topologyRequest = handler.Requests[0];
+        Assert.Equal(HttpMethod.Get, topologyRequest.Method);
+        Assert.Equal("http://1.1.1.1:1400/status/topology", topologyRequest.Uri!.ToString());
+
+        var joinRequest = handler.Requests[1];
+        Assert.Equal(HttpMethod.Post, joinRequest.Method);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", joinRequest.SoapAction);
+        Assert.Equal("http://2.2.2.2:1400/MediaRenderer/AVTransport/Control", joinRequest.Uri!.ToString());
+        Assert.NotNull(joinRequest.Body);
+        Assert.Contains("x-rincon:RINCON_123", joinRequest.Body);
+    }
+
+    [Fact]
+    public async Task LeaveGroupAsync_SendsStandaloneSoap()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        await repo.LeaveGroupAsync("3.3.3.3");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#BecomeCoordinatorOfStandaloneGroup\"", request.SoapAction);
+        Assert.Equal("http://3.3.3.3:1400/MediaRenderer/AVTransport/Control", request.Uri!.ToString());
+    }
+
+    [Fact]
+    public async Task SetGroupCoordinatorAsync_DelegatesToLeaveGroup()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+
+        await repo.SetGroupCoordinatorAsync("4.4.4.4");
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#BecomeCoordinatorOfStandaloneGroup\"", request.SoapAction);
+        Assert.Equal("http://4.4.4.4:1400/MediaRenderer/AVTransport/Control", request.Uri!.ToString());
+    }
+
+    [Fact]
     public async Task RebootDeviceAsync_PostsToRebootEndpoint()
     {
         var handler = new QueueHttpMessageHandler();

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using Moq;
@@ -10,10 +12,11 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceStartSpeakerTests
 {
-    private static Task InvokeStartSpeakerAsync(SonosControlService service, string ip, SonosSettings settings, DaySchedule? schedule)
+    private static Task InvokeStartSpeakerAsync(SonosControlService service, string ip, SonosSettings settings, DaySchedule? schedule, IReadOnlyList<string>? memberIps = null, SonosGroup? group = null)
     {
         var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (Task)method.Invoke(service, new object[] { ip, settings, schedule })!;
+        memberIps ??= Array.Empty<string>();
+        return (Task)method.Invoke(service, new object[] { ip, settings, schedule, memberIps, group, CancellationToken.None })!;
     }
 
     [Fact]
@@ -39,6 +42,8 @@ public class SonosControlServiceStartSpeakerTests
         sonosRepo.Verify(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         sonosRepo.Verify(r => r.PlaySpotifyTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.SetGroupCoordinatorAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.JoinGroupAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -186,5 +191,70 @@ public class SonosControlServiceStartSpeakerTests
         await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
 
         sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSpeaker_WithActiveGroup_PreparesCoordinatorAndMembers()
+    {
+        var sonosRepo = new Mock<ISonosConnectorRepo>();
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        var service = new SonosControlService(uow.Object);
+
+        var group = new SonosGroup
+        {
+            Id = "group-1",
+            Name = "Morning",
+            CoordinatorIp = "1.1.1.1",
+            MemberIps = new List<string> { "1.1.1.1", "2.2.2.2" }
+        };
+
+        var settings = new SonosSettings
+        {
+            ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek }
+        };
+
+        sonosRepo.Setup(r => r.SetGroupCoordinatorAsync(group.CoordinatorIp, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask).Verifiable();
+        sonosRepo.Setup(r => r.JoinGroupAsync(group.CoordinatorIp, "2.2.2.2", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask).Verifiable();
+        sonosRepo.Setup(r => r.StartPlaying(group.CoordinatorIp)).Returns(Task.CompletedTask).Verifiable();
+
+        await InvokeStartSpeakerAsync(service, group.CoordinatorIp, settings, null, group.MemberIps, group);
+
+        sonosRepo.Verify(r => r.SetGroupCoordinatorAsync(group.CoordinatorIp, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.JoinGroupAsync(group.CoordinatorIp, "2.2.2.2", It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.StartPlaying(group.CoordinatorIp), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSpeaker_WithOfflineMember_ContinuesPlayback()
+    {
+        var sonosRepo = new Mock<ISonosConnectorRepo>();
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        var service = new SonosControlService(uow.Object);
+
+        var group = new SonosGroup
+        {
+            Id = "group-2",
+            Name = "Morning",
+            CoordinatorIp = "1.1.1.1",
+            MemberIps = new List<string> { "2.2.2.2" }
+        };
+
+        var settings = new SonosSettings
+        {
+            ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek }
+        };
+
+        sonosRepo.Setup(r => r.SetGroupCoordinatorAsync(group.CoordinatorIp, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        sonosRepo.Setup(r => r.JoinGroupAsync(group.CoordinatorIp, "2.2.2.2", It.IsAny<CancellationToken>())).ThrowsAsync(new HttpRequestException("offline"));
+        sonosRepo.Setup(r => r.StartPlaying(group.CoordinatorIp)).Returns(Task.CompletedTask);
+
+        await InvokeStartSpeakerAsync(service, group.CoordinatorIp, settings, null, group.MemberIps, group);
+
+        sonosRepo.Verify(r => r.StartPlaying(group.CoordinatorIp), Times.Once);
+        sonosRepo.Verify(r => r.JoinGroupAsync(group.CoordinatorIp, "2.2.2.2", It.IsAny<CancellationToken>()), Times.Once);
     }
 }

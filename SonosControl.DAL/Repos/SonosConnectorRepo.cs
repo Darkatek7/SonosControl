@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security;
@@ -12,6 +13,7 @@ using System.Xml;
 using ByteDev.Sonos;
 using ByteDev.Sonos.Models;
 using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Models;
 
 
 namespace SonosControl.DAL.Repos
@@ -28,6 +30,21 @@ namespace SonosControl.DAL.Repos
         private HttpClient CreateClient()
         {
             return _httpClientFactory.CreateClient(nameof(SonosConnectorRepo));
+        }
+
+        private static StringContent CreateSoapContent(string payload, string soapAction)
+        {
+            var content = new StringContent(payload, Encoding.UTF8, "text/xml");
+            content.Headers.Clear();
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+            content.Headers.Add("SOAPACTION", $"\"{soapAction}\"");
+            return content;
+        }
+
+        private async Task<string?> ResolvePlayerUuidAsync(string ip, CancellationToken cancellationToken)
+        {
+            var players = await DiscoverPlayersAsync(ip, cancellationToken);
+            return players.FirstOrDefault(p => string.Equals(p.IpAddress, ip, StringComparison.OrdinalIgnoreCase))?.Uuid;
         }
         public async Task PausePlaying(string ip)
         {
@@ -131,6 +148,111 @@ namespace SonosControl.DAL.Repos
             }
         }
 
+
+        public async Task<IReadOnlyList<SonosPlayerInfo>> DiscoverPlayersAsync(string ip, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ip))
+                throw new ArgumentException("IP address is required.", nameof(ip));
+
+            var client = CreateClient();
+            var response = await client.GetAsync($"http://{ip}:1400/status/topology", cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            var xml = await response.Content.ReadAsStringAsync(cancellationToken);
+            var document = new XmlDocument();
+            document.LoadXml(xml);
+
+            var players = new List<SonosPlayerInfo>();
+            var nodes = document.SelectNodes("//ZonePlayers/ZonePlayer");
+            if (nodes != null)
+            {
+                foreach (XmlNode node in nodes)
+                {
+                    var locationValue = node.Attributes?["location"]?.Value;
+                    if (string.IsNullOrWhiteSpace(locationValue))
+                        continue;
+
+                    string host;
+                    try
+                    {
+                        host = new Uri(locationValue).Host;
+                    }
+                    catch (UriFormatException)
+                    {
+                        continue;
+                    }
+
+                    var uuid = node.Attributes?["uuid"]?.Value;
+                    var name = node.InnerText?.Trim() ?? string.Empty;
+
+                    players.Add(new SonosPlayerInfo
+                    {
+                        IpAddress = host,
+                        Name = name,
+                        Uuid = uuid
+                    });
+                }
+            }
+
+            return players;
+        }
+
+        public async Task JoinGroupAsync(string coordinatorIp, string memberIp, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(coordinatorIp))
+                throw new ArgumentException("Coordinator IP is required.", nameof(coordinatorIp));
+
+            if (string.IsNullOrWhiteSpace(memberIp))
+                throw new ArgumentException("Member IP is required.", nameof(memberIp));
+
+            if (string.Equals(coordinatorIp, memberIp, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var coordinatorUuid = await ResolvePlayerUuidAsync(coordinatorIp, cancellationToken);
+            if (string.IsNullOrWhiteSpace(coordinatorUuid))
+                throw new InvalidOperationException($"Unable to resolve UUID for coordinator {coordinatorIp}.");
+
+            var soapRequest = $@"
+    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+      <s:Body>
+        <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+          <InstanceID>0</InstanceID>
+          <CurrentURI>x-rincon:{coordinatorUuid}</CurrentURI>
+          <CurrentURIMetaData></CurrentURIMetaData>
+        </u:SetAVTransportURI>
+      </s:Body>
+    </s:Envelope>";
+
+            using var content = CreateSoapContent(soapRequest, "urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI");
+            var client = CreateClient();
+            var response = await client.PostAsync($"http://{memberIp}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task LeaveGroupAsync(string ip, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ip))
+                throw new ArgumentException("IP address is required.", nameof(ip));
+
+            const string soapRequest = @"
+    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/"" s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+      <s:Body>
+        <u:BecomeCoordinatorOfStandaloneGroup xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+          <InstanceID>0</InstanceID>
+        </u:BecomeCoordinatorOfStandaloneGroup>
+      </s:Body>
+    </s:Envelope>";
+
+            using var content = CreateSoapContent(soapRequest, "urn:schemas-upnp-org:service:AVTransport:1#BecomeCoordinatorOfStandaloneGroup");
+            var client = CreateClient();
+            var response = await client.PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
+        public async Task SetGroupCoordinatorAsync(string ip, CancellationToken cancellationToken = default)
+        {
+            await LeaveGroupAsync(ip, cancellationToken);
+        }
 
         public async Task<string> GetCurrentTrackInfoAsync(string ip, CancellationToken cancellationToken = default)
         {

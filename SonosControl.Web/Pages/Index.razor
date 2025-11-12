@@ -1,9 +1,14 @@
 ﻿@page "/"
+@using System.Collections.Generic
+@using System.IO
+@using System.Linq
+@using System.Net.Http
 @using System.Text.RegularExpressions
 @using System.Threading
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models;
+@using SonosControl.DAL.Models;
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -71,6 +76,105 @@
                                         <span class="playback-volume-value">@($"{Volume}%")</span>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                            <h5 class="mb-0">🧩 Speaker Groups</h5>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-outline-light btn-sm"
+                                        @onclick="RefreshPlayers"
+                                        disabled="@isLoadingPlayers">
+                                    @(isLoadingPlayers ? "Refreshing…" : "Refresh Players")
+                                </button>
+                                <button class="btn btn-outline-light btn-sm"
+                                        @onclick="ApplyActiveGroup"
+                                        disabled="@(!OrderedGroups.Any())">
+                                    Apply Active Group
+                                </button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(groupErrorMessage))
+                        {
+                            <div class="alert alert-warning py-2 mb-3">@groupErrorMessage</div>
+                        }
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-4">
+                                <h6 class="mb-2">Create Group</h6>
+                                <input class="form-control bg-dark text-white border-0 mb-2"
+                                       placeholder="Morning"
+                                       @bind="newGroupNameQuick" @bind:event="oninput" />
+                                <select class="form-select bg-dark text-white border-0 mb-2"
+                                        @bind="newGroupCoordinatorIp">
+                                    <option value="">Select coordinator</option>
+                                    @foreach (var player in _availablePlayers)
+                                    {
+                                        <option value="@player.IpAddress">@player.Name (@player.IpAddress)</option>
+                                    }
+                                </select>
+                                <button class="btn btn-success btn-sm"
+                                        @onclick="CreateGroupQuick"
+                                        disabled="@(!CanCreateGroup)">
+                                    Add Group
+                                </button>
+                            </div>
+                            <div class="col-12 col-lg-8">
+                                @{ var groups = OrderedGroups.ToList(); }
+                                @if (!groups.Any())
+                                {
+                                    <p class="text-light-emphasis mb-0">No groups yet. Create one to start managing multiple players.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var group in groups)
+                                    {
+                                        <div class="group-card bg-dark rounded-4 border border-secondary-subtle p-3 mb-3">
+                                            <div class="d-flex justify-content-between flex-wrap gap-2 align-items-center">
+                                                <div>
+                                                    <strong>@group.Name</strong>
+                                                    <div class="small text-light-emphasis">
+                                                        Coordinator: @GetCoordinatorDisplayName(group)
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button class="btn btn-sm btn-outline-light"
+                                                            @onclick="() => ActivateGroupAsync(group)"
+                                                            disabled="@IsActiveGroup(group)">
+                                                        @(IsActiveGroup(group) ? "Active" : "Set Active")
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-light"
+                                                            @onclick="() => SyncGroupAsync(group)">
+                                                        Apply
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <div class="small text-light-emphasis mb-2">Members</div>
+                                                <div class="d-flex flex-wrap gap-2">
+                                                    @foreach (var player in _availablePlayers)
+                                                    {
+                                                        var playerId = $"{group.Id}-{player.IpAddress}";
+                                                        var isCoordinator = string.Equals(player.IpAddress, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase);
+                                                        <div class="form-check form-switch">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   role="switch"
+                                                                   id="@playerId"
+                                                                   checked="@(isCoordinator || IsMember(group, player.IpAddress))"
+                                                                   disabled="@isCoordinator"
+                                                                   @onchange="e => ToggleMemberAsync(group, player.IpAddress, e)" />
+                                                            <label class="form-check-label small" for="@playerId">@player.Name</label>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
                             </div>
                         </div>
                     </div>
@@ -419,6 +523,11 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+    private readonly List<SonosPlayerInfo> _availablePlayers = new();
+    private bool isLoadingPlayers;
+    private string? groupErrorMessage;
+    private string newGroupNameQuick = string.Empty;
+    private string? newGroupCoordinatorIp;
 
     private int Volume
     {
@@ -448,7 +557,11 @@
             }
 
             _settings.Volume = clamped;
-            _ = _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, clamped);
+            var coordinator = ResolveCoordinatorIp();
+            if (!string.IsNullOrWhiteSpace(coordinator))
+            {
+                _ = _uow.ISonosConnectorRepo.SetVolume(coordinator, clamped);
+            }
             _ = SaveSettings();
         }
     }
@@ -508,16 +621,30 @@
         (_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
         .OrderBy(t => t.Name)
         .ToList();
-    
+
     private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
 
     private List<string> queue = new();
+
+    private IEnumerable<SonosGroup> OrderedGroups =>
+        (_settings?.Groups ?? new List<SonosGroup>())
+        .OrderBy(g => g.Name);
+
+    private bool CanCreateGroup =>
+        !string.IsNullOrWhiteSpace(newGroupNameQuick) &&
+        !string.IsNullOrWhiteSpace(newGroupCoordinatorIp);
 
     private async Task LoadCurrentStation()
     {
         if (_settings is not null)
         {
-            var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+            {
+                return;
+            }
+
+            var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(coordinator);
             currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "").Trim();
 
             if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
@@ -546,8 +673,8 @@
                 _isSpotifyPlaying = false;
             }
 
-            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
-            var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(coordinator);
+            var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(coordinator);
 
             if (progress.Duration == TimeSpan.Zero)
             {
@@ -617,9 +744,14 @@
     {
         if (!string.IsNullOrEmpty(selectedStation))
         {
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
             // Set the selected stream URL to the Sonos speaker
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinator, selectedStation);
+            await _uow.ISonosConnectorRepo.StartPlaying(coordinator);
             await AddLog("Station Changed", $"URL: {selectedStation}");
         }
     }
@@ -628,9 +760,14 @@
     {
         if (!string.IsNullOrEmpty(selectedTrack) && _tracks.Any(s => s.Url == selectedTrack))
         {
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
             // Set the selected stream URL to the Sonos speaker
-            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinator, selectedTrack);
+            await _uow.ISonosConnectorRepo.StartPlaying(coordinator);
             await AddLog("Spotify Track Changed", $"URL: {selectedTrack}");
         }
     }
@@ -639,8 +776,13 @@
     {
         if (!string.IsNullOrEmpty(selectedYouTubeEntry) && _youTubeCollections.Any(s => s.Url == selectedYouTubeEntry))
         {
-            await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings!.IP_Adress, selectedYouTubeEntry, _settings.AutoPlayStationUrl);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinator, selectedYouTubeEntry, _settings.AutoPlayStationUrl);
+            await _uow.ISonosConnectorRepo.StartPlaying(coordinator);
             await AddLog("YouTube Music Changed", $"URL: {selectedYouTubeEntry}");
         }
     }
@@ -661,20 +803,33 @@
     {
         if (_settings is not null)
         {
-            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinator, url);
             await AddLog("Spotify URL Played", url);
         }
     }
 
     private async Task PreviousTrack()
     {
-        await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
+        var coordinator = ResolveCoordinatorIp();
+        if (string.IsNullOrWhiteSpace(coordinator))
+            return;
+
+        await _uow.ISonosConnectorRepo.PreviousTrack(coordinator);
         await AddLog("Previous Track");
     }
 
     private async Task NextTrack()
     {
-        await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
+        var coordinator = ResolveCoordinatorIp();
+        if (string.IsNullOrWhiteSpace(coordinator))
+            return;
+
+        await _uow.ISonosConnectorRepo.NextTrack(coordinator);
         await AddLog("Next Track");
     }
 
@@ -687,7 +842,239 @@
         }
         else
         {
-            queue = await _uow.ISonosConnectorRepo.GetQueue(_settings!.IP_Adress);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+            {
+                return;
+            }
+
+            queue = await _uow.ISonosConnectorRepo.GetQueue(coordinator);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private (string CoordinatorIp, IReadOnlyList<string> MemberIps, SonosGroup? Group) GetPlaybackTarget()
+    {
+        if (_settings?.Groups != null && !string.IsNullOrWhiteSpace(_settings.ActiveGroupId))
+        {
+            var group = _settings.Groups
+                .FirstOrDefault(g => string.Equals(g.Id, _settings.ActiveGroupId, StringComparison.OrdinalIgnoreCase));
+
+            if (group != null && !string.IsNullOrWhiteSpace(group.CoordinatorIp))
+            {
+                var members = group.MemberIps?
+                    .Where(ip => !string.IsNullOrWhiteSpace(ip))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Where(ip => !string.Equals(ip, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase))
+                    .ToList() ?? new List<string>();
+
+                return (group.CoordinatorIp, members, group);
+            }
+        }
+
+        return (_settings?.IP_Adress ?? string.Empty, Array.Empty<string>(), null);
+    }
+
+    private string ResolveCoordinatorIp()
+    {
+        var target = GetPlaybackTarget();
+        return target.CoordinatorIp;
+    }
+
+    private async Task PrepareGroupAsync()
+    {
+        var target = GetPlaybackTarget();
+        groupErrorMessage = null;
+
+        if (target.Group is null || string.IsNullOrWhiteSpace(target.CoordinatorIp))
+        {
+            return;
+        }
+
+        try
+        {
+            await _uow.ISonosConnectorRepo.SetGroupCoordinatorAsync(target.CoordinatorIp, CancellationToken.None);
+        }
+        catch (Exception ex) when (IsNetworkException(ex))
+        {
+            groupErrorMessage = $"Coordinator {target.CoordinatorIp} unavailable: {ex.Message}";
+        }
+
+        foreach (var member in target.MemberIps.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.Equals(member, target.CoordinatorIp, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                await _uow.ISonosConnectorRepo.JoinGroupAsync(target.CoordinatorIp, member, CancellationToken.None);
+            }
+            catch (Exception ex) when (IsNetworkException(ex))
+            {
+                var message = $"Member {member} skipped: {ex.Message}";
+                groupErrorMessage = string.IsNullOrWhiteSpace(groupErrorMessage)
+                    ? message
+                    : $"{groupErrorMessage} | {message}";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(groupErrorMessage))
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static bool IsNetworkException(Exception ex)
+    {
+        return ex is HttpRequestException || ex is TaskCanceledException || ex is IOException;
+    }
+
+    private bool IsMember(SonosGroup group, string ip)
+    {
+        return group.MemberIps?.Any(member => string.Equals(member, ip, StringComparison.OrdinalIgnoreCase)) ?? false;
+    }
+
+    private async Task ToggleMemberAsync(SonosGroup group, string ip, ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool value && value;
+
+        group.MemberIps ??= new List<string>();
+
+        if (isChecked)
+        {
+            if (!IsMember(group, ip))
+            {
+                group.MemberIps.Add(ip);
+            }
+        }
+        else
+        {
+            group.MemberIps.RemoveAll(member => string.Equals(member, ip, StringComparison.OrdinalIgnoreCase));
+        }
+
+        await SaveSettings();
+    }
+
+    private string GetCoordinatorDisplayName(SonosGroup group)
+    {
+        if (string.IsNullOrWhiteSpace(group.CoordinatorIp))
+            return "Not set";
+
+        var match = _availablePlayers.FirstOrDefault(p => string.Equals(p.IpAddress, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase));
+        return match?.Name ?? group.CoordinatorIp;
+    }
+
+    private bool IsActiveGroup(SonosGroup group)
+    {
+        return string.Equals(_settings?.ActiveGroupId, group.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ActivateGroupAsync(SonosGroup group)
+    {
+        if (_settings is null)
+            return;
+
+        _settings.ActiveGroupId = group.Id;
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SyncGroupAsync(SonosGroup group)
+    {
+        if (string.IsNullOrWhiteSpace(group.CoordinatorIp))
+        {
+            groupErrorMessage = "Coordinator IP required.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        group.MemberIps ??= new List<string>();
+        groupErrorMessage = null;
+
+        try
+        {
+            await _uow.ISonosConnectorRepo.SetGroupCoordinatorAsync(group.CoordinatorIp, CancellationToken.None);
+        }
+        catch (Exception ex) when (IsNetworkException(ex))
+        {
+            groupErrorMessage = $"Coordinator {group.CoordinatorIp} unavailable: {ex.Message}";
+        }
+
+        foreach (var member in group.MemberIps.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.Equals(member, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                await _uow.ISonosConnectorRepo.JoinGroupAsync(group.CoordinatorIp, member, CancellationToken.None);
+            }
+            catch (Exception ex) when (IsNetworkException(ex))
+            {
+                var message = $"Member {member} skipped: {ex.Message}";
+                groupErrorMessage = string.IsNullOrWhiteSpace(groupErrorMessage)
+                    ? message
+                    : $"{groupErrorMessage} | {message}";
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ApplyActiveGroup()
+    {
+        var target = GetPlaybackTarget();
+        if (target.Group is null)
+            return;
+
+        await SyncGroupAsync(target.Group);
+    }
+
+    private async Task CreateGroupQuick()
+    {
+        if (_settings is null || string.IsNullOrWhiteSpace(newGroupNameQuick) || string.IsNullOrWhiteSpace(newGroupCoordinatorIp))
+            return;
+
+        _settings.Groups ??= new List<SonosGroup>();
+
+        var group = new SonosGroup
+        {
+            Name = newGroupNameQuick,
+            CoordinatorIp = newGroupCoordinatorIp,
+            MemberIps = new List<string> { newGroupCoordinatorIp }
+        };
+
+        _settings.Groups.Add(group);
+        _settings.ActiveGroupId ??= group.Id;
+
+        await SaveSettings();
+        newGroupNameQuick = string.Empty;
+        newGroupCoordinatorIp = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshPlayers()
+    {
+        if (_settings is null || string.IsNullOrWhiteSpace(_settings.IP_Adress) || _settings.IP_Adress == "10.0.0.0")
+            return;
+
+        isLoadingPlayers = true;
+        groupErrorMessage = null;
+
+        try
+        {
+            var players = await _uow.ISonosConnectorRepo.DiscoverPlayersAsync(_settings.IP_Adress);
+            _availablePlayers.Clear();
+            _availablePlayers.AddRange(players.OrderBy(p => p.Name));
+        }
+        catch (Exception ex) when (IsNetworkException(ex))
+        {
+            groupErrorMessage = $"Unable to load players: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingPlayers = false;
         }
 
         await InvokeAsync(StateHasChanged);
@@ -744,15 +1131,24 @@
         var selectionValue = parts[1];
         string selectionName;
         string logSource;
+        var coordinator = ResolveCoordinatorIp();
+
+        if (string.IsNullOrWhiteSpace(coordinator))
+        {
+            timerErrorMessage = "Coordinator is unavailable.";
+            return;
+        }
 
         try
         {
+            await PrepareGroupAsync();
+
             if (selectionType == "station")
             {
                 var station = _stations.FirstOrDefault(s => s.Url == selectionValue);
                 selectionName = station?.Name ?? selectionValue;
                 logSource = $"Station: {selectionName}";
-                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectionValue);
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinator, selectionValue);
                 _isSpotifyPlaying = false;
             }
             else if (selectionType == "spotify")
@@ -760,7 +1156,7 @@
                 var track = _tracks.FirstOrDefault(t => t.Url == selectionValue);
                 selectionName = track?.Name ?? selectionValue;
                 logSource = $"Spotify: {selectionName}";
-                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, selectionValue);
+                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinator, selectionValue);
                 _isSpotifyPlaying = true;
             }
             else if (selectionType == "youtube")
@@ -768,7 +1164,7 @@
                 var entry = _youTubeCollections.FirstOrDefault(t => t.Url == selectionValue);
                 selectionName = entry?.Name ?? selectionValue;
                 logSource = $"YouTube Music: {selectionName}";
-                await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, selectionValue, _settings.AutoPlayStationUrl);
+                await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinator, selectionValue, _settings.AutoPlayStationUrl);
                 _isSpotifyPlaying = false;
             }
             else
@@ -777,11 +1173,11 @@
                 return;
             }
 
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+            await _uow.ISonosConnectorRepo.StartPlaying(coordinator);
             _isPlaying = true;
 
             var minutes = timerMinutes;
-            var ip = _settings.IP_Adress;
+            var ip = coordinator;
 
             _playbackTimerCts?.Cancel();
             _playbackTimerCts?.Dispose();
@@ -857,6 +1253,13 @@
             await AddLog("Timed Playback Cancelled", details);
         }
 
+        var coordinator = ResolveCoordinatorIp();
+        if (!string.IsNullOrWhiteSpace(coordinator))
+        {
+            await _uow.ISonosConnectorRepo.PausePlaying(coordinator);
+            _isPlaying = false;
+        }
+
         _timerEndTimeUtc = null;
         _timerSelectionName = null;
         isTimerModalOpen = false;
@@ -915,7 +1318,11 @@
 
     private async Task ClearQueue()
     {
-        await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
+        var coordinator = ResolveCoordinatorIp();
+        if (string.IsNullOrWhiteSpace(coordinator))
+            return;
+
+        await _uow.ISonosConnectorRepo.ClearQueue(coordinator);
         queue.Clear();
         await AddLog("Queue Cleared");
     }
@@ -936,18 +1343,28 @@
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
         if (_settings!.IP_Adress is "10.0.0.0")
+        {
+            await RefreshPlayers();
             return;
+        }
 
-        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+        var coordinator = ResolveCoordinatorIp();
+        if (string.IsNullOrWhiteSpace(coordinator))
+        {
+            coordinator = _settings.IP_Adress;
+        }
+
+        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(coordinator);
 
         var maxVolumeLimit = MaxVolumeLimit;
         if (_settings.Volume > maxVolumeLimit)
         {
             _settings.Volume = maxVolumeLimit;
-            await _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, maxVolumeLimit);
+            await _uow.ISonosConnectorRepo.SetVolume(coordinator, maxVolumeLimit);
         }
 
         await SaveSettings();
+        await RefreshPlayers();
         _isPlaying = await IsPlaying();
         _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 0, 1000);
     }
@@ -956,13 +1373,22 @@
     {
         if (play)
         {
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.StartPlaying(coordinator);
             _isPlaying = true;
             await AddLog("Playback Started");
         }
         else
         {
-            await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+                return;
+
+            await _uow.ISonosConnectorRepo.PausePlaying(coordinator);
             _isPlaying = false;
             await AddLog("Playback Started");
         }
@@ -973,7 +1399,11 @@
 
     private async Task<bool> IsPlaying()
     {
-        return await _uow.ISonosConnectorRepo.IsPlaying(_settings!.IP_Adress);
+        var coordinator = ResolveCoordinatorIp();
+        if (string.IsNullOrWhiteSpace(coordinator))
+            return false;
+
+        return await _uow.ISonosConnectorRepo.IsPlaying(coordinator);
     }
 
     private async Task SaveSettings()
@@ -1111,9 +1541,16 @@
     {
         if (_settings?.Stations != null && _settings.Stations.Any())
         {
+            var coordinator = ResolveCoordinatorIp();
+            if (string.IsNullOrWhiteSpace(coordinator))
+            {
+                return;
+            }
+
             var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
             selectedStation = randomStation; // This triggers OnStationChanged()
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
+            await PrepareGroupAsync();
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinator, selectedStation);
             await AddLog("Shuffled Station", $"Selected: {selectedStation}");
         }
     }

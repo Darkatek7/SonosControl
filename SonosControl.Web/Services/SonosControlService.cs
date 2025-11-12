@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -25,14 +30,15 @@ namespace SonosControl.Web.Services
                 var (settings, schedule) = await WaitUntilStartTime(stoppingToken);
 
                 var stop = schedule?.StopTime ?? settings.StopTime;
+                var target = ResolvePlaybackTarget(settings);
 
-                await StartSpeaker(settings.IP_Adress, settings, schedule);
+                await StartSpeaker(target.CoordinatorIp, settings, schedule, target.MemberIps, target.Group, stoppingToken);
 
-                await StopSpeaker(settings.IP_Adress, stop);
+                await StopSpeaker(target.CoordinatorIp, stop, stoppingToken);
             }
         }
 
-        private async Task StartSpeaker(string ip, SonosSettings settings, DaySchedule? schedule)
+        private async Task StartSpeaker(string coordinatorIp, SonosSettings settings, DaySchedule? schedule, IReadOnlyList<string> memberIps, SonosGroup? group, CancellationToken cancellationToken)
         {
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
@@ -42,40 +48,42 @@ namespace SonosControl.Web.Services
                 return;
             }
 
+            await PrepareGroupAsync(coordinatorIp, memberIps, group, cancellationToken);
+
             if (schedule != null)
             {
                 if (schedule.PlayRandomSpotify)
                 {
                     var url = GetRandomSpotifyUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinatorIp, url, null, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (schedule.PlayRandomYouTubeMusic)
                 {
                     var url = GetRandomYouTubeMusicUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinatorIp, url, settings.AutoPlayStationUrl, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (schedule.PlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinatorIp, url, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinatorIp, schedule.SpotifyUrl, null, cancellationToken);
                 else if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinatorIp, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl, cancellationToken);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, schedule.StationUrl);
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinatorIp, schedule.StationUrl, cancellationToken);
                 else
-                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                    await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
             }
             else
             {
@@ -83,34 +91,34 @@ namespace SonosControl.Web.Services
                 {
                     var url = GetRandomSpotifyUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinatorIp, url, null, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (settings.AutoPlayRandomYouTubeMusic)
                 {
                     var url = GetRandomYouTubeMusicUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinatorIp, url, settings.AutoPlayStationUrl, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (settings.AutoPlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinatorIp, url, cancellationToken);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
                 }
                 else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(coordinatorIp, settings.AutoPlaySpotifyUrl, null, cancellationToken);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeMusicUrl))
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(coordinatorIp, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl, cancellationToken);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, settings.AutoPlayStationUrl);
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(coordinatorIp, settings.AutoPlayStationUrl, cancellationToken);
                 else
-                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                    await _uow.ISonosConnectorRepo.StartPlaying(coordinatorIp);
             }
 
             Console.WriteLine($"{DateTime.Now:g}: Started Playing");
@@ -252,14 +260,17 @@ namespace SonosControl.Web.Services
             return Task.Delay(delay, token);
         }
 
-        private async Task StopSpeaker(string ip, TimeOnly stopTime)
+        private async Task StopSpeaker(string coordinatorIp, TimeOnly stopTime, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(coordinatorIp))
+                return;
+
             TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
             var timeDifference = stopTime - timeNow;
 
             if (stopTime <= timeNow)
             {
-                await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                await _uow.ISonosConnectorRepo.StopPlaying(coordinatorIp);
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
             else
@@ -273,11 +284,78 @@ namespace SonosControl.Web.Services
                         t.Milliseconds);
 
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
-                await Task.Delay(ms);
+                try
+                {
+                    await Task.Delay(ms, cancellationToken);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
 
-                await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                if (cancellationToken.IsCancellationRequested)
+                    return;
+
+                await _uow.ISonosConnectorRepo.StopPlaying(coordinatorIp);
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
+        }
+
+        private (string CoordinatorIp, IReadOnlyList<string> MemberIps, SonosGroup? Group) ResolvePlaybackTarget(SonosSettings settings)
+        {
+            if (settings.Groups != null && !string.IsNullOrWhiteSpace(settings.ActiveGroupId))
+            {
+                var group = settings.Groups
+                    .FirstOrDefault(g => string.Equals(g.Id, settings.ActiveGroupId, StringComparison.OrdinalIgnoreCase));
+
+                if (group != null && !string.IsNullOrWhiteSpace(group.CoordinatorIp))
+                {
+                    var members = group.MemberIps?
+                        .Where(ip => !string.IsNullOrWhiteSpace(ip))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Where(ip => !string.Equals(ip, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase))
+                        .ToList() ?? new List<string>();
+
+                    return (group.CoordinatorIp, members, group);
+                }
+            }
+
+            return (settings.IP_Adress, Array.Empty<string>(), null);
+        }
+
+        private async Task PrepareGroupAsync(string coordinatorIp, IReadOnlyList<string> memberIps, SonosGroup? group, CancellationToken cancellationToken)
+        {
+            if (group is null || string.IsNullOrWhiteSpace(coordinatorIp))
+                return;
+
+            try
+            {
+                await _uow.ISonosConnectorRepo.SetGroupCoordinatorAsync(coordinatorIp, cancellationToken);
+            }
+            catch (Exception ex) when (IsNetworkException(ex))
+            {
+                Console.WriteLine($"{DateTime.Now:g}: Failed to prepare coordinator {coordinatorIp}: {ex.Message}");
+            }
+
+            foreach (var member in memberIps.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.Equals(member, coordinatorIp, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    await _uow.ISonosConnectorRepo.JoinGroupAsync(coordinatorIp, member, cancellationToken);
+                }
+                catch (Exception ex) when (IsNetworkException(ex))
+                {
+                    Console.WriteLine($"{DateTime.Now:g}: Skipped member {member}: {ex.Message}");
+                }
+            }
+        }
+
+        private static bool IsNetworkException(Exception ex)
+        {
+            return ex is HttpRequestException || ex is TaskCanceledException || ex is IOException;
         }
     }
 }
