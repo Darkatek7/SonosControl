@@ -188,6 +188,80 @@ public class SonosControlServiceTests
         Assert.Equal(tomorrow, timeProvider.LocalNow.DayOfWeek);
     }
 
+    [Fact]
+    public async Task WaitUntilStartTime_UsesHolidayScheduleForToday()
+    {
+        var initial = new DateTimeOffset(2024, 12, 25, 5, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(initial);
+
+        var holidaySchedule = new HolidaySchedule
+        {
+            Date = DateOnly.FromDateTime(initial.Date),
+            StartTime = new TimeOnly(5, 5),
+            SpotifyUrl = "spotify:track:winter"
+        };
+
+        var settings = new SonosSettings
+        {
+            StartTime = new TimeOnly(7, 0),
+            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+
+        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+
+        var waitTask = InvokeWait(svc, CancellationToken.None);
+
+        timeProvider.Advance(TimeSpan.FromMinutes(5));
+
+        var result = await waitTask;
+
+        Assert.Same(holidaySchedule, result.schedule);
+    }
+
+    [Fact]
+    public async Task WaitUntilStartTime_WhenHolidayIsNextDay_SelectsHolidayStart()
+    {
+        var initial = new DateTimeOffset(2024, 12, 24, 23, 30, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(initial);
+
+        var holidayDate = DateOnly.FromDateTime(initial.AddDays(1).Date);
+        var holidaySchedule = new HolidaySchedule
+        {
+            Date = holidayDate,
+            StartTime = new TimeOnly(6, 15)
+        };
+
+        var settings = new SonosSettings
+        {
+            StartTime = new TimeOnly(7, 0),
+            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+
+        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+
+        var waitTask = InvokeWait(svc, CancellationToken.None);
+
+        var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(holidaySchedule.StartTime.ToTimeSpan()), initial.Offset);
+        timeProvider.Advance(expectedStart - timeProvider.LocalNow);
+
+        var result = await waitTask;
+
+        Assert.Same(holidaySchedule, result.schedule);
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
+    }
+
     private sealed class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _current;

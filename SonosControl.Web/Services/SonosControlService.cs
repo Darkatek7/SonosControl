@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -161,7 +162,8 @@ namespace SonosControl.Web.Services
                 var now = _timeProvider.GetLocalNow();
 
                 var currentTime = TimeOnly.FromDateTime(now.LocalDateTime);
-                var todaySchedule = GetScheduleForDay(settings, now.DayOfWeek);
+                var todayDate = DateOnly.FromDateTime(now.LocalDateTime);
+                var todaySchedule = GetScheduleForDate(settings, todayDate);
                 var todayStart = todaySchedule?.StartTime ?? settings.StartTime;
 
                 if (previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
@@ -210,8 +212,16 @@ namespace SonosControl.Web.Services
             return default;
         }
 
-        private static DaySchedule? GetScheduleForDay(SonosSettings settings, DayOfWeek day)
+        private static DaySchedule? GetScheduleForDate(SonosSettings settings, DateOnly date)
         {
+            if (settings.HolidaySchedules != null)
+            {
+                var holiday = settings.HolidaySchedules.FirstOrDefault(h => h.Date == date);
+                if (holiday != null)
+                    return holiday;
+            }
+
+            var day = date.DayOfWeek;
             if (settings.DailySchedules != null && settings.DailySchedules.TryGetValue(day, out var schedule))
                 return schedule;
 
@@ -221,20 +231,21 @@ namespace SonosControl.Web.Services
         private (DateTimeOffset target, DaySchedule? schedule, TimeOnly start, DayOfWeek day) DetermineNextStart(SonosSettings settings, DateTimeOffset now)
         {
             var today = now.DayOfWeek;
-            var todaySchedule = GetScheduleForDay(settings, today);
+            var todayDate = DateOnly.FromDateTime(now.LocalDateTime);
+            var todaySchedule = GetScheduleForDate(settings, todayDate);
             var start = todaySchedule?.StartTime ?? settings.StartTime;
             var startDateTime = new DateTimeOffset(now.Date.Add(start.ToTimeSpan()), now.Offset);
             var currentTime = TimeOnly.FromDateTime(now.LocalDateTime);
 
             if (start < currentTime)
             {
-                for (int offset = 1; offset <= 7; offset++)
+                for (int offset = 1; offset <= 14; offset++)
                 {
-                    var day = (DayOfWeek)(((int)today + offset) % 7);
-                    var schedule = GetScheduleForDay(settings, day);
+                    var candidateDate = todayDate.AddDays(offset);
+                    var schedule = GetScheduleForDate(settings, candidateDate);
                     var nextStart = schedule?.StartTime ?? settings.StartTime;
-                    var nextDate = new DateTimeOffset(now.Date.AddDays(offset).Add(nextStart.ToTimeSpan()), now.Offset);
-                    return (nextDate, schedule, nextStart, day);
+                    var nextDate = new DateTimeOffset(candidateDate.ToDateTime(nextStart), now.Offset);
+                    return (nextDate, schedule, nextStart, candidateDate.DayOfWeek);
                 }
             }
 
