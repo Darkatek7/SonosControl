@@ -21,6 +21,7 @@ builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
 
 builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddSingleton<SonosControlService>();
+builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();

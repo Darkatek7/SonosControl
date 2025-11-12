@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -35,6 +36,15 @@ namespace SonosControl.Web.Services
         private async Task StartSpeaker(string ip, SonosSettings settings, DaySchedule? schedule)
         {
             DayOfWeek today = DateTime.Now.DayOfWeek;
+
+            if (schedule != null && ShouldSkipPlayback(schedule))
+            {
+                if (schedule is HolidaySchedule holiday)
+                {
+                    Console.WriteLine($"{DateTime.Now:g}: Holiday override for {holiday.Date:yyyy-MM-dd} skips playback.");
+                }
+                return;
+            }
 
             if (schedule == null && (settings == null || !settings.ActiveDays.Contains(today)))
             {
@@ -161,10 +171,16 @@ namespace SonosControl.Web.Services
                 var now = _timeProvider.GetLocalNow();
 
                 var currentTime = TimeOnly.FromDateTime(now.LocalDateTime);
-                var todaySchedule = GetScheduleForDay(settings, now.DayOfWeek);
+                var todayDate = DateOnly.FromDateTime(now.LocalDateTime);
+                var todaySchedule = GetScheduleForDate(settings, todayDate);
                 var todayStart = todaySchedule?.StartTime ?? settings.StartTime;
 
-                if (previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
+                if (todaySchedule != null && ShouldSkipPlayback(todaySchedule))
+                {
+                    todaySchedule = null;
+                }
+
+                if (todaySchedule != null && previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
                     return (settings, todaySchedule);
 
                 var (target, schedule, start, startDay) = DetermineNextStart(settings, now);
@@ -210,8 +226,16 @@ namespace SonosControl.Web.Services
             return default;
         }
 
-        private static DaySchedule? GetScheduleForDay(SonosSettings settings, DayOfWeek day)
+        private static DaySchedule? GetScheduleForDate(SonosSettings settings, DateOnly date)
         {
+            if (settings.HolidaySchedules != null)
+            {
+                var holiday = settings.HolidaySchedules.FirstOrDefault(h => h.Date == date);
+                if (holiday != null)
+                    return holiday;
+            }
+
+            var day = date.DayOfWeek;
             if (settings.DailySchedules != null && settings.DailySchedules.TryGetValue(day, out var schedule))
                 return schedule;
 
@@ -220,28 +244,30 @@ namespace SonosControl.Web.Services
 
         private (DateTimeOffset target, DaySchedule? schedule, TimeOnly start, DayOfWeek day) DetermineNextStart(SonosSettings settings, DateTimeOffset now)
         {
-            var today = now.DayOfWeek;
-            var todaySchedule = GetScheduleForDay(settings, today);
-            var start = todaySchedule?.StartTime ?? settings.StartTime;
-            var startDateTime = new DateTimeOffset(now.Date.Add(start.ToTimeSpan()), now.Offset);
+            var todayDate = DateOnly.FromDateTime(now.LocalDateTime);
             var currentTime = TimeOnly.FromDateTime(now.LocalDateTime);
 
-            if (start < currentTime)
+            for (int offset = 0; offset <= 14; offset++)
             {
-                for (int offset = 1; offset <= 7; offset++)
-                {
-                    var day = (DayOfWeek)(((int)today + offset) % 7);
-                    var schedule = GetScheduleForDay(settings, day);
-                    var nextStart = schedule?.StartTime ?? settings.StartTime;
-                    var nextDate = new DateTimeOffset(now.Date.AddDays(offset).Add(nextStart.ToTimeSpan()), now.Offset);
-                    return (nextDate, schedule, nextStart, day);
-                }
+                var candidateDate = todayDate.AddDays(offset);
+                var schedule = GetScheduleForDate(settings, candidateDate);
+
+                if (schedule != null && ShouldSkipPlayback(schedule))
+                    continue;
+
+                var candidateStart = schedule?.StartTime ?? settings.StartTime;
+                var candidateDateTime = new DateTimeOffset(candidateDate.ToDateTime(candidateStart), now.Offset);
+
+                if (offset == 0 && candidateStart < currentTime)
+                    continue;
+
+                return (candidateDateTime, schedule, candidateStart, candidateDate.DayOfWeek);
             }
 
-            if (start == currentTime)
-                return (startDateTime, todaySchedule, start, today);
-
-            return (startDateTime, todaySchedule, start, today);
+            var fallbackDate = todayDate.AddDays(1);
+            var fallbackStart = settings.StartTime;
+            var fallbackDateTime = new DateTimeOffset(fallbackDate.ToDateTime(fallbackStart), now.Offset);
+            return (fallbackDateTime, null, fallbackStart, fallbackDate.DayOfWeek);
         }
 
         private static Task TaskDelay(TimeSpan delay, CancellationToken token)
@@ -250,6 +276,29 @@ namespace SonosControl.Web.Services
                 return Task.CompletedTask;
 
             return Task.Delay(delay, token);
+        }
+
+        private static bool HasPlaybackTarget(DaySchedule schedule)
+        {
+            return schedule.PlayRandomStation
+                   || schedule.PlayRandomSpotify
+                   || schedule.PlayRandomYouTubeMusic
+                   || !string.IsNullOrWhiteSpace(schedule.StationUrl)
+                   || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+                   || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
+        }
+
+        private static bool ShouldSkipPlayback(DaySchedule schedule)
+        {
+            if (schedule is HolidaySchedule holiday)
+            {
+                if (holiday.SkipPlayback)
+                    return true;
+
+                return !HasPlaybackTarget(holiday);
+            }
+
+            return false;
         }
 
         private async Task StopSpeaker(string ip, TimeOnly stopTime)
