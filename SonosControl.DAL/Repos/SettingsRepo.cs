@@ -1,8 +1,9 @@
 using Newtonsoft.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
-using System.Threading;
+using System;
 using System.Linq;
+using System.Threading;
 
 namespace SonosControl.DAL.Repos
 {
@@ -64,10 +65,42 @@ namespace SonosControl.DAL.Repos
                     settings.YouTubeMusicCollections ??= new();
                     settings.DailySchedules ??= new();
                     settings.ActiveDays ??= new();
+                    settings.Groups ??= new();
 
                     foreach (var key in settings.DailySchedules.Keys.ToList())
                     {
                         settings.DailySchedules[key] ??= new DaySchedule();
+                    }
+
+                    foreach (var group in settings.Groups)
+                    {
+                        if (string.IsNullOrWhiteSpace(group.Id))
+                            group.Id = Guid.NewGuid().ToString("N");
+
+                        group.Name = (group.Name ?? string.Empty).Trim();
+                        group.CoordinatorIp = (group.CoordinatorIp ?? string.Empty).Trim();
+
+                        group.MemberIps ??= new();
+                        group.MemberIps = group.MemberIps
+                            .Select(ip => ip?.Trim())
+                            .Where(ip => !string.IsNullOrWhiteSpace(ip))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+
+                        if (!string.IsNullOrWhiteSpace(group.CoordinatorIp) &&
+                            !group.MemberIps.Any(ip => string.Equals(ip, group.CoordinatorIp, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            group.MemberIps.Insert(0, group.CoordinatorIp);
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(settings.ActiveGroupId))
+                        settings.ActiveGroupId = settings.ActiveGroupId.Trim();
+
+                    if (!string.IsNullOrWhiteSpace(settings.ActiveGroupId) &&
+                        settings.Groups.All(g => !string.Equals(g.Id, settings.ActiveGroupId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        settings.ActiveGroupId = null;
                     }
 
                     return settings;

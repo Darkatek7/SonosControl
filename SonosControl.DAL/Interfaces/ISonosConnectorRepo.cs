@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading;
+using SonosControl.DAL.Models;
 
 namespace SonosControl.DAL.Interfaces
 {
@@ -23,5 +24,9 @@ namespace SonosControl.DAL.Interfaces
         Task PreviousTrack(string ip, CancellationToken cancellationToken = default);
         Task NextTrack(string ip, CancellationToken cancellationToken = default);
         Task RebootDeviceAsync(string ip, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<SonosPlayerInfo>> DiscoverPlayersAsync(string ip, CancellationToken cancellationToken = default);
+        Task JoinGroupAsync(string coordinatorIp, string memberIp, CancellationToken cancellationToken = default);
+        Task LeaveGroupAsync(string ip, CancellationToken cancellationToken = default);
+        Task SetGroupCoordinatorAsync(string ip, CancellationToken cancellationToken = default);
     }
 }
