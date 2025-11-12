@@ -83,7 +83,7 @@
                     <label class="form-label">🎵 Auto Play</label>
                     <select class="form-select bg-secondary text-light border-0"
                             @bind="AutoPlaySelection" @bind:event="onchange">
-                        <option value="">-- Don’t play --</option>
+                        <option value="">-- None --</option>
                         <option value="randomStation">Random Station</option>
                         <option value="randomSpotify">Random Spotify</option>
                         <option value="randomYouTube">Random YouTube Music</option>
@@ -216,7 +216,7 @@
                                     <select class="form-select bg-secondary text-light border-0"
                                             value="@GetScheduleSelection(schedule)"
                                             @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
-                                        <option value="skip">-- Don’t play --</option>
+                                        <option value="">-- None --</option>
                                         <option value="randomStation">Random Station</option>
                                         <option value="randomSpotify">Random Spotify</option>
                                         <option value="randomYouTube">Random YouTube Music</option>
@@ -620,8 +620,12 @@
 
     private string GetScheduleSelection(DaySchedule schedule)
     {
-        if (schedule.SkipPlayback || !HasPlaybackTarget(schedule))
-            return "skip";
+        if (schedule is HolidaySchedule holiday)
+        {
+            if (holiday.SkipPlayback || !HasPlaybackTarget(holiday))
+                return "skip";
+        }
+
         if (schedule.PlayRandomStation)
             return "randomStation";
         if (schedule.PlayRandomSpotify)
@@ -634,7 +638,7 @@
             return $"spotify:{schedule.SpotifyUrl}";
         if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
             return $"youtube:{schedule.YouTubeMusicUrl}";
-        return "skip";
+        return string.Empty;
     }
 
     private void ApplyScheduleSelection(DaySchedule schedule, string? value)
@@ -645,23 +649,36 @@
         schedule.StationUrl = null;
         schedule.SpotifyUrl = null;
         schedule.YouTubeMusicUrl = null;
-        schedule.SkipPlayback = false;
 
-        if (string.IsNullOrWhiteSpace(value) || string.Equals(value, "skip", StringComparison.OrdinalIgnoreCase))
+        var selection = value?.Trim();
+
+        if (schedule is HolidaySchedule holiday)
         {
-            schedule.SkipPlayback = true;
-            return;
+            holiday.SkipPlayback = false;
+
+            if (string.IsNullOrEmpty(selection) || string.Equals(selection, "skip", StringComparison.OrdinalIgnoreCase))
+            {
+                holiday.SkipPlayback = true;
+                return;
+            }
+        }
+        else if (string.Equals(selection, "skip", StringComparison.OrdinalIgnoreCase))
+        {
+            selection = string.Empty;
         }
 
-        if (value == "randomStation")
+        if (string.IsNullOrEmpty(selection))
+            return;
+
+        if (selection == "randomStation")
             schedule.PlayRandomStation = true;
-        else if (value == "randomSpotify")
+        else if (selection == "randomSpotify")
             schedule.PlayRandomSpotify = true;
-        else if (value == "randomYouTube")
+        else if (selection == "randomYouTube")
             schedule.PlayRandomYouTubeMusic = true;
         else
         {
-            var parts = value.Split(':', 2);
+            var parts = selection.Split(':', 2);
             if (parts.Length == 2)
             {
                 if (parts[0] == "station")
@@ -692,15 +709,6 @@
 
     private void NormalizeSchedules()
     {
-        if (_settings?.DailySchedules != null)
-        {
-            foreach (var schedule in _settings.DailySchedules.Values)
-            {
-                if (!HasPlaybackTarget(schedule))
-                    schedule.SkipPlayback = true;
-            }
-        }
-
         if (_settings?.HolidaySchedules != null)
         {
             foreach (var holiday in _settings.HolidaySchedules)
