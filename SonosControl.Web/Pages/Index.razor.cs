@@ -124,6 +124,11 @@ public partial class Index : ComponentBase, IAsyncDisposable
     private CancellationTokenSource? _queueRefreshCts;
     private Task? _queueRefreshTask;
 
+    private bool ShouldShowQueueSection =>
+        _queueIsLoading ||
+        !string.IsNullOrEmpty(_queueErrorMessage) ||
+        queue.Count > 0;
+
     private async Task LoadCurrentStation()
     {
         if (_settings is not null)
