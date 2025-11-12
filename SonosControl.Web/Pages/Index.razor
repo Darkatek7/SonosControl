@@ -111,94 +111,97 @@
 
 
                 <!-- Queue Section -->
-                <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4">
-                    <div class="card-header bg-secondary border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
-                        <h5 class="mb-0">Playback Queue</h5>
-                        <div class="d-flex flex-wrap align-items-center gap-2">
-                            <div class="d-flex align-items-center gap-2">
-                                <label class="form-label mb-0 small text-light-emphasis" for="queueRefreshInterval">Refresh every</label>
-                                <select id="queueRefreshInterval"
-                                        class="form-select form-select-sm bg-dark text-white border-0"
-                                        value="@_queueRefreshIntervalSeconds"
-                                        @onchange="OnQueueRefreshIntervalChanged"
-                                        aria-label="Queue auto refresh interval">
-                                    @foreach (var option in _queueRefreshIntervals)
-                                    {
-                                        <option value="@option">@option s</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="form-check form-switch m-0">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       role="switch"
-                                       id="queueAutoRefreshSwitch"
-                                       @bind="QueueAutoRefreshEnabled"
-                                       aria-label="Toggle queue auto refresh" />
-                                <label class="form-check-label small" for="queueAutoRefreshSwitch">Auto</label>
-                            </div>
-                            <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-1"
-                                    @onclick="() => LoadQueue(reset: true)"
-                                    disabled="@_queueIsLoading"
-                                    aria-label="Refresh queue now">
-                                <i class="fa fa-refresh @(_queueIsLoading ? "fa-spin" : string.Empty)"></i>
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        @if (!string.IsNullOrEmpty(_queueErrorMessage))
-                        {
-                            <div class="alert alert-warning m-3" role="alert">@_queueErrorMessage</div>
-                        }
-
-                        <div class="queue-list-container">
-                            @if (_queueIsLoading && !queue.Any())
-                            {
-                                <div class="text-center py-4 text-light-emphasis">
-                                    <div class="spinner-border text-light" role="status">
-                                        <span class="visually-hidden">Loading queue…</span>
-                                    </div>
+                @if (ShouldShowQueueSection)
+                {
+                    <div class="card bg-secondary text-white mb-4 shadow-sm border-0 rounded-4" data-qa="queue-card">
+                        <div class="card-header bg-secondary border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <h5 class="mb-0">Playback Queue</h5>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <label class="form-label mb-0 small text-light-emphasis" for="queueRefreshInterval">Refresh every</label>
+                                    <select id="queueRefreshInterval"
+                                            class="form-select form-select-sm bg-dark text-white border-0"
+                                            value="@_queueRefreshIntervalSeconds"
+                                            @onchange="OnQueueRefreshIntervalChanged"
+                                            aria-label="Queue auto refresh interval">
+                                        @foreach (var option in _queueRefreshIntervals)
+                                        {
+                                            <option value="@option">@option s</option>
+                                        }
+                                    </select>
                                 </div>
-                            }
-                            else if (!queue.Any())
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           role="switch"
+                                           id="queueAutoRefreshSwitch"
+                                           @bind="QueueAutoRefreshEnabled"
+                                           aria-label="Toggle queue auto refresh" />
+                                    <label class="form-check-label small" for="queueAutoRefreshSwitch">Auto</label>
+                                </div>
+                                <button class="btn btn-outline-light btn-sm d-flex align-items-center gap-1"
+                                        @onclick="() => LoadQueue(reset: true)"
+                                        disabled="@_queueIsLoading"
+                                        aria-label="Refresh queue now">
+                                    <i class="fa fa-refresh @(_queueIsLoading ? "fa-spin" : string.Empty)"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            @if (!string.IsNullOrEmpty(_queueErrorMessage))
                             {
-                                <p class="text-light-emphasis text-center py-4 mb-0">Queue is empty.</p>
+                                <div class="alert alert-warning m-3" role="alert">@_queueErrorMessage</div>
                             }
-                            else
-                            {
-                                <ul class="list-group queue-list">
-                                    @foreach (var item in queue)
-                                    {
-                                        <li class="list-group-item bg-dark text-white d-flex align-items-start justify-content-between gap-3"
-                                            data-qa="queue-item">
-                                            <div class="flex-grow-1 text-truncate">
-                                                <div class="fw-semibold text-truncate">@FormatQueueItem(item)</div>
-                                                @if (!string.IsNullOrWhiteSpace(item.Album))
-                                                {
-                                                    <div class="small text-light-emphasis text-truncate">@item.Album</div>
-                                                }
-                                            </div>
-                                            <span class="badge bg-secondary align-self-center">@((item.Index + 1).ToString("D2"))</span>
-                                        </li>
-                                    }
-                                </ul>
 
-                                @if (_queueHasMore)
+                            <div class="queue-list-container">
+                                @if (_queueIsLoading && !queue.Any())
                                 {
-                                    <div class="p-3 text-center">
-                                        <button class="btn btn-outline-light btn-sm"
-                                                @onclick="LoadNextQueuePage"
-                                                disabled="@_queueIsLoading"
-                                                aria-label="Load more queue items">
-                                            @(_queueIsLoading ? "Loading…" : "Load more")
-                                        </button>
+                                    <div class="text-center py-4 text-light-emphasis">
+                                        <div class="spinner-border text-light" role="status">
+                                            <span class="visually-hidden">Loading queue…</span>
+                                        </div>
                                     </div>
                                 }
-                            }
+                                else if (!queue.Any())
+                                {
+                                    <p class="text-light-emphasis text-center py-4 mb-0">Queue is empty.</p>
+                                }
+                                else
+                                {
+                                    <ul class="list-group queue-list">
+                                        @foreach (var item in queue)
+                                        {
+                                            <li class="list-group-item bg-dark text-white d-flex align-items-start justify-content-between gap-3"
+                                                data-qa="queue-item">
+                                                <div class="flex-grow-1 text-truncate">
+                                                    <div class="fw-semibold text-truncate">@FormatQueueItem(item)</div>
+                                                    @if (!string.IsNullOrWhiteSpace(item.Album))
+                                                    {
+                                                        <div class="small text-light-emphasis text-truncate">@item.Album</div>
+                                                    }
+                                                </div>
+                                                <span class="badge bg-secondary align-self-center">@((item.Index + 1).ToString("D2"))</span>
+                                            </li>
+                                        }
+                                    </ul>
+
+                                    @if (_queueHasMore)
+                                    {
+                                        <div class="p-3 text-center">
+                                            <button class="btn btn-outline-light btn-sm"
+                                                    @onclick="LoadNextQueuePage"
+                                                    disabled="@_queueIsLoading"
+                                                    aria-label="Load more queue items">
+                                                @(_queueIsLoading ? "Loading…" : "Load more")
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                            </div>
                         </div>
                     </div>
-                </div>
+                }
 
 
 

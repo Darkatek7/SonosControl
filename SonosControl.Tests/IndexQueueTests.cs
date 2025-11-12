@@ -74,6 +74,27 @@ public class IndexQueueTests
         Assert.DoesNotContain("Queue is empty", cut.Markup);
     }
 
+    [Fact]
+    public void QueuePanel_HiddenWhenQueueEmpty()
+    {
+        using var ctx = new TestContext();
+
+        var queuePage = new SonosQueuePage(
+            Array.Empty<SonosQueueItem>(),
+            StartIndex: 0,
+            NumberReturned: 0,
+            TotalMatches: 0);
+
+        using var resources = ConfigureServices(ctx, queuePage, "x-rincon-mp3radio://example");
+
+        using var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[data-qa='queue-card']"));
+        });
+    }
+
     private sealed class TestResources : IDisposable
     {
         public ApplicationDbContext DbContext { get; }
