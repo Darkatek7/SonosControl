@@ -1,0 +1,15 @@
+<div class="form-field" role="group">
+    <label class="form-label" for="@Id">@Label</label>
+    @ChildContent
+    @if (!string.IsNullOrWhiteSpace(HelperText))
+    {
+        <p class="form-text text-light text-opacity-75 mb-0">@HelperText</p>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = default!;
+    [Parameter] public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    [Parameter] public string? HelperText { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
