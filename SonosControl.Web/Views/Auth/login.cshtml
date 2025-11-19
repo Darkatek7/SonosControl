@@ -1,48 +1,38 @@
 @{
-Layout = null;
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Login";
 }
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <link href="~/css/site.css" rel="stylesheet" asp-append-version="true" />
-</head>
-<body>
-    <div class="auth-shell">
-        <form method="post" action="/auth/login" class="auth-card panel stack-sm">
-            @Html.AntiForgeryToken()
-            <h2 class="fw-semibold">🔒 Login</h2>
 
-            @if (ViewBag.Error != null)
-            {
-                <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.Error</div>
-            }
+<div class="auth-shell">
+    <form method="post" action="/auth/login" class="auth-card panel stack-sm">
+        @Html.AntiForgeryToken()
+        <h2 class="fw-semibold text-center mb-3">🔒 Login</h2>
 
-            <div class="mb-3">
-                <label for="username" class="form-label">Username</label>
-                <input id="username" name="username" type="text" class="form-control" required autofocus />
-            </div>
+        @if (ViewBag.Error != null)
+        {
+            <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.Error</div>
+        }
 
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input id="password" name="password" type="password" class="form-control" required />
-            </div>
+        <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input id="username" name="username" type="text" class="form-control" required autofocus />
+        </div>
 
-            <div class="form-check mb-3">
-                <input id="rememberMe" name="rememberMe" type="checkbox" value="true" checked class="form-check-input" />
-                <input type="hidden" name="rememberMe" value="false" />
-                <label for="rememberMe" class="form-check-label">Remember Me</label>
-            </div>
+        <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input id="password" name="password" type="password" class="form-control" required />
+        </div>
 
-            <button type="submit" class="btn btn-primary w-100">Log In</button>
+        <div class="form-check mb-3">
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" checked class="form-check-input" />
+            <input type="hidden" name="rememberMe" value="false" />
+            <label for="rememberMe" class="form-check-label">Remember Me</label>
+        </div>
 
-            <div class="text-center mt-3">
-                <a href="/register" class="auth-link text-decoration-none">Don’t have an account? Register</a>
-            </div>
-        </form>
-    </div>
-</body>
-</html>
+        <button type="submit" class="btn btn-primary w-100">Log In</button>
+
+        <div class="text-center mt-3">
+            <a href="/register" class="auth-link text-decoration-none">Don’t have an account? Register</a>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,47 @@
+@using System.Linq
+
+@if (HasContent)
+{
+    <div class="form-status alert @AlertClass" role="status">
+        @if (ShowValidationSummary)
+        {
+            <ValidationSummary class="validation-summary text-danger mb-0" />
+        }
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <p class="mb-0">@StatusMessage</p>
+        }
+        @if (ChildContent is not null)
+        {
+            <div class="form-status-extra">
+                @ChildContent
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? StatusMessage { get; set; }
+    [Parameter] public AlertSeverity Severity { get; set; } = AlertSeverity.Danger;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter] private EditContext? EditContext { get; set; }
+
+    private bool ShowValidationSummary => EditContext?.GetValidationMessages().Any() ?? false;
+    private bool HasContent => ShowValidationSummary || !string.IsNullOrWhiteSpace(StatusMessage);
+    private string AlertClass => Severity switch
+    {
+        AlertSeverity.Success => "alert-success",
+        AlertSeverity.Warning => "alert-warning",
+        AlertSeverity.Info => "alert-info",
+        _ => "alert-danger"
+    };
+
+    public enum AlertSeverity
+    {
+        Info,
+        Success,
+        Warning,
+        Danger
+    }
+}

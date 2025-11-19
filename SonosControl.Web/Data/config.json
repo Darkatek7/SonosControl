@@ -1,5 +1,5 @@
 {
-  "Volume": 18,
+  "Volume": 14,
   "MaxVolume": 100,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
@@ -18,7 +18,7 @@
       "Url": "onair.krone.at/kronehit.mp3"
     },
     {
-      "Name": "\u00d63",
+      "Name": "Ö3",
       "Url": "orf-live.ors-shoutcast.at/oe3-q2a"
     },
     {
@@ -48,6 +48,24 @@
       "Url": "https://open.spotify.com/album/41GuZcammIkupMPKH2OJ6I"
     }
   ],
+  "YouTubeMusicCollections": [
+    {
+      "Name": "Supermix",
+      "Url": "https://music.youtube.com/playlist?list=LM"
+    },
+    {
+      "Name": "Energize",
+      "Url": "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+    }
+  ],
+  "AutoPlayStationUrl": null,
+  "AutoPlaySpotifyUrl": null,
+  "AutoPlayYouTubeMusicUrl": null,
+  "AutoPlayRandomStation": false,
+  "AutoPlayRandomSpotify": false,
+  "AutoPlayRandomYouTubeMusic": false,
+  "DailySchedules": {},
+  "HolidaySchedules": [],
   "ActiveDays": [
     1,
     2,
