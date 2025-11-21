@@ -753,13 +753,13 @@ a:focus-visible {
 
 .nav-brand-title {
     font-weight: 700;
-    color: #050505;
+    color: var(--text-primary);
     white-space: nowrap;
 }
 
 .nav-brand-subtitle {
     font-size: var(--font-size-xs);
-    color: #111111;
+    color: var(--text-muted);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
