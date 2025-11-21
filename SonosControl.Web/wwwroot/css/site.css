@@ -489,3 +489,72 @@ a:focus-visible {
 .blazor-error-boundary::after {
     content: "An error has occurred.";
 }
+
+/* Styles originally scoped to the Index page, moved here to avoid duplicate component definitions. */
+.dashboard-shell {
+    padding: var(--spacing-lg) 0;
+}
+
+.dashboard-panel {
+    border-radius: var(--bs-border-radius-xl);
+    border: 1px solid var(--bs-border-color);
+    box-shadow: var(--shadow-lg);
+}
+
+.dashboard-grid {
+    display: grid;
+    gap: var(--spacing-lg);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+        "playback"
+        "queue"
+        "media";
+}
+
+.playback-column {
+    grid-area: playback;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.queue-column {
+    grid-area: queue;
+}
+
+.media-column {
+    grid-area: media;
+}
+
+@media (min-width: 992px) {
+    .dashboard-grid {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        grid-template-areas:
+            "playback queue"
+            "media queue";
+    }
+}
+
+.timed-playback-alert {
+    border-radius: var(--bs-border-radius);
+    background-color: var(--surface-1);
+    border: 1px solid var(--bs-border-color);
+    align-items: center;
+}
+
+.currently-playing-card {
+    border-radius: var(--bs-border-radius-lg);
+    border: 1px solid var(--bs-border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.currently-playing-text {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+}

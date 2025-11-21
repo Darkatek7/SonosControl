@@ -1,0 +1,155 @@
+@using System
+@using Microsoft.AspNetCore.Components
+@using SonosControl.DAL.Models
+
+<div class="card queue-panel" data-qa="queue-card">
+    <div class="card-header queue-panel__header">
+        <div>
+            <h5 class="mb-0">Playback Queue</h5>
+        </div>
+        <div class="queue-panel__toolbar">
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label small mb-0 text-muted" for="@RefreshSelectId">Refresh every</label>
+                <select id="@RefreshSelectId"
+                        class="form-select form-select-sm queue-panel__select"
+                        value="@RefreshIntervalSeconds"
+                        @onchange="HandleIntervalChange"
+                        aria-label="Queue auto refresh interval">
+                    @foreach (var option in RefreshIntervals)
+                    {
+                        <option value="@option">@option s</option>
+                    }
+                </select>
+            </div>
+            <div class="form-check form-switch m-0">
+                <input class="form-check-input"
+                       type="checkbox"
+                       role="switch"
+                       id="queueAutoRefreshSwitch"
+                       @bind="AutoRefreshEnabledValue"
+                       aria-label="Toggle queue auto refresh" />
+                <label class="form-check-label small" for="queueAutoRefreshSwitch">Auto</label>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+                    @onclick="Refresh"
+                    disabled="@IsLoading"
+                    aria-label="Refresh queue now">
+                <i class="fa fa-refresh @(IsLoading ? "fa-spin" : string.Empty)" aria-hidden="true"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body queue-panel__body">
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="alert alert-warning" role="alert">@ErrorMessage</div>
+        }
+        else if (IsLoading && !Items.Any())
+        {
+            <div class="text-center py-4 text-muted">
+                <div class="spinner-border text-secondary" role="status">
+                    <span class="visually-hidden">Loading queue…</span>
+                </div>
+            </div>
+        }
+        else if (!Items.Any())
+        {
+            <p class="text-muted text-center mb-0">Queue is empty.</p>
+        }
+        else
+        {
+            <ul class="list-group queue-panel__list">
+                @foreach (var item in Items)
+                {
+                    <li class="list-group-item queue-panel__item">
+                        <div class="flex-grow-1 text-truncate">
+                            <div class="fw-semibold text-truncate">@FormatItem?.Invoke(item)</div>
+                            @if (!string.IsNullOrWhiteSpace(item.Album))
+                            {
+                                <div class="small text-muted text-truncate">@item.Album</div>
+                            }
+                        </div>
+                        <span class="badge bg-secondary align-self-center">@((item.Index + 1).ToString("D2"))</span>
+                    </li>
+                }
+            </ul>
+
+            @if (HasMore)
+            {
+                <div class="text-center mt-3">
+                    <button class="btn btn-outline-secondary btn-sm"
+                            @onclick="LoadMore"
+                            disabled="@IsLoading"
+                            aria-label="Load more queue items">
+                        @(IsLoading ? "Loading…" : "Load more")
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<SonosQueueItem> Items { get; set; } = Array.Empty<SonosQueueItem>();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool HasMore { get; set; }
+
+    [Parameter]
+    public bool AutoRefreshEnabled { get; set; }
+
+    [Parameter]
+    public int RefreshIntervalSeconds { get; set; }
+
+    [Parameter]
+    public IEnumerable<int> RefreshIntervals { get; set; } = Array.Empty<int>();
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public EventCallback Refresh { get; set; }
+
+    [Parameter]
+    public EventCallback LoadMore { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> AutoRefreshChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<int> RefreshIntervalChanged { get; set; }
+
+    [Parameter]
+    public Func<SonosQueueItem, string>? FormatItem { get; set; }
+
+    private string RefreshSelectId { get; } = $"queueRefresh_{Guid.NewGuid():N}";
+
+    private bool AutoRefreshEnabledValue
+    {
+        get => AutoRefreshEnabled;
+        set
+        {
+            if (value == AutoRefreshEnabled)
+            {
+                return;
+            }
+
+            _ = AutoRefreshChanged.InvokeAsync(value);
+        }
+    }
+
+    private Task HandleIntervalChange(ChangeEventArgs args)
+    {
+        if (args.Value is string raw && int.TryParse(raw, out var seconds))
+        {
+            return RefreshIntervalChanged.InvokeAsync(seconds);
+        }
+
+        return Task.CompletedTask;
+    }
+}

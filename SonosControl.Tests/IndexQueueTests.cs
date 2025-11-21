@@ -12,7 +12,7 @@ using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
 using SonosControl.Web.Models;
-using IndexPage = SonosControl.Web.Pages.Index;
+using IndexPage = SonosControl.Web.Pages.IndexPage;
 using Xunit;
 
 namespace SonosControl.Tests;

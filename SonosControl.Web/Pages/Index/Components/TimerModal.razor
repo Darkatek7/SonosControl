@@ -1,0 +1,203 @@
+@using System
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using SonosControl.DAL.Models
+
+@if (Show)
+{
+    <div class="timer-modal-backdrop" role="presentation">
+        <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="@ModalTitleId" aria-describedby="@ModalDescriptionId" @onkeydown="HandleKeyDown">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content timer-modal__content">
+                    <span tabindex="0" class="visually-hidden" @onfocus="FocusMinutes">.</span>
+                    <div class="modal-header">
+                        <h5 id="@ModalTitleId" class="modal-title">⏱️ Timed Playback</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModal" aria-label="Close" @ref="_closeButtonRef"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="@ModalDescriptionId" class="text-muted">Choose how long to play and what to listen to. Playback stops automatically when the timer ends.</p>
+                        @if (!string.IsNullOrEmpty(ErrorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert">@ErrorMessage</div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label">Duration (minutes)</label>
+                            <input type="number" min="1" class="form-control" @bind-value="TimerMinutesValue" @bind-value:event="oninput" @ref="_minutesInputRef" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Station or Spotify</label>
+                            <select class="form-select" @bind="SelectedSourceValue" aria-label="Timer source selection">
+                                <option value="">-- Select Source --</option>
+                                @if (Stations?.Count > 0)
+                                {
+                                    <optgroup label="TuneIn Stations">
+                                        @foreach (var station in Stations)
+                                        {
+                                            <option value="station|@station.Url">@Truncate(station.Name)</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (SpotifyTracks?.Count > 0)
+                                {
+                                    <optgroup label="Spotify">
+                                        @foreach (var track in SpotifyTracks)
+                                        {
+                                            <option value="spotify|@track.Url">@Truncate(track.Name)</option>
+                                        }
+                                    </optgroup>
+                                }
+                                @if (YouTubeCollections?.Count > 0)
+                                {
+                                    <optgroup label="YouTube Music">
+                                        @foreach (var entry in YouTubeCollections)
+                                        {
+                                            <option value="youtube|@entry.Url">@Truncate(entry.Name)</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-link" @onclick="CloseModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="Start">Start timer</button>
+                    </div>
+                    <span tabindex="0" class="visually-hidden" @onfocus="FocusCloseButton">.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnStart { get; set; }
+
+    [Parameter]
+    public int TimerMinutes { get; set; }
+
+    [Parameter]
+    public EventCallback<int> TimerMinutesChanged { get; set; }
+
+    [Parameter]
+    public string? SelectedSource { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> SelectedSourceChanged { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<TuneInStation>? Stations { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<SpotifyObject>? SpotifyTracks { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<YouTubeMusicObject>? YouTubeCollections { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    private string ModalTitleId { get; } = $"timerModalTitle_{Guid.NewGuid():N}";
+    private string ModalDescriptionId { get; } = $"timerModalDesc_{Guid.NewGuid():N}";
+
+    private ElementReference _minutesInputRef;
+    private ElementReference _closeButtonRef;
+    private bool _shouldFocusFirst;
+
+    private int TimerMinutesValue
+    {
+        get => TimerMinutes;
+        set
+        {
+            if (value == TimerMinutes)
+            {
+                return;
+            }
+
+            _ = TimerMinutesChanged.InvokeAsync(value);
+        }
+    }
+
+    private string? SelectedSourceValue
+    {
+        get => SelectedSource;
+        set
+        {
+            if (value == SelectedSource)
+            {
+                return;
+            }
+
+            _ = SelectedSourceChanged.InvokeAsync(value);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Show)
+        {
+            _shouldFocusFirst = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldFocusFirst)
+        {
+            _shouldFocusFirst = false;
+            await FocusMinutes();
+        }
+    }
+
+    private async Task FocusMinutes()
+    {
+        if (_minutesInputRef.Context is not null)
+        {
+            await _minutesInputRef.FocusAsync();
+        }
+    }
+
+    private async Task FocusCloseButton()
+    {
+        if (_closeButtonRef.Context is not null)
+        {
+            await _closeButtonRef.FocusAsync();
+        }
+    }
+
+    private Task CloseModal()
+    {
+        return OnClose.InvokeAsync();
+    }
+
+    private Task Start()
+    {
+        return OnStart.InvokeAsync();
+    }
+
+    private Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            return OnClose.InvokeAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string Truncate(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length > 40 ? value[..40] + "…" : value;
+    }
+}
