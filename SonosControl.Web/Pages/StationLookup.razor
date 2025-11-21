@@ -9,53 +9,67 @@
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 
-        <div class="container p-4 bg-dark text-light rounded-4 shadow mt-4" style="max-width: 600px;">
-            <h4 class="text-center mb-4 border-bottom pb-2">📻 Station Lookup</h4>
+        <div class="lookup-shell surface-1 rounded-4 shadow-sm border border-secondary">
+            <header class="lookup-shell__header">
+                <div>
+                    <h2 class="lookup-shell__title">📻 Station Lookup</h2>
+                    <p class="text-muted mb-0">Search and persist radio stations for the Sonos system.</p>
+                </div>
+                <p class="text-muted small mb-0">Live data powered by Radio Browser.</p>
+            </header>
 
             @if (!string.IsNullOrEmpty(saveSuccessMessage))
             {
-                <div class="alert alert-success">@saveSuccessMessage</div>
+                <div class="alert alert-success mb-0">@saveSuccessMessage</div>
             }
 
             @if (!string.IsNullOrEmpty(addStationErrorMessage))
             {
-                <div class="alert alert-danger">@addStationErrorMessage</div>
+                <div class="alert alert-danger mb-0">@addStationErrorMessage</div>
             }
 
-            <div class="mb-3">
-                <input class="form-control bg-secondary text-light border-0"
+            <div class="lookup-shell__search">
+                <input class="lookup-shell__search-input form-control"
                        @bind-value="searchTerm"
                        @bind-value:event="oninput"
                        placeholder="Search for a radio station..."
-                       @onkeydown="HandleKeyDown"/>
+                       @onkeydown="HandleKeyDown" />
+                <button class="lookup-shell__search-button btn btn-primary"
+                        @onclick="SearchStations"
+                        disabled="@string.IsNullOrWhiteSpace(searchTerm)"
+                        aria-label="Search stations"
+                        title="Search stations">
+                    🔍
+                </button>
             </div>
-
-            <button class="btn btn-primary w-100 mb-3"
-                    @onclick="SearchStations"
-                    disabled="@string.IsNullOrWhiteSpace(searchTerm)">
-                🔍 Search
-            </button>
 
             @if (isLoading)
             {
-                <p class="text-center text-muted">Searching...</p>
+                <p class="text-center text-muted mb-0">Searching...</p>
             }
             else if (results?.Any() == true)
             {
-                <ul class="list-group">
+                <ul class="lookup-results">
                     @foreach (var station in results)
                     {
-                        <li class="list-group-item bg-dark text-light border-secondary station-item">
-                            <div class="station-info">
-                                <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong><br/>
+                        <li class="lookup-result">
+                            <div class="lookup-info">
+                                <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong>
                                 <small class="text-muted">@GetCleanUrl(station.Url)</small>
                             </div>
-                            <div class="station-actions">
-                                <button class="btn btn-outline-success btn-sm me-1"
-                                        @onclick="() => PlayStation(station.Url)">
+                            <div class="lookup-actions">
+                                <button type="button"
+                                        class="lookup-action-button btn btn-outline-success"
+                                        @onclick="() => PlayStation(station.Url)"
+                                        aria-label="@($"Play {station.Name}")"
+                                        title="@($"Play {station.Name}")">
                                     🔊
                                 </button>
-                                <button class="btn btn-outline-primary btn-sm" @onclick="() => SaveStation(station)">
+                                <button type="button"
+                                        class="lookup-action-button btn btn-outline-primary"
+                                        @onclick="() => SaveStation(station)"
+                                        aria-label="@($"Save {station.Name}")"
+                                        title="@($"Save {station.Name}")">
                                     💾
                                 </button>
                             </div>
@@ -65,7 +79,7 @@
             }
             else if (results is not null)
             {
-                <p class="text-center text-muted">No stations found.</p>
+                <p class="text-center text-muted mb-0">No stations found.</p>
             }
         </div>
 
@@ -272,159 +286,3 @@
 }
 
 
-<style>
-    body {
-        background-color: #121212;
-        color: #e0e0e0;
-    }
-
-    .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #1e1e1e;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .form-section {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        font-weight: bold;
-        color: #bbbbbb;
-    }
-
-    .form-control, .form-select {
-        background-color: #333333;
-        border: 1px solid #555555;
-        color: #ffffff;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .form-control:disabled {
-        background-color: #333333 !important;
-        color: #bbbbbb !important;
-        border: 1px solid #555555 !important;
-        opacity: 1; /* Prevents browsers from making it look faded */
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: #888888;
-        outline: none;
-        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    }
-
-    .alert {
-        border-radius: 5px;
-        margin-bottom: 15px;
-    }
-
-    .alert-success {
-        background-color: #2e7d32;
-        color: #ffffff;
-        border: 1px solid #1b5e20;
-    }
-
-    .alert-warning {
-        background-color: #b8860b;
-        color: #ffffff;
-        border: 1px solid #8b6508;
-    }
-
-    .btn {
-        width: 100%;
-        border-radius: 5px;
-    }
-
-    .btn-danger {
-        background-color: #d32f2f;
-        border: 1px solid #b71c1c;
-        color: #ffffff;
-    }
-
-    .btn-danger:hover {
-        background-color: #b71c1c;
-    }
-
-    .btn-success {
-        background-color: #388e3c;
-        border: 1px solid #2e7d32;
-        color: #ffffff;
-    }
-
-    .btn-success:hover {
-        background-color: #2e7d32;
-    }
-
-    .list-group-item {
-        border: 1px solid #555;
-    }
-
-    input.form-control.bg-secondary::placeholder {
-        color: rgba(255, 255, 255, 0.6); /* soft white */
-    }
-
-    .station-remove-btn {
-        background-color: #dc3545;
-        color: white;
-        border: none;
-    }
-
-    .station-remove-btn {
-        font-size: 0.8rem;
-        line-height: 1;
-        padding: 2px 6px;
-    }
-
-    .btn-inline {
-        width: auto !important;
-        margin-top: 0 !important;
-    }
-
-    .station-remove-btn,
-    .spotify-remove-btn {
-        padding: 2px 8px;
-        font-size: 0.75rem;
-        line-height: 1;
-        width: auto;
-        white-space: nowrap;
-    }
-
-    .station-item {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .station-info {
-        flex: 1 1 70%;
-        min-width: 200px;
-    }
-
-    .station-actions {
-        display: flex;
-        flex-direction: row;
-        gap: 0.5rem;
-        flex-shrink: 0;
-    }
-
-    @@media (max-width: 576px) {
-        .station-item {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .station-actions {
-            width: 100%;
-            justify-content: flex-end;
-        }
-    }
-
-
-</style>

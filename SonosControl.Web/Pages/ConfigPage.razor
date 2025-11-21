@@ -9,278 +9,56 @@
 @using System;
 @attribute [Authorize(Roles = "admin,superadmin")]
 
-<style>
-    .holiday-table-wrapper {
-        max-height: 24rem;
-        overflow-y: auto;
-    }
-
-    .holiday-table-wrapper table {
-        margin-bottom: 0;
-    }
-
-    .holiday-table-wrapper thead th {
-        position: sticky;
-        top: 0;
-        background-color: #212529;
-        z-index: 1;
-    }
-
-    @@media (max-width: 576px) {
-        .holiday-table-wrapper {
-            max-height: 18rem;
-        }
-    }
-
-    .holiday-table-wrapper table th,
-    .holiday-table-wrapper table td {
-        white-space: nowrap;
-    }
-
-    .holiday-table-wrapper .form-control,
-    .holiday-table-wrapper .form-select {
-        min-width: 12rem;
-    }
-</style>
-
-
         @if (_settings is null)
         {
             <p class="text-muted">Loading settings...</p>
         }
         else
         {
-            <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: min(100%, 960px);">
-                <h4 class="mb-4 border-bottom pb-2">🔊 Speaker Settings</h4>
-
-                <div class="mb-3">
-                    <label class="form-label">💻 IP Address</label>
-                    <input type="text" class="form-control bg-secondary text-light border-0"
-                           @bind-value="IP_Adress"
-                           @bind-value:event="oninput"
-                           placeholder="Enter IP Address"
-                           disabled="@(!canEditIp)"/>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label d-block">⚙️ Device Actions</label>
-                    <button class="btn btn-outline-warning"
-                            @onclick="SendRebootCommand"
-                            disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
-                        @if (_isRebooting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        }
-                        Reboot Speaker
-                    </button>
-                    @if (!string.IsNullOrEmpty(_rebootAlertMessage))
-                    {
-                        <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
-                    }
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">🎵 Auto Play</label>
-                    <select class="form-select bg-secondary text-light border-0"
-                            @bind="AutoPlaySelection" @bind:event="onchange">
-                        <option value="">-- None --</option>
-                        <option value="randomStation">Random Station</option>
-                        <option value="randomSpotify">Random Spotify</option>
-                        <option value="randomYouTube">Random YouTube Music</option>
-                        <optgroup label="Stations">
-                            @foreach (var station in _settings.Stations)
-                            {
-                                <option value="station:@station.Url">@station.Name</option>
-                            }
-                        </optgroup>
-                        <optgroup label="Spotify">
-                            @foreach (var track in _settings.SpotifyTracks)
-                            {
-                                <option value="spotify:@track.Url">@track.Name</option>
-                            }
-                        </optgroup>
-                        <optgroup label="YouTube Music">
-                            @foreach (var collection in _settings.YouTubeMusicCollections)
-                            {
-                                <option value="youtube:@collection.Url">@collection.Name</option>
-                            }
-                        </optgroup>
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">🔊 Max Volume</label>
-                    <input type="number" class="form-control bg-secondary text-light border-0"
-                           min="0" max="100"
-                           @bind-value="MaxVolume"
-                           @bind-value:event="oninput" />
-                    <div class="form-text text-light text-opacity-75">
-                        Limits the highest volume that can be set from the main control panel.
+            <div class="config-shell surface-1 rounded-4 shadow-sm border border-secondary">
+                <header class="config-shell__header">
+                    <div>
+                        <h2 class="config-shell__title">🔧 System Configuration</h2>
+                        <p class="text-muted mb-0">Fine-tune playback behavior, schedules, and overrides for the Sonos speaker.</p>
                     </div>
-                </div>
+                    <p class="text-muted small mb-0">Changes save automatically.</p>
+                </header>
 
-                <div class="mb-3">
-                    <label class="form-label">🎨 Now Playing Gradient</label>
-                    <div class="gradient-inputs d-flex flex-wrap gap-3">
-                        <div class="gradient-input text-center">
-                            <span class="text-uppercase small text-muted d-block">Start</span>
-                            <input type="color" class="form-control form-control-color"
-                                   @bind-value="GradientStartColor"
-                                   @bind-value:event="oninput" />
+                <SectionCard Title="Device Settings" Icon="🎛️" Subtitle="Control the device endpoint, default playback, and visual accents.">
+                    <div class="config-field-stack">
+                        <div class="config-field">
+                            <label class="form-label">💻 IP Address</label>
+                            <input type="text" class="form-control bg-secondary text-light border-0"
+                                   @bind-value="IP_Adress"
+                                   @bind-value:event="oninput"
+                                   placeholder="Enter IP Address"
+                                   disabled="@(!canEditIp)" />
                         </div>
-                        <div class="gradient-input text-center">
-                            <span class="text-uppercase small text-muted d-block">Middle</span>
-                            <input type="color" class="form-control form-control-color"
-                                   @bind-value="GradientMidColor"
-                                   @bind-value:event="oninput" />
-                        </div>
-                        <div class="gradient-input text-center">
-                            <span class="text-uppercase small text-muted d-block">End</span>
-                            <input type="color" class="form-control form-control-color"
-                                   @bind-value="GradientEndColor"
-                                   @bind-value:event="oninput" />
-                        </div>
-                    </div>
-                    <div class="gradient-preview mt-3" style="@GradientPreviewStyle"></div>
-                </div>
 
-                <div class="mb-3">
-                    <label class="form-label">⏰ Start Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0"
-                           @bind-value="StartTime"
-                           @bind-value:event="oninput"/>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">🛑 Stop Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0"
-                           @bind-value="StopTime"
-                           @bind-value:event="oninput"/>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">📅 Server Time</label>
-                    <input type="time" class="form-control bg-secondary text-light border-0"
-                           disabled
-                           @bind-value="TimeRightNow"/>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">📆 Active Days</label>
-                    <div class="active-days-grid mt-2">
-                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7)) // Monday to Sunday
-                        {
-                            <div>
-                                <input type="checkbox"
-                                       class="btn-check"
-                                       id="btncheck-@day"
-                                       checked="@DaySelection[day]"
-                                       @onchange="(e => OnDayChanged(day, e.Value))"/>
-                                <label class="btn btn-outline-light btn-sm w-100" for="btncheck-@day">
-                                    @day.ToString().Substring(0, 3)
-                                </label>
+                        <div class="config-field">
+                            <label class="form-label">⚙️ Device Actions</label>
+                            <div class="device-action-row">
+                                <button class="btn btn-outline-warning"
+                                        @onclick="SendRebootCommand"
+                                        disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
+                                    @if (_isRebooting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    }
+                                    Reboot Speaker
+                                </button>
                             </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">🗓️ Daily Schedule</label>
-                    <table class="table table-dark table-striped mb-0">
-                        <thead>
-                        <tr>
-                            <th>Day</th>
-                            <th>Start</th>
-                            <th>Stop</th>
-                            <th>Play</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
-                        {
-                            if (!_settings.DailySchedules.ContainsKey(day))
-                                _settings.DailySchedules[day] = new DaySchedule();
-
-                            var schedule = _settings.DailySchedules[day];
-                            <tr>
-                                <td>@day.ToString().Substring(0,3)</td>
-                                <td>
-                                    <input type="time" class="form-control bg-secondary text-light border-0"
-                                           @bind-value="schedule.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                </td>
-                                <td>
-                                    <input type="time" class="form-control bg-secondary text-light border-0"
-                                           @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                </td>
-                                <td>
-                                    <select class="form-select bg-secondary text-light border-0"
-                                            value="@GetScheduleSelection(schedule)"
-                                            @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
-                                        <option value="">-- None --</option>
-                                        <option value="randomStation">Random Station</option>
-                                        <option value="randomSpotify">Random Spotify</option>
-                                        <option value="randomYouTube">Random YouTube Music</option>
-                                        <optgroup label="Stations">
-                                            @foreach (var station in _settings.Stations)
-                                            {
-                                                <option value="station:@station.Url">@station.Name</option>
-                                            }
-                                        </optgroup>
-                                        <optgroup label="Spotify">
-                                            @foreach (var track in _settings.SpotifyTracks)
-                                            {
-                                                <option value="spotify:@track.Url">@track.Name</option>
-                                            }
-                                        </optgroup>
-                                        <optgroup label="YouTube Music">
-                                            @foreach (var collection in _settings.YouTubeMusicCollections)
-                                            {
-                                                <option value="youtube:@collection.Url">@collection.Name</option>
-                                            }
-                                        </optgroup>
-                                    </select>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="mb-4">
-                    <label class="form-label">🎯 Holiday Overrides</label>
-                    <p class="form-text text-light text-opacity-75">
-                        Import calendar dates or define one-off playback rules for specific days. Overrides replace the standard daily plan when the date matches.
-                    </p>
-
-                    <div class="holiday-import mb-3 p-3 border border-secondary rounded-3 bg-secondary bg-opacity-25">
-                        <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
-                            <InputFile OnChange="ImportHolidayCalendarAsync" accept=".ics,text/calendar" disabled="@_importingCalendar" />
-                            <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))">Clear Message</button>
+                            @if (!string.IsNullOrEmpty(_rebootAlertMessage))
+                            {
+                                <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
+                            }
                         </div>
-                        <small class="d-block text-muted mt-2">.ics files that contain DTSTART values are supported. New dates inherit the default start/stop times until edited.</small>
-                        @if (!string.IsNullOrEmpty(_holidayImportMessage))
-                        {
-                            <div class="mt-2 small text-info">@_holidayImportMessage</div>
-                        }
-                    </div>
 
-                    <div class="row g-2 align-items-end mb-3">
-                        <div class="col-12 col-md-3">
-                            <label class="form-label small mb-1">Date</label>
-                            <input type="date" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Date" @bind-value:event="oninput" />
-                        </div>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">Start</label>
-                            <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Start" @bind-Value:event="oninput" />
-                        </div>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">Stop</label>
-                            <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Stop" @bind-Value:event="oninput" />
-                        </div>
-                        <div class="col-12 col-md-3">
-                            <label class="form-label small mb-1">Playback</label>
-                            <select class="form-select bg-secondary text-light border-0" @bind="_holidayDraft.Selection">
-                                <option value="skip">-- Don’t play --</option>
+                        <div class="config-field">
+                            <label class="form-label">🎵 Auto Play</label>
+                            <select class="form-select bg-secondary text-light border-0"
+                                    @bind="AutoPlaySelection" @bind:event="onchange">
+                                <option value="">-- None --</option>
                                 <option value="randomStation">Random Station</option>
                                 <option value="randomSpotify">Random Spotify</option>
                                 <option value="randomYouTube">Random YouTube Music</option>
@@ -304,23 +82,226 @@
                                 </optgroup>
                             </select>
                         </div>
-                        <div class="col-12 col-md-2">
-                            <label class="form-label small mb-1">Label</label>
-                            <input type="text" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Name" @bind-value:event="oninput" maxlength="80" />
+
+                        <div class="config-field">
+                            <label class="form-label">🔊 Max Volume</label>
+                            <input type="number" class="form-control bg-secondary text-light border-0"
+                                   min="0" max="100"
+                                   @bind-value="MaxVolume"
+                                   @bind-value:event="oninput" />
+                            <div class="form-text text-muted text-opacity-75">
+                                Limits the highest volume that can be set from the main control panel.
+                            </div>
                         </div>
-                        <div class="col-12 text-end">
-                            <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
+
+                        <div class="config-field">
+                            <label class="form-label">🎨 Now Playing Gradient</label>
+                            <div class="gradient-inputs">
+                                <div class="gradient-input text-center">
+                                    <span class="gradient-input__label">Start</span>
+                                    <input type="color" class="form-control form-control-color gradient-input__color"
+                                           @bind-value="GradientStartColor"
+                                           @bind-value:event="oninput" />
+                                </div>
+                                <div class="gradient-input text-center">
+                                    <span class="gradient-input__label">Middle</span>
+                                    <input type="color" class="form-control form-control-color gradient-input__color"
+                                           @bind-value="GradientMidColor"
+                                           @bind-value:event="oninput" />
+                                </div>
+                                <div class="gradient-input text-center">
+                                    <span class="gradient-input__label">End</span>
+                                    <input type="color" class="form-control form-control-color gradient-input__color"
+                                           @bind-value="GradientEndColor"
+                                           @bind-value:event="oninput" />
+                                </div>
+                            </div>
+                            <div class="gradient-preview mt-3" style="@GradientPreviewStyle"></div>
+                        </div>
+                    </div>
+                </SectionCard>
+
+                <SectionCard Title="Schedules" Icon="📅" Subtitle="Define when playback runs and how each day behaves.">
+                    <div class="schedule-grid">
+                        <div class="schedule-field">
+                            <label class="form-label">⏰ Start Time</label>
+                            <input type="time" class="form-control bg-secondary text-light border-0"
+                                   @bind-value="StartTime"
+                                   @bind-value:event="oninput" />
+                        </div>
+                        <div class="schedule-field">
+                            <label class="form-label">🛑 Stop Time</label>
+                            <input type="time" class="form-control bg-secondary text-light border-0"
+                                   @bind-value="StopTime"
+                                   @bind-value:event="oninput" />
+                        </div>
+                        <div class="schedule-field">
+                            <label class="form-label">📅 Server Time</label>
+                            <input type="time" class="form-control bg-secondary text-light border-0"
+                                   disabled
+                                   @bind-value="TimeRightNow" />
+                        </div>
+                    </div>
+
+                    <div class="schedule-days">
+                        <label class="form-label d-block">📆 Active Days</label>
+                        <div class="active-days-grid">
+                            @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
+                            {
+                                <div>
+                                    <input type="checkbox"
+                                           class="btn-check"
+                                           id="btncheck-@day"
+                                           checked="@DaySelection[day]"
+                                           @onchange="(e => OnDayChanged(day, e.Value))" />
+                                    <label class="btn btn-outline-light btn-sm w-100" for="btncheck-@day">
+                                        @day.ToString().Substring(0, 3)
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="daily-schedule-table-wrapper">
+                        <div class="daily-schedule-table-scroll">
+                            <table class="table daily-schedule-table table-dark table-striped mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Start</th>
+                                        <th>Stop</th>
+                                        <th>Play</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
+                                    {
+                                        if (!_settings.DailySchedules.ContainsKey(day))
+                                            _settings.DailySchedules[day] = new DaySchedule();
+
+                                        var schedule = _settings.DailySchedules[day];
+                                        <tr>
+                                            <td>@day.ToString().Substring(0,3)</td>
+                                            <td>
+                                                <input type="time" class="form-control bg-secondary text-light border-0"
+                                                       @bind-value="schedule.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                            </td>
+                                            <td>
+                                                <input type="time" class="form-control bg-secondary text-light border-0"
+                                                       @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                            </td>
+                                            <td>
+                                                <select class="form-select bg-secondary text-light border-0"
+                                                        value="@GetScheduleSelection(schedule)"
+                                                        @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
+                                                    <option value="">-- None --</option>
+                                                    <option value="randomStation">Random Station</option>
+                                                    <option value="randomSpotify">Random Spotify</option>
+                                                    <option value="randomYouTube">Random YouTube Music</option>
+                                                    <optgroup label="Stations">
+                                                        @foreach (var station in _settings.Stations)
+                                                        {
+                                                            <option value="station:@station.Url">@station.Name</option>
+                                                        }
+                                                    </optgroup>
+                                                    <optgroup label="Spotify">
+                                                        @foreach (var track in _settings.SpotifyTracks)
+                                                        {
+                                                            <option value="spotify:@track.Url">@track.Name</option>
+                                                        }
+                                                    </optgroup>
+                                                    <optgroup label="YouTube Music">
+                                                        @foreach (var collection in _settings.YouTubeMusicCollections)
+                                                        {
+                                                            <option value="youtube:@collection.Url">@collection.Name</option>
+                                                        }
+                                                    </optgroup>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </SectionCard>
+
+                <SectionCard Title="Holiday Overrides" Icon="🎯" Subtitle="Import or define dates that replace the normal schedule.">
+                    <p class="form-text text-muted">
+                        Import calendar dates or define one-off playback rules for specific days. Overrides replace the standard daily plan when an exact date matches.
+                    </p>
+
+                    <div class="holiday-import-panel">
+                        <div class="holiday-import-actions">
+                            <InputFile OnChange="ImportHolidayCalendarAsync" accept=".ics,text/calendar" disabled="@_importingCalendar" />
+                            <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))">Clear Message</button>
+                        </div>
+                        <small class="text-muted">.ics files containing DTSTART entries are supported. New dates inherit the default start and stop times until edited.</small>
+                        @if (!string.IsNullOrEmpty(_holidayImportMessage))
+                        {
+                            <div class="holiday-import-message">@_holidayImportMessage</div>
+                        }
+                    </div>
+
+                    <div class="holiday-editor">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small mb-1">Date</label>
+                                <input type="date" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Date" @bind-value:event="oninput" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-1">Start</label>
+                                <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Start" @bind-Value:event="oninput" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-1">Stop</label>
+                                <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Stop" @bind-Value:event="oninput" />
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="form-label small mb-1">Playback</label>
+                                <select class="form-select bg-secondary text-light border-0" @bind="_holidayDraft.Selection">
+                                    <option value="skip">-- Do not play --</option>
+                                    <option value="randomStation">Random Station</option>
+                                    <option value="randomSpotify">Random Spotify</option>
+                                    <option value="randomYouTube">Random YouTube Music</option>
+                                    <optgroup label="Stations">
+                                        @foreach (var station in _settings.Stations)
+                                        {
+                                            <option value="station:@station.Url">@station.Name</option>
+                                        }
+                                    </optgroup>
+                                    <optgroup label="Spotify">
+                                        @foreach (var track in _settings.SpotifyTracks)
+                                        {
+                                            <option value="spotify:@track.Url">@track.Name</option>
+                                        }
+                                    </optgroup>
+                                    <optgroup label="YouTube Music">
+                                        @foreach (var collection in _settings.YouTubeMusicCollections)
+                                        {
+                                            <option value="youtube:@collection.Url">@collection.Name</option>
+                                        }
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2">
+                                <label class="form-label small mb-1">Label</label>
+                                <input type="text" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Name" @bind-value:event="oninput" maxlength="80" />
+                            </div>
+                            <div class="col-12 text-end">
+                                <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
+                            </div>
                         </div>
                     </div>
 
                     @if (!string.IsNullOrEmpty(_holidayValidationMessage))
                     {
-                        <div class="text-warning small mb-3">@_holidayValidationMessage</div>
+                        <div class="holiday-validation">@_holidayValidationMessage</div>
                     }
 
-                    <div class="border border-secondary rounded-3 overflow-hidden">
-                        <div class="table-responsive holiday-table-wrapper">
-                            <table class="table table-dark table-striped table-sm align-middle">
+                    <div class="holiday-table-wrapper">
+                        <div class="holiday-table-scroll">
+                            <table class="table holiday-schedule-table table-striped table-sm align-middle">
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -347,7 +328,7 @@
                                             </td>
                                             <td>
                                                 <select class="form-select bg-secondary text-light border-0" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
-                                                    <option value="skip">-- Don’t play --</option>
+                                                    <option value="skip">-- Do not play --</option>
                                                     <option value="randomStation">Random Station</option>
                                                     <option value="randomSpotify">Random Spotify</option>
                                                     <option value="randomYouTube">Random YouTube Music</option>
@@ -386,11 +367,9 @@
                             </table>
                         </div>
                     </div>
-                </div>
-
+                </SectionCard>
             </div>
         }
-
 
 @code {
     private SonosSettings? _settings;
@@ -1018,114 +997,3 @@
 }
 
 
-<style>
-    body {
-        background-color: #121212;
-        color: #e0e0e0;
-    }
-
-    .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #1e1e1e;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .form-section {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        font-weight: bold;
-        color: #bbbbbb;
-    }
-
-    .form-control, .form-select {
-        background-color: #333333;
-        border: 1px solid #555555;
-        color: #ffffff;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .form-control:disabled {
-        background-color: #333333 !important;
-        color: #bbbbbb !important;
-        border: 1px solid #555555 !important;
-        opacity: 1; /* Prevents browsers from making it look faded */
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: #888888;
-        outline: none;
-        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    }
-
-    .active-days-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-        gap: 0.5rem;
-    }
-
-    .active-days-grid .btn {
-        font-size: 0.85rem;
-        padding: 0.45rem;
-        font-weight: 500;
-    }
-
-    .btn-check + .btn {
-        font-weight: 500;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
-    }
-
-    @@media (max-width: 400px) {
-    .col-4 {
-        flex: 0 0 50%;
-        max-width: 50%;
-    }
-    }
-
-    .active-days-grid {
-        display: grid;
-        gap: 0.5rem;
-        grid-template-columns: repeat(7, 1fr); /* exactly 7 buttons per row */
-    }
-
-    @@media (max-width: 576px) {
-    .active-days-grid {
-        grid-template-columns: repeat(3, 1fr); /* 3 per row on mobile */
-    }
-    }
-
-    .active-days-grid .btn {
-        font-size: 0.85rem;
-        padding: 0.45rem;
-        font-weight: 500;
-        white-space: nowrap;
-    }
-
-    .gradient-inputs .form-control-color {
-        width: 3rem;
-        height: 3rem;
-        padding: 0;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-    }
-
-    .gradient-input span {
-        letter-spacing: 0.05em;
-    }
-
-    .gradient-preview {
-        height: 2.5rem;
-        border-radius: 0.75rem;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35);
-    }
-
-
-</style>

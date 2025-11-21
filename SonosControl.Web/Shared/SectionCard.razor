@@ -1,0 +1,51 @@
+@using System
+
+<section class="section-card" aria-labelledby="@HeadingId">
+    <header class="section-card__header">
+        <div class="section-card__header-main">
+            @if (!string.IsNullOrWhiteSpace(Icon))
+            {
+                <span class="section-card__icon" aria-hidden="true">@Icon</span>
+            }
+            <div class="section-card__header-text">
+                @if (!string.IsNullOrWhiteSpace(Eyebrow))
+                {
+                    <p class="section-card__eyebrow">@Eyebrow</p>
+                }
+                <h3 id="@HeadingId">@Title</h3>
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <p class="section-card__subtitle">@Subtitle</p>
+                }
+            </div>
+        </div>
+        @if (HeaderExtras is not null)
+        {
+            <div class="section-card__actions">
+                @HeaderExtras
+            </div>
+        }
+    </header>
+    <div class="section-card__body">
+        @ChildContent
+    </div>
+</section>
+
+@code {
+    private string? _headingId;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = default!;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Eyebrow { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public RenderFragment? HeaderExtras { get; set; }
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+    [Parameter] public string? Id { get; set; }
+
+    private string HeadingId => _headingId!;
+
+    protected override void OnParametersSet()
+    {
+        _headingId ??= string.IsNullOrWhiteSpace(Id) ? $"section-{Guid.NewGuid():N}" : Id!;
+    }
+}
