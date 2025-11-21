@@ -11,36 +11,46 @@
 
 <PageTitle>SonosControl.Web</PageTitle>
 
-<div class="page">
-    <div class="sidebar" style="background-image: linear-gradient(180deg, rgb(0, 0, 0) 0%, #808080 130%)">
+<div class="app-shell">
+    <aside class="app-sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="top-row px-4 d-flex justify-content-end align-items-center" style="height: 50px;">
-            @if (!isAuthenticated)
-            {
-                <a href="/auth/login" class="top-link me-3">Login</a>
-                <a href="/register" class="top-link btn-primary px-3 py-1 rounded">Register</a>
-            }
-            else
-            {
-                <span class="me-3">Hello, @firstName!</span>
+    <main class="app-main">
+        <header class="app-top-bar">
+            <div class="app-top-bar__content px-4">
+                <div class="app-top-bar__identity">
+                    <span class="app-top-bar__title">SonosControl</span>
+                    <span class="app-top-bar__subtitle">Master every room</span>
+                </div>
+                <div class="top-bar-actions">
+                    @if (!isAuthenticated)
+                    {
+                        <a href="/auth/login" class="top-link top-link--ghost">Login</a>
+                        <a href="/register" class="top-link top-link--primary">Register</a>
+                    }
+                    else
+                    {
+                        <span class="top-bar-greeting">Hello, @firstName!</span>
 
-                <form method="post" action="/auth/logout" style="display:inline;">
-                    <input type="hidden" name="__RequestVerificationToken" value="@antiforgeryToken" />
-                    <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-                </form>
-                
-                <a href="@($"/useredit")" class="top-link btn-primary px-3 py-1 rounded">
-                    <span class="oi oi-person" aria-hidden="true"></span>
-                </a>
-            }
-        </div>
+                        <form method="post" action="/auth/logout" class="top-bar-logout">
+                            <input type="hidden" name="__RequestVerificationToken" value="@antiforgeryToken" />
+                            <button type="submit" class="btn btn-sm btn-danger">Logout</button>
+                        </form>
 
-        <article class="content px-4">
-            @Body
-        </article>
+                        <a href="@($"/useredit")" class="top-link top-link--icon">
+                            <span class="oi oi-person" aria-hidden="true"></span>
+                        </a>
+                    }
+                </div>
+            </div>
+        </header>
+
+        <section class="app-content-wrapper">
+            <article class="content px-4">
+                @Body
+            </article>
+        </section>
     </main>
 </div>
 
@@ -81,46 +91,3 @@
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 }
 
-<style>
-    .top-row {
-        background-color: #1e1e1e !important;
-        color: #e0e0e0 !important;
-        border-bottom: 1px solid #333333;
-        height: 50px;
-    }
-    .top-link {
-        color: #e0e0e0;
-        text-decoration: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        font-weight: 500;
-        transition: background-color 0.3s ease;
-        cursor: pointer;
-        display: inline-block;
-    }
-    .top-link:hover {
-        background-color: #555;
-        color: #fff;
-        text-decoration: none;
-    }
-    .btn-primary {
-        background-color: #007bff;
-        border: none;
-    }
-    .btn-primary:hover {
-        background-color: #0056b3;
-        color: #fff;
-    }
-    .logout-link {
-        background-color: #dc3545;
-        border-radius: 4px;
-        padding: 6px 12px;
-    }
-    .logout-link:hover {
-        background-color: #b02a37;
-        color: white;
-    }
-    .top-row {
-        width: 100%;
-    }
-</style>
