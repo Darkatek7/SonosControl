@@ -25,6 +25,7 @@ builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
+builder.Services.AddScoped<ThemeService>();
 
 builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews();

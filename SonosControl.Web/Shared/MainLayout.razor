@@ -1,13 +1,17 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Http
+@using Microsoft.JSInterop
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject IAntiforgery Antiforgery
 @inject IHttpContextAccessor HttpContextAccessor
+@inject SonosControl.Web.Services.ThemeService ThemeService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>SonosControl.Web</PageTitle>
 
@@ -24,13 +28,23 @@
                     <span class="app-top-bar__subtitle">Master every room</span>
                 </div>
                 <div class="top-bar-actions">
-                    @if (!isAuthenticated)
+                    @if (isAuthenticated)
                     {
-                        <a href="/auth/login" class="top-link top-link--ghost">Login</a>
-                        <a href="/register" class="top-link top-link--primary">Register</a>
-                    }
-                    else
-                    {
+                        <div class="theme-toggle">
+                            <span class="text-uppercase text-muted small mb-0">Theme</span>
+                            <div class="btn-group" role="group" aria-label="Theme preference">
+                                @foreach (var mode in ThemeOptions)
+                                {
+                                    <button type="button"
+                                            class="@GetThemeButtonClasses(mode)"
+                                            aria-pressed="@(mode == _userThemePreference)"
+                                            @onclick="() => ChangeThemeAsync(mode)">
+                                        @GetThemeLabel(mode)
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
                         <span class="top-bar-greeting">Hello, @firstName!</span>
 
                         <form method="post" action="/auth/logout" class="top-bar-logout">
@@ -41,6 +55,11 @@
                         <a href="@($"/useredit")" class="top-link top-link--icon">
                             <span class="oi oi-person" aria-hidden="true"></span>
                         </a>
+                    }
+                    else
+                    {
+                        <a href="/auth/login" class="top-link top-link--ghost">Login</a>
+                        <a href="/register" class="top-link top-link--primary">Register</a>
                     }
                 </div>
             </div>
@@ -59,6 +78,15 @@
     private bool isAuthenticated;
     private string? userId;
     private string? antiforgeryToken;
+    private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
+    private static readonly ThemePreferenceMode[] ThemeOptions = new[]
+    {
+        ThemePreferenceMode.System,
+        ThemePreferenceMode.Light,
+        ThemePreferenceMode.Dark
+    };
+    private bool _hasAppliedThemeOnClient;
+    private bool _themeSubscriptionRegistered;
 
     protected override async Task OnInitializedAsync()
     {
@@ -75,6 +103,9 @@
             firstName = appUser?.FirstName ?? user.Identity?.Name;
             userId = appUser?.Id;
         }
+
+        await ThemeService.InitializeAsync();
+        _userThemePreference = ThemeService.CurrentPreference;
     }
 
     private async Task Logout(MouseEventArgs e)
@@ -88,6 +119,78 @@
             Navigation.NavigateTo("/");
         }
     }
+    private async Task ChangeThemeAsync(ThemePreferenceMode mode)
+    {
+        if (!isAuthenticated || _userThemePreference == mode)
+        {
+            return;
+        }
+
+        _userThemePreference = mode;
+        await ThemeService.SetPreferenceAsync(mode);
+    }
+
+    private static string GetThemeLabel(ThemePreferenceMode mode) => mode switch
+    {
+        ThemePreferenceMode.Light => "Light",
+        ThemePreferenceMode.Dark => "Dark",
+        _ => "System"
+    };
+
+    private string GetThemeButtonClasses(ThemePreferenceMode mode)
+        => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-light";
+
+    private async Task ApplyThemePreferenceAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosTheme.apply", ThemeService.CurrentPreferenceIdentifier);
+        }
+        catch (JSException)
+        {
+            // The inline script might not be available yet; swallow so the layout still renders.
+        }
+    }
+
+    private void OnThemePreferenceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _userThemePreference = ThemeService.CurrentPreference;
+            await ApplyThemePreferenceAsync();
+            _hasAppliedThemeOnClient = true;
+            StateHasChanged();
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            return;
+        }
+
+        if (!_themeSubscriptionRegistered)
+        {
+            ThemeService.OnPreferenceChanged += OnThemePreferenceChanged;
+            _themeSubscriptionRegistered = true;
+        }
+
+        if (!_hasAppliedThemeOnClient)
+        {
+            await ApplyThemePreferenceAsync();
+            _hasAppliedThemeOnClient = true;
+        }
+    }
+
     [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    void IDisposable.Dispose()
+    {
+        if (_themeSubscriptionRegistered)
+        {
+            ThemeService.OnPreferenceChanged -= OnThemePreferenceChanged;
+        }
+    }
 }
 

@@ -12,5 +12,9 @@ namespace SonosControl.Web.Models
         [PersonalData]
         [MaxLength(100)]
         public string LastName { get; set; }
+
+        [PersonalData]
+        [MaxLength(16)]
+        public string ThemePreference { get; set; } = ThemePreferenceMode.System.ToIdentifier();
     }
 }

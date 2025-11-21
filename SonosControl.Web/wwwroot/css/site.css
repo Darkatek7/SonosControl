@@ -574,6 +574,11 @@ a:focus-visible {
     flex-direction: column;
 }
 
+[data-theme='dark'] .app-sidebar {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 60%, var(--surface-2)) 0%, var(--surface-0) 100%);
+    border-color: var(--border-strong);
+}
+
 .app-main {
     display: flex;
     flex-direction: column;
@@ -616,6 +621,38 @@ a:focus-visible {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+}
+
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: var(--font-size-xs);
+}
+
+.theme-toggle .btn-group {
+    display: inline-flex;
+}
+
+.theme-toggle .btn {
+    padding: 0.35rem 0.9rem;
+}
+
+.theme-toggle span {
+    color: var(--text-secondary);
+    letter-spacing: 0.2em;
+}
+
+.theme-toggle .btn {
+    border-color: var(--border-subtle);
+    color: var(--text-secondary);
+    background-color: transparent;
+}
+
+.theme-toggle .btn-primary {
+    color: #fff;
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary-strong);
 }
 
 .top-bar-greeting {
@@ -756,7 +793,7 @@ a:focus-visible {
     gap: var(--spacing-sm);
     padding: 0.65rem 1rem;
     border-radius: var(--radius-md);
-    color: #050505 !important;
+    color: var(--text-primary) !important;
     background-color: transparent;
     font-weight: 500;
     transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -764,11 +801,11 @@ a:focus-visible {
 
 .nav-shell .nav-link:hover {
     background-color: color-mix(in srgb, var(--brand-info) 12%, var(--surface-2));
-    color: #050505 !important;
+    color: var(--text-primary) !important;
 }
 
 .nav-shell .nav-link.active {
-    color: #050505;
+    color: var(--text-primary);
     background-color: color-mix(in srgb, var(--brand-primary) 20%, var(--surface-1));
     box-shadow: var(--shadow-xs);
 }
@@ -776,7 +813,7 @@ a:focus-visible {
 .nav-shell .nav-icon {
     font-size: 1rem;
     line-height: 1;
-    color: #050505;
+    color: var(--text-primary);
 }
 
 .nav-divider {
