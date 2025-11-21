@@ -1,0 +1,127 @@
+.user-management-shell {
+    width: min(100%, 1120px);
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+}
+
+.user-management-panel {
+    width: 100%;
+}
+
+.user-management__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-lg);
+}
+
+.user-management__header-control {
+    min-width: 240px;
+}
+
+.user-management__header .form-field {
+    margin: 0;
+}
+
+.user-management__body {
+    width: 100%;
+}
+
+.user-management__table-wrapper {
+    border-radius: var(--bs-border-radius-lg);
+    border: 1px solid var(--border-strong);
+    overflow: hidden;
+    background-color: var(--surface-1);
+    box-shadow: var(--shadow-xs);
+}
+
+.user-management-table {
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+}
+
+.user-management-table thead {
+    background-color: var(--surface-2);
+}
+
+.user-management-table th {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.user-management-table td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-strong);
+    vertical-align: middle;
+}
+
+.user-management-table tbody tr:nth-child(even) {
+    background-color: var(--surface-0);
+}
+
+.user-management-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.user-role-badge {
+    background-color: color-mix(in srgb, var(--brand-primary) 18%, var(--surface-1));
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.25rem 0.7rem;
+    margin: 0 var(--spacing-2xs) var(--spacing-2xs) 0;
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-2xs);
+}
+
+.user-action-btn {
+    min-width: 110px;
+    min-height: 40px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    padding: 0.4rem 0.85rem;
+}
+
+.user-action-btn:disabled {
+    opacity: 0.6;
+}
+
+.user-management__legend {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 576px) {
+    .user-management-shell {
+        padding: var(--spacing-md);
+    }
+
+    .user-management__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .user-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .user-action-btn {
+        width: 100%;
+    }
+}

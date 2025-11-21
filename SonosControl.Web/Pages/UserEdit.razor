@@ -9,62 +9,55 @@
 <PageTitle>Edit User</PageTitle>
 <AuthorizeView Context="authContext">
     <Authorized>
-        <div class="container p-4 shadow-lg rounded-4 bg-dark text-light" style="max-width: 600px;">
-            <h3 class="mb-4 border-bottom pb-2">📝 Edit User</h3>
-        
-            @if (user == null)
-            {
-                <p class="text-muted">Loading...</p>
-            }
-            else
-            {
-                <EditForm Model="editModel" OnValidSubmit="HandleUpdate">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary />
-        
-                    <div class="mb-3">
-                        <label class="form-label">First Name</label>
-                        <InputText class="form-control bg-secondary text-light border-0" @bind-Value="editModel.FirstName" />
-                    </div>
-        
-                    <div class="mb-3">
-                        <label class="form-label">Last Name</label>
-                        <InputText class="form-control bg-secondary text-light border-0" @bind-Value="editModel.LastName" />
-                    </div>
-        
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <InputText type="email" class="form-control bg-secondary text-light border-0" @bind-Value="editModel.Email" />
-                    </div>
-        
-                    <div class="mb-3">
-                        <label class="form-label">Username</label>
-                        <InputText class="form-control bg-secondary text-light border-0" disabled @bind-Value="editModel.UserName" />
-                    </div>
-        
-                    <div class="mb-3">
-                        <label class="form-label">New Password (optional)</label>
-                        <InputText type="password" class="form-control bg-secondary text-light border-0" @bind-Value="editModel.NewPassword" />
-                    </div>
-        
-                    <div class="mb-3">
-                        <label class="form-label">Confirm Password (optional)</label>
-                        <InputText type="password" class="form-control bg-secondary text-light border-0" @bind-Value="editModel.ConfirmPassword" />
-                    </div>
-        
-                    <div class="d-flex justify-content-between">
-                        <button type="submit" class="btn btn-primary px-4">Update</button>
-                        <button type="button" class="btn btn-secondary px-4" @onclick="Cancel">Cancel</button>
-                    </div>
-                </EditForm>
-        
-                @if (!string.IsNullOrEmpty(statusMessage))
+        <div class="auth-shell">
+            <section class="auth-card panel stack-sm user-edit-card" aria-labelledby="user-edit-heading">
+                <h3 id="user-edit-heading" class="page-title text-center mb-3">📝 Edit User</h3>
+
+                @if (user == null)
                 {
-                    <div class="alert mt-3 @(statusMessage.Contains("success", StringComparison.OrdinalIgnoreCase) ? "alert-success" : "alert-danger")">
-                        @statusMessage
-                    </div>
+                    <p class="text-muted text-center mb-0">Loading...</p>
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
+                    }
                 }
-            }
+                else
+                {
+                    <EditForm Model="editModel" OnValidSubmit="HandleUpdate" class="stack-md">
+                        <DataAnnotationsValidator />
+                        <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
+
+                        <FormField Label="First Name" Id="edit-firstname">
+                            <InputText id="edit-firstname" class="form-control" @bind-Value="editModel.FirstName" />
+                        </FormField>
+
+                        <FormField Label="Last Name" Id="edit-lastname">
+                            <InputText id="edit-lastname" class="form-control" @bind-Value="editModel.LastName" />
+                        </FormField>
+
+                        <FormField Label="Email" Id="edit-email">
+                            <InputText id="edit-email" type="email" class="form-control" @bind-Value="editModel.Email" />
+                        </FormField>
+
+                        <FormField Label="Username" Id="edit-username">
+                            <InputText id="edit-username" class="form-control" disabled @bind-Value="editModel.UserName" />
+                        </FormField>
+
+                        <FormField Label="New Password (optional)" Id="edit-new-password">
+                            <InputText id="edit-new-password" type="password" class="form-control" @bind-Value="editModel.NewPassword" />
+                        </FormField>
+
+                        <FormField Label="Confirm Password (optional)" Id="edit-confirm-password">
+                            <InputText id="edit-confirm-password" type="password" class="form-control" @bind-Value="editModel.ConfirmPassword" />
+                        </FormField>
+
+                        <div class="stack-sm">
+                            <button type="submit" class="btn btn-primary w-100">Update</button>
+                            <button type="button" class="btn btn-outline-secondary w-100" @onclick="Cancel">Cancel</button>
+                        </div>
+                    </EditForm>
+                }
+            </section>
         </div>
     </Authorized>
     <NotAuthorized>
@@ -80,6 +73,7 @@
     private ApplicationUser? user;
     private EditUserModel editModel = new();
     private string? statusMessage;
+    private FormStatus.AlertSeverity statusSeverity = FormStatus.AlertSeverity.Info;
     private bool isAuthenticated;
 
     protected override async Task OnInitializedAsync()
@@ -109,7 +103,7 @@
         }
         else
         {
-            statusMessage = "User not found.";
+            SetStatus("User not found.", FormStatus.AlertSeverity.Danger);
         }
     }
 
@@ -117,7 +111,7 @@
     {
         if (user == null)
         {
-            statusMessage = "User not loaded.";
+            SetStatus("User not loaded.", FormStatus.AlertSeverity.Danger);
             return;
         }
 
@@ -127,7 +121,7 @@
 
         if (!string.IsNullOrWhiteSpace(editModel.NewPassword) && editModel.NewPassword != editModel.ConfirmPassword)
         {
-            statusMessage = "Passwords do not match.";
+            SetStatus("Passwords do not match.", FormStatus.AlertSeverity.Danger);
             return;
         }
 
@@ -135,7 +129,7 @@
 
         if (!updateResult.Succeeded)
         {
-            statusMessage = "Error updating user: " + string.Join(", ", updateResult.Errors.Select(e => e.Description));
+            SetStatus("Error updating user: " + string.Join(", ", updateResult.Errors.Select(e => e.Description)), FormStatus.AlertSeverity.Danger);
             return;
         }
 
@@ -146,17 +140,23 @@
 
             if (!passResult.Succeeded)
             {
-                statusMessage = "Password reset failed: " + string.Join(", ", passResult.Errors.Select(e => e.Description));
+                SetStatus("Password reset failed: " + string.Join(", ", passResult.Errors.Select(e => e.Description)), FormStatus.AlertSeverity.Danger);
                 return;
             }
         }
 
-        statusMessage = "✅ User updated successfully.";
+        SetStatus("✅ User updated successfully.", FormStatus.AlertSeverity.Success);
     }
 
     private void Cancel()
     {
         NavigationManager.NavigateTo("/");
+    }
+
+    private void SetStatus(string message, FormStatus.AlertSeverity severity)
+    {
+        statusMessage = message;
+        statusSeverity = severity;
     }
 
     public class EditUserModel
@@ -174,46 +174,3 @@
     }
 }
 
-<style>
-    /* Match your dark theme form controls */
-    .form-label {
-        font-weight: 600;
-        color: #bbbbbb;
-    }
-
-    .form-control {
-        background-color: #333333;
-        border: none;
-        color: #e0e0e0;
-        border-radius: 0.375rem;
-        padding: 0.5rem 0.75rem;
-        transition: border-color 0.3s ease;
-    }
-
-    .form-control:focus {
-        outline: none;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-        border-color: #007bff;
-        background-color: #444444;
-        color: #fff;
-    }
-
-    .btn-primary {
-        background-color: #007bff;
-        border: none;
-    }
-
-    .btn-primary:hover {
-        background-color: #0056b3;
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        border: none;
-        color: #fff;
-    }
-
-    .btn-secondary:hover {
-        background-color: #5a6268;
-    }
-</style>
