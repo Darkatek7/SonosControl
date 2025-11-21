@@ -1,0 +1,213 @@
+.config-shell {
+    max-width: min(100%, 1100px);
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+    border-radius: var(--bs-border-radius-xl);
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface-0);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.config-shell__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    color: var(--text-secondary);
+}
+
+.config-shell__title {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    color: var(--text-primary);
+}
+
+.config-field-stack {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.config-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2xs);
+}
+
+.device-action-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.gradient-inputs {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.gradient-input__label {
+    letter-spacing: 0.1em;
+    font-size: var(--font-size-xs);
+    display: block;
+    color: var(--text-muted);
+}
+
+.gradient-input__color {
+    width: 3rem;
+    height: 3rem;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.gradient-preview {
+    height: 2.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid color-mix(in srgb, var(--text-secondary) 40%, transparent);
+    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--spacing-md);
+}
+
+.schedule-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2xs);
+}
+
+.schedule-days {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2xs);
+}
+
+.active-days-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: var(--spacing-2xs);
+}
+
+.daily-schedule-table-wrapper,
+.holiday-table-wrapper {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--bs-border-radius-md);
+    background-color: var(--surface-1);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+}
+
+.daily-schedule-table-scroll,
+.holiday-table-scroll {
+    overflow: auto;
+    max-height: 28rem;
+}
+
+.daily-schedule-table,
+.holiday-schedule-table {
+    min-width: 100%;
+    border-collapse: collapse;
+}
+
+.daily-schedule-table thead th,
+.holiday-schedule-table thead th {
+    position: sticky;
+    top: 0;
+    background-color: var(--surface-2);
+    z-index: 2;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.daily-schedule-table td,
+.holiday-schedule-table td {
+    white-space: nowrap;
+    min-width: 120px;
+}
+
+.holiday-import-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2xs);
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--bs-border-radius-md);
+    background-color: var(--surface-1);
+}
+
+.holiday-import-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.holiday-import-message {
+    color: var(--brand-info);
+}
+
+.holiday-editor {
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--bs-border-radius-md);
+    background-color: var(--surface-1);
+    margin-bottom: 0;
+}
+
+.holiday-validation {
+    color: var(--brand-warning);
+    font-size: var(--font-size-sm);
+}
+
+.holiday-table-scroll table {
+    width: 100%;
+}
+
+.section-card + .section-card {
+    margin-top: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+    .config-shell__header {
+        flex-direction: column;
+    }
+
+    .device-action-row button {
+        width: 100%;
+    }
+
+    .config-field-stack,
+    .schedule-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .daily-schedule-table-scroll,
+    .holiday-table-scroll {
+        max-height: 22rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .active-days-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .daily-schedule-table-scroll,
+    .holiday-table-scroll {
+        max-height: 18rem;
+    }
+
+    .holiday-editor .row {
+        gap: var(--spacing-sm);
+    }
+}
