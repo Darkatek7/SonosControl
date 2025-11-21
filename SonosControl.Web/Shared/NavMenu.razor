@@ -1,52 +1,59 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">SonosControl</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+<div class="nav-shell">
+    <div class="nav-brand-row px-3">
+        <div class="nav-brand-mark">SC</div>
+        <div class="nav-brand-text">
+            <span class="nav-brand-title">SonosControl</span>
+            <span class="nav-brand-subtitle">Command center</span>
+        </div>
+        <button title="Navigation menu" class="navbar-toggler nav-toggler" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
     </div>
-</div>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="oi oi-home" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="lookup">
-                <span class="oi oi-magnifying-glass" aria-hidden="true"></span> Station Lookup
-            </NavLink>
-        </div>
-        <AuthorizeView Roles="admin,superadmin">
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="config">
-                        <span class="oi oi-cog" aria-hidden="true"></span> Sonos Config
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-        <AuthorizeView Roles="admin,superadmin">
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="admin/users">
-                        <span class="oi oi-person" aria-hidden="true"></span> User Management
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-        <AuthorizeView Roles="admin,superadmin">
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="logs">
-                        <span class="oi oi-file" aria-hidden="true"></span> Logs
-                    </NavLink>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-    </nav>
+    <div class="@NavMenuCssClass nav-scrollable px-3" @onclick="ToggleNavMenu">
+        <nav class="nav-links">
+            <div class="nav-item">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    <span class="nav-icon oi oi-home" aria-hidden="true"></span>
+                    <span>Home</span>
+                </NavLink>
+            </div>
+            <div class="nav-item">
+                <NavLink class="nav-link" href="lookup">
+                    <span class="nav-icon oi oi-magnifying-glass" aria-hidden="true"></span>
+                    <span>Station Lookup</span>
+                </NavLink>
+            </div>
+
+            <AuthorizeView Roles="admin,superadmin">
+                <Authorized>
+                    <div class="nav-divider" aria-hidden="true"></div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="config">
+                            <span class="nav-icon oi oi-cog" aria-hidden="true"></span>
+                            <span>Sonos Config</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="admin/users">
+                            <span class="nav-icon oi oi-person" aria-hidden="true"></span>
+                            <span>User Management</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="logs">
+                            <span class="nav-icon oi oi-file" aria-hidden="true"></span>
+                            <span>Logs</span>
+                        </NavLink>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+    </div>
+
+    <div class="nav-footer px-3">
+        <span class="nav-footer-note">Syncing rooms in real time.</span>
+    </div>
 </div>
 
 @code {
