@@ -7,74 +7,98 @@
 
 <PageTitle>System Logs</PageTitle>
 
-
-        <div class="container-fluid logs-container p-4 bg-dark text-light rounded-4 shadow mt-5">
-            <h3 class="mb-4 border-bottom pb-2">📜 System Logs</h3>
-
-            @if (logs == null)
-            {
-                <p class="text-muted">Loading logs...</p>
-            }
-            else if (!logs.Any())
-            {
-                <div class="alert alert-warning">No logs found.</div>
-            }
-            else
-            {
-                <div class="mb-4 row gx-3 align-items-center flex-wrap">
-                    <div class="col-auto">
-                        <label for="logCountSelect" class="form-label mb-0">Show:</label>
-                    </div>
-                    <div class="col-auto">
-                        <select id="logCountSelect"
-                                class="form-select form-select-sm bg-secondary text-light border-0"
-                                @bind="selectedLogCount">
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
-                            <option value="-1">Custom</option>
-                        </select>
-                    </div>
-
-                    @if (selectedLogCount == -1)
-                    {
-                        <div class="col-auto">
-                            <input type="number"
-                                   class="form-control form-control-sm bg-secondary text-light border-0"
-                                   placeholder="Enter number"
-                                   style="max-width: 120px;"
-                                   @bind="customLogCount"
-                                   @bind:event="onchange"/>
-                        </div>
-                    }
+<section class="logs-shell card surface-1 shadow-sm border border-1">
+    <div class="card-body p-4 p-lg-5">
+        <header class="logs-header d-flex flex-column flex-md-row align-items-start justify-content-between gap-3 mb-4">
+            <div>
+                <h2 class="page-title mb-1">📜 System Logs</h2>
+                <p class="text-muted mb-0">A chronological overview of operator activity.</p>
+            </div>
+            <div class="toolbar-actions logs-toolbar align-items-center flex-wrap">
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <label for="logCountSelect" class="form-label logs-toolbar__label mb-0">Show</label>
+                    <select id="logCountSelect"
+                            class="form-select form-select-sm logs-count-select"
+                            @bind="selectedLogCount">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                        <option value="-1">Custom</option>
+                    </select>
                 </div>
+                @if (selectedLogCount == -1)
+                {
+                    <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                        <label for="customLogCount" class="form-label logs-toolbar__label mb-0">Count</label>
+                        <input id="customLogCount"
+                               type="number"
+                               min="1"
+                               class="form-control form-control-sm logs-count-input"
+                               placeholder="Enter number"
+                               @bind="customLogCount"
+                               @bind:event="onchange" />
+                    </div>
+                }
+            </div>
+        </header>
 
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover table-striped align-middle">
-                        <thead class="table-secondary text-dark">
+        @if (logs == null)
+        {
+            <div class="alert alert-info logs-status-alert" role="status" aria-live="polite">
+                <span class="fw-semibold">Loading logs…</span>
+            </div>
+        }
+        else if (!logs.Any())
+        {
+            <div class="alert alert-warning logs-status-alert" role="status" aria-live="polite">
+                <span>No log entries were found.</span>
+            </div>
+        }
+        else
+        {
+            <div class="logs-table-wrapper d-none d-md-block">
+                <table class="table table-striped table-hover align-middle logs-table mb-0">
+                    <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>User</th>
-                            <th class="d-none d-sm-table-cell">Action</th>
-                            <th class="d-none d-md-table-cell">Details</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">User</th>
+                            <th scope="col" class="d-none d-sm-table-cell">Action</th>
+                            <th scope="col" class="d-none d-md-table-cell">Details</th>
                         </tr>
-                        </thead>
-                        <tbody>
+                    </thead>
+                    <tbody>
                         @foreach (var log in logs)
                         {
-                            <tr>
+                            <tr @key="log.Id">
                                 <td>@log.Timestamp.ToLocalTime().ToString("g")</td>
-                                <td>@log.PerformedBy</td>
+                                <td>@(string.IsNullOrWhiteSpace(log.PerformedBy) ? "System" : log.PerformedBy)</td>
                                 <td class="d-none d-sm-table-cell">@log.Action</td>
-                                <td class="d-none d-md-table-cell">@log.Details</td>
+                                <td class="d-none d-md-table-cell">@(!string.IsNullOrWhiteSpace(log.Details) ? log.Details : "—")</td>
                             </tr>
                         }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="logs-card-list d-grid d-md-none">
+                @foreach (var log in logs)
+                {
+                    <article class="logs-card" @key="log.Id">
+                        <div class="logs-card__meta">
+                            <span>@log.Timestamp.ToLocalTime().ToString("g")</span>
+                            <span class="badge bg-secondary text-uppercase fs-7">
+                                @(string.IsNullOrWhiteSpace(log.PerformedBy) ? "System" : log.PerformedBy)
+                            </span>
+                        </div>
+                        <p class="logs-card__action mb-1 fw-semibold">@log.Action</p>
+                        <p class="logs-card__details mb-0 text-muted">@(!string.IsNullOrWhiteSpace(log.Details) ? log.Details : "—")</p>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</section>
 
 @code {
     private List<LogEntry>? logs;
@@ -125,154 +149,3 @@
     }
 
 }
-
-<style>
-    body {
-        background-color: #121212;
-        color: #e0e0e0;
-    }
-
-    .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #1e1e1e;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .form-section {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        font-weight: bold;
-        color: #bbbbbb;
-    }
-
-    .form-control, .form-select {
-        background-color: #333333;
-        border: 1px solid #555555;
-        color: #ffffff;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .form-control:disabled {
-        background-color: #333333 !important;
-        color: #bbbbbb !important;
-        border: 1px solid #555555 !important;
-        opacity: 1; /* Prevents browsers from making it look faded */
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: #888888;
-        outline: none;
-        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    }
-
-    .alert {
-        border-radius: 5px;
-        margin-bottom: 15px;
-    }
-
-    .alert-success {
-        background-color: #2e7d32;
-        color: #ffffff;
-        border: 1px solid #1b5e20;
-    }
-
-    .alert-warning {
-        background-color: #b8860b;
-        color: #ffffff;
-        border: 1px solid #8b6508;
-    }
-
-    .btn {
-        width: 100%;
-        border-radius: 5px;
-    }
-
-    .btn-danger {
-        background-color: #d32f2f;
-        border: 1px solid #b71c1c;
-        color: #ffffff;
-    }
-
-    .btn-danger:hover {
-        background-color: #b71c1c;
-    }
-
-    .btn-success {
-        background-color: #388e3c;
-        border: 1px solid #2e7d32;
-        color: #ffffff;
-    }
-
-    .btn-success:hover {
-        background-color: #2e7d32;
-    }
-
-    .list-group-item {
-        border: 1px solid #555;
-    }
-
-    input.form-control.bg-secondary::placeholder {
-        color: rgba(255, 255, 255, 0.6); /* soft white */
-    }
-
-    .station-remove-btn {
-        background-color: #dc3545;
-        color: white;
-        border: none;
-    }
-
-    .station-remove-btn {
-        font-size: 0.8rem;
-        line-height: 1;
-        padding: 2px 6px;
-    }
-
-    .btn-inline {
-        width: auto !important;
-        margin-top: 0 !important;
-    }
-
-    .station-remove-btn,
-    .spotify-remove-btn {
-        padding: 2px 8px;
-        font-size: 0.75rem;
-        line-height: 1;
-        width: auto;
-        white-space: nowrap;
-    }
-
-    .table th, .table td {
-        font-size: 0.85rem;
-        padding: 0.5rem 0.75rem;
-    }
-
-    .form-select-sm, .form-control-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.8rem;
-    }
-
-    .logs-container {
-        max-width: 100%;
-        margin: 0 auto;
-    }
-
-    @@media (min-width: 992px) {
-    .logs-container {
-        max-width: 960px; /* Same as container-lg */
-    }
-    }
-
-    @@media (min-width: 1200px) {
-    .logs-container {
-        max-width: 1140px; /* Same as container-xl */
-    }
-    }
-
-
-</style>
