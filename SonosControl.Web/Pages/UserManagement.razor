@@ -13,38 +13,55 @@
 
 <PageTitle>User Management</PageTitle>
 
-        <div class="container container-lg p-4 bg-dark text-light rounded-4 shadow">
-            <h3 class="mb-4 border-bottom pb-2">👥 User Management</h3>
-
+<div class="user-management-shell">
+    <section class="panel user-management-panel stack-lg" aria-labelledby="user-management-heading">
+        <header class="user-management__header">
+            <div>
+                <h3 id="user-management-heading" class="page-title mb-1">👥 User Management</h3>
+                <p class="text-muted small mb-0">Manage accounts, roles, and activation states securely.</p>
+            </div>
             @if (isAdmin)
             {
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="allowRegSwitch" checked="@allowUserRegistration" @onchange="ToggleRegistration" />
-                    <label class="form-check-label" for="allowRegSwitch">Allow user registration</label>
+                <div class="user-management__header-control">
+                    <FormField Label="Allow user registration"
+                               Id="@RegistrationSwitchId"
+                               HelperText="@RegistrationSwitchHelperText">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input user-management__switch"
+                                   type="checkbox"
+                                   role="switch"
+                                   id="@RegistrationSwitchId"
+                                   checked="@allowUserRegistration"
+                                   @onchange="ToggleRegistration"
+                                   aria-label="Allow user registration toggle" />
+                        </div>
+                    </FormField>
                 </div>
             }
+        </header>
 
+        <div class="user-management__body stack-md">
             @if (isLoading)
             {
-                <p class="text-muted">Loading users...</p>
+                <p class="text-muted mb-0">Loading users...</p>
             }
             else
             {
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
-                    <div class="alert alert-danger">@errorMessage</div>
+                    <FormStatus StatusMessage="@errorMessage" Severity="FormStatus.AlertSeverity.Danger" />
                 }
 
-                <div class="table-responsive">
-                    <table class="table table-dark table-hover align-middle rounded-3 overflow-hidden">
-                        <thead class="table-secondary text-dark">
+                <div class="table-responsive user-management__table-wrapper">
+                    <table class="table user-management-table mb-0">
+                        <thead>
                         <tr>
-                            <th>User</th>
-                            <th class="d-none d-xl-table-cell">First</th>
-                            <th class="d-none d-xl-table-cell">Last</th>
-                            <th class="d-none d-md-table-cell">Email</th>
-                            <th class="d-none d-lg-table-cell">Roles</th>
-                            <th class="text-center">Actions</th>
+                            <th scope="col">User</th>
+                            <th scope="col" class="d-none d-xl-table-cell">First</th>
+                            <th scope="col" class="d-none d-xl-table-cell">Last</th>
+                            <th scope="col" class="d-none d-md-table-cell">Email</th>
+                            <th scope="col" class="d-none d-lg-table-cell">Roles</th>
+                            <th scope="col" class="text-center">Actions</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -58,45 +75,52 @@
 
                                 <td class="d-none d-md-table-cell">@user.Email</td>
 
-                                <td class="d-none d-lg-table-cell">
+                                <td class="d-none d-lg-table-cell user-management__roles">
                                     @foreach (var role in userRoles[user.Id])
                                     {
-                                        <span class="badge bg-secondary me-1">@role</span>
+                                        <span class="badge user-role-badge">@role</span>
                                     }
                                 </td>
 
                                 <td class="text-center">
-                                    <div class="d-flex flex-wrap justify-content-center gap-2">
-                                        <button class="btn btn-sm btn-outline-danger"
+                                    <div class="user-actions">
+                                        <button type="button"
+                                                class="btn btn-outline-danger user-action-btn"
                                                 @onclick="() => DeleteUser(user)"
-                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))">
+                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))"
+                                                aria-label="Delete user">
                                             Delete
                                         </button>
 
                                         @if (isSuperAdmin)
                                         {
-                                            <button class="btn btn-sm btn-outline-primary"
+                                            <button type="button"
+                                                    class="btn btn-outline-primary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "admin")'
                                                     disabled="@IsCurrentUser(user)">
                                                 @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
                                             </button>
 
-                                            <button class="btn btn-sm btn-outline-secondary"
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "operator")'
                                                     disabled="@IsCurrentUser(user)">
                                                 @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
                                             </button>
-                                            
-                                            <button class="btn btn-sm btn-outline-warning"
+
+                                            <button type="button"
+                                                    class="btn btn-outline-warning user-action-btn"
                                                     @onclick='() => ToggleRole(user, "superadmin")'
                                                     disabled="@IsCurrentUser(user)">
                                                 @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
                                             </button>
                                         }
 
-                                        <button class="btn btn-sm @(IsUserActive(user) ? "btn-success" : "btn-warning")"
+                                        <button type="button"
+                                                class="btn user-action-btn @GetActivationButtonClass(user)"
                                                 @onclick='() => ToggleUserActivation(user)'
-                                                disabled="@IsCurrentUser(user)">
+                                                disabled="@IsCurrentUser(user)"
+                                                aria-label="Toggle user activation status">
                                             @(IsUserActive(user) ? "✔" : "⛔")
                                         </button>
                                     </div>
@@ -104,18 +128,18 @@
                             </tr>
                         }
                         </tbody>
-
                     </table>
+                </div>
 
-                    <div class="mt-3 small text-muted text-center">
-                        <strong>Legend:</strong>
-                        <span class="ms-3">✔ = Active</span>
-                        <span class="ms-3">⛔ = Deactivated</span>
-                    </div>
-
+                <div class="user-management__legend">
+                    <strong>Legend:</strong>
+                    <span class="ms-3">✔ = Active</span>
+                    <span class="ms-3">⛔ = Deactivated</span>
                 </div>
             }
         </div>
+    </section>
+</div>
 
 @code {
     private List<ApplicationUser> users = new();
@@ -127,6 +151,9 @@
     private bool isAdmin;
     private bool allowUserRegistration;
     private SonosSettings? _settings;
+    private readonly string RegistrationSwitchId = $"allowRegistrationSwitch_{System.Guid.NewGuid():N}";
+
+    private string RegistrationSwitchHelperText => allowUserRegistration ? "Open to new users." : "Closed to new signups.";
 
     protected override async Task OnInitializedAsync()
     {
@@ -257,6 +284,9 @@
         }
     }
 
+    private string GetActivationButtonClass(ApplicationUser user) =>
+        IsUserActive(user) ? "btn-outline-success" : "btn-outline-warning";
+
     private async Task ToggleRole(ApplicationUser user, string role)
     {
         if (!isSuperAdmin)
@@ -333,167 +363,3 @@
 }
 
 
-<style>
-    body {
-        background-color: #121212;
-        color: #e0e0e0;
-    }
-
-    .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #1e1e1e;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .form-section {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        font-weight: bold;
-        color: #bbbbbb;
-    }
-
-    .form-control, .form-select {
-        background-color: #333333;
-        border: 1px solid #555555;
-        color: #ffffff;
-        border-radius: 5px;
-        padding: 10px;
-    }
-
-    .form-control:disabled {
-        background-color: #333333 !important;
-        color: #bbbbbb !important;
-        border: 1px solid #555555 !important;
-        opacity: 1; /* Prevents browsers from making it look faded */
-    }
-
-    .form-control:focus, .form-select:focus {
-        border-color: #888888;
-        outline: none;
-        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
-    }
-
-    .alert {
-        border-radius: 5px;
-        margin-bottom: 15px;
-    }
-
-    .alert-success {
-        background-color: #2e7d32;
-        color: #ffffff;
-        border: 1px solid #1b5e20;
-    }
-
-    .alert-warning {
-        background-color: #b8860b;
-        color: #ffffff;
-        border: 1px solid #8b6508;
-    }
-
-    .btn {
-        width: 100%;
-        border-radius: 5px;
-    }
-
-    .btn-danger {
-        background-color: #d32f2f;
-        border: 1px solid #b71c1c;
-        color: #ffffff;
-    }
-
-    .btn-danger:hover {
-        background-color: #b71c1c;
-    }
-
-    .btn-success {
-        background-color: #388e3c;
-        border: 1px solid #2e7d32;
-        color: #ffffff;
-    }
-
-    .btn-success:hover {
-        background-color: #2e7d32;
-    }
-
-    .list-group-item {
-        border: 1px solid #555;
-    }
-
-    input.form-control.bg-secondary::placeholder {
-        color: rgba(255, 255, 255, 0.6); /* soft white */
-    }
-
-    .station-remove-btn {
-        background-color: #dc3545;
-        color: white;
-        border: none;
-    }
-
-    .station-remove-btn {
-        font-size: 0.8rem;
-        line-height: 1;
-        padding: 2px 6px;
-    }
-
-    .btn-inline {
-        width: auto !important;
-        margin-top: 0 !important;
-    }
-
-    .station-remove-btn,
-    .spotify-remove-btn {
-        padding: 2px 8px;
-        font-size: 0.75rem;
-        line-height: 1;
-        width: auto;
-        white-space: nowrap;
-    }
-
-    .table thead th {
-        font-weight: 600;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .table td, .table th {
-        vertical-align: middle;
-        padding: 0.75rem 1rem;
-    }
-
-    .btn-sm {
-        font-size: 0.75rem;
-        padding: 4px 10px;
-    }
-
-    .badge {
-        font-size: 0.75rem;
-        padding: 4px 8px;
-    }
-
-    .alert {
-        font-size: 0.9rem;
-        padding: 10px 14px;
-        border-radius: 6px;
-    }
-
-    .container-lg {
-        max-width: 1000px;
-    }
-
-    .table-responsive {
-        border-radius: 12px;
-        overflow-x: auto;
-    }
-
-    h3 {
-        font-weight: 600;
-        font-size: 1.5rem;
-    }
-
-</style>

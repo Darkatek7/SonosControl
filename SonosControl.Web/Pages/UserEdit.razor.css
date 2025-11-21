@@ -1,0 +1,25 @@
+.user-edit-card {
+    width: min(100%, 460px);
+}
+
+.user-edit-card .page-title {
+    color: var(--text-primary);
+    font-size: var(--font-size-2xl);
+}
+
+.user-edit-card .stack-md {
+    width: 100%;
+}
+
+.user-edit-card .form-control {
+    background-color: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s ease;
+}
+
+.user-edit-card .form-control:focus {
+    border-color: var(--brand-primary);
+    box-shadow: var(--focus-ring);
+}
