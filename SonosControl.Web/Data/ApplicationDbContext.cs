@@ -26,6 +26,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.Property(u => u.PhoneNumber).HasColumnType("TEXT");
             entity.Property(u => u.ConcurrencyStamp).HasColumnType("TEXT");
+            entity.Property(u => u.ThemePreference).HasColumnType("TEXT")
+                .HasMaxLength(16)
+                .HasDefaultValue(ThemePreferenceMode.System.ToIdentifier());
             // add other overrides if necessary
         });
 

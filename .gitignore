@@ -350,3 +350,5 @@ MigrationBackup/
 .Data/
 config.json
 app.db
+app.db-shm
+app.db-wal

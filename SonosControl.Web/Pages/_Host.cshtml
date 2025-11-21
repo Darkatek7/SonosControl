@@ -1,7 +1,44 @@
-﻿@page "/"
-@using Microsoft.AspNetCore.Components.Web
-@namespace SonosControl.Web.Pages
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@using System.Text.Json
+@namespace SonosControl.Web.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IHttpContextAccessor HttpContextAccessor
+
+
+@{
+
+    var themePreference = ThemePreferenceMode.System.ToIdentifier();
+
+    var principal = HttpContextAccessor.HttpContext?.User;
+
+    if (principal?.Identity?.IsAuthenticated ?? false)
+
+    {
+
+        var appUser = await UserManager.GetUserAsync(principal);
+
+        if (appUser != null && !string.IsNullOrWhiteSpace(appUser.ThemePreference))
+
+        {
+
+            themePreference = appUser.ThemePreference;
+
+        }
+
+    }
+
+
+
+    var serializedThemePreference = JsonSerializer.Serialize(themePreference);
+
+}
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -9,6 +46,60 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="~/" />
+    <script>
+        (function () {
+            var html = document.documentElement;
+            var mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+            var cleanup;
+
+            function syncWithSystemTheme() {
+                if (mediaQuery.matches) {
+                    html.setAttribute("data-theme", "dark");
+                } else {
+                    html.removeAttribute("data-theme");
+                }
+            }
+
+            function applyPreference(preference) {
+                if (cleanup) {
+                    cleanup();
+                    cleanup = null;
+                }
+
+                if (preference === "dark") {
+                    html.setAttribute("data-theme", "dark");
+                    return;
+                }
+
+                if (preference === "light") {
+                    html.removeAttribute("data-theme");
+                    return;
+                }
+
+                syncWithSystemTheme();
+
+                var listener = function () {
+                    syncWithSystemTheme();
+                };
+
+                if (mediaQuery.addEventListener) {
+                    mediaQuery.addEventListener("change", listener);
+                    cleanup = function () {
+                        mediaQuery.removeEventListener("change", listener);
+                    };
+                } else if (mediaQuery.addListener) {
+                    mediaQuery.addListener(listener);
+                    cleanup = function () {
+                        mediaQuery.removeListener(listener);
+                    };
+                }
+            }
+
+            window.sonosTheme = window.sonosTheme || {};
+            window.sonosTheme.apply = applyPreference;
+            window.sonosTheme.apply(@Html.Raw(serializedThemePreference));
+        })();
+    </script>
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="_content/Radzen.Blazor/css/standard-dark.css">
     <link href="css/site.css" rel="stylesheet" />
