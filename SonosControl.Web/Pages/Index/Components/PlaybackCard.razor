@@ -1,0 +1,133 @@
+@using Microsoft.AspNetCore.Components
+
+<div class="card playback-card" style="@GradientStyle">
+    <div class="card-body playback-card__body">
+        <div class="d-flex flex-column flex-lg-row align-items-start gap-3">
+            <div class="d-flex align-items-start gap-3 flex-grow-1">
+                <div class="playback-card__icon" aria-hidden="true">
+                    <i class="fa fa-music"></i>
+                </div>
+                <div>
+                    <h5 class="mb-1 playback-card__title">@StatusTitle</h5>
+                    <p class="mb-0 text-muted playback-card__subtitle">@StatusDescription</p>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 playback-card__actions">
+                <button type="button"
+                        class="btn btn-light btn-sm playback-card__toggle"
+                        @onclick="TogglePlayback"
+                        title="@PlayToggleLabel"
+                        aria-label="@PlayToggleLabel">
+                    <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
+                </button>
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm playback-card__action"
+                        @onclick="OpenTimer"
+                        title="Schedule playback"
+                        aria-label="Schedule playback">
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                </button>
+                @if (ShowNextTrack)
+                {
+                    <button type="button"
+                            class="btn btn-outline-secondary btn-sm playback-card__action"
+                            @onclick="NextTrack"
+                            title="Skip track"
+                            aria-label="Skip track">
+                        <i class="fa fa-forward" aria-hidden="true"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="playback-card__volume">
+            <i class="fa fa-volume-up" aria-hidden="true"></i>
+            <input type="range"
+                   class="form-range"
+                   min="0"
+                   max="@MaxVolumeLimit"
+                   @bind-value="VolumeValue"
+                   @bind-value:event="oninput"
+                   aria-label="Volume" />
+            <span class="badge bg-secondary playback-card__volume-label">@VolumeLabel</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsPlaying { get; set; }
+
+    [Parameter]
+    public bool ShowNextTrack { get; set; }
+
+    [Parameter]
+    public int Volume { get; set; }
+
+    [Parameter]
+    public int MaxVolumeLimit { get; set; }
+
+    [Parameter]
+    public string? GradientStyle { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> TogglePlay { get; set; }
+
+    [Parameter]
+    public EventCallback<int> VolumeChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnOpenTimer { get; set; }
+
+    [Parameter]
+    public EventCallback OnNextTrack { get; set; }
+
+    private int _pendingVolume;
+
+    private int VolumeValue
+    {
+        get => _pendingVolume;
+        set
+        {
+            if (value == _pendingVolume)
+            {
+                return;
+            }
+
+            _pendingVolume = value;
+            _ = VolumeChanged.InvokeAsync(value);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        _pendingVolume = Volume;
+    }
+
+    private string StatusTitle => IsPlaying ? "Now Playing" : "Playback Paused";
+
+    private string StatusDescription => IsPlaying
+        ? "Click to pause playback."
+        : "Click to start playing music.";
+
+    private string PlayToggleLabel => IsPlaying ? "Pause playback" : "Start playback";
+
+    private string PlayToggleIcon => IsPlaying ? "fa-pause" : "fa-play";
+
+    private string VolumeLabel => $"{Volume}%";
+
+    private Task TogglePlayback()
+    {
+        return TogglePlay.InvokeAsync(!IsPlaying);
+    }
+
+    private Task OpenTimer()
+    {
+        return OnOpenTimer.InvokeAsync();
+    }
+
+    private Task NextTrack()
+    {
+        return OnNextTrack.InvokeAsync();
+    }
+}

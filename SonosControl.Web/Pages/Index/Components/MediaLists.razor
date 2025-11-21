@@ -1,0 +1,474 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using SonosControl.DAL.Models
+
+<div class="d-grid gap-3">
+    <section class="card media-section">
+        <div class="card-header d-flex align-items-center justify-content-between gap-3">
+            <div>
+                <h5 class="mb-0">📻 TuneIn Stations</h5>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        @onclick="ShuffleStation"
+                        title="Shuffle stations"
+                        aria-label="Shuffle stations">
+                    🔀
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        @onclick="ToggleStationEditMode"
+                        aria-label="Toggle station edit mode">
+                    <i class="fa @(IsStationEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                    <span class="visually-hidden">@(IsStationEditMode ? "Exit edit mode" : "Edit stations")</span>
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (IsStationEditMode)
+            {
+                @if (!string.IsNullOrEmpty(StationErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@StationErrorMessage</div>
+                }
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Station Name</label>
+                        <input class="form-control"
+                               @bind-value="StationNameValue"
+                               @bind-value:event="oninput"
+                               placeholder="Antenne Vorarlberg" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Station URL</label>
+                        <input class="form-control"
+                               @bind-value="StationUrlValue"
+                               @bind-value:event="oninput"
+                               placeholder="web.radio.example.com/stream"
+                               pattern="@StationUrlPattern" />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-success btn-sm" type="button" @onclick="AddStation" disabled="@(!CanAddStation)">Add Station</button>
+                </div>
+                <ul class="list-group list-group-flush mt-3">
+                    @foreach (var station in Stations)
+                    {
+                        <li class="list-group-item d-flex align-items-center justify-content-between">
+                            <span class="text-truncate">@Truncate(station.Name)</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => RemoveStation.InvokeAsync(station)"
+                                    aria-label="Remove station">
+                                <i class="fa fa-times" aria-hidden="true"></i>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <select class="form-select" @bind="SelectedStationValue">
+                    <option value="">-- Select Station --</option>
+                    @foreach (var station in Stations)
+                    {
+                        <option value="@station.Url">@Truncate(station.Name)</option>
+                    }
+                </select>
+            }
+        </div>
+    </section>
+
+    <section class="card media-section">
+        <div class="card-header d-flex align-items-center justify-content-between gap-3">
+            <h5 class="mb-0">🎧 Spotify Tracks</h5>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    @onclick="ToggleSpotifyEditMode"
+                    aria-label="Toggle Spotify playlists">
+                <i class="fa @(IsSpotifyEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                <span class="visually-hidden">@(IsSpotifyEditMode ? "Exit edit mode" : "Edit Spotify tracks")</span>
+            </button>
+        </div>
+        <div class="card-body">
+            @if (IsSpotifyEditMode)
+            {
+                @if (!string.IsNullOrEmpty(SpotifyErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@SpotifyErrorMessage</div>
+                }
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Name</label>
+                        <input class="form-control"
+                               @bind-value="SpotifyNameValue"
+                               @bind-value:event="oninput"
+                               placeholder="Crunchyroll Anime Essentials" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Spotify URL</label>
+                        <input class="form-control"
+                               @bind-value="SpotifyTrackUrlValue"
+                               @bind-value:event="oninput"
+                               placeholder="https://open.spotify.com/playlist/..." />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-success btn-sm" type="button" @onclick="AddSpotifyTrack" disabled="@(!CanAddSpotifyTrack)">Add Spotify Track</button>
+                </div>
+                <ul class="list-group list-group-flush mt-3">
+                    @foreach (var track in SpotifyTracks)
+                    {
+                        <li class="list-group-item d-flex align-items-center justify-content-between">
+                            <span class="text-truncate">@Truncate(track.Name)</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => RemoveSpotifyTrack.InvokeAsync(track)"
+                                    aria-label="Remove track">
+                                <i class="fa fa-times" aria-hidden="true"></i>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <select class="form-select" @bind="SelectedTrackValue">
+                    <option value="">-- Select Spotify Track --</option>
+                    @foreach (var track in SpotifyTracks)
+                    {
+                        <option value="@track.Url">@Truncate(track.Name)</option>
+                    }
+                </select>
+            }
+        </div>
+    </section>
+
+    <section class="card media-section">
+        <div class="card-header d-flex align-items-center justify-content-between gap-3">
+            <h5 class="mb-0">▶️ YouTube Music</h5>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    @onclick="ToggleYouTubeEditMode"
+                    aria-label="Toggle YouTube edit mode">
+                <i class="fa @(IsYouTubeEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                <span class="visually-hidden">@(IsYouTubeEditMode ? "Exit edit mode" : "Edit YouTube links")</span>
+            </button>
+        </div>
+        <div class="card-body">
+            @if (IsYouTubeEditMode)
+            {
+                @if (!string.IsNullOrEmpty(YouTubeErrorMessage))
+                {
+                    <div class="alert alert-danger" role="alert">@YouTubeErrorMessage</div>
+                }
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">Name</label>
+                        <input class="form-control"
+                               @bind-value="YouTubeNameValue"
+                               @bind-value:event="oninput"
+                               placeholder="Morning Flow" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label">YouTube Music URL</label>
+                        <input class="form-control"
+                               @bind-value="YouTubeUrlValue"
+                               @bind-value:event="oninput"
+                               placeholder="https://music.youtube.com/playlist?..." />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-success btn-sm" type="button" @onclick="AddYouTubeEntry" disabled="@(!CanAddYouTubeEntry)">Add YouTube Music Link</button>
+                </div>
+                <ul class="list-group list-group-flush mt-3">
+                    @foreach (var entry in YouTubeCollections)
+                    {
+                        <li class="list-group-item d-flex align-items-center justify-content-between">
+                            <span class="text-truncate">@entry.Name</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => RemoveYouTubeEntry.InvokeAsync(entry)"
+                                    aria-label="Remove YouTube link">
+                                <i class="fa fa-times" aria-hidden="true"></i>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <select class="form-select" @bind="SelectedYouTubeEntryValue">
+                    <option value="">-- Select YouTube Music --</option>
+                    @foreach (var entry in YouTubeCollections)
+                    {
+                        <option value="@entry.Url">@Truncate(entry.Name)</option>
+                    }
+                </select>
+            }
+        </div>
+    </section>
+
+    <section class="card media-section">
+        <div class="card-header">
+            <h5 class="mb-0">🎧 Play Spotify URL</h5>
+        </div>
+        <div class="card-body">
+            <div class="input-group">
+                <input type="text"
+                       class="form-control"
+                       @bind-value="SpotifyFreeUrlValue"
+                       @bind-value:event="oninput"
+                       @onkeyup="SpotifyUrlKeyPress"
+                       placeholder="Enter Spotify URL"
+                       aria-label="Spotify URL" />
+                <button class="btn btn-primary" type="button" @onclick="PlaySpotifyUrl">Play</button>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<TuneInStation> Stations { get; set; } = Array.Empty<TuneInStation>();
+
+    [Parameter]
+    public IReadOnlyList<SpotifyObject> SpotifyTracks { get; set; } = Array.Empty<SpotifyObject>();
+
+    [Parameter]
+    public IReadOnlyList<YouTubeMusicObject> YouTubeCollections { get; set; } = Array.Empty<YouTubeMusicObject>();
+
+    [Parameter]
+    public bool IsStationEditMode { get; set; }
+
+    [Parameter]
+    public bool IsSpotifyEditMode { get; set; }
+
+    [Parameter]
+    public bool IsYouTubeEditMode { get; set; }
+
+    [Parameter]
+    public string NewStationName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string NewStationUrl { get; set; } = string.Empty;
+
+    [Parameter]
+    public string NewTrackName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string NewTrackUrl { get; set; } = string.Empty;
+
+    [Parameter]
+    public string NewYouTubeName { get; set; } = string.Empty;
+
+    [Parameter]
+    public string NewYouTubeUrl { get; set; } = string.Empty;
+
+    [Parameter]
+    public string SelectedStation { get; set; } = string.Empty;
+
+    [Parameter]
+    public string SelectedTrack { get; set; } = string.Empty;
+
+    [Parameter]
+    public string SelectedYouTubeEntry { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? SpotifyUrl { get; set; }
+
+    [Parameter]
+    public string? StationErrorMessage { get; set; }
+
+    [Parameter]
+    public string? SpotifyErrorMessage { get; set; }
+
+    [Parameter]
+    public string? YouTubeErrorMessage { get; set; }
+
+    [Parameter]
+    public EventCallback ToggleStationEditMode { get; set; }
+
+    [Parameter]
+    public EventCallback ToggleSpotifyEditMode { get; set; }
+
+    [Parameter]
+    public EventCallback ToggleYouTubeEditMode { get; set; }
+
+    [Parameter]
+    public EventCallback ShuffleStation { get; set; }
+
+    [Parameter]
+    public EventCallback AddStation { get; set; }
+
+    [Parameter]
+    public EventCallback<TuneInStation> RemoveStation { get; set; }
+
+    [Parameter]
+    public EventCallback AddSpotifyTrack { get; set; }
+
+    [Parameter]
+    public EventCallback<SpotifyObject> RemoveSpotifyTrack { get; set; }
+
+    [Parameter]
+    public EventCallback AddYouTubeEntry { get; set; }
+
+    [Parameter]
+    public EventCallback<YouTubeMusicObject> RemoveYouTubeEntry { get; set; }
+
+    [Parameter]
+    public EventCallback<string> SpotifyUrlChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<KeyboardEventArgs> SpotifyUrlKeyPress { get; set; }
+
+    [Parameter]
+    public EventCallback PlaySpotifyUrl { get; set; }
+
+    [Parameter]
+    public EventCallback<string> SelectedStationChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> SelectedTrackChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> SelectedYouTubeEntryChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewStationNameChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewStationUrlChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewTrackNameChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewTrackUrlChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewYouTubeNameChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> NewYouTubeUrlChanged { get; set; }
+
+    private bool CanAddStation => !string.IsNullOrWhiteSpace(NewStationName) && !string.IsNullOrWhiteSpace(NewStationUrl);
+    private bool CanAddSpotifyTrack => !string.IsNullOrWhiteSpace(NewTrackName) && !string.IsNullOrWhiteSpace(NewTrackUrl);
+    private bool CanAddYouTubeEntry => !string.IsNullOrWhiteSpace(NewYouTubeName) && !string.IsNullOrWhiteSpace(NewYouTubeUrl);
+
+    private string StationUrlPattern => @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
+
+    private string StationNameValue
+    {
+        get => NewStationName;
+        set
+        {
+            if (value == NewStationName)
+                return;
+            _ = NewStationNameChanged.InvokeAsync(value);
+        }
+    }
+
+    private string StationUrlValue
+    {
+        get => NewStationUrl;
+        set
+        {
+            if (value == NewStationUrl)
+                return;
+            _ = NewStationUrlChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SelectedStationValue
+    {
+        get => SelectedStation;
+        set
+        {
+            if (value == SelectedStation)
+                return;
+            _ = SelectedStationChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SelectedTrackValue
+    {
+        get => SelectedTrack;
+        set
+        {
+            if (value == SelectedTrack)
+                return;
+            _ = SelectedTrackChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SelectedYouTubeEntryValue
+    {
+        get => SelectedYouTubeEntry;
+        set
+        {
+            if (value == SelectedYouTubeEntry)
+                return;
+            _ = SelectedYouTubeEntryChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SpotifyNameValue
+    {
+        get => NewTrackName;
+        set
+        {
+            if (value == NewTrackName)
+                return;
+            _ = NewTrackNameChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SpotifyTrackUrlValue
+    {
+        get => NewTrackUrl;
+        set
+        {
+            if (value == NewTrackUrl)
+                return;
+            _ = NewTrackUrlChanged.InvokeAsync(value);
+        }
+    }
+
+    private string YouTubeNameValue
+    {
+        get => NewYouTubeName;
+        set
+        {
+            if (value == NewYouTubeName)
+                return;
+            _ = NewYouTubeNameChanged.InvokeAsync(value);
+        }
+    }
+
+    private string YouTubeUrlValue
+    {
+        get => NewYouTubeUrl;
+        set
+        {
+            if (value == NewYouTubeUrl)
+                return;
+            _ = NewYouTubeUrlChanged.InvokeAsync(value);
+        }
+    }
+
+    private string SpotifyFreeUrlValue
+    {
+        get => SpotifyUrl ?? string.Empty;
+        set
+        {
+            if (value == SpotifyUrl)
+                return;
+            _ = SpotifyUrlChanged.InvokeAsync(value);
+        }
+    }
+
+    private static string Truncate(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length > 33 ? value[..33] + "…" : value;
+    }
+}

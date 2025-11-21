@@ -1,21 +1,155 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.JSInterop;
-using SonosControl.DAL.Interfaces;
-using SonosControl.DAL.Models;
-using SonosControl.Web.Data;
-using SonosControl.Web.Models;
+@page "/"
+@using System.Text.RegularExpressions
+@using SonosControl.DAL.Interfaces
+@using SonosControl.DAL.Models
+@using SonosControl.Web.Data
+@using SonosControl.Web.Models
+@using SonosControl.Web.Pages.Index.Components
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
-namespace SonosControl.Web.Pages;
+<PageTitle>Sonos Control</PageTitle>
 
-public partial class Index : ComponentBase, IAsyncDisposable
+@if (_settings is not null)
 {
+    <div class="container dashboard-shell">
+        <div class="card dashboard-panel surface-0">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-start justify-content-between mb-4 gap-3">
+                    <div>
+                        <h3 class="mb-1">🎛️ Sonos Control Panel</h3>
+                        <p class="text-muted mb-0">Manage playback, queue, and curated sources for your Sonos system.</p>
+                    </div>
+                    <div class="toolbar-actions">
+                        <p class="text-muted mb-0 small">Playback status refreshes automatically.</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="playback-column">
+                        <PlaybackCard
+                            IsPlaying="_isPlaying"
+                            ShowNextTrack="_isPlaying && _isSpotifyPlaying"
+                            Volume="Volume"
+                            MaxVolumeLimit="MaxVolumeLimit"
+                            GradientStyle="PlaybackCardStyle"
+                            TogglePlay="Play"
+                            VolumeChanged="@(value => Volume = value)"
+                            OnOpenTimer="OpenTimerModal"
+                            OnNextTrack="NextTrack" />
+
+                        @if (_timerEndTimeUtc is not null)
+                        {
+                            var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
+                            <div class="alert alert-info timed-playback-alert d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <strong>Timed Playback Active</strong>
+                                    <p class="mb-0 text-muted">@(_timerSelectionName ?? "Playback") will stop at @localStopTime.ToString("t").</p>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelTimedPlayback">Cancel</button>
+                            </div>
+                        }
+
+                        <div class="card currently-playing-card">
+                            <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
+                                <div class="display-5">🎵</div>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-2">Currently Playing</h5>
+                                    <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
+                                    <p class="mb-1 text-muted currently-playing-text"><strong>Track:</strong> @currentlyPlaying</p>
+                                    @if (!string.IsNullOrWhiteSpace(trackProgress))
+                                    {
+                                        <p class="mb-0 text-muted currently-playing-text"><strong>Time:</strong> @trackProgress</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="queue-column">
+                        <QueuePanel
+                            Items="@queue"
+                            IsLoading="@_queueIsLoading"
+                            HasMore="@_queueHasMore"
+                            AutoRefreshEnabled="@QueueAutoRefreshEnabled"
+                            RefreshIntervalSeconds="@_queueRefreshIntervalSeconds"
+                            RefreshIntervals="@_queueRefreshIntervals"
+                            ErrorMessage="@_queueErrorMessage"
+                            Refresh="() => LoadQueue(reset: true)"
+                            LoadMore="LoadNextQueuePage"
+                            AutoRefreshChanged="value => QueueAutoRefreshEnabled = value"
+                            RefreshIntervalChanged="UpdateQueueRefreshInterval"
+                            FormatItem="FormatQueueItem" />
+                    </div>
+
+                    <div class="media-column">
+                        <MediaLists
+                            Stations="@_stations"
+                            SpotifyTracks="@_tracks"
+                            YouTubeCollections="@_youTubeCollections"
+                            IsStationEditMode="@isEditMode"
+                            IsSpotifyEditMode="@isSpotifyEditMode"
+                            IsYouTubeEditMode="@isYouTubeEditMode"
+                            NewStationName="@newStationName"
+                            NewStationUrl="@newStationUrl"
+                            NewTrackName="@newTrackName"
+                            NewTrackUrl="@newTrackUrl"
+                            NewYouTubeName="@newYouTubeName"
+                            NewYouTubeUrl="@newYouTubeUrl"
+                            SelectedStation="@selectedStation"
+                            SelectedTrack="@selectedTrack"
+                            SelectedYouTubeEntry="@selectedYouTubeEntry"
+                            SpotifyUrl="@spotifyUrl"
+                            StationErrorMessage="@addStationErrorMessage"
+                            SpotifyErrorMessage="@addTrackErrorMessage"
+                            YouTubeErrorMessage="@addYouTubeErrorMessage"
+                            ToggleStationEditMode="ToggleStationEdit"
+                            ToggleSpotifyEditMode="ToggleSpotifyEdit"
+                            ToggleYouTubeEditMode="ToggleYouTubeEdit"
+                            ShuffleStation="ShuffleStation"
+                            AddStation="AddStation"
+                            RemoveStation="RemoveStation"
+                            AddSpotifyTrack="AddNewSpotifyTrack"
+                            RemoveSpotifyTrack="RemoveSpotifyTrack"
+                            AddYouTubeEntry="AddNewYouTubeMusicEntry"
+                            RemoveYouTubeEntry="RemoveYouTubeMusicEntry"
+                            SpotifyUrlChanged="value => spotifyUrl = value"
+                            SpotifyUrlKeyPress="HandleKeyPress"
+                            PlaySpotifyUrl="SubmitSpotifyUrl"
+                            SelectedStationChanged="value => selectedStation = value"
+                            SelectedTrackChanged="value => selectedTrack = value"
+                            SelectedYouTubeEntryChanged="value => selectedYouTubeEntry = value"
+                            NewStationNameChanged="value => newStationName = value"
+                            NewStationUrlChanged="value => newStationUrl = value"
+                            NewTrackNameChanged="value => newTrackName = value"
+                            NewTrackUrlChanged="value => newTrackUrl = value"
+                            NewYouTubeNameChanged="value => newYouTubeName = value"
+                            NewYouTubeUrlChanged="value => newYouTubeUrl = value" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<TimerModal
+    Show="isTimerModalOpen"
+    OnClose="CloseTimerModal"
+    OnStart="StartTimedPlayback"
+    TimerMinutes="timerMinutes"
+    TimerMinutesChanged="value => timerMinutes = value"
+    SelectedSource="timerSelection"
+    SelectedSourceChanged="value => timerSelection = value"
+    Stations="_stations"
+    SpotifyTracks="_tracks"
+    YouTubeCollections="_youTubeCollections"
+    ErrorMessage="timerErrorMessage" />
+
+@code {
+
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
@@ -80,9 +214,23 @@ public partial class Index : ComponentBase, IAsyncDisposable
     private DateTime? _timerEndTimeUtc;
     private string? _timerSelectionName;
 
-
     private bool isSpotifyEditMode = false;
     private bool isYouTubeEditMode = false;
+
+    private void ToggleStationEdit()
+    {
+        isEditMode = !isEditMode;
+    }
+
+    private void ToggleSpotifyEdit()
+    {
+        isSpotifyEditMode = !isSpotifyEditMode;
+    }
+
+    private void ToggleYouTubeEdit()
+    {
+        isYouTubeEditMode = !isYouTubeEditMode;
+    }
 
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
@@ -123,11 +271,6 @@ public partial class Index : ComponentBase, IAsyncDisposable
     private int _queueRefreshIntervalSeconds = 30;
     private CancellationTokenSource? _queueRefreshCts;
     private Task? _queueRefreshTask;
-
-    private bool ShouldShowQueueSection =>
-        _queueIsLoading ||
-        !string.IsNullOrEmpty(_queueErrorMessage) ||
-        queue.Count > 0;
 
     private async Task LoadCurrentStation()
     {
@@ -273,6 +416,15 @@ public partial class Index : ComponentBase, IAsyncDisposable
         }
     }
 
+    private async Task SubmitSpotifyUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(spotifyUrl))
+        {
+            await PlaySpotifyTrack(spotifyUrl);
+            spotifyUrl = string.Empty;
+        }
+    }
+
     private async Task PlaySpotifyTrack(string url)
     {
         if (_settings is not null)
@@ -382,16 +534,20 @@ public partial class Index : ComponentBase, IAsyncDisposable
         }
     }
 
-    private void OnQueueRefreshIntervalChanged(ChangeEventArgs args)
+    private Task UpdateQueueRefreshInterval(int seconds)
     {
-        if (args.Value is string raw && int.TryParse(raw, out var seconds) && seconds > 0)
+        if (seconds <= 0)
         {
-            _queueRefreshIntervalSeconds = seconds;
-            if (_queueAutoRefreshEnabled)
-            {
-                StartQueueAutoRefresh();
-            }
+            return Task.CompletedTask;
         }
+
+        _queueRefreshIntervalSeconds = seconds;
+        if (_queueAutoRefreshEnabled)
+        {
+            StartQueueAutoRefresh();
+        }
+
+        return Task.CompletedTask;
     }
 
     private void StartQueueAutoRefresh()
@@ -815,13 +971,13 @@ public partial class Index : ComponentBase, IAsyncDisposable
     {
         if (string.IsNullOrWhiteSpace(newTrackName))
         {
-            addStationErrorMessage = "Station name is required.";
+            addTrackErrorMessage = "Track name is required.";
             return;
         }
 
         if (string.IsNullOrWhiteSpace(newTrackUrl))
         {
-            addStationErrorMessage = "Station URL is required.";
+            addTrackErrorMessage = "Spotify URL is required.";
             return;
         }
 
@@ -832,7 +988,7 @@ public partial class Index : ComponentBase, IAsyncDisposable
         await SaveSettings();
         await AddLog("Spotify Track Added", $"{newTrackName} ({newTrackUrl})");
 
-        addStationErrorMessage = null;
+        addTrackErrorMessage = null;
         newTrackName = newTrackUrl = "";
 
         await InvokeAsync(StateHasChanged);
