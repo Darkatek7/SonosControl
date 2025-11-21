@@ -93,31 +93,6 @@
                                 Limits the highest volume that can be set from the main control panel.
                             </div>
                         </div>
-
-                        <div class="config-field">
-                            <label class="form-label">🎨 Now Playing Gradient</label>
-                            <div class="gradient-inputs">
-                                <div class="gradient-input text-center">
-                                    <span class="gradient-input__label">Start</span>
-                                    <input type="color" class="form-control form-control-color gradient-input__color"
-                                           @bind-value="GradientStartColor"
-                                           @bind-value:event="oninput" />
-                                </div>
-                                <div class="gradient-input text-center">
-                                    <span class="gradient-input__label">Middle</span>
-                                    <input type="color" class="form-control form-control-color gradient-input__color"
-                                           @bind-value="GradientMidColor"
-                                           @bind-value:event="oninput" />
-                                </div>
-                                <div class="gradient-input text-center">
-                                    <span class="gradient-input__label">End</span>
-                                    <input type="color" class="form-control form-control-color gradient-input__color"
-                                           @bind-value="GradientEndColor"
-                                           @bind-value:event="oninput" />
-                                </div>
-                            </div>
-                            <div class="gradient-preview mt-3" style="@GradientPreviewStyle"></div>
-                        </div>
                     </div>
                 </SectionCard>
 
