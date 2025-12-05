@@ -2,973 +2,1419 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
-@using SonosControl.Web.Models;
-@using SonosControl.Web.Services;
-@using System.Linq;
-@using System.Globalization;
+@using SonosControl.Web.Models
+@using SonosControl.Web.Services
+@using System.Linq
+@using System.Globalization
 @using System;
 @attribute [Authorize(Roles = "admin,superadmin")]
 
-        @if (_settings is null)
-        {
-            <p class="text-muted">Loading settings...</p>
-        }
-        else
-        {
-            <div class="config-shell surface-1 rounded-4 shadow-sm border border-secondary">
-                <header class="config-shell__header">
-                    <div>
-                        <h2 class="config-shell__title">🔧 System Configuration</h2>
-                        <p class="text-muted mb-0">Fine-tune playback behavior, schedules, and overrides for the Sonos speaker.</p>
-                    </div>
-                    <p class="text-muted small mb-0">Changes save automatically.</p>
-                </header>
+@if (_settings is null)
+{
+    <p class="text-muted">Loading settings...</p>
+}
+else
+{
+    <div class="config-shell surface-1 rounded-4 shadow-sm border border-secondary">
+        <header class="config-shell__header">
+            <div>
+                <h2 class="config-shell__title">🔧 System Configuration</h2>
+                <p class="text-muted mb-0">Fine-tune playback behavior, schedules, and overrides for the Sonos speaker.</p>
+            </div>
+            <p class="text-muted small mb-0">Changes save automatically.</p>
+        </header>
 
-                <SectionCard Title="Device Settings" Icon="🎛️" Subtitle="Control the device endpoint, default playback, and visual accents.">
-                    <div class="config-field-stack">
-                        <div class="config-field">
-                            <label class="form-label">💻 IP Address</label>
-                            <input type="text" class="form-control"
-                                   @bind-value="IP_Adress"
-                                   @bind-value:event="oninput"
-                                   placeholder="Enter IP Address"
-                                   disabled="@(!canEditIp)" />
-                        </div>
+        <nav class="nav nav-tabs px-4">
+            <button class="nav-link @(_activeTab == "device" ? "active" : "")" @onclick="@(() => _activeTab = "device")">🎛️ Device</button>
+            <button class="nav-link @(_activeTab == "schedules" ? "active" : "")" @onclick="@(() => _activeTab = "schedules")">📅 Schedules</button>
+            <button class="nav-link @(_activeTab == "holidays" ? "active" : "")" @onclick="@(() => _activeTab = "holidays")">🎯 Holidays</button>
+        </nav>
 
-                        <div class="config-field">
-                            <label class="form-label">⚙️ Device Actions</label>
-                            <div class="device-action-row">
-                                <button class="btn btn-outline-warning"
-                                        @onclick="SendRebootCommand"
-                                        disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
-                                    @if (_isRebooting)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                    }
-                                    Reboot Speaker
-                                </button>
-                            </div>
-                            @if (!string.IsNullOrEmpty(_rebootAlertMessage))
-                            {
-                                <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
-                            }
-                        </div>
-
-                        <div class="config-field">
-                            <label class="form-label">🎵 Auto Play</label>
-                            <select class="form-select"
-                                    @bind="AutoPlaySelection" @bind:event="onchange">
-                                <option value="">-- None --</option>
-                                <option value="randomStation">Random Station</option>
-                                <option value="randomSpotify">Random Spotify</option>
-                                <option value="randomYouTube">Random YouTube Music</option>
-                                <optgroup label="Stations">
-                                    @foreach (var station in _settings.Stations)
-                                    {
-                                        <option value="station:@station.Url">@station.Name</option>
-                                    }
-                                </optgroup>
-                                <optgroup label="Spotify">
-                                    @foreach (var track in _settings.SpotifyTracks)
-                                    {
-                                        <option value="spotify:@track.Url">@track.Name</option>
-                                    }
-                                </optgroup>
-                                <optgroup label="YouTube Music">
-                                    @foreach (var collection in _settings.YouTubeMusicCollections)
-                                    {
-                                        <option value="youtube:@collection.Url">@collection.Name</option>
-                                    }
-                                </optgroup>
-                            </select>
-                        </div>
-
-                        <div class="config-field">
-                            <label class="form-label">🔊 Max Volume</label>
-                            <input type="number" class="form-control"
-                                   min="0" max="100"
-                                   @bind-value="MaxVolume"
-                                   @bind-value:event="oninput" />
-                            <div class="form-text text-muted text-opacity-75">
-                                Limits the highest volume that can be set from the main control panel.
-                            </div>
-                        </div>
-                    </div>
-                </SectionCard>
-
-                <SectionCard Title="Schedules" Icon="📅" Subtitle="Define when playback runs and how each day behaves.">
-                    <div class="schedule-grid">
-                        <div class="schedule-field">
-                            <label class="form-label">⏰ Start Time</label>
-                            <input type="time" class="form-control"
-                                   @bind-value="StartTime"
-                                   @bind-value:event="oninput" />
-                        </div>
-                        <div class="schedule-field">
-                            <label class="form-label">🛑 Stop Time</label>
-                            <input type="time" class="form-control"
-                                   @bind-value="StopTime"
-                                   @bind-value:event="oninput" />
-                        </div>
-                        <div class="schedule-field">
-                            <label class="form-label">📅 Server Time</label>
-                            <input type="time" class="form-control"
-                                   disabled
-                                   @bind-value="TimeRightNow" />
-                        </div>
+        <div class="tab-content p-4">
+            @if (_activeTab == "device")
+            {
+                <div class="config-field-stack">
+                    <div class="config-field">
+                        <label class="form-label">💻 IP Address</label>
+                        <input type="text" class="form-control"
+                               @bind-value="IP_Adress"
+                               @bind-value:event="oninput"
+                               placeholder="Enter IP Address"
+                               disabled="@(!canEditIp)"/>
                     </div>
 
-                    <div class="schedule-days">
-                        <label class="form-label d-block">📆 Active Days</label>
-                        <div class="active-days-grid">
-                            @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
-                            {
-                                <div>
-                                    <input type="checkbox"
-                                           class="btn-check"
-                                           id="btncheck-@day"
-                                           checked="@DaySelection[day]"
-                                           @onchange="(e => OnDayChanged(day, e.Value))" />
-                                    <label class="btn btn-outline-light btn-sm w-100" for="btncheck-@day">
-                                        @day.ToString().Substring(0, 3)
-                                    </label>
-                                </div>
-                            }
+                    <div class="config-field">
+                        <label class="form-label">⚙️ Device Actions</label>
+                        <div class="device-action-row">
+                            <button class="btn btn-outline-warning"
+                                    @onclick="SendRebootCommand"
+                                    disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
+                                @if (_isRebooting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                }
+                                Reboot Speaker
+                            </button>
                         </div>
-                    </div>
-
-                    <div class="daily-schedule-table-wrapper">
-                        <div class="daily-schedule-table-scroll">
-                            <table class="table daily-schedule-table table-dark table-striped mb-0 align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Day</th>
-                                        <th>Start</th>
-                                        <th>Stop</th>
-                                        <th>Play</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int)d + 6) % 7))
-                                    {
-                                        if (!_settings.DailySchedules.ContainsKey(day))
-                                            _settings.DailySchedules[day] = new DaySchedule();
-
-                                        var schedule = _settings.DailySchedules[day];
-                                        <tr>
-                                            <td>@day.ToString().Substring(0,3)</td>
-                                            <td>
-                                                <input type="time" class="form-control"
-                                                       @bind-value="schedule.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                            </td>
-                                            <td>
-                                                <input type="time" class="form-control"
-                                                       @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                            </td>
-                                            <td>
-                                                <select class="form-select"
-                                                        value="@GetScheduleSelection(schedule)"
-                                                        @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
-                                                    <option value="">-- None --</option>
-                                                    <option value="randomStation">Random Station</option>
-                                                    <option value="randomSpotify">Random Spotify</option>
-                                                    <option value="randomYouTube">Random YouTube Music</option>
-                                                    <optgroup label="Stations">
-                                                        @foreach (var station in _settings.Stations)
-                                                        {
-                                                            <option value="station:@station.Url">@station.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                    <optgroup label="Spotify">
-                                                        @foreach (var track in _settings.SpotifyTracks)
-                                                        {
-                                                            <option value="spotify:@track.Url">@track.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                    <optgroup label="YouTube Music">
-                                                        @foreach (var collection in _settings.YouTubeMusicCollections)
-                                                        {
-                                                            <option value="youtube:@collection.Url">@collection.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </SectionCard>
-
-                <SectionCard Title="Holiday Overrides" Icon="🎯" Subtitle="Import or define dates that replace the normal schedule.">
-                    <p class="form-text text-muted">
-                        Import calendar dates or define one-off playback rules for specific days. Overrides replace the standard daily plan when an exact date matches.
-                    </p>
-
-                    <div class="holiday-import-panel">
-                        <div class="holiday-import-actions">
-                            <InputFile OnChange="ImportHolidayCalendarAsync" accept=".ics,text/calendar" disabled="@_importingCalendar" />
-                            <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))">Clear Message</button>
-                        </div>
-                        <small class="text-muted">.ics files containing DTSTART entries are supported. New dates inherit the default start and stop times until edited.</small>
-                        @if (!string.IsNullOrEmpty(_holidayImportMessage))
+                        @if (!string.IsNullOrEmpty(_rebootAlertMessage))
                         {
-                            <div class="holiday-import-message">@_holidayImportMessage</div>
+                            <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
                         }
                     </div>
 
-                    <div class="holiday-editor">
-                        <div class="row g-2 align-items-end">
-                            <div class="col-12 col-md-3">
-                                <label class="form-label small mb-1">Date</label>
-                                <input type="date" class="form-control" @bind-value="_holidayDraft.Date" @bind-value:event="oninput" />
-                            </div>
-                            <div class="col-6 col-md-2">
-                                <label class="form-label small mb-1">Start</label>
-                                <InputText type="time" class="form-control" @bind-Value="_holidayDraft.Start" @bind-Value:event="oninput" />
-                            </div>
-                            <div class="col-6 col-md-2">
-                                <label class="form-label small mb-1">Stop</label>
-                                <InputText type="time" class="form-control" @bind-Value="_holidayDraft.Stop" @bind-Value:event="oninput" />
-                            </div>
-                            <div class="col-12 col-md-3">
-                                <label class="form-label small mb-1">Playback</label>
-                                <select class="form-select" @bind="_holidayDraft.Selection">
-                                    <option value="skip">-- Do not play --</option>
-                                    <option value="randomStation">Random Station</option>
-                                    <option value="randomSpotify">Random Spotify</option>
-                                    <option value="randomYouTube">Random YouTube Music</option>
-                                    <optgroup label="Stations">
-                                        @foreach (var station in _settings.Stations)
-                                        {
-                                            <option value="station:@station.Url">@station.Name</option>
-                                        }
-                                    </optgroup>
-                                    <optgroup label="Spotify">
-                                        @foreach (var track in _settings.SpotifyTracks)
-                                        {
-                                            <option value="spotify:@track.Url">@track.Name</option>
-                                        }
-                                    </optgroup>
-                                    <optgroup label="YouTube Music">
-                                        @foreach (var collection in _settings.YouTubeMusicCollections)
-                                        {
-                                            <option value="youtube:@collection.Url">@collection.Name</option>
-                                        }
-                                    </optgroup>
-                                </select>
-                            </div>
-                            <div class="col-12 col-md-2">
-                                <label class="form-label small mb-1">Label</label>
-                                <input type="text" class="form-control" @bind-value="_holidayDraft.Name" @bind-value:event="oninput" maxlength="80" />
-                            </div>
-                            <div class="col-12 text-end">
-                                <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
-                            </div>
-                        </div>
+                    <div class="config-field">
+                        <label class="form-label">🎵 Auto Play</label>
+                        <select class="form-select"
+                                @bind="AutoPlaySelection" @bind:event="onchange">
+                            <option value="">-- None --</option>
+                            <option value="randomStation">Random Station</option>
+                            <option value="randomSpotify">Random Spotify</option>
+                            <option value="randomYouTube">Random YouTube Music</option>
+                            <optgroup label="Stations">
+                                @foreach (var station in _settings.Stations)
+                                {
+                                    <option value="station:@station.Url">@station.Name</option>
+                                }
+                            </optgroup>
+                            <optgroup label="Spotify">
+                                @foreach (var track in _settings.SpotifyTracks)
+                                {
+                                    <option value="spotify:@track.Url">@track.Name</option>
+                                }
+                            </optgroup>
+                            <optgroup label="YouTube Music">
+                                @foreach (var collection in _settings.YouTubeMusicCollections)
+                                {
+                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                }
+                            </optgroup>
+                        </select>
                     </div>
 
-                    @if (!string.IsNullOrEmpty(_holidayValidationMessage))
+                    <div class="config-field">
+                        <label class="form-label">🔊 Max Volume</label>
+                        <input type="number" class="form-control"
+                               min="0" max="100"
+                               @bind-value="MaxVolume"
+                               @bind-value:event="oninput"/>
+                        <div class="form-text text-muted text-opacity-75">
+                            Limits the highest volume that can be set from the main control panel.
+                        </div>
+                    </div>
+                </div>
+            }
+            @if (_activeTab == "schedules")
+            {
+                <div class="schedule-grid">
+                    <div class="schedule-field">
+                        <label class="form-label">⏰ Start Time</label>
+                        <input type="time" class="form-control"
+                               @bind-value="StartTime"
+                               @bind-value:event="oninput"/>
+                    </div>
+                    <div class="schedule-field">
+                        <label class="form-label">🛑 Stop Time</label>
+                        <input type="time" class="form-control"
+                               @bind-value="StopTime"
+                               @bind-value:event="oninput"/>
+                    </div>
+                    <div class="schedule-field">
+                        <label class="form-label">📅 Server Time</label>
+                        <input type="time" class="form-control"
+                               disabled
+                               @bind-value="TimeRightNow"/>
+                    </div>
+                </div>
+
+                <div class="schedule-days">
+                    <label class="form-label d-block">📆 Active Days</label>
+                    <div class="active-days-grid">
+                        @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int) d + 6) % 7))
+                        {
+                            <div>
+                                <input type="checkbox"
+                                       class="btn-check"
+                                       id="btncheck-@day"
+                                       checked="@DaySelection[day]"
+                                       @onchange="(e => OnDayChanged(day, e.Value))"/>
+                                <label class="btn btn-outline-light btn-sm w-100" for="btncheck-@day">
+                                    @day.ToString().Substring(0, 3)
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="daily-schedule-table-wrapper">
+                    <div class="daily-schedule-table-scroll">
+                        <table class="table daily-schedule-table table-dark table-striped mb-0 align-middle">
+                            <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Start</th>
+                                <th>Stop</th>
+                                <th>Play</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int) d + 6) % 7))
+                            {
+                                if (!_settings.DailySchedules.ContainsKey(day))
+                                    _settings.DailySchedules[day] = new DaySchedule();
+
+                                var schedule = _settings.DailySchedules[day];
+                                <tr>
+                                    <td>@day.ToString().Substring(0, 3)</td>
+                                    <td>
+                                        <input type="time" class="form-control" value="@schedule.StartTime.ToString("HH:mm")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StartTime = t; await SaveSettings(); } }"/>
+                                    </td>
+                                    <td>
+                                        <input type="time" class="form-control" value="@schedule.StopTime.ToString("HH:mm")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StopTime = t; await SaveSettings(); } }"/>
+                                    </td>
+                                    <td>
+                                        <select class="form-select"
+                                                value="@GetScheduleSelection(schedule)"
+                                                @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
+                                            <option value="">-- None --</option>
+                                            <option value="randomStation">Random Station</option>
+                                            <option value="randomSpotify">Random Spotify</option>
+                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <optgroup label="Stations">
+                                                @foreach (var station in _settings.Stations)
+                                                {
+                                                    <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="Spotify">
+                                                @foreach (var track in _settings.SpotifyTracks)
+                                                {
+                                                    <option value="spotify:@track.Url">@track.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube Music">
+                                                @foreach (var collection in _settings.YouTubeMusicCollections)
+                                                {
+                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                }
+                                            </optgroup>
+                                        </select>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            @if (_activeTab == "holidays")
+            {
+                <p class="form-text text-muted">
+                    Import calendar dates or define one-off playback rules for specific days. Overrides replace the standard daily plan when an exact date matches.
+                </p>
+
+                <div class="holiday-import-panel">
+                    <div class="holiday-import-actions">
+                        <InputFile OnChange="ImportHolidayCalendarAsync" accept=".ics,text/calendar" disabled="@_importingCalendar"/>
+                        <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))">Clear Message</button>
+                    </div>
+                    <small class="text-muted">.ics files containing DTSTART entries are supported. New dates inherit the default start and stop times until edited.</small>
+                    @if (!string.IsNullOrEmpty(_holidayImportMessage))
                     {
-                        <div class="holiday-validation">@_holidayValidationMessage</div>
+                        <div class="holiday-import-message">@_holidayImportMessage</div>
                     }
+                </div>
 
-                    <div class="holiday-table-wrapper">
-                        <div class="holiday-table-scroll">
-                            <table class="table holiday-schedule-table table-striped table-sm align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Name</th>
-                                        <th>Start</th>
-                                        <th>Stop</th>
-                                        <th>Play</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var holiday in OrderedHolidaySchedules)
-                                    {
-                                        <tr>
-                                            <td class="fw-semibold">@holiday.Date.ToString("yyyy-MM-dd")</td>
-                                            <td>
-                                                <input type="text" class="form-control" value="@holiday.Name" maxlength="80" @onchange="async e => await OnHolidayNameChanged(holiday, e)" title="@holiday.Name" />
-                                            </td>
-                                            <td>
-                                                <input type="time" class="form-control" @bind-value="holiday.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                            </td>
-                                            <td>
-                                                <input type="time" class="form-control" @bind-value="holiday.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
-                                            </td>
-                                            <td>
-                                                <select class="form-select" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
-                                                    <option value="skip">-- Do not play --</option>
-                                                    <option value="randomStation">Random Station</option>
-                                                    <option value="randomSpotify">Random Spotify</option>
-                                                    <option value="randomYouTube">Random YouTube Music</option>
-                                                    <optgroup label="Stations">
-                                                        @foreach (var station in _settings.Stations)
-                                                        {
-                                                            <option value="station:@station.Url">@station.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                    <optgroup label="Spotify">
-                                                        @foreach (var track in _settings.SpotifyTracks)
-                                                        {
-                                                            <option value="spotify:@track.Url">@track.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                    <optgroup label="YouTube Music">
-                                                        @foreach (var collection in _settings.YouTubeMusicCollections)
-                                                        {
-                                                            <option value="youtube:@collection.Url">@collection.Name</option>
-                                                        }
-                                                    </optgroup>
-                                                </select>
-                                            </td>
-                                            <td class="text-end">
-                                                <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)">Remove</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                    @if (!OrderedHolidaySchedules.Any())
-                                    {
-                                        <tr>
-                                            <td colspan="6" class="text-center text-muted">No holiday overrides configured.</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                @if (!string.IsNullOrEmpty(_holidayValidationMessage))
+                {
+                    <div class="alert alert-danger">@_holidayValidationMessage</div>
+                }
+
+                <div class="holiday-table-wrapper">
+                    <div class="holiday-table-scroll">
+                        <table class="table holiday-schedule-table table-striped table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Name</th>
+                                <th>Start</th>
+                                <th>Stop</th>
+                                <th>Play</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var holiday in OrderedHolidaySchedules)
+                            {
+                                <tr>
+                                    <td>
+                                        <input type="date" class="form-control" value="@holiday.Date.ToString("yyyy-MM-dd")"
+                                               @onchange="async e => { if (DateOnly.TryParse(e.Value?.ToString(), out var d)) { holiday.Date = d; await SaveSettings(); } }"/>
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control" value="@holiday.Name"
+                                               @onchange="async e => { holiday.Name = e.Value?.ToString(); await SaveSettings(); }" title="@holiday.Name"/>
+                                    </td>
+                                    <td>
+                                        <input type="time" class="form-control" value="@holiday.StartTime.ToString("HH:mm")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StartTime = t; await SaveSettings(); } }"/>
+                                    </td>
+                                    <td>
+                                        <input type="time" class="form-control" value="@holiday.StopTime.ToString("HH:mm")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StopTime = t; await SaveSettings(); } }"/>
+                                    </td>
+                                    <td>
+                                        <select class="form-select" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
+                                            <option value="skip">-- Do not play --</option>
+                                            <option value="randomStation">Random Station</option>
+                                            <option value="randomSpotify">Random Spotify</option>
+                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <optgroup label="Stations">
+                                                @foreach (var station in _settings.Stations)
+                                                {
+                                                    <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="Spotify">
+                                                @foreach (var track in _settings.SpotifyTracks)
+                                                {
+                                                    <option value="spotify:@track.Url">@track.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube Music">
+                                                @foreach (var collection in _settings.YouTubeMusicCollections)
+                                                {
+                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                }
+                                            </optgroup>
+                                        </select>
+                                    </td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)">Remove</button>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!OrderedHolidaySchedules.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">No holiday overrides configured.</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
                     </div>
-                </SectionCard>
-            </div>
-        }
+                </div>
+                <div class="mt-3 text-end">
+                    <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
+                </div>
+            }
+        </div>
+    </div>
+}
 
 @code {
+
+    private string _activeTab = "device";
+
     private SonosSettings? _settings;
+
     private TimeOnly TimeRightNow = TimeOnly.FromDateTime(DateTime.Now);
+
     private Dictionary<DayOfWeek, bool> DaySelection = new();
+
     private bool canEditIp;
+
     private bool _isRebooting;
+
     private string? _rebootAlertMessage;
+
     private string _rebootAlertCss = "alert-info";
-    private HolidayEditorModel _holidayDraft = new();
+
     private string? _holidayValidationMessage;
+
     private string? _holidayImportMessage;
+
     private bool _importingCalendar;
+
+
 
     private IEnumerable<HolidaySchedule> OrderedHolidaySchedules => _settings?.HolidaySchedules?.OrderBy(h => h.Date) ?? Enumerable.Empty<HolidaySchedule>();
 
 
+
+
+
     protected override async Task OnInitializedAsync()
+
     {
+
         await base.OnInitializedAsync();
 
+
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
         var user = authState.User;
+
         canEditIp = user.IsInRole("admin") || user.IsInRole("superadmin");
 
+
+
         if (user.Identity?.IsAuthenticated ?? false)
+
         {
+
             _settings = await _uow.ISettingsRepo.GetSettings();
+
             _settings.YouTubeMusicCollections ??= new();
+
             _settings.HolidaySchedules ??= new();
+
+
 
             NormalizeSchedules();
 
+
+
             // Default to weekdays if no ActiveDays are set
+
             if (_settings.ActiveDays == null || !_settings.ActiveDays.Any())
+
             {
+
                 _settings.ActiveDays = Enum.GetValues<DayOfWeek>()
+
                     .Where(d => d != DayOfWeek.Saturday && d != DayOfWeek.Sunday)
+
                     .ToList();
 
+
+
                 // Persist the updated default back to the config file
+
                 await _uow.ISettingsRepo.WriteSettings(_settings);
+
             }
+
+
 
             // Build checkbox model
+
             foreach (DayOfWeek day in Enum.GetValues(typeof(DayOfWeek)))
+
             {
+
                 DaySelection[day] = _settings.ActiveDays.Contains(day);
+
             }
 
-            ResetHolidayDraft();
         }
+
     }
+
+
+
 
 
     private TimeOnly StartTime
+
     {
+
         get => _settings!.StartTime;
+
         set
+
         {
+
             _settings!.StartTime = value;
+
             SaveSettings();
+
             AddLog("Starttime Changed", $"Time: {value}");
+
         }
+
     }
+
+
 
     private TimeOnly StopTime
+
     {
+
         get => _settings!.StopTime;
+
         set
+
         {
+
             _settings!.StopTime = value;
+
             SaveSettings();
+
             AddLog("Stoptime Changed", $"Time: {value}");
+
         }
+
     }
 
+
+
       private string AutoPlaySelection
+
       {
+
           get
+
           {
+
               if (_settings!.AutoPlayRandomStation)
+
                   return "randomStation";
+
               if (_settings.AutoPlayRandomSpotify)
+
                   return "randomSpotify";
+
               if (_settings.AutoPlayRandomYouTubeMusic)
+
                   return "randomYouTube";
+
               if (!string.IsNullOrEmpty(_settings.AutoPlayStationUrl))
+
                   return $"station:{_settings.AutoPlayStationUrl}";
+
               if (!string.IsNullOrEmpty(_settings.AutoPlaySpotifyUrl))
+
                   return $"spotify:{_settings.AutoPlaySpotifyUrl}";
+
               if (!string.IsNullOrEmpty(_settings.AutoPlayYouTubeMusicUrl))
+
                   return $"youtube:{_settings.AutoPlayYouTubeMusicUrl}";
+
               return string.Empty;
+
           }
+
           set
+
           {
+
               _settings!.AutoPlayRandomStation = false;
+
               _settings.AutoPlayRandomSpotify = false;
+
               _settings.AutoPlayRandomYouTubeMusic = false;
+
               _settings.AutoPlayStationUrl = null;
+
               _settings.AutoPlaySpotifyUrl = null;
+
               _settings.AutoPlayYouTubeMusicUrl = null;
+
               if (!string.IsNullOrEmpty(value))
+
               {
+
                   if (value == "randomStation")
+
                       _settings.AutoPlayRandomStation = true;
+
                   else if (value == "randomSpotify")
+
                       _settings.AutoPlayRandomSpotify = true;
+
                   else if (value == "randomYouTube")
+
                       _settings.AutoPlayRandomYouTubeMusic = true;
+
                   else
+
                   {
+
                       var parts = value.Split(':', 2);
+
                       if (parts[0] == "station")
+
                           _settings.AutoPlayStationUrl = parts[1];
+
                       else if (parts[0] == "spotify")
+
                           _settings.AutoPlaySpotifyUrl = parts[1];
+
                       else if (parts[0] == "youtube")
+
                           _settings.AutoPlayYouTubeMusicUrl = parts[1];
+
                   }
+
               }
+
               SaveSettings();
+
           }
+
       }
 
+
+
     private int MaxVolume
+
     {
+
         get => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
+
         set
+
         {
+
             if (_settings is null)
+
                 return;
+
+
 
             var clamped = Math.Clamp(value, 0, 100);
 
+
+
             if (_settings.MaxVolume == clamped)
+
                 return;
+
+
 
             _settings.MaxVolume = clamped;
 
+
+
             if (_settings.Volume > clamped)
+
             {
+
                 _settings.Volume = clamped;
+
             }
 
+
+
             SaveSettings();
+
             _ = AddLog("Max Volume Changed", $"Value: {clamped}");
+
         }
+
     }
 
+
+
     private string GradientStartColor
+
     {
+
         get => NormalizeColor(_settings?.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor);
+
         set
+
         {
+
             if (_settings is null)
+
                 return;
+
+
 
             var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientStartColor);
 
+
+
             if (_settings.NowPlayingGradientStartColor == normalized)
+
                 return;
+
+
 
             _settings.NowPlayingGradientStartColor = normalized;
+
             SaveSettings();
+
         }
+
     }
 
+
+
     private string GradientMidColor
+
     {
+
         get => NormalizeColor(_settings?.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor);
+
         set
+
         {
+
             if (_settings is null)
+
                 return;
+
+
 
             var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientMidColor);
 
+
+
             if (_settings.NowPlayingGradientMidColor == normalized)
+
                 return;
+
+
 
             _settings.NowPlayingGradientMidColor = normalized;
+
             SaveSettings();
+
         }
+
     }
 
+
+
     private string GradientEndColor
+
     {
+
         get => NormalizeColor(_settings?.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor);
+
         set
+
         {
+
             if (_settings is null)
+
                 return;
+
+
 
             var normalized = NormalizeColor(value, SonosSettings.DefaultNowPlayingGradientEndColor);
 
+
+
             if (_settings.NowPlayingGradientEndColor == normalized)
+
                 return;
 
+
+
             _settings.NowPlayingGradientEndColor = normalized;
+
             SaveSettings();
+
         }
+
     }
+
+
 
     private string GradientPreviewStyle => $"background: linear-gradient(135deg, {GradientStartColor} 0%, {GradientMidColor} 55%, {GradientEndColor} 100%);";
 
+
+
     private async Task SaveSettings()
+
     {
+
+        if (_settings is null) return;
+
+        
+
         _settings.ActiveDays = DaySelection
+
             .Where(kv => kv.Value)
+
             .Select(kv => kv.Key)
+
             .ToList();
 
+
+
         _settings.MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
+
         _settings.Volume = Math.Clamp(_settings.Volume, 0, _settings.MaxVolume);
+
         _settings.NowPlayingGradientStartColor = NormalizeColor(_settings.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor);
+
         _settings.NowPlayingGradientMidColor = NormalizeColor(_settings.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor);
+
         _settings.NowPlayingGradientEndColor = NormalizeColor(_settings.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor);
+
         _settings.HolidaySchedules ??= new();
+
         _settings.HolidaySchedules.Sort((a, b) => a.Date.CompareTo(b.Date));
+
+
 
         NormalizeSchedules();
 
-        await _uow.ISettingsRepo.WriteSettings(_settings!);
+
+
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+
     }
+
+
 
     private string GetScheduleSelection(DaySchedule schedule)
+
     {
+
         if (schedule is HolidaySchedule holiday)
+
         {
+
             if (holiday.SkipPlayback || !HasPlaybackTarget(holiday))
+
                 return "skip";
+
         }
 
+
+
         if (schedule.PlayRandomStation)
+
             return "randomStation";
+
         if (schedule.PlayRandomSpotify)
+
             return "randomSpotify";
+
         if (schedule.PlayRandomYouTubeMusic)
+
             return "randomYouTube";
+
         if (!string.IsNullOrEmpty(schedule.StationUrl))
+
             return $"station:{schedule.StationUrl}";
+
         if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
+
             return $"spotify:{schedule.SpotifyUrl}";
+
         if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
+
             return $"youtube:{schedule.YouTubeMusicUrl}";
+
         return string.Empty;
+
     }
 
+
+
     private void ApplyScheduleSelection(DaySchedule schedule, string? value)
+
     {
+
         schedule.PlayRandomStation = false;
+
         schedule.PlayRandomSpotify = false;
+
         schedule.PlayRandomYouTubeMusic = false;
+
         schedule.StationUrl = null;
+
         schedule.SpotifyUrl = null;
+
         schedule.YouTubeMusicUrl = null;
+
+
 
         var selection = value?.Trim();
 
+
+
         if (schedule is HolidaySchedule holiday)
+
         {
+
             holiday.SkipPlayback = false;
 
+
+
             if (string.IsNullOrEmpty(selection) || string.Equals(selection, "skip", StringComparison.OrdinalIgnoreCase))
+
             {
+
                 holiday.SkipPlayback = true;
+
                 return;
+
             }
+
         }
+
         else if (string.Equals(selection, "skip", StringComparison.OrdinalIgnoreCase))
+
         {
+
             selection = string.Empty;
+
         }
+
+
 
         if (string.IsNullOrEmpty(selection))
+
             return;
+
+
 
         if (selection == "randomStation")
+
             schedule.PlayRandomStation = true;
+
         else if (selection == "randomSpotify")
+
             schedule.PlayRandomSpotify = true;
+
         else if (selection == "randomYouTube")
+
             schedule.PlayRandomYouTubeMusic = true;
+
         else
+
         {
+
             var parts = selection.Split(':', 2);
+
             if (parts.Length == 2)
+
             {
+
                 if (parts[0] == "station")
+
                     schedule.StationUrl = parts[1];
+
                 else if (parts[0] == "spotify")
+
                     schedule.SpotifyUrl = parts[1];
+
                 else if (parts[0] == "youtube")
+
                     schedule.YouTubeMusicUrl = parts[1];
+
             }
+
         }
+
     }
+
+
 
     private static bool HasPlaybackTarget(DaySchedule schedule)
+
     {
+
         return schedule.PlayRandomStation
+
                || schedule.PlayRandomSpotify
+
                || schedule.PlayRandomYouTubeMusic
+
                || !string.IsNullOrWhiteSpace(schedule.StationUrl)
+
                || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+
                || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
+
     }
+
+
 
     private async Task SetScheduleSelection(DaySchedule schedule, string? value)
+
     {
+
         ApplyScheduleSelection(schedule, value);
+
         await SaveSettings();
+
     }
+
+
 
     private void NormalizeSchedules()
+
     {
+
         if (_settings?.HolidaySchedules != null)
+
         {
+
             foreach (var holiday in _settings.HolidaySchedules)
+
             {
+
                 if (!HasPlaybackTarget(holiday))
+
                     holiday.SkipPlayback = true;
+
             }
+
         }
+
     }
+
+
 
     private async Task AddHolidayOverride()
+
     {
+
         _holidayValidationMessage = null;
 
-        if (_settings is null)
-            return;
+        if (_settings is null) return;
 
-        var validation = ValidateHolidayDraft();
-        if (!string.IsNullOrEmpty(validation))
+
+
+        var newDate = DateOnly.FromDateTime(DateTime.Now);
+
+        while (_settings.HolidaySchedules.Any(h => h.Date == newDate))
+
         {
-            _holidayValidationMessage = validation;
-            return;
+
+            newDate = newDate.AddDays(1);
+
         }
 
-        var date = DateOnly.FromDateTime(_holidayDraft.Date!.Value);
-        if (!TimeOnly.TryParseExact(_holidayDraft.Start, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))
-        {
-            _holidayValidationMessage = "Provide a valid start time.";
-            return;
-        }
 
-        if (!TimeOnly.TryParseExact(_holidayDraft.Stop, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var stop))
-        {
-            _holidayValidationMessage = "Provide a valid stop time.";
-            return;
-        }
-
-        if (stop <= start)
-        {
-            _holidayValidationMessage = "Stop time must be after start time.";
-            return;
-        }
-
-        if (_settings.HolidaySchedules.Any(h => h.Date == date))
-        {
-            _holidayValidationMessage = "A holiday override already exists for that date.";
-            return;
-        }
 
         var schedule = new HolidaySchedule
+
         {
-            Date = date,
-            StartTime = start,
-            StopTime = stop,
-            Name = string.IsNullOrWhiteSpace(_holidayDraft.Name) ? null : _holidayDraft.Name.Trim()
+
+            Date = newDate,
+
+            StartTime = _settings.StartTime,
+
+            StopTime = _settings.StopTime,
+
+            Name = "New Holiday",
+
+            SkipPlayback = true
+
         };
 
-        ApplyScheduleSelection(schedule, _holidayDraft.Selection);
+        
+
         _settings.HolidaySchedules.Add(schedule);
+
         await SaveSettings();
-        ResetHolidayDraft();
+
     }
 
-    private string? ValidateHolidayDraft()
-    {
-        if (_holidayDraft.Date is null)
-            return "Select a date for the holiday override.";
 
-        if (string.IsNullOrWhiteSpace(_holidayDraft.Start) || string.IsNullOrWhiteSpace(_holidayDraft.Stop))
-            return "Specify start and stop times.";
-
-        return null;
-    }
 
     private async Task ImportHolidayCalendarAsync(InputFileChangeEventArgs args)
+
     {
+
         if (_settings is null)
+
             return;
+
+
 
         if (args.FileCount == 0)
+
         {
+
             _holidayImportMessage = "Choose a calendar file to import.";
+
             return;
+
         }
+
+
 
         _importingCalendar = true;
+
         _holidayImportMessage = null;
+
+
 
         try
+
         {
+
             var file = args.File;
+
             await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+
             var events = await HolidayCalendarParser.ParseEventsAsync(stream);
 
+
+
             if (events.Count == 0)
+
             {
+
                 _holidayImportMessage = "No events were found in the selected calendar.";
+
                 return;
+
             }
+
+
 
             var added = 0;
+
             var updated = 0;
 
+
+
             foreach (var calendarEvent in events)
+
             {
+
                 var existing = _settings.HolidaySchedules.FirstOrDefault(h => h.Date == calendarEvent.Date);
+
                 if (existing == null)
+
                 {
+
                     var schedule = new HolidaySchedule
+
                     {
+
                         Date = calendarEvent.Date,
+
                         Name = calendarEvent.Name,
+
                         StartTime = _settings.StartTime,
+
                         StopTime = _settings.StopTime
+
                     };
+
                     _settings.HolidaySchedules.Add(schedule);
+
                     added++;
+
                 }
+
                 else if (!string.IsNullOrWhiteSpace(calendarEvent.Name) && !string.Equals(existing.Name, calendarEvent.Name, StringComparison.Ordinal))
+
                 {
+
                     existing.Name = calendarEvent.Name;
+
                     updated++;
+
                 }
+
             }
 
+
+
             if (added > 0 || updated > 0)
+
             {
+
                 await SaveSettings();
+
             }
 
+
+
             if (added > 0 || updated > 0)
+
                 _holidayImportMessage = $"Imported {added} date(s) and updated {updated} existing entries.";
+
             else
+
                 _holidayImportMessage = "Calendar import matched no new dates.";
+
         }
+
         catch (Exception ex)
+
         {
+
             _holidayImportMessage = $"Calendar import failed: {ex.Message}";
+
         }
+
         finally
+
         {
+
             _importingCalendar = false;
+
         }
+
     }
+
+
 
     private void ClearHolidayImportMessage()
+
     {
+
         _holidayImportMessage = null;
+
     }
 
-    private async Task OnHolidayNameChanged(HolidaySchedule holiday, ChangeEventArgs args)
-    {
-        var text = args.Value?.ToString();
-        holiday.Name = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
-        await SaveSettings();
-    }
+
 
     private async Task RemoveHoliday(HolidaySchedule holiday)
+
     {
+
         if (_settings?.HolidaySchedules == null)
+
             return;
+
+
 
         _settings.HolidaySchedules.Remove(holiday);
+
         await SaveSettings();
+
     }
 
-    private void ResetHolidayDraft()
-    {
-        if (_settings is null)
-        {
-            _holidayDraft = new HolidayEditorModel { Selection = "skip" };
-            return;
-        }
 
-        _holidayDraft = new HolidayEditorModel
-        {
-            Start = _settings.StartTime.ToString("HH:mm"),
-            Stop = _settings.StopTime.ToString("HH:mm"),
-            Selection = "skip"
-        };
-    }
-
-    private sealed class HolidayEditorModel
-    {
-        public DateTime? Date { get; set; }
-        public string? Start { get; set; }
-        public string? Stop { get; set; }
-        public string? Selection { get; set; }
-        public string? Name { get; set; }
-    }
 
     private async Task OnDayChanged(DayOfWeek dayKey, object? value)
+
     {
+
         bool isChecked = value is bool b && b;
+
         DaySelection[dayKey] = isChecked;
 
+
+
         await SaveSettings();
+
     }
 
+
+
     private static string NormalizeColor(string? value, string fallback)
+
     {
+
         if (string.IsNullOrWhiteSpace(value))
+
         {
+
             return fallback;
+
         }
+
+
 
         var trimmed = value.Trim();
 
+
+
         if (!trimmed.StartsWith("#", System.StringComparison.Ordinal))
+
         {
+
             trimmed = $"#{trimmed.TrimStart('#')}";
+
         }
+
+
 
         if (trimmed.Length == 7)
+
         {
+
             return trimmed;
+
         }
+
+
 
         if (trimmed.Length == 4)
+
         {
+
             return $"#{trimmed[1]}{trimmed[1]}{trimmed[2]}{trimmed[2]}{trimmed[3]}{trimmed[3]}";
+
         }
+
+
 
         if (trimmed.Length > 7)
+
         {
+
             return trimmed.Substring(0, 7);
+
         }
 
+
+
         return fallback;
+
     }
+
+
+
 
 
     private string IP_Adress
+
     {
+
         get => _settings!.IP_Adress;
+
         set
+
         {
+
             if (!canEditIp)
+
                 return;
 
+
+
             _settings!.IP_Adress = value;
+
             SaveSettings();
+
             AddLog("IP-Adress Changed", $"IP: {value}");
+
         }
+
     }
+
+
 
     private async Task SendRebootCommand()
+
     {
+
         if (_settings is null)
+
         {
+
             return;
+
         }
+
+
 
         if (string.IsNullOrWhiteSpace(_settings.IP_Adress))
+
         {
+
             _rebootAlertCss = "alert-warning";
+
             _rebootAlertMessage = "Set a valid IP address before sending commands.";
+
             return;
+
         }
+
+
 
         _isRebooting = true;
+
         _rebootAlertMessage = null;
 
+
+
         try
+
         {
+
             await _uow.ISonosConnectorRepo.RebootDeviceAsync(_settings.IP_Adress);
+
             _rebootAlertCss = "alert-success";
+
             _rebootAlertMessage = "Reboot command sent to the speaker.";
+
             await AddLog("Reboot Command Sent", $"IP: {_settings.IP_Adress}");
+
         }
+
         catch (Exception ex)
+
         {
+
             _rebootAlertCss = "alert-danger";
+
             _rebootAlertMessage = $"Failed to send reboot command: {ex.Message}";
+
             try
+
             {
+
                 await AddLog("Reboot Command Failed", $"IP: {_settings.IP_Adress}; Error: {ex.Message}");
+
             }
+
             catch
+
             {
+
             }
+
         }
+
         finally
+
         {
+
             _isRebooting = false;
+
         }
+
     }
 
+
+
     private async Task AddLog(string action, string? details = null)
+
     {
+
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
         var user = authState.User;
+
         var username = user.Identity?.Name ?? "Unknown";
 
+
+
         var log = new LogEntry
+
         {
+
             Action = action,
+
             PerformedBy = username,
+
             Timestamp = DateTime.UtcNow,
+
             Details = details
+
         };
 
+
+
         Db.Logs.Add(log);
+
         await Db.SaveChangesAsync();
+
     }
 
 }
+
+
 
 
