@@ -1,92 +1,116 @@
 ﻿@page "/lookup"
 @using System.Net.Http.Json
 @using System.Linq
+@using System.Text
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
-@using SonosControl.Web.Models;
+@using SonosControl.Web.Models
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 
-        <div class="lookup-shell surface-1 rounded-4 shadow-sm border border-secondary">
-            <header class="lookup-shell__header">
-                <div>
-                    <h2 class="lookup-shell__title">📻 Station Lookup</h2>
-                    <p class="text-muted mb-0">Search and persist radio stations for the Sonos system.</p>
-                </div>
-                <p class="text-muted small mb-0">Live data powered by Radio Browser.</p>
-            </header>
-
-            @if (!string.IsNullOrEmpty(saveSuccessMessage))
-            {
-                <div class="alert alert-success mb-0">@saveSuccessMessage</div>
-            }
-
-            @if (!string.IsNullOrEmpty(addStationErrorMessage))
-            {
-                <div class="alert alert-danger mb-0">@addStationErrorMessage</div>
-            }
-
-            <div class="lookup-shell__search">
-                <input class="lookup-shell__search-input form-control"
-                       @bind-value="searchTerm"
-                       @bind-value:event="oninput"
-                       placeholder="Search for a radio station..."
-                       @onkeydown="HandleKeyDown" />
-                <button class="lookup-shell__search-button btn btn-primary"
-                        @onclick="SearchStations"
-                        disabled="@string.IsNullOrWhiteSpace(searchTerm)"
-                        aria-label="Search stations"
-                        title="Search stations">
-                    🔍
-                </button>
-            </div>
-
-            @if (isLoading)
-            {
-                <p class="text-center text-muted mb-0">Searching...</p>
-            }
-            else if (results?.Any() == true)
-            {
-                <ul class="lookup-results">
-                    @foreach (var station in results)
-                    {
-                        <li class="lookup-result">
-                            <div class="lookup-info">
-                                <strong>@(station.Name.Length > 50 ? station.Name[..50] + "..." : station.Name)</strong>
-                                <small class="text-muted">@GetCleanUrl(station.Url)</small>
-                            </div>
-                            <div class="lookup-actions">
-                                <button type="button"
-                                        class="lookup-action-button btn btn-outline-success"
-                                        @onclick="() => PlayStation(station.Url)"
-                                        aria-label="@($"Play {station.Name}")"
-                                        title="@($"Play {station.Name}")">
-                                    🔊
-                                </button>
-                                <button type="button"
-                                        class="lookup-action-button btn btn-outline-primary"
-                                        @onclick="() => SaveStation(station)"
-                                        aria-label="@($"Save {station.Name}")"
-                                        title="@($"Save {station.Name}")">
-                                    💾
-                                </button>
-                            </div>
-                        </li>
-                    }
-                </ul>
-            }
-            else if (results is not null)
-            {
-                <p class="text-center text-muted mb-0">No stations found.</p>
-            }
+<div class="lookup-shell surface-1 rounded-4 shadow-sm border border-secondary">
+    <header class="lookup-shell__header">
+        <div>
+            <h2 class="lookup-shell__title">📻 Station Lookup</h2>
+            <p class="text-muted mb-0">Search and persist radio stations for the Sonos system.</p>
         </div>
+        <p class="text-muted small mb-0">Live data powered by Radio Browser.</p>
+    </header>
+
+    @if (!string.IsNullOrEmpty(saveSuccessMessage))
+    {
+        <div class="alert alert-success mb-0">@saveSuccessMessage</div>
+    }
+
+    @if (!string.IsNullOrEmpty(addStationErrorMessage))
+    {
+        <div class="alert alert-danger mb-0">@addStationErrorMessage</div>
+    }
+
+    <div class="lookup-shell__search">
+        <input class="lookup-shell__search-input form-control"
+               @bind-value="searchTerm"
+               @bind-value:event="oninput"
+               placeholder="Search for a radio station..."
+               @onkeydown="HandleKeyDown"/>
+        <button class="lookup-shell__search-button btn btn-primary"
+                @onclick="SearchStations"
+                disabled="@string.IsNullOrWhiteSpace(searchTerm)"
+                aria-label="Search stations"
+                title="Search stations">
+            🔍
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="text-center text-muted mb-0">Searching...</p>
+    }
+    else if (results?.Any() == true)
+    {
+        <ul class="list-group list-group-flush lookup-results">
+            @foreach (var station in results)
+            {
+                <li class="list-group-item lookup-result">
+                    <div class="lookup-info">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="display-6">@GetFlagEmoji(station.CountryCode)</span>
+                            <div class="flex-grow-1">
+                                <strong>@station.Name</strong>
+                                <small class="text-muted d-block">@GetCleanUrl(station.Url)</small>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(station.Tags))
+                        {
+                            <div class="d-flex gap-1 flex-wrap mt-2">
+                                @foreach(var tag in station.Tags.Split(',').Take(3))
+                                {
+                                    <span class="badge bg-secondary bg-opacity-25 text-dark-emphasis">@tag</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="lookup-actions">
+                        <button type="button"
+                                class="lookup-action-button btn btn-outline-success"
+                                @onclick="() => PlayStation(station.Url)"
+                                aria-label="@($"Play {station.Name}")"
+                                title="@($"Play {station.Name}")">
+                            🔊
+                        </button>
+                        @if (IsStationSaved(station))
+                        {
+                            <button type="button" class="lookup-action-button btn btn-outline-primary" disabled>
+                                ✅
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="lookup-action-button btn btn-outline-primary"
+                                    @onclick="() => SaveStation(station)"
+                                    aria-label="@($"Save {station.Name}")"
+                                    title="@($"Save {station.Name}")">
+                                💾
+                            </button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    else if (results is not null)
+    {
+        <p class="text-center text-muted mb-0">No stations found.</p>
+    }
+</div>
 
 @code {
     private SonosSettings? _settings;
-    private string searchTerm;
-    private List<RadioStation> results;
+    private string? searchTerm;
+    private List<RadioStation>? results;
     private bool isLoading = false;
     private string? saveSuccessMessage;
     private bool isAuthenticated;
@@ -109,32 +133,58 @@
     {
         isLoading = true;
         results = null;
+        StateHasChanged();
 
         try
         {
             var http = new HttpClient();
-            string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm)}";
-            results = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
+            string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm ?? string.Empty)}";
+            var searchResults = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
 
-            if (results is null)
+            if (searchResults is not null)
             {
-                results = new List<RadioStation>();
+                results = searchResults
+                    .Where(station => station is not null && !string.IsNullOrWhiteSpace(station.Url) && !string.IsNullOrWhiteSpace(station.Name))
+                    .GroupBy(station => new { Name = station.Name.Trim(), Url = NormalizeUrl(station.Url) })
+                    .Select(group => group.First())
+                    .Take(50)
+                    .ToList();
             }
             else
             {
-                results = results
-                    .Where(station => station is not null && !string.IsNullOrWhiteSpace(station.Url))
-                    .GroupBy(station => NormalizeUrl(station.Url))
-                    .Select(group => group.First())
-                    .ToList();
+                results = new List<RadioStation>();
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine("Error fetching stations: " + ex.Message);
+            results = new List<RadioStation>();
         }
-
-        isLoading = false;
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private bool IsStationSaved(RadioStation station)
+    {
+        if (_settings?.Stations == null) return false;
+        
+        string normalizedUrl = NormalizeUrl(station.Url);
+        string normalizedName = station.Name.Trim().ToLowerInvariant();
+        
+        return _settings.Stations.Any(s =>
+            NormalizeUrl(s.Url) == normalizedUrl ||
+            s.Name.Trim().ToLowerInvariant() == normalizedName);
+    }
+    
+    private string GetFlagEmoji(string countryCode)
+    {
+        if (string.IsNullOrWhiteSpace(countryCode) || countryCode.Length != 2)
+            return "🏳️";
+        
+        return string.Concat(countryCode.ToUpperInvariant().Select(c => char.ConvertFromUtf32(c + 0x1F1E6 - 'A')));
     }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -146,34 +196,23 @@
         }
     }
 
-    private async Task CopyFormatted(RadioStation station)
-    {
-        if (!string.IsNullOrWhiteSpace(station.Url))
-        {
-            try
-            {
-                var uri = new Uri(station.Url);
-                // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
-                var cleanUrl = uri.Host + uri.AbsolutePath;
-                await JS.InvokeVoidAsync("navigator.clipboard.writeText", cleanUrl);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Invalid URL: {station.Url} - {ex.Message}");
-            }
-        }
-        else
-        {
-            Console.WriteLine("URL is null or empty.");
-        }
-    }
-
     private string GetCleanUrl(string url)
     {
-        var uri = new Uri(url);
-        // Get just host + path (e.g., "web.radio.example.com/stream.mp3")
-        var cleanUrl = uri.Host + uri.AbsolutePath;
+        string cleanUrl;
+        try
+        {
+            var uri = new Uri(url);
+            cleanUrl = uri.Host + uri.AbsolutePath;
+        }
+        catch
+        {
+            cleanUrl = url;
+        }
 
+        if (cleanUrl.Length > 30)
+        {
+            return cleanUrl.Substring(0, 30) + "...";
+        }
         return cleanUrl;
     }
 
@@ -189,10 +228,11 @@
 
     public class RadioStation
     {
-        public string Name { get; set; }
-        public string Url { get; set; } // ✅ Use this field
-        public string Country { get; set; }
-        public string Tags { get; set; }
+        public string Name { get; set; } = "";
+        public string Url { get; set; } = "";
+        public string Country { get; set; } = "";
+        public string CountryCode { get; set; } = "";
+        public string Tags { get; set; } = "";
     }
 
     private string? addStationErrorMessage;
@@ -204,40 +244,30 @@
 
         if (_settings == null)
         {
-            _settings = new SonosSettings();
+            addStationErrorMessage = "Settings not loaded.";
+            return;
         }
 
-        if (_settings.Stations == null)
+        _settings.Stations ??= new List<TuneInStation>();
+
+        if (IsStationSaved(station))
         {
-            _settings.Stations = new List<TuneInStation>();
+            addStationErrorMessage = "Station is already saved.";
+            return;
         }
-
+        
         try
         {
-            string normalizedUrl = NormalizeUrl(station.Url);
-            string normalizedName = station.Name.Trim().ToLowerInvariant();
-
-            bool alreadyExists = _settings.Stations.Any(s =>
-                NormalizeUrl(s.Url) == normalizedUrl ||
-                s.Name.Trim().ToLowerInvariant() == normalizedName);
-
-            if (alreadyExists)
-            {
-                addStationErrorMessage = "Station is already saved.";
-                return;
-            }
-
             _settings.Stations.Add(new TuneInStation { Name = station.Name, Url = station.Url });
             await SaveSettings();
             await AddLog("Added Station", $"station: {station.Name}, ({station.Url})");
 
             saveSuccessMessage = $"✅ \"{station.Name}\" saved!";
-            Console.WriteLine($@"Station {station.Name} saved successfully.");
 
-            await InvokeAsync(StateHasChanged);
+            StateHasChanged();
             await Task.Delay(3000);
             saveSuccessMessage = null;
-            await InvokeAsync(StateHasChanged);
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -258,10 +288,9 @@
         }
     }
 
-
     private async Task SaveSettings()
     {
-        // Implement your settings saving logic here, for example:
+        if (_settings is null) return;
         await _uow.ISettingsRepo.WriteSettings(_settings);
     }
 
@@ -282,7 +311,6 @@
         Db.Logs.Add(log);
         await Db.SaveChangesAsync();
     }
-
 }
 
 
