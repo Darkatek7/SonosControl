@@ -860,3 +860,39 @@ a:focus-visible {
         max-height: 48vh;
     }
 }
+/* New styles for the refactored media lists */
+.media-list .list-group-item {
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background-color: var(--surface-1);
+    border-color: var(--border-subtle);
+    transition: background-color 0.2s;
+}
+
+.media-list .list-group-item:hover {
+    background-color: var(--surface-2);
+}
+
+.media-list .list-group-item span {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.media-list .active-media {
+    background-color: color-mix(in srgb, var(--brand-accent) 20%, var(--surface-1));
+    color: var(--text-primary);
+    font-weight: 600;
+}
+[data-theme='dark'] .media-list .active-media {
+    background-color: color-mix(in srgb, var(--brand-accent) 30%, var(--surface-2));
+}

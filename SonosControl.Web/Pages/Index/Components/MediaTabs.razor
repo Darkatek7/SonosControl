@@ -1,0 +1,63 @@
+@namespace SonosControl.Web.Pages.Index.Components
+
+<div class="media-tabs-container">
+    <div class="nav nav-tabs" role="tablist">
+        <button class="@GetTabClass("stations")" @onclick="@(() => SetActiveTab("stations"))" role="tab">
+            📻 Stations
+        </button>
+        <button class="@GetTabClass("spotify")" @onclick="@(() => SetActiveTab("spotify"))" role="tab">
+            🎧 Spotify
+        </button>
+        <button class="@GetTabClass("youtube")" @onclick="@(() => SetActiveTab("youtube"))" role="tab">
+            ▶️ YouTube
+        </button>
+    </div>
+
+    <div class="tab-content">
+        @if (ActiveTab == "stations")
+        {
+            <div class="tab-pane active">
+                @StationsContent
+            </div>
+        }
+        else if (ActiveTab == "spotify")
+        {
+            <div class="tab-pane active">
+                @SpotifyContent
+            </div>
+        }
+        else if (ActiveTab == "youtube")
+        {
+            <div class="tab-pane active">
+                @YouTubeContent
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? StationsContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? SpotifyContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? YouTubeContent { get; set; }
+
+    [Parameter]
+    public string ActiveTab { get; set; } = "stations";
+
+    [Parameter]
+    public EventCallback<string> ActiveTabChanged { get; set; }
+
+    private async Task SetActiveTab(string tabName)
+    {
+        if (ActiveTab == tabName) return;
+        ActiveTab = tabName;
+        await ActiveTabChanged.InvokeAsync(ActiveTab);
+    }
+
+    private string GetTabClass(string tabName) =>
+        $"nav-link { (ActiveTab == tabName ? "active" : "") }";
+}

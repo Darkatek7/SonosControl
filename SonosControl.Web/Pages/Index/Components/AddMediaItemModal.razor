@@ -1,0 +1,85 @@
+@using SonosControl.DAL.Models
+
+<div class="modal fade show @(_show ? "d-block" : "d-none")" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Title</h5>
+                <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(ErrorMessage))
+                {
+                    <div class="alert alert-danger">@ErrorMessage</div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control" @bind="Name" @bind:event="oninput" placeholder="My favorite playlist" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">URL</label>
+                    <input type="text" class="form-control" @bind="Url" @bind:event="oninput" placeholder="https://..." />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="HandleSave" disabled="@IsSaveDisabled">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_show)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private bool _show;
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Name, string Url)> OnSave { get; set; }
+    
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Title { get; set; } = "Add New Item";
+
+    private bool IsSaveDisabled => string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(Url);
+
+    public void Show(string title)
+    {
+        Title = title;
+        Name = "";
+        Url = "";
+        _show = true;
+        StateHasChanged();
+    }
+
+    private async Task Close()
+    {
+        _show = false;
+        await OnClose.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async Task HandleSave()
+    {
+        if (IsSaveDisabled) return;
+
+        await OnSave.InvokeAsync((Name, Url));
+        
+        if (string.IsNullOrEmpty(ErrorMessage))
+        {
+            await Close();
+        }
+    }
+}
