@@ -28,7 +28,7 @@
                     <div class="config-field-stack">
                         <div class="config-field">
                             <label class="form-label">💻 IP Address</label>
-                            <input type="text" class="form-control bg-secondary text-light border-0"
+                            <input type="text" class="form-control"
                                    @bind-value="IP_Adress"
                                    @bind-value:event="oninput"
                                    placeholder="Enter IP Address"
@@ -56,7 +56,7 @@
 
                         <div class="config-field">
                             <label class="form-label">🎵 Auto Play</label>
-                            <select class="form-select bg-secondary text-light border-0"
+                            <select class="form-select"
                                     @bind="AutoPlaySelection" @bind:event="onchange">
                                 <option value="">-- None --</option>
                                 <option value="randomStation">Random Station</option>
@@ -85,7 +85,7 @@
 
                         <div class="config-field">
                             <label class="form-label">🔊 Max Volume</label>
-                            <input type="number" class="form-control bg-secondary text-light border-0"
+                            <input type="number" class="form-control"
                                    min="0" max="100"
                                    @bind-value="MaxVolume"
                                    @bind-value:event="oninput" />
@@ -100,19 +100,19 @@
                     <div class="schedule-grid">
                         <div class="schedule-field">
                             <label class="form-label">⏰ Start Time</label>
-                            <input type="time" class="form-control bg-secondary text-light border-0"
+                            <input type="time" class="form-control"
                                    @bind-value="StartTime"
                                    @bind-value:event="oninput" />
                         </div>
                         <div class="schedule-field">
                             <label class="form-label">🛑 Stop Time</label>
-                            <input type="time" class="form-control bg-secondary text-light border-0"
+                            <input type="time" class="form-control"
                                    @bind-value="StopTime"
                                    @bind-value:event="oninput" />
                         </div>
                         <div class="schedule-field">
                             <label class="form-label">📅 Server Time</label>
-                            <input type="time" class="form-control bg-secondary text-light border-0"
+                            <input type="time" class="form-control"
                                    disabled
                                    @bind-value="TimeRightNow" />
                         </div>
@@ -158,15 +158,15 @@
                                         <tr>
                                             <td>@day.ToString().Substring(0,3)</td>
                                             <td>
-                                                <input type="time" class="form-control bg-secondary text-light border-0"
+                                                <input type="time" class="form-control"
                                                        @bind-value="schedule.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                             </td>
                                             <td>
-                                                <input type="time" class="form-control bg-secondary text-light border-0"
+                                                <input type="time" class="form-control"
                                                        @bind-value="schedule.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                             </td>
                                             <td>
-                                                <select class="form-select bg-secondary text-light border-0"
+                                                <select class="form-select"
                                                         value="@GetScheduleSelection(schedule)"
                                                         @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
                                                     <option value="">-- None --</option>
@@ -222,19 +222,19 @@
                         <div class="row g-2 align-items-end">
                             <div class="col-12 col-md-3">
                                 <label class="form-label small mb-1">Date</label>
-                                <input type="date" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Date" @bind-value:event="oninput" />
+                                <input type="date" class="form-control" @bind-value="_holidayDraft.Date" @bind-value:event="oninput" />
                             </div>
                             <div class="col-6 col-md-2">
                                 <label class="form-label small mb-1">Start</label>
-                                <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Start" @bind-Value:event="oninput" />
+                                <InputText type="time" class="form-control" @bind-Value="_holidayDraft.Start" @bind-Value:event="oninput" />
                             </div>
                             <div class="col-6 col-md-2">
                                 <label class="form-label small mb-1">Stop</label>
-                                <InputText type="time" class="form-control bg-secondary text-light border-0" @bind-Value="_holidayDraft.Stop" @bind-Value:event="oninput" />
+                                <InputText type="time" class="form-control" @bind-Value="_holidayDraft.Stop" @bind-Value:event="oninput" />
                             </div>
                             <div class="col-12 col-md-3">
                                 <label class="form-label small mb-1">Playback</label>
-                                <select class="form-select bg-secondary text-light border-0" @bind="_holidayDraft.Selection">
+                                <select class="form-select" @bind="_holidayDraft.Selection">
                                     <option value="skip">-- Do not play --</option>
                                     <option value="randomStation">Random Station</option>
                                     <option value="randomSpotify">Random Spotify</option>
@@ -261,7 +261,7 @@
                             </div>
                             <div class="col-12 col-md-2">
                                 <label class="form-label small mb-1">Label</label>
-                                <input type="text" class="form-control bg-secondary text-light border-0" @bind-value="_holidayDraft.Name" @bind-value:event="oninput" maxlength="80" />
+                                <input type="text" class="form-control" @bind-value="_holidayDraft.Name" @bind-value:event="oninput" maxlength="80" />
                             </div>
                             <div class="col-12 text-end">
                                 <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
@@ -293,16 +293,16 @@
                                         <tr>
                                             <td class="fw-semibold">@holiday.Date.ToString("yyyy-MM-dd")</td>
                                             <td>
-                                                <input type="text" class="form-control bg-secondary text-light border-0" value="@holiday.Name" maxlength="80" @onchange="async e => await OnHolidayNameChanged(holiday, e)" title="@holiday.Name" />
+                                                <input type="text" class="form-control" value="@holiday.Name" maxlength="80" @onchange="async e => await OnHolidayNameChanged(holiday, e)" title="@holiday.Name" />
                                             </td>
                                             <td>
-                                                <input type="time" class="form-control bg-secondary text-light border-0" @bind-value="holiday.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                                <input type="time" class="form-control" @bind-value="holiday.StartTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                             </td>
                                             <td>
-                                                <input type="time" class="form-control bg-secondary text-light border-0" @bind-value="holiday.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
+                                                <input type="time" class="form-control" @bind-value="holiday.StopTime" @bind-value:event="oninput" @onchange="async _ => await SaveSettings()" />
                                             </td>
                                             <td>
-                                                <select class="form-select bg-secondary text-light border-0" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
+                                                <select class="form-select" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
                                                     <option value="skip">-- Do not play --</option>
                                                     <option value="randomStation">Random Station</option>
                                                     <option value="randomSpotify">Random Spotify</option>

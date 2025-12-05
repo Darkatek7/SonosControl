@@ -345,6 +345,7 @@ a:focus-visible {
 .form-control:focus, .form-select:focus {
     border-color: color-mix(in srgb, var(--brand-primary) 55%, var(--bs-border-color));
     background-color: color-mix(in srgb, var(--surface-1) 92%, var(--brand-primary) 8%);
+    color: var(--bs-body-color);
 }
 
 .form-check-input:checked {
