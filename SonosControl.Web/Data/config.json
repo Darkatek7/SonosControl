@@ -1,6 +1,6 @@
 {
-  "Volume": 15,
-  "MaxVolume": 100,
+  "Volume": 25,
+  "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
   "IP_Adress": "10.1.12.251",
@@ -64,7 +64,78 @@
   "AutoPlayRandomStation": false,
   "AutoPlayRandomSpotify": false,
   "AutoPlayRandomYouTubeMusic": false,
-  "DailySchedules": {},
+  "DailySchedules": {
+    "Monday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Tuesday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Wednesday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Thursday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Friday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Saturday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    },
+    "Sunday": {
+      "StartTime": "06:00:00",
+      "StopTime": "18:00:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    }
+  },
   "HolidaySchedules": [],
   "ActiveDays": [
     1,

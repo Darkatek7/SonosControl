@@ -86,48 +86,92 @@
                     </div>
 
                     <div class="media-column">
-                        <MediaLists
-                            Stations="@_stations"
-                            SpotifyTracks="@_tracks"
-                            YouTubeCollections="@_youTubeCollections"
-                            IsStationEditMode="@isEditMode"
-                            IsSpotifyEditMode="@isSpotifyEditMode"
-                            IsYouTubeEditMode="@isYouTubeEditMode"
-                            NewStationName="@newStationName"
-                            NewStationUrl="@newStationUrl"
-                            NewTrackName="@newTrackName"
-                            NewTrackUrl="@newTrackUrl"
-                            NewYouTubeName="@newYouTubeName"
-                            NewYouTubeUrl="@newYouTubeUrl"
-                            SelectedStation="@selectedStation"
-                            SelectedTrack="@selectedTrack"
-                            SelectedYouTubeEntry="@selectedYouTubeEntry"
-                            SpotifyUrl="@spotifyUrl"
-                            StationErrorMessage="@addStationErrorMessage"
-                            SpotifyErrorMessage="@addTrackErrorMessage"
-                            YouTubeErrorMessage="@addYouTubeErrorMessage"
-                            ToggleStationEditMode="ToggleStationEdit"
-                            ToggleSpotifyEditMode="ToggleSpotifyEdit"
-                            ToggleYouTubeEditMode="ToggleYouTubeEdit"
-                            ShuffleStation="ShuffleStation"
-                            AddStation="AddStation"
-                            RemoveStation="RemoveStation"
-                            AddSpotifyTrack="AddNewSpotifyTrack"
-                            RemoveSpotifyTrack="RemoveSpotifyTrack"
-                            AddYouTubeEntry="AddNewYouTubeMusicEntry"
-                            RemoveYouTubeEntry="RemoveYouTubeMusicEntry"
-                            SpotifyUrlChanged="value => spotifyUrl = value"
-                            SpotifyUrlKeyPress="HandleKeyPress"
-                            PlaySpotifyUrl="SubmitSpotifyUrl"
-                            SelectedStationChanged="value => selectedStation = value"
-                            SelectedTrackChanged="value => selectedTrack = value"
-                            SelectedYouTubeEntryChanged="value => selectedYouTubeEntry = value"
-                            NewStationNameChanged="value => newStationName = value"
-                            NewStationUrlChanged="value => newStationUrl = value"
-                            NewTrackNameChanged="value => newTrackName = value"
-                            NewTrackUrlChanged="value => newTrackUrl = value"
-                            NewYouTubeNameChanged="value => newYouTubeName = value"
-                            NewYouTubeUrlChanged="value => newYouTubeUrl = value" />
+                        <MediaTabs @bind-ActiveTab="_activeMediaTab">
+                            <StationsContent>
+                                @{
+                                    var stations = _stations;
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0">Saved Stations</h5>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station">🔀</button>
+                                            <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">➕ Add</button>
+                                        </div>
+                                    </div>
+                                    <ul class="list-group media-list">
+                                        @foreach (var station in stations)
+                                        {
+                                            <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
+                                                <span>@station.Name</span>
+                                                <div class="media-actions">
+                                                    <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))">▶️</button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))">🗑️</button>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </StationsContent>
+                            <SpotifyContent>
+                                @{
+                                    var tracks = _tracks;
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0">Saved Spotify</h5>
+                                        <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal">➕ Add</button>
+                                    </div>
+                                    <ul class="list-group media-list">
+                                        @foreach (var track in tracks)
+                                        {
+                                            <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
+                                                <span>@track.Name</span>
+                                                <div class="media-actions">
+                                                    <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))">▶️</button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))">🗑️</button>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </SpotifyContent>
+                            <YouTubeContent>
+                                @{
+                                    var collections = _youTubeCollections;
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0">Saved YouTube</h5>
+                                        <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal">➕ Add</button>
+                                    </div>
+                                    <ul class="list-group media-list">
+                                        @foreach (var collection in collections)
+                                        {
+                                            <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
+                                                <span>@collection.Name</span>
+                                                <div class="media-actions">
+                                                    <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))">▶️</button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))">🗑️</button>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </YouTubeContent>
+                        </MediaTabs>
+                        
+                        <div class="card media-section mt-3">
+                            <div class="card-header">
+                                <h5 class="mb-0">🎧 Play Spotify URL</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="input-group">
+                                    <input type="text"
+                                           class="form-control"
+                                           @bind-value="spotifyUrl"
+                                           @bind-value:event="oninput"
+                                           @onkeyup="HandleKeyPress"
+                                           placeholder="Enter Spotify URL"
+                                           aria-label="Spotify URL" />
+                                    <button class="btn btn-primary" type="button" @onclick="SubmitSpotifyUrl">Play</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -148,12 +192,20 @@
     YouTubeCollections="_youTubeCollections"
     ErrorMessage="timerErrorMessage" />
 
+<AddMediaItemModal @ref="_addMediaItemModal" OnSave="SaveNewMediaItem" ErrorMessage="@_addModalError" OnClose="() => _addModalError = null"/>
+
 @code {
 
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+
+    // New state for tabs and modal
+    private string _activeMediaTab = "stations";
+    private AddMediaItemModal _addMediaItemModal = default!;
+    private string? _addModalError;
+
 
     private int Volume
     {
@@ -198,14 +250,6 @@
     private bool isAdmin;
     private bool isOperator;
 
-    private bool isEditMode = false;
-    private string newStationName = "";
-    private string newTrackName = "";
-    private string newYouTubeName = "";
-    private string newStationUrl = "";
-    private string newTrackUrl = "";
-    private string newYouTubeUrl = "";
-
     private bool isTimerModalOpen;
     private int timerMinutes = 60;
     private string? timerSelection;
@@ -214,34 +258,12 @@
     private DateTime? _timerEndTimeUtc;
     private string? _timerSelectionName;
 
-    private bool isSpotifyEditMode = false;
-    private bool isYouTubeEditMode = false;
-
-    private void ToggleStationEdit()
-    {
-        isEditMode = !isEditMode;
-    }
-
-    private void ToggleSpotifyEdit()
-    {
-        isSpotifyEditMode = !isSpotifyEditMode;
-    }
-
-    private void ToggleYouTubeEdit()
-    {
-        isYouTubeEditMode = !isYouTubeEditMode;
-    }
-
     private string currentStationUrl = "Loading...";
     private string currentStationDisplay = "Loading...";
 
     private string currentlyPlaying = "Loading...";
-    private string currentyPlayingDisplay = "Loading...";
     private string trackProgress = "";
     private Timer? _stationUpdateTimer;
-    private string? addStationErrorMessage;
-    private string? addTrackErrorMessage;
-    private string? addYouTubeErrorMessage;
 
     private List<TuneInStation> _stations =>
         (_settings?.Stations ?? new List<TuneInStation>())
@@ -258,8 +280,6 @@
         .OrderBy(t => t.Name)
         .ToList();
     
-    private string stationUrlPattern = @"^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9\-._~%!$&'()*+,;=:@/]*)*$";
-
     private List<SonosQueueItem> queue = new();
     private const int QueuePageSize = 50;
     private int _queueNextIndex;
@@ -322,88 +342,39 @@
             await InvokeAsync(StateHasChanged);
         }
     }
-
-
-    private string selectedStation
+    
+    private bool IsCurrentlyPlaying(string url)
     {
-        get => _selectedStation;
-        set
+        if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(currentStationUrl))
         {
-            if (_selectedStation != value)
-            {
-                _selectedStation = value;
-                OnStationChanged(); // Call the station change handler
-            }
+            return false;
         }
+        // Normalize and compare, this might need to be more robust
+        return currentStationUrl.Contains(url, StringComparison.OrdinalIgnoreCase);
     }
 
-    private bool CanAddStation => !string.IsNullOrWhiteSpace(newStationName) && !string.IsNullOrWhiteSpace(newStationUrl);
-    private bool CanAddTrack => !string.IsNullOrWhiteSpace(newTrackName) && !string.IsNullOrWhiteSpace(newTrackUrl);
-    private bool CanAddYouTubeEntry => !string.IsNullOrWhiteSpace(newYouTubeName) && !string.IsNullOrWhiteSpace(newYouTubeUrl);
-
-    private string _selectedStation;
-
-    private string selectedTrack
+    private async Task PlayMediaItem(string url, string type)
     {
-        get => _selectedTrack;
-        set
+        if (string.IsNullOrEmpty(url) || _settings is null) return;
+
+        switch (type)
         {
-            if (_selectedTrack != value)
-            {
-                _selectedTrack = value;
-                OnTrackChanged(); // Call the station change handler
-            }
+            case "station":
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
+                await AddLog("Station Changed", $"URL: {url}");
+                break;
+            case "spotify":
+                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+                await AddLog("Spotify Track Changed", $"URL: {url}");
+                break;
+            case "youtube":
+                 await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, url, _settings.AutoPlayStationUrl);
+                 await AddLog("YouTube Music Changed", $"URL: {url}");
+                break;
         }
+        await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
     }
-
-    private string _selectedTrack;
-    private string _selectedYouTubeEntry = string.Empty;
-
-    private string selectedYouTubeEntry
-    {
-        get => _selectedYouTubeEntry;
-        set
-        {
-            if (_selectedYouTubeEntry != value)
-            {
-                _selectedYouTubeEntry = value;
-                OnYouTubeSelectionChanged();
-            }
-        }
-    }
-
-    private async Task OnStationChanged()
-    {
-        if (!string.IsNullOrEmpty(selectedStation))
-        {
-            // Set the selected stream URL to the Sonos speaker
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings!.IP_Adress, selectedStation);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
-            await AddLog("Station Changed", $"URL: {selectedStation}");
-        }
-    }
-
-    private async Task OnTrackChanged()
-    {
-        if (!string.IsNullOrEmpty(selectedTrack) && _tracks.Any(s => s.Url == selectedTrack))
-        {
-            // Set the selected stream URL to the Sonos speaker
-            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings!.IP_Adress, selectedTrack);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
-            await AddLog("Spotify Track Changed", $"URL: {selectedTrack}");
-        }
-    }
-
-    private async Task OnYouTubeSelectionChanged()
-    {
-        if (!string.IsNullOrEmpty(selectedYouTubeEntry) && _youTubeCollections.Any(s => s.Url == selectedYouTubeEntry))
-        {
-            await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings!.IP_Adress, selectedYouTubeEntry, _settings.AutoPlayStationUrl);
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
-            await AddLog("YouTube Music Changed", $"URL: {selectedYouTubeEntry}");
-        }
-    }
-
+    
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -432,12 +403,6 @@
             await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
             await AddLog("Spotify URL Played", url);
         }
-    }
-
-    private async Task PreviousTrack()
-    {
-        await _uow.ISonosConnectorRepo.PreviousTrack(_settings!.IP_Adress);
-        await AddLog("Previous Track");
     }
 
     private async Task NextTrack()
@@ -838,16 +803,6 @@
         await Db.SaveChangesAsync();
     }
 
-    private async Task ClearQueue()
-    {
-        await _uow.ISonosConnectorRepo.ClearQueue(_settings!.IP_Adress);
-        queue.Clear();
-        _queueNextIndex = 0;
-        _queueHasMore = false;
-        await AddLog("Queue Cleared");
-        await LoadQueue(reset: true);
-    }
-
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -859,7 +814,6 @@
             return;
         }
 
-        // Load your settings and initialize page as before
         _settings = await _uow.ISettingsRepo.GetSettings();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
@@ -894,10 +848,8 @@
         {
             await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
             _isPlaying = false;
-            await AddLog("Playback Started");
+            await AddLog("Playback Paused");
         }
-
-        //_isPlaying = await IsPlaying();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -911,127 +863,92 @@
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
 
-    private async Task AddStation()
+    private void ShowAddStationModal() => _addMediaItemModal.Show("Add New Station");
+    private void ShowAddSpotifyModal() => _addMediaItemModal.Show("Add New Spotify Item");
+    private void ShowAddYouTubeModal() => _addMediaItemModal.Show("Add New YouTube Music Item");
+
+    private async Task SaveNewMediaItem((string Name, string Url) data)
     {
-        if (string.IsNullOrWhiteSpace(newStationName))
-        {
-            addStationErrorMessage = "Station name is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(newStationUrl))
-        {
-            addStationErrorMessage = "Station URL is required.";
-            return;
-        }
-
-        await AddLog("Station Added", $"{newStationName} ({newStationUrl})");
-        addStationErrorMessage = null;
-
+        _addModalError = null;
         _settings ??= new SonosSettings();
-        _settings.Stations ??= new List<TuneInStation>();
-        _settings.Stations.Add(new TuneInStation { Name = newStationName, Url = newStationUrl });
-        newStationName = newStationUrl = "";
 
+        switch (_activeMediaTab)
+        {
+            case "stations":
+                _settings.Stations ??= new List<TuneInStation>();
+                if (_settings.Stations.Any(s => s.Name == data.Name || s.Url == data.Url))
+                {
+                    _addModalError = "Station with this name or URL already exists.";
+                    return;
+                }
+                _settings.Stations.Add(new TuneInStation { Name = data.Name, Url = data.Url });
+                await AddLog("Station Added", $"{data.Name} ({data.Url})");
+                break;
+            case "spotify":
+                _settings.SpotifyTracks ??= new List<SpotifyObject>();
+                 if (_settings.SpotifyTracks.Any(s => s.Name == data.Name || s.Url == data.Url))
+                {
+                    _addModalError = "Spotify item with this name or URL already exists.";
+                    return;
+                }
+                _settings.SpotifyTracks.Add(new SpotifyObject { Name = data.Name, Url = data.Url });
+                await AddLog("Spotify Track Added", $"{data.Name} ({data.Url})");
+                break;
+            case "youtube":
+                _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+                 if (_settings.YouTubeMusicCollections.Any(s => s.Name == data.Name || s.Url == data.Url))
+                {
+                    _addModalError = "YouTube item with this name or URL already exists.";
+                    return;
+                }
+                _settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = data.Name, Url = data.Url });
+                await AddLog("YouTube Music Link Added", $"{data.Name} ({data.Url})");
+                break;
+        }
+        
         await SaveSettings();
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task RemoveStation(TuneInStation station)
     {
-        if (_settings == null) return;
+        if (_settings?.Stations is null) return;
 
         var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete station '{station.Name}'?");
         if (!confirmed) return;
 
-        _settings.Stations?.Remove(station);
+        _settings.Stations.Remove(station);
         await SaveSettings();
 
         await AddLog("Station Removed", $"{station.Name} ({station.Url})");
         await InvokeAsync(StateHasChanged);
     }
 
-    // Remove Spotify track
     private async Task RemoveSpotifyTrack(SpotifyObject track)
     {
+        if (_settings?.SpotifyTracks is null) return;
+        
         var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete track '{track.Name}'?");
         if (!confirmed) return;
 
         _settings.SpotifyTracks.Remove(track);
-        // You may also want to save the settings after removing it
-        Console.WriteLine($"Removed track: {track.Name}");
         await SaveSettings();
 
         await AddLog("Spotify Track Removed", $"{track.Name} ({track.Url})");
         await InvokeAsync(StateHasChanged);
     }
 
-    // Add a new Spotify track
-    private async Task AddNewSpotifyTrack()
-    {
-        if (string.IsNullOrWhiteSpace(newTrackName))
-        {
-            addTrackErrorMessage = "Track name is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(newTrackUrl))
-        {
-            addTrackErrorMessage = "Spotify URL is required.";
-            return;
-        }
-
-        // Example: Open a form to add a new track
-        _settings.SpotifyTracks.Add(new SpotifyObject() { Name = newTrackName, Url = newTrackUrl });
-        Console.WriteLine("Added new Spotify track.");
-
-        await SaveSettings();
-        await AddLog("Spotify Track Added", $"{newTrackName} ({newTrackUrl})");
-
-        addTrackErrorMessage = null;
-        newTrackName = newTrackUrl = "";
-
-        await InvokeAsync(StateHasChanged);
-    }
-
     private async Task RemoveYouTubeMusicEntry(YouTubeMusicObject entry)
     {
+        if (_settings?.YouTubeMusicCollections is null) return;
+        
         var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete link '{entry.Name}'?");
         if (!confirmed) return;
 
-        _settings ??= new SonosSettings();
-        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
         _settings.YouTubeMusicCollections.Remove(entry);
         await SaveSettings();
 
         await AddLog("YouTube Music Link Removed", $"{entry.Name} ({entry.Url})");
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task AddNewYouTubeMusicEntry()
-    {
-        if (string.IsNullOrWhiteSpace(newYouTubeName))
-        {
-            addYouTubeErrorMessage = "Name is required.";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(newYouTubeUrl))
-        {
-            addYouTubeErrorMessage = "URL is required.";
-            return;
-        }
-
-        _settings ??= new SonosSettings();
-        _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
-        _settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = newYouTubeName, Url = newYouTubeUrl });
-
-        await SaveSettings();
-        await AddLog("YouTube Music Link Added", $"{newYouTubeName} ({newYouTubeUrl})");
-
-        addYouTubeErrorMessage = null;
-        newYouTubeName = newYouTubeUrl = "";
-
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1042,9 +959,7 @@
         if (_settings?.Stations != null && _settings.Stations.Any())
         {
             var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
-            selectedStation = randomStation; // This triggers OnStationChanged()
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, selectedStation);
-            await AddLog("Shuffled Station", $"Selected: {selectedStation}");
+            await PlayMediaItem(randomStation, "station");
         }
     }
 
