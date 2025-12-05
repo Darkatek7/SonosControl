@@ -896,3 +896,38 @@ a:focus-visible {
 [data-theme='dark'] .media-list .active-media {
     background-color: color-mix(in srgb, var(--brand-accent) 30%, var(--surface-2));
 }
+
+/* Config page tabs */
+.config-shell .nav-tabs {
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.config-shell .nav-link {
+    color: var(--text-muted);
+    border-radius: var(--bs-border-radius-lg) var(--bs-border-radius-lg) 0 0;
+    border-color: transparent;
+    border-bottom-color: transparent;
+    font-weight: 600;
+}
+
+.config-shell .nav-link.active {
+    color: var(--bs-body-color);
+    background-color: var(--surface-2);
+    border-color: var(--border-strong);
+    border-bottom-color: transparent;
+    position: relative;
+    top: 1px;
+}
+
+.config-shell .nav-link:hover:not(.active) {
+    border-color: transparent;
+    background-color: var(--surface-2);
+}
+
+[data-theme='dark'] .config-shell .nav-link.active {
+    background-color: var(--surface-0);
+}
+
+[data-theme='dark'] .config-shell .nav-link:hover:not(.active) {
+    background-color: var(--surface-2);
+}
