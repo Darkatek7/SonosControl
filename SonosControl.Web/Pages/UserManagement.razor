@@ -1,4 +1,4 @@
-﻿@page "/admin/users"
+@page "/admin/users"
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @inject UserManager<ApplicationUser> UserManager
@@ -7,8 +7,9 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
-@inject IJSRuntime JS
 @inject IUnitOfWork _uow
+@inject DialogService DialogService
+@inject NotificationService NotificationService
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>User Management</PageTitle>
@@ -43,99 +44,49 @@
         <div class="user-management__body stack-md">
             @if (isLoading)
             {
-                <p class="text-muted mb-0">Loading users...</p>
+                <RadzenProgressBar Value="100" ShowValue="false" Mode="ProgressBarMode.Indeterminate" />
             }
             else
             {
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <FormStatus StatusMessage="@errorMessage" Severity="FormStatus.AlertSeverity.Danger" />
-                }
-
-                <div class="table-responsive user-management__table-wrapper">
-                    <table class="table user-management-table mb-0">
-                        <thead>
-                        <tr>
-                            <th scope="col">User</th>
-                            <th scope="col" class="d-none d-xl-table-cell">First</th>
-                            <th scope="col" class="d-none d-xl-table-cell">Last</th>
-                            <th scope="col" class="d-none d-md-table-cell">Email</th>
-                            <th scope="col" class="d-none d-lg-table-cell">Roles</th>
-                            <th scope="col" class="text-center">Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var user in users)
-                        {
-                            <tr>
-                                <td>@user.UserName</td>
-
-                                <td class="d-none d-xl-table-cell">@user.FirstName</td>
-                                <td class="d-none d-xl-table-cell">@user.LastName</td>
-
-                                <td class="d-none d-md-table-cell">@user.Email</td>
-
-                                <td class="d-none d-lg-table-cell user-management__roles">
-                                    @foreach (var role in userRoles[user.Id])
-                                    {
-                                        <span class="badge user-role-badge">@role</span>
-                                    }
-                                </td>
-
-                                <td class="text-center">
-                                    <div class="user-actions">
-                                        <button type="button"
-                                                class="btn btn-outline-danger user-action-btn"
-                                                @onclick="() => DeleteUser(user)"
-                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))"
-                                                aria-label="Delete user">
-                                            Delete
-                                        </button>
-
-                                        @if (isSuperAdmin)
-                                        {
-                                            <button type="button"
-                                                    class="btn btn-outline-primary user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "admin")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
-                                            </button>
-
-                                            <button type="button"
-                                                    class="btn btn-outline-secondary user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "operator")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
-                                            </button>
-
-                                            <button type="button"
-                                                    class="btn btn-outline-warning user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "superadmin")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
-                                            </button>
-                                        }
-
-                                        <button type="button"
-                                                class="btn user-action-btn @GetActivationButtonClass(user)"
-                                                @onclick='() => ToggleUserActivation(user)'
-                                                disabled="@IsCurrentUser(user)"
-                                                aria-label="Toggle user activation status">
-                                            @(IsUserActive(user) ? "✔" : "⛔")
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="user-management__legend">
-                    <strong>Legend:</strong>
-                    <span class="ms-3">✔ = Active</span>
-                    <span class="ms-3">⛔ = Deactivated</span>
-                </div>
+                 <RadzenDataGrid AllowFiltering="true" AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                    Data="@users" TItem="ApplicationUser" ColumnWidth="300px" LogicalFilterOperator="LogicalFilterOperator.Or">
+                    <Columns>
+                        <RadzenDataGridColumn TItem="ApplicationUser" Property="UserName" Title="User" Width="150px" />
+                        <RadzenDataGridColumn TItem="ApplicationUser" Property="FirstName" Title="First Name" />
+                        <RadzenDataGridColumn TItem="ApplicationUser" Property="LastName" Title="Last Name" />
+                        <RadzenDataGridColumn TItem="ApplicationUser" Property="Email" Title="Email" />
+                        <RadzenDataGridColumn TItem="ApplicationUser" Title="Roles" Sortable="false" Filterable="false">
+                            <Template Context="user">
+                                @foreach (var role in userRoles[user.Id])
+                                {
+                                    <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@role" Class="me-1" />
+                                }
+                            </Template>
+                        </RadzenDataGridColumn>
+                         <RadzenDataGridColumn TItem="ApplicationUser" Title="Status" Sortable="false" Filterable="false" Width="100px">
+                            <Template Context="user">
+                                @if(IsUserActive(user))
+                                {
+                                     <RadzenBadge BadgeStyle="BadgeStyle.Success" Text="Active" />
+                                }
+                                else
+                                {
+                                     <RadzenBadge BadgeStyle="BadgeStyle.Danger" Text="Inactive" />
+                                }
+                            </Template>
+                        </RadzenDataGridColumn>
+                        <RadzenDataGridColumn TItem="ApplicationUser" Title="Actions" Sortable="false" Filterable="false" TextAlign="TextAlign.Center" Width="120px">
+                            <Template Context="user">
+                                <RadzenSplitButton Click="@((args) => OnActionClick(args, user))" Icon="settings" Style="height: 30px; padding: 0 10px;" Text="Actions" Variant="Variant.Flat" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small">
+                                    <ChildContent>
+                                        <RadzenSplitButtonItem Text="Edit" Value="edit" Icon="edit" Disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))" />
+                                        <RadzenSplitButtonItem Text="Delete" Value="delete" Icon="delete"  Disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))" />
+                                    </ChildContent>
+                                </RadzenSplitButton>
+                            </Template>
+                        </RadzenDataGridColumn>
+                    </Columns>
+                </RadzenDataGrid>
             }
         </div>
     </section>
@@ -145,7 +96,6 @@
     private List<ApplicationUser> users = new();
     private Dictionary<string, IList<string>> userRoles = new();
     private bool isLoading = true;
-    private string? errorMessage;
     private string? currentUserName;
     private bool isSuperAdmin;
     private bool isAdmin;
@@ -162,6 +112,15 @@
         isSuperAdmin = authState.User.IsInRole("superadmin");
         isAdmin = isSuperAdmin || authState.User.IsInRole("admin");
 
+        await LoadUsers();
+
+        _settings = await _uow.ISettingsRepo.GetSettings();
+        allowUserRegistration = _settings?.AllowUserRegistration ?? true;
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
         try
         {
             users = UserManager.Users
@@ -176,15 +135,12 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading users: {ex.Message}";
+            NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = $"Error loading users: {ex.Message}" });
         }
         finally
         {
             isLoading = false;
         }
-
-        _settings = await _uow.ISettingsRepo.GetSettings();
-        allowUserRegistration = _settings?.AllowUserRegistration ?? true;
     }
 
     private async Task ToggleRegistration(ChangeEventArgs e)
@@ -195,6 +151,32 @@
             _settings.AllowUserRegistration = allowUserRegistration;
             await _uow.ISettingsRepo.WriteSettings(_settings);
             await AddLog(allowUserRegistration ? "Registration enabled" : "Registration disabled");
+            NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Success", Detail = allowUserRegistration ? "Registration enabled" : "Registration disabled" });
+        }
+    }
+
+    private async Task OnActionClick(RadzenSplitButtonItem item, ApplicationUser user)
+    {
+        if ((string)item.Value == "edit")
+        {
+            await OpenEditDialog(user);
+        }
+        else if ((string)item.Value == "delete")
+        {
+            await DeleteUser(user);
+        }
+    }
+
+    private async Task OpenEditDialog(ApplicationUser user)
+    {
+        var result = await DialogService.OpenAsync<UserEditDialog>("Edit User",
+               new Dictionary<string, object>() { { "user", user }, { "currentRoles", userRoles[user.Id] } },
+               new DialogOptions() { Width = "500px", Height = "auto", Resizable = true, Draggable = true });
+
+        if (result == true)
+        {
+            await LoadUsers();
+            NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Success", Detail = "User updated successfully" });
         }
     }
 
@@ -202,38 +184,37 @@
     {
         if (IsCurrentUser(user))
         {
-            errorMessage = "You cannot delete your own user account.";
+            NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = "You cannot delete your own user account." });
             return;
         }
 
         if (userRoles[user.Id].Contains("superadmin") && !isSuperAdmin)
         {
-            errorMessage = "You cannot delete a super administrator.";
+            NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = "You cannot delete a super administrator." });
             return;
         }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete user '{user.UserName}'?");
-        if (!confirmed) return;
-
-        var result = await UserManager.DeleteAsync(user);
-        if (result.Succeeded)
+        var confirmed = await DialogService.Confirm($"Are you sure you want to delete user '{user.UserName}'?", "Delete User", new ConfirmOptions() { OkButtonText = "Yes", CancelButtonText = "No" });
+        if (confirmed == true)
         {
-            users.Remove(user);
-            userRoles.Remove(user.Id);
-            errorMessage = null;
-            StateHasChanged();
-            AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
-        }
-        else
-        {
-            errorMessage = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            var result = await UserManager.DeleteAsync(user);
+            if (result.Succeeded)
+            {
+                users.Remove(user);
+                userRoles.Remove(user.Id);
+                StateHasChanged();
+                await AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+                NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Success, Summary = "Success", Detail = "User deleted successfully" });
+            }
+            else
+            {
+                NotificationService.Notify(new NotificationMessage { Severity = NotificationSeverity.Error, Summary = "Error", Detail = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}" });
+            }
         }
     }
 
     private bool IsUserActive(ApplicationUser user)
     {
-        // If LockoutEnabled is false, user is active.
-        // Or if LockoutEnd is in the past or null, user is active.
         if (!user.LockoutEnabled)
             return true;
 
@@ -241,100 +222,6 @@
             return true;
 
         return user.LockoutEnd <= DateTimeOffset.UtcNow;
-    }
-
-    private async Task ToggleUserActivation(ApplicationUser user)
-    {
-        if (IsCurrentUser(user))
-        {
-            errorMessage = "You cannot deactivate/reactivate your own user account.";
-            return;
-        }
-
-        if (IsUserActive(user))
-        {
-            // Deactivate user: enable lockout and set LockoutEnd far in the future
-            user.LockoutEnabled = true;
-            user.LockoutEnd = DateTimeOffset.MaxValue;
-            await AddLog("User deactivated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
-        }
-        else
-        {
-            // Reactivate user: disable lockout and clear LockoutEnd
-            user.LockoutEnd = null;
-            user.LockoutEnabled = false;
-            await AddLog("User activated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
-        }
-
-        var result = await UserManager.UpdateAsync(user);
-
-        if (result.Succeeded)
-        {
-            errorMessage = null;
-            // Update the local user list to reflect changes
-            var index = users.FindIndex(u => u.Id == user.Id);
-            if (index >= 0)
-                users[index] = user;
-
-            StateHasChanged();
-        }
-        else
-        {
-            errorMessage = $"Failed to update user activation status: {string.Join(", ", result.Errors.Select(e => e.Description))}";
-        }
-    }
-
-    private string GetActivationButtonClass(ApplicationUser user) =>
-        IsUserActive(user) ? "btn-outline-success" : "btn-outline-warning";
-
-    private async Task ToggleRole(ApplicationUser user, string role)
-    {
-        if (!isSuperAdmin)
-        {
-            errorMessage = "Only super administrators can modify roles.";
-            return;
-        }
-
-        if (IsCurrentUser(user))
-        {
-            errorMessage = "You cannot modify your own roles.";
-            return;
-        }
-
-        if (!await RoleManager.RoleExistsAsync(role))
-        {
-            errorMessage = $"Role '{role}' does not exist.";
-            return;
-        }
-
-        if (userRoles[user.Id].Contains(role))
-        {
-            var removeResult = await UserManager.RemoveFromRoleAsync(user, role);
-            if (removeResult.Succeeded)
-            {
-                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
-                errorMessage = null;
-            }
-            else
-            {
-                errorMessage = $"Failed to remove role '{role}': {string.Join(", ", removeResult.Errors.Select(e => e.Description))}";
-            }
-        }
-        else
-        {
-            var addResult = await UserManager.AddToRoleAsync(user, role);
-            if (addResult.Succeeded)
-            {
-                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
-                errorMessage = null;
-            }
-            else
-            {
-                errorMessage = $"Failed to add role '{role}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}";
-            }
-        }
-
-        StateHasChanged();
     }
 
     private bool IsCurrentUser(ApplicationUser user)
@@ -359,7 +246,4 @@
         Db.Logs.Add(log);
         await Db.SaveChangesAsync();
     }
-
 }
-
-

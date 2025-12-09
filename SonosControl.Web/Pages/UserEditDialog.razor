@@ -1,0 +1,123 @@
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject Radzen.DialogService DialogService
+
+<RadzenTemplateForm Data="@user" Submit="@(async (ApplicationUser args) => { await Submit(args); })">
+    <div class="row">
+        <div class="col-md-12">
+            <RadzenFieldset Text="User Details">
+                <div class="row mb-3">
+                    <div class="col-md-4 align-items-center d-flex">
+                        <RadzenLabel Text="Username" />
+                    </div>
+                    <div class="col-md-8">
+                        <RadzenTextBox style="width: 100%;" Name="UserName" @bind-Value="user.UserName" Disabled="true" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 align-items-center d-flex">
+                        <RadzenLabel Text="Email" />
+                    </div>
+                    <div class="col-md-8">
+                        <RadzenTextBox style="width: 100%;" Name="Email" @bind-Value="user.Email" Disabled="true" />
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4 align-items-center d-flex">
+                        <RadzenLabel Text="Roles" />
+                    </div>
+                    <div class="col-md-8">
+                        <RadzenCheckBoxList @bind-Value=@selectedRoles TValue="string" Orientation="Orientation.Vertical" class="mb-5">
+                            <Items>
+                                <RadzenCheckBoxListItem Text="Admin" Value="@("admin")" />
+                                <RadzenCheckBoxListItem Text="Operator" Value="@("operator")" />
+                                <RadzenCheckBoxListItem Text="Superadmin" Value="@("superadmin")" />
+                            </Items>
+                        </RadzenCheckBoxList>
+                    </div>
+                </div>
+                 <div class="row mb-3">
+                    <div class="col-md-4 align-items-center d-flex">
+                        <RadzenLabel Text="Active" />
+                    </div>
+                    <div class="col-md-8">
+                         <RadzenSwitch @bind-Value=@isActive Change=@(args => OnActiveChange(args)) />
+                    </div>
+                </div>
+            </RadzenFieldset>
+        </div>
+    </div>
+    <div class="row justify-content-center">
+        <div class="col-md-12 d-flex align-items-end justify-content-center" style="margin-top: 16px;">
+            <RadzenButton ButtonType="ButtonType.Submit" Icon="save" Text="Save" />
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Icon="cancel" style="display: inline-block; margin-left: 10px;" Text="Cancel" Click="@Cancel" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public ApplicationUser user { get; set; }
+    [Parameter] public IEnumerable<string> currentRoles { get; set; }
+
+    IEnumerable<string> selectedRoles;
+    bool isActive;
+
+    protected override void OnInitialized()
+    {
+        selectedRoles = currentRoles.ToList();
+        isActive = IsUserActive(user);
+    }
+
+    private bool IsUserActive(ApplicationUser user)
+    {
+        if (!user.LockoutEnabled) return true;
+        if (user.LockoutEnd == null) return true;
+        return user.LockoutEnd <= DateTimeOffset.UtcNow;
+    }
+
+    private void OnActiveChange(bool value)
+    {
+        isActive = value;
+    }
+
+    async Task Submit(ApplicationUser user)
+    {
+        // Handle Active Status
+        if (isActive)
+        {
+             user.LockoutEnd = null;
+             user.LockoutEnabled = false;
+        }
+        else
+        {
+             user.LockoutEnabled = true;
+             user.LockoutEnd = DateTimeOffset.MaxValue;
+        }
+
+        await UserManager.UpdateAsync(user);
+
+        // Handle Roles
+        var userRoles = await UserManager.GetRolesAsync(user);
+        var rolesToAdd = selectedRoles.Except(userRoles).ToList();
+        var rolesToRemove = userRoles.Except(selectedRoles).ToList();
+
+        if (rolesToAdd.Any())
+        {
+            await UserManager.AddToRolesAsync(user, rolesToAdd);
+        }
+
+        if (rolesToRemove.Any())
+        {
+            await UserManager.RemoveFromRolesAsync(user, rolesToRemove);
+        }
+
+        DialogService.Close(true);
+    }
+
+    void Cancel()
+    {
+        DialogService.Close(false);
+    }
+}

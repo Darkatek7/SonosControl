@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Http
 @using Microsoft.JSInterop
 @using SonosControl.Web.Models
+@using Radzen.Blazor
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject IAntiforgery Antiforgery
@@ -14,6 +15,11 @@
 @inject IJSRuntime JSRuntime
 
 <PageTitle>SonosControl.Web</PageTitle>
+
+<RadzenDialog />
+<RadzenNotification />
+<RadzenTooltip />
+<RadzenContextMenu />
 
 <div class="app-shell">
     <aside class="app-sidebar">
@@ -193,4 +199,3 @@
         }
     }
 }
-
