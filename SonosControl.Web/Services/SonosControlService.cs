@@ -2,18 +2,19 @@ using System.Linq;
 using System.Threading;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using Microsoft.Extensions.DependencyInjection; // Added for IServiceScopeFactory
 
 namespace SonosControl.Web.Services
 {
     public class SonosControlService : BackgroundService
     {
-        private IUnitOfWork _uow;
+        private readonly IServiceScopeFactory _scopeFactory; // Changed from IUnitOfWork
         private readonly TimeProvider _timeProvider;
         private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
-        public SonosControlService(IUnitOfWork uow, TimeProvider? timeProvider = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
+        public SonosControlService(IServiceScopeFactory scopeFactory, TimeProvider? timeProvider = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
         {
-            _uow = uow;
+            _scopeFactory = scopeFactory; // Injected IServiceScopeFactory
             _timeProvider = timeProvider ?? TimeProvider.System;
             _delay = delay ?? TaskDelay;
         }
@@ -22,18 +23,32 @@ namespace SonosControl.Web.Services
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                // Continuously evaluate settings until start time is reached
-                var (settings, schedule) = await WaitUntilStartTime(stoppingToken);
+                // Create a new scope for each execution cycle
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>(); // Resolve IUnitOfWork from the scope
 
-                var stop = schedule?.StopTime ?? settings.StopTime;
+                    // Continuously evaluate settings until start time is reached
+                    var (settings, schedule) = await WaitUntilStartTime(uow, stoppingToken);
 
-                await StartSpeaker(settings.IP_Adress, settings, schedule);
+                    if (settings == null || settings.Speakers == null || !settings.Speakers.Any())
+                    {
+                        Console.WriteLine($"{DateTime.Now:g}: No speakers configured. Waiting...");
+                        await _delay(TimeSpan.FromSeconds(30), stoppingToken); // Wait for a bit before re-checking
+                        continue;
+                    }
 
-                await StopSpeaker(settings.IP_Adress, stop);
+                    var stop = schedule?.StopTime ?? settings.StopTime;
+                    var speakers = settings.Speakers.ToList();
+
+                    await StartSpeaker(uow, speakers, settings, schedule, stoppingToken);
+
+                    await StopSpeaker(uow, speakers, stop, schedule, stoppingToken);
+                }
             }
         }
 
-        private async Task StartSpeaker(string ip, SonosSettings settings, DaySchedule? schedule)
+        private async Task StartSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, SonosSettings settings, DaySchedule? schedule, CancellationToken cancellationToken)
         {
             DayOfWeek today = DateTime.Now.DayOfWeek;
 
@@ -52,40 +67,70 @@ namespace SonosControl.Web.Services
                 return;
             }
 
+            string masterIp = speakers.First().IpAddress; // Assuming the first speaker in the list is the master
+
+            if (schedule?.IsSyncedPlayback == true)
+            {
+                var slaveIps = speakers.Where(s => s.IpAddress != masterIp).Select(s => s.IpAddress);
+
+                // Ungroup all speakers first to ensure a clean slate
+                foreach (var speaker in speakers)
+                {
+                    await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
+                }
+
+                if (slaveIps.Any())
+                {
+                    await uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                }
+
+                // Set volume for each speaker in the group
+                foreach (var speaker in speakers)
+                {
+                    await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, settings.Volume, cancellationToken);
+                }
+            }
+            else
+            {
+                // Ensure the single speaker is ungrouped if it was previously part of a group
+                await uow.ISonosConnectorRepo.UngroupSpeaker(masterIp, cancellationToken);
+                await uow.ISonosConnectorRepo.SetSpeakerVolume(masterIp, settings.Volume, cancellationToken);
+            }
+
             if (schedule != null)
             {
                 if (schedule.PlayRandomSpotify)
                 {
                     var url = GetRandomSpotifyUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                        await uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(masterIp, url);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (schedule.PlayRandomYouTubeMusic)
                 {
                     var url = GetRandomYouTubeMusicUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                        await uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(masterIp, url, settings.AutoPlayStationUrl);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (schedule.PlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                        await uow.ISonosConnectorRepo.SetTuneInStationAsync(masterIp, url);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
+                    await uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(masterIp, schedule.SpotifyUrl);
                 else if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
+                    await uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(masterIp, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, schedule.StationUrl);
+                    await uow.ISonosConnectorRepo.SetTuneInStationAsync(masterIp, schedule.StationUrl);
                 else
-                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                    await uow.ISonosConnectorRepo.StartPlaying(masterIp);
             }
             else
             {
@@ -93,34 +138,34 @@ namespace SonosControl.Web.Services
                 {
                     var url = GetRandomSpotifyUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, url);
+                        await uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(masterIp, url);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (settings.AutoPlayRandomYouTubeMusic)
                 {
                     var url = GetRandomYouTubeMusicUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, url, settings.AutoPlayStationUrl);
+                        await uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(masterIp, url, settings.AutoPlayStationUrl);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (settings.AutoPlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
                     if (url != null)
-                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, url);
+                        await uow.ISonosConnectorRepo.SetTuneInStationAsync(masterIp, url);
                     else
-                        await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                        await uow.ISonosConnectorRepo.StartPlaying(masterIp);
                 }
                 else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
+                    await uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(masterIp, settings.AutoPlaySpotifyUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeMusicUrl))
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
+                    await uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(masterIp, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, settings.AutoPlayStationUrl);
+                    await uow.ISonosConnectorRepo.SetTuneInStationAsync(masterIp, settings.AutoPlayStationUrl);
                 else
-                    await _uow.ISonosConnectorRepo.StartPlaying(ip);
+                    await uow.ISonosConnectorRepo.StartPlaying(masterIp);
             }
 
             Console.WriteLine($"{DateTime.Now:g}: Started Playing");
@@ -154,7 +199,7 @@ namespace SonosControl.Web.Services
             return settings.YouTubeMusicCollections[index].Url;
         }
 
-        private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(CancellationToken token)
+        private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(IUnitOfWork uow, CancellationToken token)
         {
             TimeOnly? previousStart = null;
             DayOfWeek? previousDay = null;
@@ -162,7 +207,7 @@ namespace SonosControl.Web.Services
 
             while (!token.IsCancellationRequested)
             {
-                var settings = await _uow.ISettingsRepo.GetSettings();
+                var settings = await uow.ISettingsRepo.GetSettings();
                 if (settings is null)
                 {
                     await _delay(TimeSpan.FromSeconds(1), token);
@@ -301,14 +346,16 @@ namespace SonosControl.Web.Services
             return false;
         }
 
-        private async Task StopSpeaker(string ip, TimeOnly stopTime)
+        private async Task StopSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, TimeOnly stopTime, DaySchedule? schedule, CancellationToken cancellationToken)
         {
             TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
             var timeDifference = stopTime - timeNow;
 
+            string masterIp = speakers.First().IpAddress; // Assuming the first speaker in the list is the master
+
             if (stopTime <= timeNow)
             {
-                await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                await uow.ISonosConnectorRepo.StopPlaying(masterIp);
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
             else
@@ -322,10 +369,18 @@ namespace SonosControl.Web.Services
                         t.Milliseconds);
 
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
-                await Task.Delay(ms);
+                await Task.Delay(ms, cancellationToken);
 
-                await _uow.ISonosConnectorRepo.StopPlaying(ip);
+                await uow.ISonosConnectorRepo.StopPlaying(masterIp);
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
+            }
+
+            if (schedule?.IsSyncedPlayback == true)
+            {
+                foreach (var speaker in speakers)
+                {
+                    await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
+                }
             }
         }
     }

@@ -3,24 +3,25 @@ using System.Net.Http;
 using Microsoft.Extensions.Logging;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using Microsoft.Extensions.DependencyInjection; // Added for IServiceScopeFactory
 
 namespace SonosControl.Web.Services
 {
     public class HolidayCalendarSyncService
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly IServiceScopeFactory _scopeFactory; // Changed from IUnitOfWork
         private readonly ILogger<HolidayCalendarSyncService> _logger;
         private readonly TimeProvider _timeProvider;
 
         public HolidayCalendarSyncService(
             IHttpClientFactory httpClientFactory,
-            IUnitOfWork unitOfWork,
+            IServiceScopeFactory scopeFactory, // Changed from IUnitOfWork
             ILogger<HolidayCalendarSyncService> logger,
             TimeProvider? timeProvider = null)
         {
             _httpClientFactory = httpClientFactory;
-            _unitOfWork = unitOfWork;
+            _scopeFactory = scopeFactory; // Injected IServiceScopeFactory
             _logger = logger;
             _timeProvider = timeProvider ?? TimeProvider.System;
         }
@@ -76,41 +77,47 @@ namespace SonosControl.Web.Services
             if (events.Count == 0)
                 return 0;
 
-            var settings = await _unitOfWork.ISettingsRepo.GetSettings();
-            if (settings == null)
-                return 0;
-
-            settings.HolidaySchedules ??= new();
-
-            var updates = 0;
-
-            foreach (var calendarEvent in events)
+            // Create a new scope to resolve IUnitOfWork
+            using (var scope = _scopeFactory.CreateScope())
             {
-                var existing = settings.HolidaySchedules.FirstOrDefault(h => h.Date == calendarEvent.Date);
-                if (existing == null)
+                var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                var settings = await unitOfWork.ISettingsRepo.GetSettings();
+                if (settings == null)
+                    return 0;
+
+                settings.HolidaySchedules ??= new();
+
+                var updates = 0;
+
+                foreach (var calendarEvent in events)
                 {
-                    settings.HolidaySchedules.Add(new HolidaySchedule
+                    var existing = settings.HolidaySchedules.FirstOrDefault(h => h.Date == calendarEvent.Date);
+                    if (existing == null)
                     {
-                        Date = calendarEvent.Date,
-                        Name = calendarEvent.Name,
-                        StartTime = settings.StartTime,
-                        StopTime = settings.StopTime
-                    });
-                    updates++;
+                        settings.HolidaySchedules.Add(new HolidaySchedule
+                        {
+                            Date = calendarEvent.Date,
+                            Name = calendarEvent.Name,
+                            StartTime = settings.StartTime,
+                            StopTime = settings.StopTime
+                        });
+                        updates++;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(calendarEvent.Name) && !string.Equals(existing.Name, calendarEvent.Name, StringComparison.Ordinal))
+                    {
+                        existing.Name = calendarEvent.Name;
+                        updates++;
+                    }
                 }
-                else if (!string.IsNullOrWhiteSpace(calendarEvent.Name) && !string.Equals(existing.Name, calendarEvent.Name, StringComparison.Ordinal))
+
+                if (updates > 0)
                 {
-                    existing.Name = calendarEvent.Name;
-                    updates++;
+                    await unitOfWork.ISettingsRepo.WriteSettings(settings);
                 }
-            }
 
-            if (updates > 0)
-            {
-                await _unitOfWork.ISettingsRepo.WriteSettings(settings);
+                return updates;
             }
-
-            return updates;
         }
     }
 }
