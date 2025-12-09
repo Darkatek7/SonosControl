@@ -35,31 +35,41 @@ else
             {
                 <div class="config-field-stack">
                     <div class="config-field">
-                        <label class="form-label">💻 IP Address</label>
-                        <input type="text" class="form-control"
-                               @bind-value="IP_Adress"
-                               @bind-value:event="oninput"
-                               placeholder="Enter IP Address"
-                               disabled="@(!canEditIp)"/>
-                    </div>
-
-                    <div class="config-field">
-                        <label class="form-label">⚙️ Device Actions</label>
-                        <div class="device-action-row">
-                            <button class="btn btn-outline-warning"
-                                    @onclick="SendRebootCommand"
-                                    disabled="@(_isRebooting || string.IsNullOrWhiteSpace(_settings?.IP_Adress))">
-                                @if (_isRebooting)
-                                {
-                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                }
-                                Reboot Speaker
-                            </button>
-                        </div>
-                        @if (!string.IsNullOrEmpty(_rebootAlertMessage))
+                        <label class="form-label">🔈 Speakers</label>
+                        @if (_settings.Speakers.Any())
                         {
-                            <div class="alert @_rebootAlertCss mt-2 mb-0">@_rebootAlertMessage</div>
+                            <div class="list-group mb-3">
+                                @foreach (var speaker in _settings.Speakers)
+                                {
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>@speaker.Name</strong>
+                                            <div class="text-muted small">@speaker.IpAddress</div>
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)">Remove</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
                         }
+                        else
+                        {
+                            <p class="text-muted">No speakers configured.</p>
+                        }
+
+                        <div class="card p-3">
+                            <h6>Add New Speaker</h6>
+                            <div class="mb-2">
+                                <label class="form-label">Name</label>
+                                <input type="text" class="form-control" @bind="_newSpeakerName" placeholder="e.g. Living Room" disabled="@(!canEditIp)" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">IP Address</label>
+                                <input type="text" class="form-control" @bind="_newSpeakerIp" placeholder="e.g. 192.168.1.50" disabled="@(!canEditIp)" />
+                            </div>
+                            <button class="btn btn-primary btn-sm" @onclick="AddSpeaker" disabled="@(!canEditIp || string.IsNullOrWhiteSpace(_newSpeakerIp))">Add Speaker</button>
+                        </div>
                     </div>
 
                     <div class="config-field">
@@ -1296,114 +1306,30 @@ else
 
 
 
-    private string IP_Adress
+    private string _newSpeakerName = "";
+    private string _newSpeakerIp = "";
 
+    private async Task AddSpeaker()
     {
+        if (_settings is null || string.IsNullOrWhiteSpace(_newSpeakerIp)) return;
 
-        get => _settings!.IP_Adress;
+        var name = string.IsNullOrWhiteSpace(_newSpeakerName) ? "New Speaker" : _newSpeakerName;
 
-        set
+        _settings.Speakers.Add(new SonosSpeaker { Name = name, IpAddress = _newSpeakerIp });
+        _newSpeakerName = "";
+        _newSpeakerIp = "";
 
-        {
-
-            if (!canEditIp)
-
-                return;
-
-
-
-            _settings!.IP_Adress = value;
-
-            SaveSettings();
-
-            AddLog("IP-Adress Changed", $"IP: {value}");
-
-        }
-
+        await SaveSettings();
+        await AddLog("Speaker Added", $"{name} ({_newSpeakerIp})");
     }
 
-
-
-    private async Task SendRebootCommand()
-
+    private async Task RemoveSpeaker(SonosSpeaker speaker)
     {
+        if (_settings is null) return;
 
-        if (_settings is null)
-
-        {
-
-            return;
-
-        }
-
-
-
-        if (string.IsNullOrWhiteSpace(_settings.IP_Adress))
-
-        {
-
-            _rebootAlertCss = "alert-warning";
-
-            _rebootAlertMessage = "Set a valid IP address before sending commands.";
-
-            return;
-
-        }
-
-
-
-        _isRebooting = true;
-
-        _rebootAlertMessage = null;
-
-
-
-        try
-
-        {
-
-            await _uow.ISonosConnectorRepo.RebootDeviceAsync(_settings.IP_Adress);
-
-            _rebootAlertCss = "alert-success";
-
-            _rebootAlertMessage = "Reboot command sent to the speaker.";
-
-            await AddLog("Reboot Command Sent", $"IP: {_settings.IP_Adress}");
-
-        }
-
-        catch (Exception ex)
-
-        {
-
-            _rebootAlertCss = "alert-danger";
-
-            _rebootAlertMessage = $"Failed to send reboot command: {ex.Message}";
-
-            try
-
-            {
-
-                await AddLog("Reboot Command Failed", $"IP: {_settings.IP_Adress}; Error: {ex.Message}");
-
-            }
-
-            catch
-
-            {
-
-            }
-
-        }
-
-        finally
-
-        {
-
-            _isRebooting = false;
-
-        }
-
+        _settings.Speakers.Remove(speaker);
+        await SaveSettings();
+        await AddLog("Speaker Removed", $"{speaker.Name} ({speaker.IpAddress})");
     }
 
 

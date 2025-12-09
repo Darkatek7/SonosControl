@@ -30,6 +30,22 @@
 
                 <div class="dashboard-grid">
                     <div class="playback-column">
+                        @if (_settings.Speakers.Any())
+                        {
+                            <div class="mb-3">
+                                <label class="form-label text-muted small">Active Speaker</label>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select" @bind="SelectedSpeakerIp">
+                                        @foreach (var speaker in _settings.Speakers)
+                                        {
+                                            <option value="@speaker.IpAddress">@speaker.Name</option>
+                                        }
+                                    </select>
+                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers">Sync Play</button>
+                                </div>
+                            </div>
+                        }
+
                         <PlaybackCard
                             IsPlaying="_isPlaying"
                             ShowNextTrack="_isPlaying && _isSpotifyPlaying"
@@ -200,6 +216,29 @@
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
+    private string? _selectedSpeakerIp;
+
+    private string SelectedSpeakerIp
+    {
+        get => _selectedSpeakerIp ?? _settings?.IP_Adress ?? "";
+        set
+        {
+            if (_selectedSpeakerIp != value)
+            {
+                _selectedSpeakerIp = value;
+                if (_settings != null)
+                {
+                    // Update the main IP address setting to match selection for compatibility
+                    _settings.IP_Adress = value;
+                    _ = SaveSettings();
+
+                    // Refresh data for the new speaker
+                    _ = LoadCurrentStation();
+                    _ = LoadQueue(reset: true);
+                }
+            }
+        }
+    }
 
     // New state for tabs and modal
     private string _activeMediaTab = "stations";
@@ -407,7 +446,7 @@
 
     private async Task NextTrack()
     {
-        await _uow.ISonosConnectorRepo.NextTrack(_settings!.IP_Adress);
+        await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
         await AddLog("Next Track");
     }
 
@@ -817,16 +856,35 @@
         _settings = await _uow.ISettingsRepo.GetSettings();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
-        if (_settings!.IP_Adress is "10.0.0.0")
-            return;
+        if (_settings.Speakers.Any())
+        {
+             // Use the first speaker or the last selected one if available
+            if (string.IsNullOrEmpty(_selectedSpeakerIp) || !_settings.Speakers.Any(s => s.IpAddress == _selectedSpeakerIp))
+            {
+                 _selectedSpeakerIp = _settings.Speakers.First().IpAddress;
+                 _settings.IP_Adress = _selectedSpeakerIp;
+            }
+        }
+        else if (_settings!.IP_Adress is "10.0.0.0")
+        {
+             // No speakers and default IP, just return
+             return;
+        }
 
-        _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(_settings!.IP_Adress);
+        try
+        {
+            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
+        }
+        catch
+        {
+             // Ignore if speaker is offline
+        }
 
         var maxVolumeLimit = MaxVolumeLimit;
         if (_settings.Volume > maxVolumeLimit)
         {
             _settings.Volume = maxVolumeLimit;
-            await _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, maxVolumeLimit);
+            await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
         }
 
         await SaveSettings();
@@ -840,22 +898,70 @@
     {
         if (play)
         {
-            await _uow.ISonosConnectorRepo.StartPlaying(_settings!.IP_Adress);
+            await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
             _isPlaying = true;
             await AddLog("Playback Started");
         }
         else
         {
-            await _uow.ISonosConnectorRepo.PausePlaying(_settings!.IP_Adress);
+            await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
             _isPlaying = false;
             await AddLog("Playback Paused");
         }
         await InvokeAsync(StateHasChanged);
     }
 
+    private async Task SyncPlay()
+    {
+        if (_settings?.Speakers == null || !_settings.Speakers.Any()) return;
+
+        // Determine what to play based on current state of the selected speaker
+        // However, Sonos "Join Group" is not implemented in repo, so we just start playback on all speakers
+        // If we want to play the SAME content, we would need to know the current content URL.
+        // For now, let's just send the "Play" command to all speakers.
+        // A better approach if supported would be to set the URI for all speakers to the current one.
+
+        // Let's try to get current station URI from current speaker
+        var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(SelectedSpeakerIp);
+        var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
+
+        if (string.IsNullOrEmpty(currentUri))
+        {
+             // Just trigger play on all
+             foreach (var speaker in _settings.Speakers)
+             {
+                 await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
+             }
+             await AddLog("Sync Play Started (Resume)", "All speakers");
+        }
+        else
+        {
+            // Set URI on all speakers and play
+            // Note: This is not true sync (multi-room), it just plays same content independently.
+            foreach (var speaker in _settings.Speakers)
+            {
+                if (speaker.IpAddress == SelectedSpeakerIp) continue; // Already set
+
+                // We need to determine if it is a station or track.
+                // The repo has methods for TuneIn and Spotify/Youtube.
+                // Getting the exact metadata to replay on another speaker is complex without full UPnP access.
+                // Fallback to just StartPlaying if we can't easily clone the stream.
+
+                // For radio stations it is easier if we have the URL.
+                if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
+                {
+                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
+                }
+
+                await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
+            }
+            await AddLog("Sync Play Started (Cloned URI)", "All speakers");
+        }
+    }
+
     private async Task<bool> IsPlaying()
     {
-        return await _uow.ISonosConnectorRepo.IsPlaying(_settings!.IP_Adress);
+        return await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
     }
 
     private async Task SaveSettings()
