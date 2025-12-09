@@ -164,6 +164,7 @@ else
                                 <th>Start</th>
                                 <th>Stop</th>
                                 <th>Play</th>
+                                <th class="text-center">Synced</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -211,6 +212,9 @@ else
                                             </optgroup>
                                         </select>
                                     </td>
+                                    <td class="text-center">
+                                        <InputCheckbox @bind-Value="schedule.IsSyncedPlayback" @onchange="async _ => await SaveSettings()" />
+                                    </td>
                                 </tr>
                             }
                             </tbody>
@@ -251,6 +255,7 @@ else
                                 <th>Start</th>
                                 <th>Stop</th>
                                 <th>Play</th>
+                                <th class="text-center">Synced</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                             </thead>
@@ -301,6 +306,9 @@ else
                                             </optgroup>
                                         </select>
                                     </td>
+                                    <td class="text-center">
+                                        <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @onchange="async _ => await SaveSettings()" />
+                                    </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)">Remove</button>
                                     </td>
@@ -309,7 +317,7 @@ else
                             @if (!OrderedHolidaySchedules.Any())
                             {
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted">No holiday overrides configured.</td>
+                                    <td colspan="7" class="text-center text-muted">No holiday overrides configured.</td>
                                 </tr>
                             }
                             </tbody>

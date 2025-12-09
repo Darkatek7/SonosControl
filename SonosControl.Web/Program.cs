@@ -17,10 +17,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddHttpClient();
-builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
+builder.Services.AddTransient<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 
 builder.Services.AddHostedService<SonosControlService>();
-builder.Services.AddSingleton<SonosControlService>();
+// builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
 builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
