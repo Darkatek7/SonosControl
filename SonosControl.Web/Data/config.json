@@ -1,5 +1,5 @@
 {
-  "Volume": 25,
+  "Volume": 15,
   "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
@@ -136,7 +136,21 @@
       "PlayRandomYouTubeMusic": false
     }
   },
-  "HolidaySchedules": [],
+  "HolidaySchedules": [
+    {
+      "Date": "2025-12-18",
+      "Name": "New Holiday",
+      "SkipPlayback": true,
+      "StartTime": "06:45:00",
+      "StopTime": "17:30:00",
+      "StationUrl": null,
+      "SpotifyUrl": null,
+      "YouTubeMusicUrl": null,
+      "PlayRandomStation": false,
+      "PlayRandomSpotify": false,
+      "PlayRandomYouTubeMusic": false
+    }
+  ],
   "ActiveDays": [
     1,
     2,

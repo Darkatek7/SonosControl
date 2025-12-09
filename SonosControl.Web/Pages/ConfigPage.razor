@@ -249,8 +249,9 @@ else
                             {
                                 <tr>
                                     <td>
-                                        <input type="date" class="form-control" value="@holiday.Date.ToString("yyyy-MM-dd")"
-                                               @onchange="async e => { if (DateOnly.TryParse(e.Value?.ToString(), out var d)) { holiday.Date = d; await SaveSettings(); } }"/>
+                                        <button class="form-control text-start" @onclick="() => OpenCalendar(holiday)">
+                                            @holiday.Date.ToString("yyyy-MM-dd")
+                                        </button>
                                     </td>
                                     <td>
                                         <input type="text" class="form-control" value="@holiday.Name"
@@ -311,6 +312,11 @@ else
             }
         </div>
     </div>
+    
+    @if (_showCalendar && _editingHoliday is not null)
+    {
+        <Calendar InitialDate="_editingHoliday.Date.ToDateTime(TimeOnly.MinValue)" OnDateSelected="OnCalendarDateSelected" OnClose="CloseCalendar" />
+    }
 }
 
 @code {
@@ -337,7 +343,30 @@ else
 
     private bool _importingCalendar;
 
+    private bool _showCalendar = false;
+    private HolidaySchedule? _editingHoliday;
 
+    private void OpenCalendar(HolidaySchedule holiday)
+    {
+        _editingHoliday = holiday;
+        _showCalendar = true;
+    }
+
+    private void CloseCalendar()
+    {
+        _showCalendar = false;
+        _editingHoliday = null;
+    }
+
+    private async Task OnCalendarDateSelected(DateTime newDate)
+    {
+        if (_editingHoliday is not null)
+        {
+            _editingHoliday.Date = DateOnly.FromDateTime(newDate);
+            await SaveSettings();
+        }
+        CloseCalendar();
+    }
 
     private IEnumerable<HolidaySchedule> OrderedHolidaySchedules => _settings?.HolidaySchedules?.OrderBy(h => h.Date) ?? Enumerable.Empty<HolidaySchedule>();
 
