@@ -69,6 +69,7 @@ namespace SonosControl.DAL.Repos
                     settings.DailySchedules ??= new();
                     settings.ActiveDays ??= new();
                     settings.HolidaySchedules ??= new();
+                    settings.Speakers ??= new();
 
                     foreach (var key in settings.DailySchedules.Keys.ToList())
                     {
