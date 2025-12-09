@@ -2,7 +2,9 @@
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
+@using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
+@implements IDisposable
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>System Logs</PageTitle>
@@ -15,6 +17,36 @@
                 <p class="text-muted mb-0">A chronological overview of operator activity.</p>
             </div>
             <div class="toolbar-actions logs-toolbar align-items-center flex-wrap">
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <label for="logSearch" class="form-label logs-toolbar__label mb-0 visually-hidden">Search</label>
+                    <input id="logSearch"
+                           type="text"
+                           class="form-control form-control-sm"
+                           placeholder="Search..."
+                           @bind="searchTerm"
+                           @bind:event="oninput"/>
+                </div>
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <label for="userFilter" class="form-label logs-toolbar__label mb-0 visually-hidden">User</label>
+                    <select id="userFilter" class="form-select form-select-sm" @bind="selectedUser">
+                        <option value="">All Users</option>
+                        @foreach (var user in allUsers)
+                        {
+                            <option value="@user">@(user ?? "System")</option>
+                        }
+                    </select>
+                </div>
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <label for="startDate" class="form-label logs-toolbar__label mb-0">From</label>
+                    <input id="startDate" type="date" class="form-control form-control-sm" @bind="startDate"/>
+                </div>
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <label for="endDate" class="form-label logs-toolbar__label mb-0">To</label>
+                    <input id="endDate" type="date" class="form-control form-control-sm" @bind="endDate"/>
+                </div>
+                <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ClearFilters">Clear</button>
+                </div>
                 <div class="logs-toolbar__group d-flex align-items-center gap-2">
                     <label for="logCountSelect" class="form-label logs-toolbar__label mb-0">Show</label>
                     <select id="logCountSelect"
@@ -37,7 +69,7 @@
                                class="form-control form-control-sm logs-count-input"
                                placeholder="Enter number"
                                @bind="customLogCount"
-                               @bind:event="onchange" />
+                               @bind:event="onchange"/>
                     </div>
                 }
             </div>
@@ -132,9 +164,78 @@
         }
     }
 
+    private string? _searchTerm;
+
+    private string? searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            if (_searchTerm != value)
+            {
+                _searchTerm = value;
+                DebounceRefresh();
+            }
+        }
+    }
+
+    private string? _selectedUser;
+
+    private string? selectedUser
+    {
+        get => _selectedUser;
+        set
+        {
+            if (_selectedUser != value)
+            {
+                _selectedUser = value;
+                _ = RefreshLogs();
+            }
+        }
+    }
+
+    private DateTime? _startDate;
+
+    private DateTime? startDate
+    {
+        get => _startDate;
+        set
+        {
+            if (_startDate != value)
+            {
+                _startDate = value;
+                _ = RefreshLogs();
+            }
+        }
+    }
+
+    private DateTime? _endDate;
+
+    private DateTime? endDate
+    {
+        get => _endDate;
+        set
+        {
+            if (_endDate != value)
+            {
+                _endDate = value;
+                _ = RefreshLogs();
+            }
+        }
+    }
+
+    private List<string?> allUsers = new();
+    private System.Timers.Timer? debounceTimer;
+
     protected override async Task OnInitializedAsync()
     {
+        await LoadInitialData();
         await RefreshLogs();
+    }
+
+    private async Task LoadInitialData()
+    {
+        allUsers = await Db.Logs.Select(l => l.PerformedBy).Distinct().ToListAsync();
     }
 
     private async Task RefreshLogs()
@@ -142,10 +243,64 @@
         int countToTake = selectedLogCount == -1 ? customLogCount : selectedLogCount;
         if (countToTake <= 0) countToTake = 100;
 
-        logs = Db.Logs
+        var query = Db.Logs.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query = query.Where(l =>
+                l.Action.Contains(searchTerm) ||
+                (l.PerformedBy != null && l.PerformedBy.Contains(searchTerm)) ||
+                (l.Details != null && l.Details.Contains(searchTerm)));
+        }
+
+        if (!string.IsNullOrEmpty(selectedUser))
+        {
+            query = query.Where(l => l.PerformedBy == selectedUser);
+        }
+
+        if (startDate.HasValue)
+        {
+            query = query.Where(l => l.Timestamp.Date >= startDate.Value.Date);
+        }
+
+        if (endDate.HasValue)
+        {
+            query = query.Where(l => l.Timestamp.Date <= endDate.Value.Date);
+        }
+
+        logs = await query
             .OrderByDescending(l => l.Timestamp)
             .Take(countToTake)
-            .ToList();
+            .ToListAsync();
+        
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void DebounceRefresh()
+    {
+        debounceTimer?.Stop();
+        debounceTimer = new System.Timers.Timer(300); // 300ms debounce delay
+        debounceTimer.Elapsed += async (sender, e) =>
+        {
+            await InvokeAsync(RefreshLogs);
+            debounceTimer.Stop();
+            debounceTimer.Dispose();
+        };
+        debounceTimer.Start();
+    }
+
+    private async Task ClearFilters()
+    {
+        _searchTerm = null;
+        _selectedUser = null;
+        _startDate = null;
+        _endDate = null;
+        await RefreshLogs();
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Dispose();
     }
 
 }
