@@ -2,6 +2,8 @@
 @using System.Net.Http.Json
 @using System.Linq
 @using System.Text
+@using SonosControl.DAL.Interfaces
+@inject IUnitOfWork _uow
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
@@ -220,7 +222,7 @@
     {
         if (_settings is not null)
         {
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, GetCleanUrl(url));
+            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
             Console.WriteLine($@"Station {url} played successfully.");
             await AddLog("Playing Station", $"station: {url}");
         }

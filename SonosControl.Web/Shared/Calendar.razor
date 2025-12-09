@@ -1,0 +1,80 @@
+@using System.Globalization
+
+<div class="calendar-modal" @onclick="Close">
+    <div class="calendar" @onclick:stopPropagation="true">
+        <div class="calendar-header">
+            <button @onclick="() => ChangeMonth(-1)">&#8249;</button>
+            <span>@currentDate.ToString("MMMM yyyy", CultureInfo.CurrentCulture)</span>
+            <button @onclick="() => ChangeMonth(1)">&#8250;</button>
+        </div>
+        <div class="calendar-grid">
+            @foreach (var day in DaysOfWeek)
+            {
+                <div class="calendar-day-header">@day</div>
+            }
+            @for (int i = 0; i < firstDayOfMonth; i++)
+            {
+                <div class="calendar-day empty"></div>
+            }
+            @for (int i = 1; i <= daysInMonth; i++)
+            {
+                var day = i;
+                var date = new DateTime(currentDate.Year, currentDate.Month, day);
+                <div class="calendar-day @(date.Date == DateTime.Today ? "today" : "") @(date.Date == SelectedDate.Date ? "selected" : "")"
+                     @onclick="() => SelectDate(date)">
+                    @day
+                </div>
+            }
+        </div>
+        <button class="calendar-close-button" @onclick="Close">&times;</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public DateTime InitialDate { get; set; } = DateTime.Today;
+    [Parameter] public EventCallback<DateTime> OnDateSelected { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private DateTime currentDate;
+    private DateTime SelectedDate;
+    private int firstDayOfMonth;
+    private int daysInMonth;
+
+    private static readonly string[] DaysOfWeek = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+
+    protected override void OnInitialized()
+    {
+        currentDate = InitialDate;
+        SelectedDate = InitialDate;
+        CalculateCalendar();
+    }
+
+    private void CalculateCalendar()
+    {
+        daysInMonth = DateTime.DaysInMonth(currentDate.Year, currentDate.Month);
+        var firstDateOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+        // DayOfWeek: Sunday = 0, Monday = 1, ..., Saturday = 6
+        var dayOfWeek = (int)firstDateOfMonth.DayOfWeek;
+        // Adjust to Monday = 0, ..., Sunday = 6
+        firstDayOfMonth = (dayOfWeek == 0) ? 6 : dayOfWeek - 1;
+
+        StateHasChanged();
+    }
+
+    private void ChangeMonth(int month)
+    {
+        currentDate = currentDate.AddMonths(month);
+        CalculateCalendar();
+    }
+
+    private async Task SelectDate(DateTime date)
+    {
+        SelectedDate = date;
+        await OnDateSelected.InvokeAsync(SelectedDate);
+    }
+    
+    private async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+}

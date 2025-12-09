@@ -1,0 +1,96 @@
+.calendar-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1050;
+}
+
+.calendar {
+    background-color: var(--surface-1);
+    border-radius: var(--bs-border-radius-lg);
+    padding: var(--spacing-lg);
+    width: auto;
+    box-shadow: var(--shadow-lg);
+    position: relative;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+}
+
+.calendar-header button {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: var(--spacing-xs);
+    background-color: var(--surface-2);
+    padding: var(--spacing-xs);
+    border-radius: var(--bs-border-radius-sm);
+}
+
+.calendar-day-header {
+    text-align: center;
+    font-weight: bold;
+    color: var(--text-secondary);
+}
+
+.calendar-day {
+    text-align: center;
+    padding: var(--spacing-sm);
+    cursor: pointer;
+    border-radius: 50%;
+    color: var(--text-primary);
+}
+
+.calendar-day:hover {
+    background-color: var(--surface-3);
+}
+
+.calendar-day.empty {
+    cursor: default;
+}
+
+.calendar-day.empty:hover {
+    background-color: transparent;
+}
+
+.calendar-day.today {
+    border: 1px solid var(--brand-primary);
+}
+
+.calendar-day.selected {
+    background-color: var(--brand-primary);
+    color: var(--text-on-brand);
+}
+
+.calendar-close-button {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.calendar-close-button:hover {
+    color: var(--text-primary);
+}
