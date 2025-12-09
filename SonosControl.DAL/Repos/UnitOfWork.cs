@@ -5,18 +5,20 @@ namespace SonosControl.DAL.Repos
 {
     public class UnitOfWork : IUnitOfWork
     {
-        private readonly IHttpClientFactory _httpClientFactory;
-        private SettingsRepo? settingsRepo;
-        private SonosConnectorRepo? sonosConnectorRepo;
-        private HolidayRepo? holidayRepo;
+        private readonly ISettingsRepo _settingsRepo;
+        private readonly IHolidayRepo _holidayRepo;
+        private readonly ISonosConnectorRepo _sonosConnectorRepo;
 
-        public UnitOfWork(IHttpClientFactory httpClientFactory)
+        public UnitOfWork(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
         {
-            _httpClientFactory = httpClientFactory;
+            _settingsRepo = settingsRepo;
+            _holidayRepo = new HolidayRepo(); // Assuming HolidayRepo doesn't have constructor dependencies
+            _sonosConnectorRepo = new SonosConnectorRepo(httpClientFactory, settingsRepo);
         }
 
-        public ISettingsRepo ISettingsRepo => settingsRepo ?? new SettingsRepo();
-        public IHolidayRepo IHolidayRepo => holidayRepo ?? new HolidayRepo();
-        public ISonosConnectorRepo ISonosConnectorRepo => sonosConnectorRepo ?? new SonosConnectorRepo(_httpClientFactory);
+        public ISettingsRepo ISettingsRepo => _settingsRepo;
+        public IHolidayRepo IHolidayRepo => _holidayRepo;
+        public ISonosConnectorRepo ISonosConnectorRepo => _sonosConnectorRepo;
     }
 }
+
