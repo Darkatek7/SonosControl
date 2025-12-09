@@ -1,9 +1,19 @@
 {
-  "Volume": 15,
+  "Volume": 17,
   "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
-  "IP_Adress": "10.1.12.251",
+  "IP_Adress": "10.1.12.252",
+  "Speakers": [
+    {
+      "Name": "op",
+      "IpAddress": "10.1.12.251"
+    },
+    {
+      "Name": "küch",
+      "IpAddress": "10.1.12.252"
+    }
+  ],
   "Stations": [
     {
       "Name": "Antenne Vorarlberg",
