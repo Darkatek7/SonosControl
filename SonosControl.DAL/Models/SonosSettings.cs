@@ -13,6 +13,7 @@ namespace SonosControl.DAL.Models
         public TimeOnly StartTime { get; set; } = new TimeOnly(6, 0);
         public TimeOnly StopTime { get; set; } = new TimeOnly(18, 0);
         public string IP_Adress { get; set; } = "10.0.0.0";
+        public List<SonosSpeaker> Speakers { get; set; } = new();
         public List<TuneInStation> Stations { get; set; } = new()
         {
             new TuneInStation { Name = "Antenne Vorarlberg", Url = "web.radio.antennevorarlberg.at/av-live/stream/mp3" },
