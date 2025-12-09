@@ -9,6 +9,7 @@ using System.IO;
 
 using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
+using Radzen;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,8 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddHttpClient();
 builder.Services.AddTransient<IUnitOfWork, UnitOfWork>();
+
+builder.Services.AddRadzenComponents();
 
 builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddSingleton<SonosControlService>();
