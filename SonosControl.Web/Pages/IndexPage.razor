@@ -224,20 +224,35 @@
         set
         {
             if (_selectedSpeakerIp != value)
-            {
+            { 
                 _selectedSpeakerIp = value;
                 if (_settings != null)
                 {
-                    // Update the main IP address setting to match selection for compatibility
-                    _settings.IP_Adress = value;
-                    _ = SaveSettings();
-
-                    // Refresh data for the new speaker
-                    _ = LoadCurrentStation();
-                    _ = LoadQueue(reset: true);
+                    _ = UpdateSpeakerRelatedData(value);
                 }
             }
         }
+    }
+
+    private async Task UpdateSpeakerRelatedData(string newIpAddress)
+    {
+        _settings.IP_Adress = newIpAddress;
+        await SaveSettings();
+
+        try
+        {
+            _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(newIpAddress);
+        }
+        catch
+        {
+            // Ignore if speaker is offline or returns error
+            _settings.Volume = 0; // Default to 0 or last known good if error
+        }
+
+        // Refresh data for the new speaker
+        await LoadCurrentStation();
+        await LoadQueue(reset: true);
+        await InvokeAsync(StateHasChanged);
     }
 
     // New state for tabs and modal
