@@ -213,7 +213,7 @@ else
                                         </select>
                                     </td>
                                     <td class="text-center">
-                                        <InputCheckbox @bind-Value="schedule.IsSyncedPlayback" @onchange="async _ => await SaveSettings()" />
+                                        <InputCheckbox @bind-Value="schedule.IsSyncedPlayback" @bind-Value:after="SaveSettings" />
                                     </td>
                                 </tr>
                             }
@@ -307,7 +307,7 @@ else
                                         </select>
                                     </td>
                                     <td class="text-center">
-                                        <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @onchange="async _ => await SaveSettings()" />
+                                        <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @bind-Value:after="SaveSettings" />
                                     </td>
                                     <td class="text-end">
                                         <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)">Remove</button>
