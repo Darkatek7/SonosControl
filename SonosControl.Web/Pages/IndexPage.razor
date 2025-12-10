@@ -1,6 +1,7 @@
 @page "/"
 @using System.Text.RegularExpressions
 @using System.Linq
+@using Radzen.Blazor.Rendering
 @using SonosControl.DAL.Interfaces
 @using SonosControl.DAL.Models
 @using SonosControl.Web.Data
@@ -115,7 +116,7 @@
                                 </ul>
                             </ChildContent>
                         </SectionCard>
-
+                        <hr/>
                         <SectionCard Title="Media Sources" Icon="🎶">
                             <ChildContent>
                                 <MediaTabs @bind-ActiveTab="_activeMediaTab">
