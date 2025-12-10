@@ -69,7 +69,8 @@ namespace SonosControl.Web.Services
 
             string masterIp = speakers.First().IpAddress; // Assuming the first speaker in the list is the master
 
-            if (schedule?.IsSyncedPlayback == true)
+            bool isSynced = schedule?.IsSyncedPlayback ?? true;
+            if (isSynced)
             {
                 var slaveIps = speakers.Where(s => s.IpAddress != masterIp).Select(s => s.IpAddress);
 
@@ -375,7 +376,7 @@ namespace SonosControl.Web.Services
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
 
-            if (schedule?.IsSyncedPlayback == true)
+            if (schedule?.IsSyncedPlayback ?? true)
             {
                 foreach (var speaker in speakers)
                 {

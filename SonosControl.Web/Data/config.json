@@ -1,9 +1,9 @@
 {
-  "Volume": 17,
+  "Volume": 19,
   "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
-  "IP_Adress": "10.1.12.252",
+  "IP_Adress": "10.1.12.251",
   "Speakers": [
     {
       "Name": "op",
@@ -84,7 +84,7 @@
       "PlayRandomStation": false,
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
-      "IsSyncedPlayback": false
+      "IsSyncedPlayback": true
     },
     "Tuesday": {
       "StartTime": "06:00:00",
@@ -95,7 +95,7 @@
       "PlayRandomStation": false,
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
-      "IsSyncedPlayback": false
+      "IsSyncedPlayback": true
     },
     "Wednesday": {
       "StartTime": "06:00:00",
@@ -106,7 +106,7 @@
       "PlayRandomStation": false,
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
-      "IsSyncedPlayback": false
+      "IsSyncedPlayback": true
     },
     "Thursday": {
       "StartTime": "06:00:00",
@@ -117,7 +117,7 @@
       "PlayRandomStation": false,
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
-      "IsSyncedPlayback": false
+      "IsSyncedPlayback": true
     },
     "Friday": {
       "StartTime": "06:00:00",
@@ -166,7 +166,7 @@
       "PlayRandomStation": false,
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
-      "IsSyncedPlayback": false
+      "IsSyncedPlayback": true
     }
   ],
   "ActiveDays": [
