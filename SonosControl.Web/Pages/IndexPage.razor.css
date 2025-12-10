@@ -1,0 +1,15 @@
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-playing {
+    background-color: var(--bs-success);
+    box-shadow: 0 0 8px var(--bs-success);
+}
+
+.status-paused {
+    background-color: var(--bs-secondary);
+}

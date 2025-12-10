@@ -1,5 +1,6 @@
 @page "/"
 @using System.Text.RegularExpressions
+@using System.Linq
 @using SonosControl.DAL.Interfaces
 @using SonosControl.DAL.Models
 @using SonosControl.Web.Data
@@ -22,9 +23,6 @@
                     <div>
                         <h3 class="mb-1">🎛️ Sonos Control Panel</h3>
                         <p class="text-muted mb-0">Manage playback, queue, and curated sources for your Sonos system.</p>
-                    </div>
-                    <div class="toolbar-actions">
-                        <p class="text-muted mb-0 small">Playback status refreshes automatically.</p>
                     </div>
                 </div>
 
@@ -86,19 +84,40 @@
                     </div>
 
                     <div class="queue-column">
-                        <QueuePanel
-                            Items="@queue"
-                            IsLoading="@_queueIsLoading"
-                            HasMore="@_queueHasMore"
-                            AutoRefreshEnabled="@QueueAutoRefreshEnabled"
-                            RefreshIntervalSeconds="@_queueRefreshIntervalSeconds"
-                            RefreshIntervals="@_queueRefreshIntervals"
-                            ErrorMessage="@_queueErrorMessage"
-                            Refresh="() => LoadQueue(reset: true)"
-                            LoadMore="LoadNextQueuePage"
-                            AutoRefreshChanged="value => QueueAutoRefreshEnabled = value"
-                            RefreshIntervalChanged="UpdateQueueRefreshInterval"
-                            FormatItem="FormatQueueItem" />
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">📢 Speaker Status</h5>
+                                <span class="text-muted small">Auto-refreshes</span>
+                            </div>
+                            <ul class="list-group list-group-flush media-list">
+                                @if (_speakerStatuses.Any())
+                                {
+                                    @foreach (var status in _speakerStatuses.OrderBy(s => s.Name))
+                                    {
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center">
+                                                <span class="me-2 status-indicator @(status.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                                <div>
+                                                    <span class="fw-bold">@status.Name</span>
+                                                    @if (status.IsPlaying && !string.IsNullOrWhiteSpace(status.Media))
+                                                    {
+                                                        <br/>
+                                                        <small class="text-muted">@status.Media</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="badge rounded-pill text-uppercase @(status.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                @(status.IsPlaying ? "Playing" : "Paused")
+                                            </span>
+                                        </li>
+                                    }
+                                }
+                                else
+                                {
+                                    <li class="list-group-item">No speakers to display.</li>
+                                }
+                            </ul>
+                        </div>
                     </div>
 
                     <div class="media-column">
@@ -211,7 +230,14 @@
 <AddMediaItemModal @ref="_addMediaItemModal" OnSave="SaveNewMediaItem" ErrorMessage="@_addModalError" OnClose="() => _addModalError = null"/>
 
 @code {
+    public class SpeakerStatusViewModel
+    {
+        public string? Name { get; set; }
+        public bool IsPlaying { get; set; }
+        public string? Media { get; set; }
+    }
 
+    private List<SpeakerStatusViewModel> _speakerStatuses = new();
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSpotifyPlaying;
@@ -250,9 +276,7 @@
         }
 
         // Refresh data for the new speaker
-        await LoadCurrentStation();
-        await LoadQueue(reset: true);
-        await InvokeAsync(StateHasChanged);
+        await UpdatePageDataAsync();
     }
 
     // New state for tabs and modal
@@ -333,25 +357,81 @@
         (_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
         .OrderBy(t => t.Name)
         .ToList();
-    
-    private List<SonosQueueItem> queue = new();
-    private const int QueuePageSize = 50;
-    private int _queueNextIndex;
-    private bool _queueHasMore;
-    private bool _queueIsLoading;
-    private string? _queueErrorMessage;
-    private bool _queueAutoRefreshEnabled;
-    private readonly int[] _queueRefreshIntervals = new[] { 15, 30, 60, 120 };
-    private int _queueRefreshIntervalSeconds = 30;
-    private CancellationTokenSource? _queueRefreshCts;
-    private Task? _queueRefreshTask;
+
+    private async Task UpdatePageDataAsync()
+    {
+        await LoadCurrentStation();
+        await UpdateSpeakerStatuses();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdatePageData(object? _ = null)
+    {
+        _ = InvokeAsync(UpdatePageDataAsync);
+    }
+
+    private async Task UpdateSpeakerStatuses()
+    {
+        if (_settings?.Speakers == null)
+        {
+            _speakerStatuses = new();
+            return;
+        }
+
+        var tasks = _settings.Speakers.Select(async speaker =>
+        {
+            var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+            string media = "";
+            if (isPlaying)
+            {
+                var track = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
+                var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
+                var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
+
+                if (!string.IsNullOrWhiteSpace(track) && !track.Contains("sonos.com") && !track.Contains("Stream"))
+                {
+                    media = track;
+                }
+                else if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+                {
+                    media = "Spotify";
+                }
+                else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+                {
+                    media = "YouTube Music";
+                }
+                else
+                {
+                    var matched = _stations.FirstOrDefault(s => currentStationUrl != null && s.Url != null && currentStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+                    if (matched != null)
+                    {
+                        media = matched.Name;
+                    }
+                    else
+                    {
+                        media = "Playing stream"; 
+                    }
+                }
+            }
+
+            return new SpeakerStatusViewModel
+            {
+                Name = speaker.Name,
+                IsPlaying = isPlaying,
+                Media = media
+            };
+        }).ToList();
+
+        _speakerStatuses = (await Task.WhenAll(tasks)).ToList();
+    }
+
 
     private async Task LoadCurrentStation()
     {
         if (_settings is not null)
         {
             var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-            currentStationUrl = rawStationUrl.Replace("x-rincon-mp3radio://", "").Trim();
+            currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
             if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
             {
@@ -379,7 +459,7 @@
                 _isSpotifyPlaying = false;
             }
 
-            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
+            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress) ?? "";
             var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
 
             if (progress.Duration == TimeSpan.Zero)
@@ -392,8 +472,6 @@
             {
                 trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
             }
-
-            await InvokeAsync(StateHasChanged);
         }
     }
     
@@ -463,178 +541,6 @@
     {
         await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
         await AddLog("Next Track");
-    }
-
-    private async Task LoadQueue(bool reset = false, CancellationToken cancellationToken = default)
-    {
-        if (_settings is null || _queueIsLoading)
-        {
-            return;
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var startIndex = reset ? 0 : _queueNextIndex;
-
-        try
-        {
-            _queueIsLoading = true;
-            _queueErrorMessage = null;
-
-            if (reset)
-            {
-                _queueNextIndex = 0;
-                _queueHasMore = false;
-            }
-
-            var page = await _uow.ISonosConnectorRepo.GetQueue(_settings.IP_Adress, startIndex, QueuePageSize, cancellationToken);
-
-            if (reset)
-            {
-                queue = new List<SonosQueueItem>(page.Items);
-            }
-            else if (page.StartIndex == startIndex)
-            {
-                queue.AddRange(page.Items);
-            }
-            else
-            {
-                queue = new List<SonosQueueItem>(page.Items);
-            }
-
-            _queueNextIndex = page.StartIndex + page.NumberReturned;
-            _queueHasMore = page.HasMore;
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            _queueErrorMessage = "Unable to load queue.";
-            Console.Error.WriteLine(ex);
-        }
-        finally
-        {
-            _queueIsLoading = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private Task LoadNextQueuePage()
-    {
-        if (!_queueHasMore)
-        {
-            return Task.CompletedTask;
-        }
-
-        return LoadQueue(reset: false);
-    }
-
-    private bool QueueAutoRefreshEnabled
-    {
-        get => _queueAutoRefreshEnabled;
-        set
-        {
-            if (_queueAutoRefreshEnabled == value)
-            {
-                return;
-            }
-
-            _queueAutoRefreshEnabled = value;
-
-            if (value)
-            {
-                StartQueueAutoRefresh();
-            }
-            else
-            {
-                StopQueueAutoRefresh();
-            }
-        }
-    }
-
-    private Task UpdateQueueRefreshInterval(int seconds)
-    {
-        if (seconds <= 0)
-        {
-            return Task.CompletedTask;
-        }
-
-        _queueRefreshIntervalSeconds = seconds;
-        if (_queueAutoRefreshEnabled)
-        {
-            StartQueueAutoRefresh();
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private void StartQueueAutoRefresh()
-    {
-        CancelQueueAutoRefreshLoop();
-
-        var cts = new CancellationTokenSource();
-        _queueRefreshCts = cts;
-        var token = cts.Token;
-
-        _queueRefreshTask = Task.Run(async () =>
-        {
-            try
-            {
-                await InvokeAsync(() => LoadQueue(reset: true, cancellationToken: token));
-                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_queueRefreshIntervalSeconds));
-                while (await timer.WaitForNextTickAsync(token))
-                {
-                    await InvokeAsync(() => LoadQueue(reset: true, cancellationToken: token));
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-        });
-    }
-
-    private void StopQueueAutoRefresh(bool updateFlag = false)
-    {
-        CancelQueueAutoRefreshLoop();
-        if (updateFlag)
-        {
-            _queueAutoRefreshEnabled = false;
-        }
-    }
-
-    private void CancelQueueAutoRefreshLoop()
-    {
-        var cts = _queueRefreshCts;
-        if (cts is null)
-        {
-            return;
-        }
-
-        _queueRefreshCts = null;
-
-        try
-        {
-            cts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-        finally
-        {
-            cts.Dispose();
-        }
-    }
-
-    private static string FormatQueueItem(SonosQueueItem item)
-    {
-        var title = string.IsNullOrWhiteSpace(item.Title) ? "Unknown title" : item.Title;
-        return string.IsNullOrWhiteSpace(item.Artist)
-            ? title
-            : $"{item.Artist} – {title}";
     }
 
     private void OpenTimerModal()
@@ -904,9 +810,9 @@
 
         await SaveSettings();
         _isPlaying = await IsPlaying();
-        await LoadCurrentStation();
-        await LoadQueue(reset: true);
-        _stationUpdateTimer = new Timer(async _ => await LoadCurrentStation(), null, 1000, 1000);
+        
+        await UpdatePageDataAsync();
+        _stationUpdateTimer = new Timer(UpdatePageData, null, 3000, 3000);
     }
 
     private async Task Play(bool play)
@@ -1089,30 +995,12 @@
         _stationUpdateTimer?.Dispose();
         _stationUpdateTimer = null;
 
-        StopQueueAutoRefresh(true);
-        var refreshTask = _queueRefreshTask;
-        _queueRefreshTask = null;
-
         var playbackCts = _playbackTimerCts;
         if (playbackCts is not null)
         {
             _playbackTimerCts = null;
             playbackCts.Cancel();
             playbackCts.Dispose();
-        }
-
-        if (refreshTask is not null)
-        {
-            try
-            {
-                await refreshTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
         }
     }
 }
