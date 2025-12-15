@@ -782,33 +782,45 @@
                  _settings.IP_Adress = _selectedSpeakerIp;
             }
         }
-        else if (_settings!.IP_Adress is "10.0.0.0")
-        {
-             // No speakers and default IP, just return
-             return;
-        }
+    }
 
-        try
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isAuthenticated && _settings != null)
         {
-            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
-        }
-        catch
-        {
-             // Ignore if speaker is offline
-        }
+            try
+            {
+                if (_settings.Speakers.Any() && !(_settings.IP_Adress is "10.0.0.0"))
+                {
+                    try
+                    {
+                        _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
+                    }
+                    catch
+                    {
+                         // Ignore if speaker is offline
+                    }
 
-        var maxVolumeLimit = MaxVolumeLimit;
-        if (_settings.Volume > maxVolumeLimit)
-        {
-            _settings.Volume = maxVolumeLimit;
-            await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
-        }
+                    var maxVolumeLimit = MaxVolumeLimit;
+                    if (_settings.Volume > maxVolumeLimit)
+                    {
+                        _settings.Volume = maxVolumeLimit;
+                        await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
+                    }
 
-        await SaveSettings();
-        _isPlaying = await IsPlaying();
-        
-        await UpdatePageDataAsync();
-        _stationUpdateTimer = new Timer(UpdatePageData, null, 3000, 3000);
+                    await SaveSettings();
+                    _isPlaying = await IsPlaying();
+
+                    await UpdatePageDataAsync();
+                    _stationUpdateTimer = new Timer(UpdatePageData, null, 3000, 3000);
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error in OnAfterRenderAsync: {ex}");
+            }
+        }
     }
 
     private async Task Play(bool play)
