@@ -5,7 +5,9 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
+using Moq;
 using Xunit;
 
 namespace SonosControl.Tests;
@@ -67,7 +69,7 @@ public class SonosConnectorRepoTests
         public int StartPlayingCallCount { get; private set; }
 
         public TestableSonosConnectorRepo(IHttpClientFactory httpClientFactory)
-            : base(httpClientFactory)
+            : base(httpClientFactory, new Mock<ISettingsRepo>().Object)
         {
         }
 
@@ -84,7 +86,7 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), new Mock<ISettingsRepo>().Object);
 
         await repo.NextTrack("1.2.3.4");
 
@@ -122,7 +124,7 @@ public class SonosConnectorRepoTests
             Content = new StringContent(soapResponse)
         });
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), new Mock<ISettingsRepo>().Object);
 
         var result = await repo.GetQueue("1.2.3.4");
 
@@ -165,7 +167,7 @@ public class SonosConnectorRepoTests
             Content = new StringContent(soapResponse)
         });
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), new Mock<ISettingsRepo>().Object);
 
         var result = await repo.GetQueue("1.2.3.4");
 
@@ -265,7 +267,7 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), new Mock<ISettingsRepo>().Object);
 
         await repo.RebootDeviceAsync("1.2.3.4");
 

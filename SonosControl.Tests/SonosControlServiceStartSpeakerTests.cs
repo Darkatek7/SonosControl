@@ -1,5 +1,8 @@
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -10,10 +13,16 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceStartSpeakerTests
 {
-    private static Task InvokeStartSpeakerAsync(SonosControlService service, string ip, SonosSettings settings, DaySchedule? schedule)
+    private static Task InvokeStartSpeakerAsync(SonosControlService service, IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, SonosSettings settings, DaySchedule? schedule)
     {
         var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (Task)method.Invoke(service, new object[] { ip, settings, schedule })!;
+        return (Task)method.Invoke(service, new object[] { uow, speakers, settings, schedule, CancellationToken.None })!;
+    }
+
+    private SonosControlService CreateService(IUnitOfWork uow)
+    {
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        return new SonosControlService(scopeFactory.Object);
     }
 
     [Fact]
@@ -23,17 +32,18 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var today = DateTime.Now.DayOfWeek;
         var inactiveDay = (DayOfWeek)(((int)today + 1) % 7);
 
         var settings = new SonosSettings
         {
-            ActiveDays = new List<DayOfWeek> { inactiveDay }
+            ActiveDays = new List<DayOfWeek> { inactiveDay },
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } }
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, null);
 
         sonosRepo.Verify(r => r.StartPlaying(It.IsAny<string>()), Times.Never);
         sonosRepo.Verify(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -48,10 +58,11 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var settings = new SonosSettings
         {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } },
             Stations = new List<TuneInStation>
             {
                 new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" },
@@ -64,9 +75,9 @@ public class SonosControlServiceStartSpeakerTests
             PlayRandomStation = true
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.SetTuneInStationAsync(settings.IP_Adress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(settings.Speakers.First().IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         sonosRepo.Verify(r => r.StartPlaying(It.IsAny<string>()), Times.Never);
     }
 
@@ -77,10 +88,11 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var settings = new SonosSettings
         {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } },
             Stations = new List<TuneInStation>(),
             ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek }
         };
@@ -90,9 +102,9 @@ public class SonosControlServiceStartSpeakerTests
             PlayRandomStation = true
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.StartPlaying(settings.IP_Adress), Times.Once);
+        sonosRepo.Verify(r => r.StartPlaying(settings.Speakers.First().IpAddress), Times.Once);
         sonosRepo.Verify(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -103,10 +115,11 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var settings = new SonosSettings
         {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } },
             YouTubeMusicCollections = new List<YouTubeMusicObject>
             {
                 new() { Name = "Focus", Url = "https://music.youtube.com/watch?v=abc123" },
@@ -119,9 +132,9 @@ public class SonosControlServiceStartSpeakerTests
             PlayRandomYouTubeMusic = true
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.Speakers.First().IpAddress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -131,17 +144,20 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
-        var settings = new SonosSettings();
+        var settings = new SonosSettings
+        {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } }
+        };
         var schedule = new DaySchedule
         {
             YouTubeMusicUrl = "https://music.youtube.com/watch?v=hijklm"
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.Speakers.First().IpAddress, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -151,10 +167,11 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var settings = new SonosSettings
         {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } },
             ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek },
             AutoPlayRandomYouTubeMusic = true,
             YouTubeMusicCollections = new List<YouTubeMusicObject>
@@ -163,9 +180,9 @@ public class SonosControlServiceStartSpeakerTests
             }
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, null);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.Speakers.First().IpAddress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -175,16 +192,17 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var service = CreateService(uow.Object);
 
         var settings = new SonosSettings
         {
+            Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4" } },
             ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek },
             AutoPlayYouTubeMusicUrl = "https://music.youtube.com/watch?v=xyz789"
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
+        await InvokeStartSpeakerAsync(service, uow.Object, settings.Speakers, settings, null);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.Speakers.First().IpAddress, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
     }
 }
