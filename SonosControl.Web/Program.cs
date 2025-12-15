@@ -17,6 +17,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(nameof(SonosConnectorRepo), client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(2);
+});
 builder.Services.AddTransient<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 

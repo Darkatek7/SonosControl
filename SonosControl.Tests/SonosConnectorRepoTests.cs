@@ -5,6 +5,8 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
+using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
 using Xunit;
 
@@ -66,8 +68,8 @@ public class SonosConnectorRepoTests
     {
         public int StartPlayingCallCount { get; private set; }
 
-        public TestableSonosConnectorRepo(IHttpClientFactory httpClientFactory)
-            : base(httpClientFactory)
+        public TestableSonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
+            : base(httpClientFactory, settingsRepo)
         {
         }
 
@@ -84,7 +86,8 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.NextTrack("1.2.3.4");
 
@@ -122,7 +125,8 @@ public class SonosConnectorRepoTests
             Content = new StringContent(soapResponse)
         });
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         var result = await repo.GetQueue("1.2.3.4");
 
@@ -165,7 +169,8 @@ public class SonosConnectorRepoTests
             Content = new StringContent(soapResponse)
         });
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         var result = await repo.GetQueue("1.2.3.4");
 
@@ -181,7 +186,8 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream");
 
@@ -199,7 +205,8 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var client = new HttpClient(handler);
-        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream");
 
@@ -219,7 +226,8 @@ public class SonosConnectorRepoTests
         });
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345", "fallback-station");
 
@@ -249,7 +257,8 @@ public class SonosConnectorRepoTests
         });
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var client = new HttpClient(handler);
-        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345");
 
@@ -265,7 +274,8 @@ public class SonosConnectorRepoTests
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
-        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client));
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.RebootDeviceAsync("1.2.3.4");
 
