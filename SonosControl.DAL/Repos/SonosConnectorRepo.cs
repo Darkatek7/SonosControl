@@ -957,10 +957,10 @@ namespace SonosControl.DAL.Repos
 
         public async Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
-            var masterUuid = await GetSpeakerUUID(masterIp, cancellationToken);
-            if (masterUuid == null)
+            var masterRinconId = await GetRinconIdAsync(masterIp, cancellationToken);
+            if (masterRinconId == null)
             {
-                Console.WriteLine($"Error: Could not get UUID for master speaker {masterIp}.");
+                Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
                 return;
             }
 
@@ -976,8 +976,9 @@ namespace SonosControl.DAL.Repos
                 }
 
                 // The URI for the slave to join the master's group
-                string groupUri = $"x-rincon-group:{masterUuid}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:sonos='http://www.sonos.com/ServiceTypes/1#' xmlns='urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/'><item id='{masterUuid}' parentID='0' restricted='true'><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.sonos-playlist</upnp:class><desc id='cdudn' nameSpace='urn:schemas-rinconnetworks-com:metadata-1-0/'>SA_RINCON{masterUuid}</desc></item></DIDL-Lite>";
+                // Using x-rincon:RINCON_... format which is used by other Sonos libraries like SoCo
+                string groupUri = $"x-rincon:RINCON_{masterRinconId}";
+                string groupMetaData = "";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
