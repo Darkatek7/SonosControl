@@ -957,27 +957,30 @@ namespace SonosControl.DAL.Repos
 
         public async Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
-            var masterUuid = await GetSpeakerUUID(masterIp, cancellationToken);
-            if (masterUuid == null)
+            // Retrieve RINCON ID without 'uuid:' prefix for use in x-rincon: URI
+            var masterRinconId = await GetRinconIdAsync(masterIp, cancellationToken);
+            if (masterRinconId == null)
             {
-                Console.WriteLine($"Error: Could not get UUID for master speaker {masterIp}.");
+                Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
                 return;
             }
+
+            var masterUuid = $"RINCON_{masterRinconId}";
 
             foreach (var slaveIp in slaveIps)
             {
                 if (slaveIp == masterIp) continue; // Skip if slave is also the master
 
-                var slaveUuid = await GetSpeakerUUID(slaveIp, cancellationToken);
-                if (slaveUuid == null)
+                var slaveRinconId = await GetRinconIdAsync(slaveIp, cancellationToken);
+                if (slaveRinconId == null)
                 {
-                    Console.WriteLine($"Error: Could not get UUID for slave speaker {slaveIp}. Skipping.");
+                    Console.WriteLine($"Error: Could not get RINCON ID for slave speaker {slaveIp}. Skipping.");
                     continue;
                 }
 
-                // The URI for the slave to join the master's group
-                string groupUri = $"x-rincon-group:{masterUuid}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:sonos='http://www.sonos.com/ServiceTypes/1#' xmlns='urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/'><item id='{masterUuid}' parentID='0' restricted='true'><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.sonos-playlist</upnp:class><desc id='cdudn' nameSpace='urn:schemas-rinconnetworks-com:metadata-1-0/'>SA_RINCON{masterUuid}</desc></item></DIDL-Lite>";
+                // The URI for the slave to join the master's group uses x-rincon: scheme with RINCON_ ID (no uuid: prefix)
+                string groupUri = $"x-rincon:{masterUuid}";
+                string groupMetaData = "";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
@@ -1015,11 +1018,9 @@ namespace SonosControl.DAL.Repos
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
                             s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
                   <s:Body>
-                    <u:SetAVTransportURI xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                    <u:BecomeCoordinatorOfStandaloneGroup xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
                       <InstanceID>0</InstanceID>
-                      <CurrentURI>x-rincon-standard:</CurrentURI>
-                      <CurrentURIMetaData></CurrentURIMetaData>
-                    </u:SetAVTransportURI>
+                    </u:BecomeCoordinatorOfStandaloneGroup>
                   </s:Body>
                 </s:Envelope>";
 
@@ -1028,7 +1029,7 @@ namespace SonosControl.DAL.Repos
                 var client = CreateClient();
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
                 using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#BecomeCoordinatorOfStandaloneGroup\"");
 
                 var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
