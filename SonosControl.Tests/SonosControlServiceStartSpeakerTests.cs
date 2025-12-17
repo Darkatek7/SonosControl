@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -10,10 +11,24 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceStartSpeakerTests
 {
-    private static Task InvokeStartSpeakerAsync(SonosControlService service, string ip, SonosSettings settings, DaySchedule? schedule)
+    private static Task InvokeStartSpeakerAsync(SonosControlService service, IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, SonosSettings settings, DaySchedule? schedule)
     {
         var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        return (Task)method.Invoke(service, new object[] { ip, settings, schedule })!;
+        return (Task)method.Invoke(service, new object[] { uow, speakers, settings, schedule, CancellationToken.None })!;
+    }
+
+    private IServiceScopeFactory CreateMockScopeFactory(IUnitOfWork uow)
+    {
+        var serviceProvider = new Mock<IServiceProvider>();
+        serviceProvider.Setup(x => x.GetService(typeof(IUnitOfWork))).Returns(uow);
+
+        var serviceScope = new Mock<IServiceScope>();
+        serviceScope.Setup(x => x.ServiceProvider).Returns(serviceProvider.Object);
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        scopeFactory.Setup(x => x.CreateScope()).Returns(serviceScope.Object);
+
+        return scopeFactory.Object;
     }
 
     [Fact]
@@ -23,17 +38,20 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
 
         var today = DateTime.Now.DayOfWeek;
         var inactiveDay = (DayOfWeek)(((int)today + 1) % 7);
 
         var settings = new SonosSettings
         {
-            ActiveDays = new List<DayOfWeek> { inactiveDay }
+            ActiveDays = new List<DayOfWeek> { inactiveDay },
+            IP_Adress = "127.0.0.1"
         };
+        var speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = settings.IP_Adress } };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, null);
 
         sonosRepo.Verify(r => r.StartPlaying(It.IsAny<string>()), Times.Never);
         sonosRepo.Verify(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -48,7 +66,8 @@ public class SonosControlServiceStartSpeakerTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
 
         var settings = new SonosSettings
         {
@@ -56,135 +75,102 @@ public class SonosControlServiceStartSpeakerTests
             {
                 new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" },
                 new() { Name = "Radio Paloma", Url = "https://www3.radiopaloma.de/RP-Hauptkanal.pls" }
-            }
+            },
+            IP_Adress = "127.0.0.1"
         };
+        var speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = settings.IP_Adress } };
 
         var schedule = new DaySchedule
         {
             PlayRandomStation = true
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
         sonosRepo.Verify(r => r.SetTuneInStationAsync(settings.IP_Adress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         sonosRepo.Verify(r => r.StartPlaying(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task StartSpeaker_WhenRandomStationHasNoStations_FallsBackToStartPlaying()
+    public async Task StartSpeaker_WhenSynced_PlaysOnAllSpeakers()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
+
+        var speaker1 = new SonosSpeaker { IpAddress = "192.168.1.101" };
+        var speaker2 = new SonosSpeaker { IpAddress = "192.168.1.102" };
+        var speakers = new List<SonosSpeaker> { speaker1, speaker2 };
 
         var settings = new SonosSettings
         {
-            Stations = new List<TuneInStation>(),
-            ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek }
-        };
-
-        var schedule = new DaySchedule
-        {
-            PlayRandomStation = true
-        };
-
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
-
-        sonosRepo.Verify(r => r.StartPlaying(settings.IP_Adress), Times.Once);
-        sonosRepo.Verify(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task StartSpeaker_WithRandomYouTubeSchedule_UsesConnector()
-    {
-        var sonosRepo = new Mock<ISonosConnectorRepo>();
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
-
-        var service = new SonosControlService(uow.Object);
-
-        var settings = new SonosSettings
-        {
-            YouTubeMusicCollections = new List<YouTubeMusicObject>
+            Stations = new List<TuneInStation>
             {
-                new() { Name = "Focus", Url = "https://music.youtube.com/watch?v=abc123" },
-                new() { Name = "Mix", Url = "https://music.youtube.com/playlist?list=LM" }
-            }
+                new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" }
+            },
+            IP_Adress = speaker1.IpAddress
         };
 
         var schedule = new DaySchedule
         {
-            PlayRandomYouTubeMusic = true
+            PlayRandomStation = true,
+            IsSyncedPlayback = true
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        // Verify Play action is called on BOTH speakers
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker1.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        // Verify Grouping is NOT called (based on new requirement)
+        sonosRepo.Verify(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify Ungrouping is called for all
+        sonosRepo.Verify(r => r.UngroupSpeaker(speaker1.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task StartSpeaker_WithYouTubeUrlSchedule_UsesConnector()
+    public async Task StartSpeaker_WhenNotSynced_PlaysOnMasterOnly()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var service = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
 
-        var settings = new SonosSettings();
-        var schedule = new DaySchedule
-        {
-            YouTubeMusicUrl = "https://music.youtube.com/watch?v=hijklm"
-        };
-
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, schedule);
-
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task StartSpeaker_WithAutoPlayRandomYouTube_UsesConnector()
-    {
-        var sonosRepo = new Mock<ISonosConnectorRepo>();
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
-
-        var service = new SonosControlService(uow.Object);
+        var speaker1 = new SonosSpeaker { IpAddress = "192.168.1.101" };
+        var speaker2 = new SonosSpeaker { IpAddress = "192.168.1.102" };
+        var speakers = new List<SonosSpeaker> { speaker1, speaker2 };
 
         var settings = new SonosSettings
         {
-            ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek },
-            AutoPlayRandomYouTubeMusic = true,
-            YouTubeMusicCollections = new List<YouTubeMusicObject>
+            Stations = new List<TuneInStation>
             {
-                new() { Name = "Morning", Url = "https://music.youtube.com/watch?v=def456" }
-            }
+                new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" }
+            },
+            IP_Adress = speaker1.IpAddress
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
-
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, It.IsAny<string>(), settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task StartSpeaker_WithAutoPlayYouTubeUrl_UsesConnector()
-    {
-        var sonosRepo = new Mock<ISonosConnectorRepo>();
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
-
-        var service = new SonosControlService(uow.Object);
-
-        var settings = new SonosSettings
+        var schedule = new DaySchedule
         {
-            ActiveDays = new List<DayOfWeek> { DateTime.Now.DayOfWeek },
-            AutoPlayYouTubeMusicUrl = "https://music.youtube.com/watch?v=xyz789"
+            PlayRandomStation = true,
+            IsSyncedPlayback = false
         };
 
-        await InvokeStartSpeakerAsync(service, settings.IP_Adress, settings, null);
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.PlayYouTubeMusicTrackAsync(settings.IP_Adress, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+        // Verify Play action is called on Master ONLY
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker1.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify Ungrouping is called for Master
+        sonosRepo.Verify(r => r.UngroupSpeaker(speaker1.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Never);
     }
 }
