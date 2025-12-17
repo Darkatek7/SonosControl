@@ -1,6 +1,11 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -13,11 +18,25 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceTests
 {
-    private static Task<(SonosSettings settings, DaySchedule? schedule)> InvokeWait(SonosControlService svc, CancellationToken token)
+    private static Task<(SonosSettings settings, DaySchedule? schedule)> InvokeWait(SonosControlService svc, IUnitOfWork uow, CancellationToken token)
     {
         var method = typeof(SonosControlService).GetMethod("WaitUntilStartTime", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var task = (Task<(SonosSettings, DaySchedule?)>)method.Invoke(svc, new object[] { token })!;
+        var task = (Task<(SonosSettings, DaySchedule?)>)method.Invoke(svc, new object[] { uow, token })!;
         return task;
+    }
+
+    private IServiceScopeFactory CreateMockScopeFactory(IUnitOfWork uow)
+    {
+        var serviceProvider = new Mock<IServiceProvider>();
+        serviceProvider.Setup(x => x.GetService(typeof(IUnitOfWork))).Returns(uow);
+
+        var serviceScope = new Mock<IServiceScope>();
+        serviceScope.Setup(x => x.ServiceProvider).Returns(serviceProvider.Object);
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        scopeFactory.Setup(x => x.CreateScope()).Returns(serviceScope.Object);
+
+        return scopeFactory.Object;
     }
 
     [Fact]
@@ -37,9 +56,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         timeProvider.Advance(TimeSpan.FromMilliseconds(300));
         Assert.False(waitTask.IsCompleted);
@@ -74,10 +94,11 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory);
 
         var sw = Stopwatch.StartNew();
-        var result = await InvokeWait(svc, CancellationToken.None);
+        var result = await InvokeWait(svc, uow.Object, CancellationToken.None);
         sw.Stop();
 
         Assert.True(sw.ElapsedMilliseconds >= 150, $"Elapsed {sw.ElapsedMilliseconds}ms");
@@ -102,9 +123,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         await Task.Delay(50);
         Assert.False(waitTask.IsCompleted);
@@ -164,9 +186,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         await Task.Delay(50);
         Assert.False(waitTask.IsCompleted);
@@ -214,9 +237,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         timeProvider.Advance(TimeSpan.FromMinutes(5));
 
@@ -250,9 +274,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(holidaySchedule.StartTime.ToTimeSpan()), initial.Offset);
         timeProvider.Advance(expectedStart - timeProvider.LocalNow);
@@ -302,9 +327,10 @@ public class SonosControlServiceTests
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
-        var svc = new SonosControlService(uow.Object, timeProvider, timeProvider.DelayAsync);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, CancellationToken.None);
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
 
         var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(tomorrowSchedule.StartTime.ToTimeSpan()), initial.Offset);
         timeProvider.Advance(expectedStart - timeProvider.LocalNow);
@@ -326,7 +352,8 @@ public class SonosControlServiceTests
         uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
-        var svc = new SonosControlService(uow.Object);
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory);
         var method = typeof(SonosControlService).GetMethod("StartSpeaker", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
         var schedule = new HolidaySchedule
@@ -341,7 +368,7 @@ public class SonosControlServiceTests
             ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
-        var task = (Task)method.Invoke(svc, new object[] { "127.0.0.1", settings, schedule })!;
+        var task = (Task)method.Invoke(svc, new object[] { uow.Object, new List<SonosSpeaker>(), settings, schedule, CancellationToken.None })!;
         await task;
 
         sonosRepo.VerifyNoOtherCalls();
