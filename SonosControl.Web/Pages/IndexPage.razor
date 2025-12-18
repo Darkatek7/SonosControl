@@ -40,7 +40,9 @@
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
-                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers">Sync Play</button>
+                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers" aria-label="Play current media on all speakers">
+                                        <i class="fa fa-link" aria-hidden="true"></i> Sync Play
+                                    </button>
                                 </div>
                             </div>
                         }
@@ -126,8 +128,12 @@
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved Stations</h5>
                                                 <div>
-                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station">🔀</button>
-                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">➕ Add</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station">
+                                                        <i class="fa fa-random" aria-hidden="true"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">
+                                                        <i class="fa fa-plus" aria-hidden="true"></i> Add
+                                                    </button>
                                                 </div>
                                             </div>
                                             <ul class="list-group media-list">
@@ -136,8 +142,12 @@
                                                     <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
                                                         <span>@station.Name</span>
                                                         <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))">🗑️</button>
+                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" title="Play @station.Name" aria-label="Play @station.Name">
+                                                                <i class="fa fa-play" aria-hidden="true"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))" title="Delete @station.Name" aria-label="Delete @station.Name">
+                                                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                                            </button>
                                                         </div>
                                                     </li>
                                                 }
@@ -149,7 +159,9 @@
                                             var tracks = _tracks;
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved Spotify</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal">➕ Add</button>
+                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal">
+                                                    <i class="fa fa-plus" aria-hidden="true"></i> Add
+                                                </button>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @foreach (var track in tracks)
@@ -157,8 +169,12 @@
                                                     <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
                                                         <span>@track.Name</span>
                                                         <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))">🗑️</button>
+                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" title="Play @track.Name" aria-label="Play @track.Name">
+                                                                <i class="fa fa-play" aria-hidden="true"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))" title="Delete @track.Name" aria-label="Delete @track.Name">
+                                                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                                            </button>
                                                         </div>
                                                     </li>
                                                 }
@@ -170,7 +186,9 @@
                                             var collections = _youTubeCollections;
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved YouTube</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal">➕ Add</button>
+                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal">
+                                                    <i class="fa fa-plus" aria-hidden="true"></i> Add
+                                                </button>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @foreach (var collection in collections)
@@ -178,8 +196,12 @@
                                                     <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
                                                         <span>@collection.Name</span>
                                                         <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))">🗑️</button>
+                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" title="Play @collection.Name" aria-label="Play @collection.Name">
+                                                                <i class="fa fa-play" aria-hidden="true"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))" title="Delete @collection.Name" aria-label="Delete @collection.Name">
+                                                                <i class="fa fa-trash" aria-hidden="true"></i>
+                                                            </button>
                                                         </div>
                                                     </li>
                                                 }
@@ -764,6 +786,7 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
         if (!isAuthenticated)
         {
             Navigation.NavigateTo("/auth/login?", true);
