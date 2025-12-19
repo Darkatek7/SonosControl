@@ -356,8 +356,10 @@
 
     private async Task UpdatePageDataAsync()
     {
-        await LoadCurrentStation();
-        await UpdateSpeakerStatuses();
+        // Execute data fetching in parallel to reduce cycle time
+        var loadStationTask = LoadCurrentStation();
+        var updateStatusesTask = UpdateSpeakerStatuses();
+        await Task.WhenAll(loadStationTask, updateStatusesTask);
         await InvokeAsync(StateHasChanged);
     }
 
