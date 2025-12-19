@@ -32,9 +32,9 @@
                         @if (_settings.Speakers.Any())
                         {
                             <div class="mb-3">
-                                <label class="form-label text-muted small">Active Speaker</label>
+                                <label for="activeSpeakerSelect" class="form-label text-muted small">Active Speaker</label>
                                 <div class="d-flex gap-2">
-                                    <select class="form-select" @bind="SelectedSpeakerIp">
+                                    <select id="activeSpeakerSelect" class="form-select" @bind="SelectedSpeakerIp">
                                         @foreach (var speaker in _settings.Speakers)
                                         {
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
@@ -126,20 +126,27 @@
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved Stations</h5>
                                                 <div>
-                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station">🔀</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station">🔀</button>
                                                     <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">➕ Add</button>
                                                 </div>
                                             </div>
                                             <ul class="list-group media-list">
-                                                @foreach (var station in stations)
+                                                @if (stations.Any())
                                                 {
-                                                    <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
-                                                        <span>@station.Name</span>
-                                                        <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))">🗑️</button>
-                                                        </div>
-                                                    </li>
+                                                    @foreach (var station in stations)
+                                                    {
+                                                        <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
+                                                            <span>@station.Name</span>
+                                                            <div class="media-actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))" aria-label="Remove @station.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No stations saved.</li>
                                                 }
                                             </ul>
                                         }
@@ -152,15 +159,22 @@
                                                 <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal">➕ Add</button>
                                             </div>
                                             <ul class="list-group media-list">
-                                                @foreach (var track in tracks)
+                                                @if (tracks.Any())
                                                 {
-                                                    <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
-                                                        <span>@track.Name</span>
-                                                        <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))">🗑️</button>
-                                                        </div>
-                                                    </li>
+                                                    @foreach (var track in tracks)
+                                                    {
+                                                        <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
+                                                            <span>@track.Name</span>
+                                                            <div class="media-actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))" aria-label="Remove @track.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No Spotify tracks saved.</li>
                                                 }
                                             </ul>
                                         }
@@ -173,15 +187,22 @@
                                                 <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal">➕ Add</button>
                                             </div>
                                             <ul class="list-group media-list">
-                                                @foreach (var collection in collections)
+                                                @if (collections.Any())
                                                 {
-                                                    <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
-                                                        <span>@collection.Name</span>
-                                                        <div class="media-actions">
-                                                            <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))">▶️</button>
-                                                            <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))">🗑️</button>
-                                                        </div>
-                                                    </li>
+                                                    @foreach (var collection in collections)
+                                                    {
+                                                        <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
+                                                            <span>@collection.Name</span>
+                                                            <div class="media-actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))" aria-label="Remove @collection.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No YouTube collections saved.</li>
                                                 }
                                             </ul>
                                         }
