@@ -786,7 +786,6 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-
         if (!isAuthenticated)
         {
             Navigation.NavigateTo("/auth/login?", true);
