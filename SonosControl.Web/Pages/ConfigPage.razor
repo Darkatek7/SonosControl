@@ -47,7 +47,7 @@ else
                                             <div class="text-muted small">@speaker.IpAddress</div>
                                         </div>
                                         <div>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)">Remove</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="Remove @speaker.Name">Remove</button>
                                         </div>
                                     </div>
                                 }

@@ -40,7 +40,7 @@
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
-                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers">Sync Play</button>
+                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers" aria-label="Sync Play on all speakers">🔗 Sync Play</button>
                                 </div>
                             </div>
                         }
@@ -70,7 +70,7 @@
 
                         <div class="card currently-playing-card">
                             <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
-                                <div class="display-5">🎵</div>
+                                <div class="display-5" aria-hidden="true">🎵</div>
                                 <div class="flex-grow-1">
                                     <h5 class="mb-2">Currently Playing</h5>
                                     <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
