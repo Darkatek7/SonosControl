@@ -77,12 +77,12 @@ namespace SonosControl.Web.Services
                 targetSpeakers.AddRange(speakers.Select(s => s.IpAddress));
 
                 // Ungroup all speakers first to ensure a clean slate
-                foreach (var speaker in speakers)
+                await Task.WhenAll(speakers.Select(async speaker =>
                 {
                     await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
                     // Set volume for each speaker
                     await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, settings.Volume, cancellationToken);
-                }
+                }));
 
                 // Do NOT create group - users want independent playback of same content
             }
@@ -170,10 +170,7 @@ namespace SonosControl.Web.Services
 
             if (playAction != null)
             {
-                foreach (var ip in targetSpeakers)
-                {
-                    await playAction(ip);
-                }
+                await Task.WhenAll(targetSpeakers.Select(ip => playAction(ip)));
             }
 
             Console.WriteLine($"{DateTime.Now:g}: Started Playing");
@@ -372,10 +369,7 @@ namespace SonosControl.Web.Services
 
             if (stopTime <= timeNow)
             {
-                foreach (var ip in targetSpeakers)
-                {
-                    await uow.ISonosConnectorRepo.StopPlaying(ip);
-                }
+                await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.StopPlaying(ip)));
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
             else
@@ -391,19 +385,13 @@ namespace SonosControl.Web.Services
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
                 await Task.Delay(ms, cancellationToken);
 
-                foreach (var ip in targetSpeakers)
-                {
-                    await uow.ISonosConnectorRepo.StopPlaying(ip);
-                }
+                await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.StopPlaying(ip)));
                 Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
             }
 
             if (isSynced)
             {
-                foreach (var speaker in speakers)
-                {
-                    await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
-                }
+                await Task.WhenAll(speakers.Select(speaker => uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken)));
             }
         }
     }
