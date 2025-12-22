@@ -460,7 +460,14 @@
     {
         if (_settings is not null)
         {
-            var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+            // Execute fetching in parallel
+            var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
+            var trackTask = _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
+            var progressTask = _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+
+            await Task.WhenAll(stationTask, trackTask, progressTask);
+
+            var rawStationUrl = await stationTask;
             currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
             if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
@@ -489,8 +496,8 @@
                 _isSpotifyPlaying = false;
             }
 
-            currentlyPlaying = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress) ?? "";
-            var progress = await _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+            currentlyPlaying = (await trackTask) ?? "";
+            var progress = await progressTask;
 
             if (progress.Duration == TimeSpan.Zero)
             {
