@@ -57,6 +57,7 @@
 
                         <PlaybackCard
                             IsPlaying="_isPlaying"
+                            IsLoading="_isMainPlaybackLoading"
                             ShowNextTrack="_isPlaying && _isSpotifyPlaying"
                             Volume="Volume"
                             MaxVolumeLimit="MaxVolumeLimit"
@@ -136,7 +137,16 @@
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved Stations</h5>
                                                 <div>
-                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station">🔀</button>
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station" disabled="@_isShuffleLoading">
+                                                        @if (_isShuffleLoading)
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>🔀</span>
+                                                        }
+                                                    </button>
                                                     <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">➕ Add</button>
                                                 </div>
                                             </div>
@@ -148,7 +158,16 @@
                                                         <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
                                                             <span>@station.Name</span>
                                                             <div class="media-actions">
-                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name" disabled="@(_loadingMediaUrl == station.Url)">
+                                                                    @if (_loadingMediaUrl == station.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
                                                                 <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))" aria-label="Remove @station.Name">🗑️</button>
                                                             </div>
                                                         </li>
@@ -176,7 +195,16 @@
                                                         <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
                                                             <span>@track.Name</span>
                                                             <div class="media-actions">
-                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name" disabled="@(_loadingMediaUrl == track.Url)">
+                                                                    @if (_loadingMediaUrl == track.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
                                                                 <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))" aria-label="Remove @track.Name">🗑️</button>
                                                             </div>
                                                         </li>
@@ -204,7 +232,16 @@
                                                         <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
                                                             <span>@collection.Name</span>
                                                             <div class="media-actions">
-                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name">▶️</button>
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name" disabled="@(_loadingMediaUrl == collection.Url)">
+                                                                    @if (_loadingMediaUrl == collection.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
                                                                 <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))" aria-label="Remove @collection.Name">🗑️</button>
                                                             </div>
                                                         </li>
@@ -268,6 +305,8 @@
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSyncing;
+    private bool _isMainPlaybackLoading;
+    private string? _loadingMediaUrl;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
     private string? _selectedSpeakerIp;
@@ -526,22 +565,33 @@
     {
         if (string.IsNullOrEmpty(url) || _settings is null) return;
 
-        switch (type)
+        _loadingMediaUrl = url;
+        await InvokeAsync(StateHasChanged);
+
+        try
         {
-            case "station":
-                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
-                await AddLog("Station Changed", $"URL: {url}");
-                break;
-            case "spotify":
-                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
-                await AddLog("Spotify Track Changed", $"URL: {url}");
-                break;
-            case "youtube":
-                 await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, url, _settings.AutoPlayStationUrl);
-                 await AddLog("YouTube Music Changed", $"URL: {url}");
-                break;
+            switch (type)
+            {
+                case "station":
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
+                    await AddLog("Station Changed", $"URL: {url}");
+                    break;
+                case "spotify":
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+                    await AddLog("Spotify Track Changed", $"URL: {url}");
+                    break;
+                case "youtube":
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, url, _settings.AutoPlayStationUrl);
+                    await AddLog("YouTube Music Changed", $"URL: {url}");
+                    break;
+            }
+            await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
         }
-        await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+        finally
+        {
+            _loadingMediaUrl = null;
+            await InvokeAsync(StateHasChanged);
+        }
     }
     
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -866,19 +916,29 @@
 
     private async Task Play(bool play)
     {
-        if (play)
-        {
-            await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
-            _isPlaying = true;
-            await AddLog("Playback Started");
-        }
-        else
-        {
-            await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
-            _isPlaying = false;
-            await AddLog("Playback Paused");
-        }
+        _isMainPlaybackLoading = true;
         await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            if (play)
+            {
+                await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
+                _isPlaying = true;
+                await AddLog("Playback Started");
+            }
+            else
+            {
+                await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
+                _isPlaying = false;
+                await AddLog("Playback Paused");
+            }
+        }
+        finally
+        {
+            _isMainPlaybackLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task SyncPlay()
@@ -1042,12 +1102,24 @@
 
     private Random _random = new();
 
+    private bool _isShuffleLoading;
+
     private async Task ShuffleStation()
     {
         if (_settings?.Stations != null && _settings.Stations.Any())
         {
-            var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
-            await PlayMediaItem(randomStation, "station");
+            _isShuffleLoading = true;
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                var randomStation = _settings.Stations[_random.Next(_settings.Stations.Count)].Url;
+                await PlayMediaItem(randomStation, "station");
+            }
+            finally
+            {
+                _isShuffleLoading = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
