@@ -40,7 +40,17 @@
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
-                                    <button class="btn btn-outline-info" @onclick="SyncPlay" title="Play current media on all speakers">Sync Play</button>
+                                    <button class="btn btn-outline-info" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
+                                        @if (_isSyncing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            <span class="visually-hidden">Syncing...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Sync Play</span>
+                                        }
+                                    </button>
                                 </div>
                             </div>
                         }
@@ -257,6 +267,7 @@
     private List<SpeakerStatusViewModel> _speakerStatuses = new();
     private SonosSettings? _settings;
     private bool _isPlaying;
+    private bool _isSyncing;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
     private string? _selectedSpeakerIp;
@@ -865,49 +876,61 @@
 
     private async Task SyncPlay()
     {
+        if (_isSyncing) return;
         if (_settings?.Speakers == null || !_settings.Speakers.Any()) return;
 
-        // Determine what to play based on current state of the selected speaker
-        // However, Sonos "Join Group" is not implemented in repo, so we just start playback on all speakers
-        // If we want to play the SAME content, we would need to know the current content URL.
-        // For now, let's just send the "Play" command to all speakers.
-        // A better approach if supported would be to set the URI for all speakers to the current one.
+        _isSyncing = true;
+        await InvokeAsync(StateHasChanged);
 
-        // Let's try to get current station URI from current speaker
-        var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(SelectedSpeakerIp);
-        var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
+        try
+        {
+            // Determine what to play based on current state of the selected speaker
+            // However, Sonos "Join Group" is not implemented in repo, so we just start playback on all speakers
+            // If we want to play the SAME content, we would need to know the current content URL.
+            // For now, let's just send the "Play" command to all speakers.
+            // A better approach if supported would be to set the URI for all speakers to the current one.
 
-        if (string.IsNullOrEmpty(currentUri))
-        {
-             // Just trigger play on all
-             foreach (var speaker in _settings.Speakers)
-             {
-                 await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
-             }
-             await AddLog("Sync Play Started (Resume)", "All speakers");
-        }
-        else
-        {
-            // Set URI on all speakers and play
-            // Note: This is not true sync (multi-room), it just plays same content independently.
-            foreach (var speaker in _settings.Speakers)
+            // Let's try to get current station URI from current speaker
+            var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(SelectedSpeakerIp);
+            var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
+
+            if (string.IsNullOrEmpty(currentUri))
             {
-                if (speaker.IpAddress == SelectedSpeakerIp) continue; // Already set
-
-                // We need to determine if it is a station or track.
-                // The repo has methods for TuneIn and Spotify/Youtube.
-                // Getting the exact metadata to replay on another speaker is complex without full UPnP access.
-                // Fallback to just StartPlaying if we can't easily clone the stream.
-
-                // For radio stations it is easier if we have the URL.
-                if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
+                // Just trigger play on all
+                foreach (var speaker in _settings.Speakers)
                 {
-                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
+                    await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
                 }
-
-                await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
+                await AddLog("Sync Play Started (Resume)", "All speakers");
             }
-            await AddLog("Sync Play Started (Cloned URI)", "All speakers");
+            else
+            {
+                // Set URI on all speakers and play
+                // Note: This is not true sync (multi-room), it just plays same content independently.
+                foreach (var speaker in _settings.Speakers)
+                {
+                    if (speaker.IpAddress == SelectedSpeakerIp) continue; // Already set
+
+                    // We need to determine if it is a station or track.
+                    // The repo has methods for TuneIn and Spotify/Youtube.
+                    // Getting the exact metadata to replay on another speaker is complex without full UPnP access.
+                    // Fallback to just StartPlaying if we can't easily clone the stream.
+
+                    // For radio stations it is easier if we have the URL.
+                    if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
+                    {
+                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
+                    }
+
+                    await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
+                }
+                await AddLog("Sync Play Started (Cloned URI)", "All speakers");
+            }
+        }
+        finally
+        {
+            _isSyncing = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
