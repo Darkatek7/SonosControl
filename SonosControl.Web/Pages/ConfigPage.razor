@@ -7,6 +7,7 @@
 @using System.Linq
 @using System.Globalization
 @using System;
+@using System.Net
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 @if (_settings is null)
@@ -60,6 +61,10 @@ else
 
                         <div class="card p-3">
                             <h6>Add New Speaker</h6>
+                            @if (!string.IsNullOrEmpty(_speakerValidationMessage))
+                            {
+                                <div class="alert alert-danger mb-2 p-2 small">@_speakerValidationMessage</div>
+                            }
                             <div class="mb-2">
                                 <label class="form-label">Name</label>
                                 <input type="text" class="form-control" @bind="_newSpeakerName" placeholder="e.g. Living Room" disabled="@(!canEditIp)" />
@@ -1316,10 +1321,36 @@ else
 
     private string _newSpeakerName = "";
     private string _newSpeakerIp = "";
+    private string? _speakerValidationMessage;
+
+    private bool ValidateIpAddress(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip)) return false;
+
+        if (!IPAddress.TryParse(ip, out var address)) return false;
+
+        // IPv4 only for now as Sonos usually operates on IPv4
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+
+        // Block loopback (127.0.0.0/8)
+        if (IPAddress.IsLoopback(address)) return false;
+
+        // Block 0.0.0.0
+        if (address.Equals(IPAddress.Any)) return false;
+
+        return true;
+    }
 
     private async Task AddSpeaker()
     {
+        _speakerValidationMessage = null;
         if (_settings is null || string.IsNullOrWhiteSpace(_newSpeakerIp)) return;
+
+        if (!ValidateIpAddress(_newSpeakerIp))
+        {
+            _speakerValidationMessage = "Invalid IP address. Please enter a valid non-loopback IPv4 address.";
+            return;
+        }
 
         var name = string.IsNullOrWhiteSpace(_newSpeakerName) ? "New Speaker" : _newSpeakerName;
 
