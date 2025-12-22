@@ -17,8 +17,16 @@
                         class="btn btn-light btn-sm playback-card__toggle"
                         @onclick="TogglePlayback"
                         title="@PlayToggleLabel"
-                        aria-label="@PlayToggleLabel">
-                    <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
+                aria-label="@PlayToggleLabel"
+                disabled="@IsLoading">
+            @if (IsLoading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
+            }
                 </button>
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm playback-card__action"
@@ -57,6 +65,9 @@
 @code {
     [Parameter]
     public bool IsPlaying { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
 
     [Parameter]
     public bool ShowNextTrack { get; set; }
