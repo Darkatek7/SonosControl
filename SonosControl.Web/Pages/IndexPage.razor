@@ -266,7 +266,17 @@
                                                @onkeyup="HandleKeyPress"
                                                placeholder="Enter Spotify URL"
                                                aria-label="Spotify URL" />
-                                        <button class="btn btn-primary" type="button" @onclick="SubmitSpotifyUrl">Play</button>
+                                        <button class="btn btn-primary" type="button" @onclick="SubmitSpotifyUrl" disabled="@_isSpotifyUrlLoading">
+                                            @if (_isSpotifyUrlLoading)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Loading...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Play</span>
+                                            }
+                                        </button>
                                     </div>
                                 </div>
                             </ChildContent>
@@ -306,6 +316,7 @@
     private bool _isPlaying;
     private bool _isSyncing;
     private bool _isMainPlaybackLoading;
+    private bool _isSpotifyUrlLoading;
     private string? _loadingMediaUrl;
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
@@ -631,8 +642,18 @@
     {
         if (_settings is not null)
         {
-            await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
-            await AddLog("Spotify URL Played", url);
+            _isSpotifyUrlLoading = true;
+            await InvokeAsync(StateHasChanged);
+            try
+            {
+                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
+                await AddLog("Spotify URL Played", url);
+            }
+            finally
+            {
+                _isSpotifyUrlLoading = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
