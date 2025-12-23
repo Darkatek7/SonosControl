@@ -24,8 +24,13 @@ def test_speaker_config_and_control(page: Page):
     if "login" in page.url or page.locator("form[action='/auth/login']").is_visible():
         print("Login page detected. Logging in...")
         try:
-            page.fill("#username", "admin")
-            page.fill("#password", "Admin123!")
+            username = os.getenv("ADMIN_USERNAME", "admin")
+            password = os.getenv("ADMIN_PASSWORD")
+            if not password:
+                raise ValueError("ADMIN_PASSWORD environment variable is not set")
+
+            page.fill("#username", username)
+            page.fill("#password", password)
             page.click("button[type='submit']")
 
             # Wait for navigation
