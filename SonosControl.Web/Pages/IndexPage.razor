@@ -975,20 +975,20 @@
 
             if (string.IsNullOrEmpty(currentUri))
             {
-                // Just trigger play on all
-                foreach (var speaker in _settings.Speakers)
-                {
-                    await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
-                }
+                // Just trigger play on all (Parallel)
+                var tasks = _settings.Speakers.Select(speaker =>
+                    _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress));
+
+                await Task.WhenAll(tasks);
                 await AddLog("Sync Play Started (Resume)", "All speakers");
             }
             else
             {
-                // Set URI on all speakers and play
+                // Set URI on all speakers and play (Parallel)
                 // Note: This is not true sync (multi-room), it just plays same content independently.
-                foreach (var speaker in _settings.Speakers)
+                var tasks = _settings.Speakers.Select(async speaker =>
                 {
-                    if (speaker.IpAddress == SelectedSpeakerIp) continue; // Already set
+                    if (speaker.IpAddress == SelectedSpeakerIp) return; // Already set
 
                     // We need to determine if it is a station or track.
                     // The repo has methods for TuneIn and Spotify/Youtube.
@@ -1002,7 +1002,9 @@
                     }
 
                     await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
-                }
+                });
+
+                await Task.WhenAll(tasks);
                 await AddLog("Sync Play Started (Cloned URI)", "All speakers");
             }
         }
