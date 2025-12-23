@@ -449,46 +449,58 @@
 
         var tasks = _settings.Speakers.Select(async speaker =>
         {
-            var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
-            string media = "";
-            if (isPlaying)
+            try
             {
-                var track = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
-                var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
-                var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
+                var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+                string media = "";
+                if (isPlaying)
+                {
+                    var track = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
+                    var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
+                    var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
-                if (!string.IsNullOrWhiteSpace(track) && !track.Contains("sonos.com") && !track.Contains("Stream"))
-                {
-                    media = track;
-                }
-                else if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
-                {
-                    media = "Spotify";
-                }
-                else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-                {
-                    media = "YouTube Music";
-                }
-                else
-                {
-                    var matched = _stations.FirstOrDefault(s => currentStationUrl != null && s.Url != null && currentStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
-                    if (matched != null)
+                    if (!string.IsNullOrWhiteSpace(track) && !track.Contains("sonos.com") && !track.Contains("Stream"))
                     {
-                        media = matched.Name;
+                        media = track;
+                    }
+                    else if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+                    {
+                        media = "Spotify";
+                    }
+                    else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+                    {
+                        media = "YouTube Music";
                     }
                     else
                     {
-                        media = "Playing stream"; 
+                        var matched = _stations.FirstOrDefault(s => currentStationUrl != null && s.Url != null && currentStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+                        if (matched != null)
+                        {
+                            media = matched.Name;
+                        }
+                        else
+                        {
+                            media = "Playing stream";
+                        }
                     }
                 }
-            }
 
-            return new SpeakerStatusViewModel
+                return new SpeakerStatusViewModel
+                {
+                    Name = speaker.Name,
+                    IsPlaying = isPlaying,
+                    Media = media
+                };
+            }
+            catch
             {
-                Name = speaker.Name,
-                IsPlaying = isPlaying,
-                Media = media
-            };
+                return new SpeakerStatusViewModel
+                {
+                    Name = speaker.Name,
+                    IsPlaying = false,
+                    Media = "Offline"
+                };
+            }
         }).ToList();
 
         _speakerStatuses = (await Task.WhenAll(tasks)).ToList();

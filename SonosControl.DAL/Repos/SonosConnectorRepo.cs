@@ -108,7 +108,7 @@ namespace SonosControl.DAL.Repos
       <s:Body>
         <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
           <InstanceID>0</InstanceID>
-          <CurrentURI>{currentUri}</CurrentURI>
+          <CurrentURI>{SecurityElement.Escape(currentUri)}</CurrentURI>
           <CurrentURIMetaData></CurrentURIMetaData>
         </u:SetAVTransportURI>
       </s:Body>
@@ -440,7 +440,7 @@ namespace SonosControl.DAL.Repos
               <s:Body>
                 <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
                   <InstanceID>0</InstanceID>
-                  <CurrentURI>{sonosUri}</CurrentURI>
+                  <CurrentURI>{SecurityElement.Escape(sonosUri)}</CurrentURI>
                   <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
                 </u:SetAVTransportURI>
               </s:Body>
@@ -566,7 +566,7 @@ namespace SonosControl.DAL.Repos
               <s:Body>
                 <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
                   <InstanceID>0</InstanceID>
-                  <CurrentURI>{sonosUri}</CurrentURI>
+                  <CurrentURI>{SecurityElement.Escape(sonosUri)}</CurrentURI>
                   <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
                 </u:SetAVTransportURI>
               </s:Body>
