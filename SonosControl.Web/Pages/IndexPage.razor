@@ -32,9 +32,15 @@
                         @if (_settings.Speakers.Any())
                         {
                             <div class="mb-3">
-                                <label for="activeSpeakerSelect" class="form-label text-muted small">Active Speaker</label>
+                                <div class="d-flex align-items-center mb-1">
+                                    <label for="activeSpeakerSelect" class="form-label text-muted small mb-0">Active Speaker</label>
+                                    @if (_isSwitchingSpeaker)
+                                    {
+                                        <span class="spinner-border spinner-border-sm ms-2 text-muted" role="status" aria-hidden="true"></span>
+                                    }
+                                </div>
                                 <div class="d-flex gap-2">
-                                    <select id="activeSpeakerSelect" class="form-select" @bind="SelectedSpeakerIp">
+                                    <select id="activeSpeakerSelect" class="form-select" @bind="SelectedSpeakerIp" disabled="@_isSwitchingSpeaker">
                                         @foreach (var speaker in _settings.Speakers)
                                         {
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
@@ -81,7 +87,7 @@
 
                         <div class="card currently-playing-card">
                             <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
-                                <div class="display-5">🎵</div>
+                                <div class="display-5" aria-hidden="true">🎵</div>
                                 <div class="flex-grow-1">
                                     <h5 class="mb-2">Currently Playing</h5>
                                     <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
@@ -316,6 +322,7 @@
     private bool _isPlaying;
     private bool _isSyncing;
     private bool _isMainPlaybackLoading;
+    private bool _isSwitchingSpeaker;
     private bool _isSpotifyUrlLoading;
     private string? _loadingMediaUrl;
     private bool _isSpotifyPlaying;
@@ -341,20 +348,31 @@
     private async Task UpdateSpeakerRelatedData(string newIpAddress)
     {
         _settings.IP_Adress = newIpAddress;
-        await SaveSettings();
+        _isSwitchingSpeaker = true;
+        await InvokeAsync(StateHasChanged);
 
         try
         {
-            _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(newIpAddress);
-        }
-        catch
-        {
-            // Ignore if speaker is offline or returns error
-            _settings.Volume = 0; // Default to 0 or last known good if error
-        }
+            await SaveSettings();
 
-        // Refresh data for the new speaker
-        await UpdatePageDataAsync();
+            try
+            {
+                _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(newIpAddress);
+            }
+            catch
+            {
+                // Ignore if speaker is offline or returns error
+                _settings.Volume = 0; // Default to 0 or last known good if error
+            }
+
+            // Refresh data for the new speaker
+            await UpdatePageDataAsync();
+        }
+        finally
+        {
+            _isSwitchingSpeaker = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     // New state for tabs and modal
