@@ -20,7 +20,14 @@ namespace SonosControl.Web.Controllers
         [HttpGet("login")]
         public IActionResult Login(string? error = null)
         {
-            ViewBag.Error = error == "1" ? "Invalid username or password." : null;
+            if (error == "lockedout")
+            {
+                ViewBag.Error = "Account locked out due to too many failed attempts. Please try again later.";
+            }
+            else
+            {
+                ViewBag.Error = error == "1" ? "Invalid username or password." : null;
+            }
             return View();
         }
 
@@ -28,10 +35,15 @@ namespace SonosControl.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(string username, string password, bool rememberMe)
         {
-            var result = await _signInManager.PasswordSignInAsync(username, password, rememberMe, false);
+            var result = await _signInManager.PasswordSignInAsync(username, password, rememberMe, lockoutOnFailure: true);
             if (result.Succeeded)
             {
                 return Redirect("/"); // Redirect to your app home or dashboard
+            }
+
+            if (result.IsLockedOut)
+            {
+                return Redirect("/auth/login?error=lockedout");
             }
 
             return Redirect("/auth/login?error=1"); // Redirect back with error
