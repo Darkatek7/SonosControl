@@ -41,8 +41,17 @@
                             class="btn btn-outline-secondary btn-sm playback-card__action"
                             @onclick="NextTrack"
                             title="Skip track"
-                            aria-label="Skip track">
-                        <i class="fa fa-forward" aria-hidden="true"></i>
+                            aria-label="Skip track"
+                            disabled="@IsNextTrackLoading">
+                        @if (IsNextTrackLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span class="visually-hidden">Skipping...</span>
+                        }
+                        else
+                        {
+                            <i class="fa fa-forward" aria-hidden="true"></i>
+                        }
                     </button>
                 }
             </div>
@@ -71,6 +80,9 @@
 
     [Parameter]
     public bool ShowNextTrack { get; set; }
+
+    [Parameter]
+    public bool IsNextTrackLoading { get; set; }
 
     [Parameter]
     public int Volume { get; set; }
