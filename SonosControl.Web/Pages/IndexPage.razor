@@ -307,6 +307,7 @@
     public class SpeakerStatusViewModel
     {
         public string? Name { get; set; }
+        public string? IpAddress { get; set; }
         public bool IsPlaying { get; set; }
         public string? Media { get; set; }
     }
@@ -442,6 +443,30 @@
         var loadStationTask = LoadCurrentStation();
         var updateStatusesTask = UpdateSpeakerStatuses();
         await Task.WhenAll(loadStationTask, updateStatusesTask);
+
+        // OPTIMIZATION: Populate the Media property for the selected speaker using the data
+        // that was already fetched by LoadCurrentStation, avoiding redundant network calls.
+        var selectedStatus = _speakerStatuses.FirstOrDefault(s => s.IpAddress == SelectedSpeakerIp);
+        if (selectedStatus != null && selectedStatus.IsPlaying && string.IsNullOrEmpty(selectedStatus.Media))
+        {
+            if (!string.IsNullOrWhiteSpace(currentlyPlaying) && !currentlyPlaying.Contains("sonos.com") && !currentlyPlaying.Contains("Stream"))
+            {
+                selectedStatus.Media = currentlyPlaying;
+            }
+            else if (currentStationDisplay.Contains("Spotify", StringComparison.OrdinalIgnoreCase))
+            {
+                selectedStatus.Media = "Spotify";
+            }
+            else if (currentStationDisplay.Contains("YouTube", StringComparison.OrdinalIgnoreCase))
+            {
+                selectedStatus.Media = "YouTube Music";
+            }
+            else
+            {
+                selectedStatus.Media = currentStationDisplay != "Loading..." ? currentStationDisplay : "Playing stream";
+            }
+        }
+
         await InvokeAsync(StateHasChanged);
     }
 
@@ -463,6 +488,23 @@
             try
             {
                 var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+
+                // OPTIMIZATION: If this is the selected speaker, update main state and skip redundant fetches.
+                // The main view data (Track, Station) is fetched in parallel by LoadCurrentStation.
+                if (speaker.IpAddress == SelectedSpeakerIp)
+                {
+                    _isPlaying = isPlaying;
+                    // We return a partial VM here; UpdatePageDataAsync will fill in the Media property
+                    // using the data fetched by LoadCurrentStation to avoid double-fetching.
+                    return new SpeakerStatusViewModel
+                    {
+                        Name = speaker.Name,
+                        IpAddress = speaker.IpAddress,
+                        IsPlaying = isPlaying,
+                        Media = null // Will be populated in UpdatePageDataAsync
+                    };
+                }
+
                 string media = "";
                 if (isPlaying)
                 {
@@ -499,6 +541,7 @@
                 return new SpeakerStatusViewModel
                 {
                     Name = speaker.Name,
+                    IpAddress = speaker.IpAddress,
                     IsPlaying = isPlaying,
                     Media = media
                 };
@@ -508,6 +551,7 @@
                 return new SpeakerStatusViewModel
                 {
                     Name = speaker.Name,
+                    IpAddress = speaker.IpAddress,
                     IsPlaying = false,
                     Media = "Offline"
                 };
@@ -916,26 +960,14 @@
             {
                 if (_settings.Speakers.Any() && !(_settings.IP_Adress is "10.0.0.0"))
                 {
-                    try
-                    {
-                        _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
-                    }
-                    catch
-                    {
-                         // Ignore if speaker is offline
-                    }
+                    // OPTIMIZATION: Run volume initialization and page data update in parallel
+                    // The _isPlaying state is now updated within UpdatePageDataAsync (via UpdateSpeakerStatuses),
+                    // removing the need for a separate sequential IsPlaying() call.
+                    await Task.WhenAll(
+                        EnsureVolumeAsync(),
+                        UpdatePageDataAsync()
+                    );
 
-                    var maxVolumeLimit = MaxVolumeLimit;
-                    if (_settings.Volume > maxVolumeLimit)
-                    {
-                        _settings.Volume = maxVolumeLimit;
-                        await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
-                    }
-
-                    await SaveSettings();
-                    _isPlaying = await IsPlaying();
-
-                    await UpdatePageDataAsync();
                     _stationUpdateTimer = new Timer(UpdatePageData, null, 3000, 3000);
                     StateHasChanged();
                 }
@@ -945,6 +977,27 @@
                 Console.Error.WriteLine($"Error in OnAfterRenderAsync: {ex}");
             }
         }
+    }
+
+    private async Task EnsureVolumeAsync()
+    {
+        try
+        {
+            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
+        }
+        catch
+        {
+            // Ignore if speaker is offline
+        }
+
+        var maxVolumeLimit = MaxVolumeLimit;
+        if (_settings!.Volume > maxVolumeLimit)
+        {
+            _settings.Volume = maxVolumeLimit;
+            await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
+        }
+
+        await SaveSettings();
     }
 
     private async Task Play(bool play)
