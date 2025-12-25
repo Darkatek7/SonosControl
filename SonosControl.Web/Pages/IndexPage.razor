@@ -510,8 +510,13 @@
                 string media = "";
                 if (isPlaying)
                 {
-                    var track = await _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
-                    var rawStationUrl = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
+                    var trackTask = _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
+                    var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
+
+                    await Task.WhenAll(trackTask, rawStationUrlTask);
+
+                    var track = await trackTask;
+                    var rawStationUrl = await rawStationUrlTask;
                     var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
                     if (!string.IsNullOrWhiteSpace(track) && !track.Contains("sonos.com") && !track.Contains("Stream"))
