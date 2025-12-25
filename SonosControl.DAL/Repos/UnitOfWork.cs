@@ -12,7 +12,7 @@ namespace SonosControl.DAL.Repos
         public UnitOfWork(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
         {
             _settingsRepo = settingsRepo;
-            _holidayRepo = new HolidayRepo(); // Assuming HolidayRepo doesn't have constructor dependencies
+            _holidayRepo = new HolidayRepo(httpClientFactory);
             _sonosConnectorRepo = new SonosConnectorRepo(httpClientFactory, settingsRepo);
         }
 
