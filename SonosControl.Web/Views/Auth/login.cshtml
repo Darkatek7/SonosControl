@@ -12,6 +12,12 @@
         {
             <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.Error</div>
         }
+        @if (Context.Request.Query["error"] == "lockedout")
+        {
+             <div class="alert alert-warning text-center py-2" role="alert">
+                Account locked due to too many failed attempts.<br>Please try again in 5 minutes.
+            </div>
+        }
 
         <div class="mb-3">
             <label for="username" class="form-label">Username</label>
