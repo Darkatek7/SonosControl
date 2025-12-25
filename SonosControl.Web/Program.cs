@@ -9,6 +9,7 @@ using System.IO;
 
 using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
+using Radzen;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,8 @@ builder.Services.AddHttpClient(nameof(SonosConnectorRepo), client =>
 });
 builder.Services.AddTransient<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
+
+builder.Services.AddRadzenComponents();
 
 builder.Services.AddHostedService<SonosControlService>();
 // builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
