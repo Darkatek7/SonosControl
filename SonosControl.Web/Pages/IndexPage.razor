@@ -59,6 +59,7 @@
                             IsPlaying="_isPlaying"
                             IsLoading="_isMainPlaybackLoading"
                             ShowNextTrack="_isPlaying && _isSpotifyPlaying"
+                            IsNextTrackLoading="_isNextTrackLoading"
                             Volume="Volume"
                             MaxVolumeLimit="MaxVolumeLimit"
                             GradientStyle="PlaybackCardStyle"
@@ -317,6 +318,7 @@
     private bool _isPlaying;
     private bool _isSyncing;
     private bool _isMainPlaybackLoading;
+    private bool _isNextTrackLoading;
     private bool _isSpotifyUrlLoading;
     private string? _loadingMediaUrl;
     private bool _isSpotifyPlaying;
@@ -703,8 +705,18 @@
 
     private async Task NextTrack()
     {
-        await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
-        await AddLog("Next Track");
+        _isNextTrackLoading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
+            await AddLog("Next Track");
+        }
+        finally
+        {
+            _isNextTrackLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void OpenTimerModal()
