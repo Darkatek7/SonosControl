@@ -81,7 +81,8 @@ namespace SonosControl.Web.Services
                 {
                     await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
                     // Set volume for each speaker
-                    await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, settings.Volume, cancellationToken);
+                    int volume = speaker.StartupVolume ?? settings.Volume;
+                    await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, volume, cancellationToken);
                 }));
 
                 // Do NOT create group - users want independent playback of same content
@@ -89,10 +90,12 @@ namespace SonosControl.Web.Services
             else
             {
                 targetSpeakers.Add(masterIp);
+                var masterSpeaker = speakers.First();
 
                 // Ensure the single speaker is ungrouped if it was previously part of a group
                 await uow.ISonosConnectorRepo.UngroupSpeaker(masterIp, cancellationToken);
-                await uow.ISonosConnectorRepo.SetSpeakerVolume(masterIp, settings.Volume, cancellationToken);
+                int volume = masterSpeaker.StartupVolume ?? settings.Volume;
+                await uow.ISonosConnectorRepo.SetSpeakerVolume(masterIp, volume, cancellationToken);
             }
 
             Func<string, Task> playAction = null;

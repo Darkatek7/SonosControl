@@ -4,5 +4,6 @@ namespace SonosControl.DAL.Models
     {
         public string Name { get; set; } = "Living Room";
         public string IpAddress { get; set; } = "";
+        public int? StartupVolume { get; set; }
     }
 }
