@@ -43,11 +43,20 @@ else
                                 @foreach (var speaker in _settings.Speakers)
                                 {
                                     <div class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
+                                        <div class="flex-grow-1">
                                             <strong>@speaker.Name</strong>
                                             <div class="text-muted small">@speaker.IpAddress</div>
                                         </div>
-                                        <div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="d-flex flex-column" style="width: 120px;">
+                                                <label class="form-label small mb-0">Startup Vol</label>
+                                                <input type="number" class="form-control form-control-sm"
+                                                       min="0" max="100"
+                                                       value="@speaker.StartupVolume"
+                                                       @onchange="async (e) => await UpdateStartupVolume(speaker, e.Value)"
+                                                       disabled="@(!canEditIp)"
+                                                       placeholder="@_settings.Volume" />
+                                            </div>
                                             <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)">Remove</button>
                                         </div>
                                     </div>
@@ -1369,6 +1378,20 @@ else
         _settings.Speakers.Remove(speaker);
         await SaveSettings();
         await AddLog("Speaker Removed", $"{speaker.Name} ({speaker.IpAddress})");
+    }
+
+    private async Task UpdateStartupVolume(SonosSpeaker speaker, object? value)
+    {
+        if (value is string s && int.TryParse(s, out int volume))
+        {
+            var clamped = Math.Clamp(volume, 0, 100);
+            speaker.StartupVolume = clamped;
+        }
+        else
+        {
+            speaker.StartupVolume = null;
+        }
+        await SaveSettings();
     }
 
 
