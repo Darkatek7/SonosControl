@@ -35,6 +35,37 @@ public class SettingsRepoTests
     }
 
     [Fact]
+    public async Task GetSettings_EnsuresDailySchedulesValuesInitialized()
+    {
+        var repo = new SettingsRepo();
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var originalDir = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(tempDir);
+
+        try
+        {
+            var dataDir = Path.Combine(tempDir, "Data");
+            Directory.CreateDirectory(dataDir);
+            var configPath = Path.Combine(dataDir, "config.json");
+            // Create a config with a null value for a key in DailySchedules
+            await File.WriteAllTextAsync(configPath, "{\"DailySchedules\": {\"Monday\": null}}");
+
+            var result = await repo.GetSettings();
+
+            Assert.NotNull(result);
+            Assert.True(result!.DailySchedules.ContainsKey(DayOfWeek.Monday));
+            Assert.NotNull(result.DailySchedules[DayOfWeek.Monday]);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDir);
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentReadsAndWrites_DoNotCorruptSettings()
     {
         var repo = new SettingsRepo();
