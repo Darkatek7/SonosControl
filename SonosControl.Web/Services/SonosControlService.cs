@@ -2,19 +2,19 @@ using System.Linq;
 using System.Threading;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
-using Microsoft.Extensions.DependencyInjection; // Added for IServiceScopeFactory
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SonosControl.Web.Services
 {
     public class SonosControlService : BackgroundService
     {
-        private readonly IServiceScopeFactory _scopeFactory; // Changed from IUnitOfWork
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly TimeProvider _timeProvider;
         private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
         public SonosControlService(IServiceScopeFactory scopeFactory, TimeProvider? timeProvider = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
         {
-            _scopeFactory = scopeFactory; // Injected IServiceScopeFactory
+            _scopeFactory = scopeFactory;
             _timeProvider = timeProvider ?? TimeProvider.System;
             _delay = delay ?? TaskDelay;
         }
@@ -26,15 +26,15 @@ namespace SonosControl.Web.Services
                 // Create a new scope for each execution cycle
                 using (var scope = _scopeFactory.CreateScope())
                 {
-                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>(); // Resolve IUnitOfWork from the scope
+                    var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
                     // Continuously evaluate settings until start time is reached
                     var (settings, schedule) = await WaitUntilStartTime(uow, stoppingToken);
 
                     if (settings == null || settings.Speakers == null || !settings.Speakers.Any())
                     {
-                        Console.WriteLine($"{DateTime.Now:g}: No speakers configured. Waiting...");
-                        await _delay(TimeSpan.FromSeconds(30), stoppingToken); // Wait for a bit before re-checking
+                        Console.WriteLine($"{_timeProvider.GetLocalNow():g}: No speakers configured. Waiting...");
+                        await _delay(TimeSpan.FromSeconds(30), stoppingToken);
                         continue;
                     }
 
@@ -50,24 +50,25 @@ namespace SonosControl.Web.Services
 
         private async Task StartSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, SonosSettings settings, DaySchedule? schedule, CancellationToken cancellationToken)
         {
-            DayOfWeek today = DateTime.Now.DayOfWeek;
+            var now = _timeProvider.GetLocalNow();
+            DayOfWeek today = now.DayOfWeek;
 
             if (schedule != null && ShouldSkipPlayback(schedule))
             {
                 if (schedule is HolidaySchedule holiday)
                 {
-                    Console.WriteLine($"{DateTime.Now:g}: Holiday override for {holiday.Date:yyyy-MM-dd} skips playback.");
+                    Console.WriteLine($"{now:g}: Holiday override for {holiday.Date:yyyy-MM-dd} skips playback.");
                 }
                 return;
             }
 
             if (schedule == null && (settings == null || !settings.ActiveDays.Contains(today)))
             {
-                Console.WriteLine($"{DateTime.Now:g}: Today ({today}) is not an active day.");
+                Console.WriteLine($"{now:g}: Today ({today}) is not an active day.");
                 return;
             }
 
-            string masterIp = speakers.First().IpAddress; // Assuming the first speaker in the list is the master
+            string masterIp = speakers.First().IpAddress;
             bool isSynced = schedule?.IsSyncedPlayback ?? true;
 
             var targetSpeakers = new List<string>();
@@ -84,8 +85,6 @@ namespace SonosControl.Web.Services
                     int volume = speaker.StartupVolume ?? settings.Volume;
                     await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, volume, cancellationToken);
                 }));
-
-                // Do NOT create group - users want independent playback of same content
             }
             else
             {
@@ -176,7 +175,7 @@ namespace SonosControl.Web.Services
                 await Task.WhenAll(targetSpeakers.Select(ip => playAction(ip)));
             }
 
-            Console.WriteLine($"{DateTime.Now:g}: Started Playing");
+            Console.WriteLine($"{now:g}: Started Playing");
         }
 
 
@@ -270,9 +269,18 @@ namespace SonosControl.Web.Services
                     previousTarget = target;
                 }
 
-                var delayMs = Math.Max(1d, Math.Min(remaining.TotalMilliseconds, 60_000d));
+                // Fix: Avoid rounding issues that cause delays larger than remaining time for small durations
                 // Poll settings at most once per minute to pick up schedule changes
-                await _delay(TimeSpan.FromMilliseconds(delayMs), token);
+                var maxDelay = TimeSpan.FromMinutes(1);
+                var delay = remaining > maxDelay ? maxDelay : remaining;
+
+                // Ensure we don't pass a zero or negative delay if something drifted slightly,
+                // but ManualTimeProvider handles zero correctly.
+                // However, we want to respect the cancellation token and yield.
+                if (delay <= TimeSpan.Zero)
+                    delay = TimeSpan.FromTicks(1);
+
+                await _delay(delay, token);
             }
 
             token.ThrowIfCancellationRequested();
@@ -356,7 +364,8 @@ namespace SonosControl.Web.Services
 
         private async Task StopSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, TimeOnly stopTime, DaySchedule? schedule, CancellationToken cancellationToken)
         {
-            TimeOnly timeNow = TimeOnly.FromDateTime(DateTime.Now);
+            var now = _timeProvider.GetLocalNow();
+            TimeOnly timeNow = TimeOnly.FromDateTime(now.LocalDateTime);
             var timeDifference = stopTime - timeNow;
             bool isSynced = schedule?.IsSyncedPlayback ?? true;
 
@@ -373,23 +382,33 @@ namespace SonosControl.Web.Services
             if (stopTime <= timeNow)
             {
                 await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.StopPlaying(ip)));
-                Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
+                Console.WriteLine($"{now:g}: Paused Playing");
             }
             else
             {
-                var ms = (int)timeDifference.TotalMilliseconds;
-                TimeSpan t = TimeSpan.FromMilliseconds(ms);
-                string delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
+                string delayInMs;
+                if (timeDifference.TotalMilliseconds > 0)
+                {
+                     // Convert using TimeSpan to avoid manual ms calculations
+                     TimeSpan t = timeDifference; // TimeOnly subtraction returns TimeSpan
+                     delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
                         t.Hours,
                         t.Minutes,
                         t.Seconds,
                         t.Milliseconds);
+                } else {
+                     delayInMs = "00ms";
+                }
 
-                Console.WriteLine(DateTime.Now.ToString("g") + ": Pausing in " + delayInMs);
-                await Task.Delay(ms, cancellationToken);
+                Console.WriteLine($"{now:g}: Pausing in " + delayInMs);
+
+                // Use _delay instead of Task.Delay
+                var delaySpan = timeDifference;
+                if (delaySpan < TimeSpan.Zero) delaySpan = TimeSpan.Zero;
+                await _delay(delaySpan, cancellationToken);
 
                 await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.StopPlaying(ip)));
-                Console.WriteLine(DateTime.Now.ToString("g") + ": Paused Playing");
+                Console.WriteLine($"{_timeProvider.GetLocalNow():g}: Paused Playing");
             }
 
             if (isSynced)
