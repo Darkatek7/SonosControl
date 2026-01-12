@@ -1069,14 +1069,48 @@ namespace SonosControl.DAL.Repos
                     var settings = await _settingsRepo.GetSettings();
                     if (settings?.Speakers != null)
                     {
-                        foreach (var speakerUuid in speakerUuidsInGroup)
+                        // Identify speakers needing UUID update
+                        var speakersToUpdate = settings.Speakers.Where(s => string.IsNullOrEmpty(s.Uuid)).ToList();
+
+                        if (speakersToUpdate.Any())
                         {
-                            var sonosSpeaker = settings.Speakers.FirstOrDefault(s => GetSpeakerUUID(s.IpAddress, cancellationToken).Result == speakerUuid);
-                            if (sonosSpeaker != null)
+                            var updateTasks = speakersToUpdate.Select(async s =>
                             {
-                                groupedSpeakerIps.Add(sonosSpeaker.IpAddress);
+                                try
+                                {
+                                    var uuid = await GetSpeakerUUID(s.IpAddress, cancellationToken);
+                                    return (Speaker: s, Uuid: uuid);
+                                }
+                                catch
+                                {
+                                    return (Speaker: s, Uuid: (string?)null);
+                                }
+                            });
+
+                            var results = await Task.WhenAll(updateTasks);
+                            bool anyUpdated = false;
+
+                            foreach (var res in results)
+                            {
+                                if (!string.IsNullOrEmpty(res.Uuid))
+                                {
+                                    res.Speaker.Uuid = res.Uuid;
+                                    anyUpdated = true;
+                                }
+                            }
+
+                            if (anyUpdated)
+                            {
+                                await _settingsRepo.WriteSettings(settings);
                             }
                         }
+
+                        // Filter speakers using cached UUIDs
+                        var matchingSpeakers = settings.Speakers
+                            .Where(s => !string.IsNullOrEmpty(s.Uuid) && speakerUuidsInGroup.Contains(s.Uuid))
+                            .Select(s => s.IpAddress);
+
+                        groupedSpeakerIps.AddRange(matchingSpeakers);
                     }
                 }
                 else

@@ -283,4 +283,67 @@ public class SonosConnectorRepoTests
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("http://1.2.3.4:1400/reboot", request.Uri!.ToString());
     }
+
+    [Fact]
+    public async Task GetAllSpeakersInGroup_ShouldUseCachedUuid_WhenAvailable()
+    {
+        // Arrange
+        var handler = new QueueHttpMessageHandler();
+
+        // 1. Response for GetTransportInfo on 1.2.3.4
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                @"<s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'>
+                    <s:Body>
+                        <u:GetTransportInfoResponse xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                            <CurrentURI>x-rincon-group:uuid:RINCON_000001+uuid:RINCON_000002</CurrentURI>
+                        </u:GetTransportInfoResponse>
+                    </s:Body>
+                  </s:Envelope>")
+        });
+
+        // 2. Response for GetRinconIdAsync (GetSpeakerUUID) for the speaker missing UUID (Slave)
+        // We expect ONE call here because Master already has UUID in settings.
+        // Note: The regex in GetRinconIdAsync expects Hex characters [A-F0-9].
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<root><UDN>uuid:RINCON_000002</UDN></root>")
+        });
+
+        var client = new HttpClient(handler);
+        var mockSettingsRepo = new Mock<ISettingsRepo>();
+
+        var speakers = new List<SonosControl.DAL.Models.SonosSpeaker>
+        {
+            new() { IpAddress = "1.2.3.4", Name = "Master", Uuid = "uuid:RINCON_000001" },
+            new() { IpAddress = "5.6.7.8", Name = "Slave", Uuid = null } // Missing UUID, needs fetch
+        };
+
+        var settings = new SonosControl.DAL.Models.SonosSettings { Speakers = speakers };
+        mockSettingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+        mockSettingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosControl.DAL.Models.SonosSettings>())).Returns(Task.CompletedTask);
+
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), mockSettingsRepo.Object);
+
+        // Act
+        var result = await repo.GetAllSpeakersInGroup("1.2.3.4");
+
+        // Assert
+        Assert.Contains("1.2.3.4", result);
+        Assert.Contains("5.6.7.8", result);
+        Assert.Equal(2, result.Count());
+
+        // Verify WriteSettings was called to save the fetched UUID
+        mockSettingsRepo.Verify(r => r.WriteSettings(It.Is<SonosControl.DAL.Models.SonosSettings>(s =>
+            s.Speakers.First(sp => sp.IpAddress == "5.6.7.8").Uuid == "uuid:RINCON_000002"
+        )), Times.Once);
+
+        // Check requests
+        // Request 1: GetTransportInfo
+        Assert.Equal("http://1.2.3.4:1400/MediaRenderer/AVTransport/Control", handler.Requests[0].Uri!.ToString());
+
+        // Request 2: Get Device Description (GetRinconIdAsync) for Slave
+        Assert.Equal("http://5.6.7.8:1400/xml/device_description.xml", handler.Requests[1].Uri!.ToString());
+    }
 }
