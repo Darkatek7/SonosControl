@@ -5,7 +5,7 @@
 >
 > Automate wake-up playlists, workday background music, and after-hours silences with a secure .NET 9 control center that you can run anywhere Docker or ASP.NET can live.
 
-[![SonosControl hero screenshot showing the Blazor dashboard](https://github.com/user-attachments/assets/44a9e2a2-dcf2-4bda-bf45-eb289ff34472)](https://github.com/Darkatek7/SonosControl)
+[![SonosControl hero screenshot showing the Blazor dashboard](assets/screenshots/dashboard-dark.png)](https://github.com/Darkatek7/SonosControl)
 
 ---
 
@@ -38,10 +38,10 @@
 ## Why SonosControl?
 **SonosControl** was built to solve a recurring problem: keeping a Sonos sound system perfectly aligned with office hours, personal routines, and curated playlists without depending on cloud schedulers. It provides:
 
-- **Self-hosted peace of mind** – own your automation stack end-to-end with SQLite storage and file-based configuration.
-- **Enterprise-ready identity** – ASP.NET Core Identity with role-based access, persistent cookies, and registration controls.
-- **Musical flexibility** – blend TuneIn stations, Spotify albums/playlists/tracks, or on-demand URLs.
-- **Automation that adapts** – per-day overrides, random playback modes, timed sessions, and manual control, all from a modern Blazor interface.
+- **Self-hosted peace of mind** – Own your automation stack end-to-end with SQLite storage and file-based configuration.
+- **Enterprise-ready identity** – Leverage ASP.NET Core Identity with role-based access, persistent cookies, and robust registration controls.
+- **Musical flexibility** – Seamlessly blend TuneIn stations, Spotify albums/playlists/tracks, or on-demand URLs.
+- **Automation that adapts** – Configure per-day overrides, random playback modes, timed sessions, and manual controls—all from a modern Blazor interface.
 
 Whether you are outfitting a smart home, synchronizing retail ambience, or crafting the perfect morning routine, SonosControl delivers the orchestration you need.
 
@@ -77,7 +77,7 @@ Whether you are outfitting a smart home, synchronizing retail ambience, or craft
 ## Screenshots
 | Dashboard | Configuration | Station Lookup |
 |-----------|---------------|----------------|
-| ![Dashboard view](https://github.com/user-attachments/assets/44a9e2a2-dcf2-4bda-bf45-eb289ff34472) | ![Configuration view](https://github.com/user-attachments/assets/0cc1ec9c-f97f-4c4e-a9ea-1379155af675) | ![Station lookup view](https://github.com/user-attachments/assets/170d5aeb-a887-4e93-be20-f66020cad955) |
+| ![Dashboard view](assets/screenshots/dashboard-dark.png) | ![Configuration view](assets/screenshots/config-dark.png) | ![Station lookup view](assets/screenshots/station-lookup-dark.png) |
 
 ---
 
@@ -190,9 +190,9 @@ The UI keeps this file synchronized; manual edits are optional but handy for inf
 ## User Management & Security
 - 🔐 **Identity Integration:** ASP.NET Core Identity with SQLite persistence, password validators, and long-lived cookies.
 - 🧑‍🤝‍🧑 **Roles:**
-  - `superadmin` – manage roles, toggle registration, delete any user.
-  - `admin` – adjust schedules, speaker IP, and review logs.
-  - `operator` – control playback without touching critical settings.
+  - `superadmin` – Manage roles, toggle registration, delete any user.
+  - `admin` – Adjust schedules, speaker IP, and review logs.
+  - `operator` – Control playback without touching critical settings.
 - 📝 **Audit Trail:** Every configuration change or playback event is logged with timestamp and username for accountability.
 - 🚫 **Registration Toggle:** Restrict sign-ups to invited accounts when running in shared spaces.
 
