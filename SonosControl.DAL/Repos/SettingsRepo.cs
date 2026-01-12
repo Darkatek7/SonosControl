@@ -163,7 +163,7 @@ namespace SonosControl.DAL.Repos
                 settings.ActiveDays ??= new();
                 settings.HolidaySchedules ??= new();
 
-                foreach (var key in settings.DailySchedules.Keys.ToList())
+                foreach (var key in settings.DailySchedules.Keys)
                 {
                     settings.DailySchedules[key] ??= new DaySchedule();
                 }
