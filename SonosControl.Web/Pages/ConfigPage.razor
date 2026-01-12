@@ -42,20 +42,21 @@ else
                             <div class="list-group mb-3">
                                 @foreach (var speaker in _settings.Speakers)
                                 {
-                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-3">
                                         <div class="flex-grow-1">
-                                            <strong>@speaker.Name</strong>
+                                            <strong class="d-block text-truncate">@speaker.Name</strong>
                                             <div class="text-muted small">@speaker.IpAddress</div>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
-                                            <div class="d-flex flex-column" style="width: 120px;">
-                                                <label class="form-label small mb-0">Startup Vol</label>
-                                                <input type="number" class="form-control form-control-sm"
+                                            <div class="input-group input-group-sm" style="width: 130px;">
+                                                <span class="input-group-text">Vol</span>
+                                                <input type="number" class="form-control"
                                                        min="0" max="100"
                                                        value="@speaker.StartupVolume"
                                                        @onchange="async (e) => await UpdateStartupVolume(speaker, e.Value)"
                                                        disabled="@(!canEditIp)"
-                                                       placeholder="@_settings.Volume" />
+                                                       placeholder="@_settings.Volume"
+                                                       aria-label="Startup Volume" />
                                             </div>
                                             <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)">Remove</button>
                                         </div>
