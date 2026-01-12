@@ -30,7 +30,7 @@ public class RoleClaimsTransformation : IClaimsTransformation
             return principal;
 
         // Remove existing role claims and reload from database
-        foreach (var claim in identity.FindAll(identity.RoleClaimType).ToList())
+        while (identity.FindFirst(identity.RoleClaimType) is Claim claim)
         {
             identity.RemoveClaim(claim);
         }
