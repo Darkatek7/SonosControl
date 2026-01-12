@@ -21,7 +21,7 @@ builder.Services.AddHttpClient(nameof(SonosConnectorRepo), client =>
 {
     client.Timeout = TimeSpan.FromSeconds(2);
 });
-builder.Services.AddTransient<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
+builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 
 builder.Services.AddHostedService<SonosControlService>();
