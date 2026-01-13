@@ -984,7 +984,8 @@ namespace SonosControl.DAL.Repos
                 // Correct metadata format is crucial for legacy/S1/S2 mixed environments.
                 // We use the raw RINCON ID (RINCON_XXXXX) without 'uuid:' for the item ID, but keep it in the URI.
                 string rinconId = $"RINCON_{masterRinconHex}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"0\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
+                // Changing parentID to "0" to match strict UPnP hierarchy expectations for root items.
+                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"{rinconId}\" parentID=\"0\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
@@ -1008,8 +1009,15 @@ namespace SonosControl.DAL.Repos
                     content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
 
                     var response = await client.PostAsync(url, content, cancellationToken);
-                    response.EnsureSuccessStatusCode();
-                    Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                        Console.WriteLine($"Error: Speaker {slaveIp} could not join group. Status: {response.StatusCode}. Response: {errorContent}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
+                    }
                 }
                 catch (Exception ex)
                 {
