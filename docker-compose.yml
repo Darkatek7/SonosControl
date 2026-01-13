@@ -10,7 +10,7 @@ services:
       - TZ=Europe/Vienna
       - ADMIN_USERNAME=admin
       - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=nZtdn84w8Gxmu8!!
+      - ADMIN_PASSWORD=xIlQuKfFjeJfUsfm
     volumes:
       - ./Data:/app/Data
       # persist data-protection keys

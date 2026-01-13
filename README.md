@@ -93,8 +93,7 @@ docker compose up -d
 <summary>Full docker-compose example</summary>
 
 ```yaml
----
-version: "3.4"
+version: '3.4'
 services:
   sonos:
     container_name: sonos
@@ -106,10 +105,10 @@ services:
       - TZ=Europe/Vienna
       - ADMIN_USERNAME=admin
       - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=ChangeMe!1
+      - ADMIN_PASSWORD=xIlQuKfFjeJfUsfm
     volumes:
       - ./Data:/app/Data
-      # Persist data-protection keys so identity cookies survive restarts
+      # persist data-protection keys
       - ./dpkeys:/root/.aspnet/DataProtection-Keys
 ```
 </details>
