@@ -978,12 +978,11 @@ namespace SonosControl.DAL.Repos
                 }
 
                 // The URI for the slave to join the master's group.
-                // Some legacy devices require the URI to NOT have the "uuid:" prefix, just "x-rincon-group:RINCON_...".
-                string groupUri = $"x-rincon-group:RINCON_{masterRinconHex}";
+                // Standard format typically includes "uuid:", but metadata ID often does not.
+                string groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
 
-                // Correct metadata format is crucial for legacy/S1/S2 mixed environments
-                // We use the raw RINCON ID (RINCON_XXXXX) prefixed with SA_ for the desc tag.
-                // Using item id="0" and parentID="0" is safer for some legacy devices than using the UUID or RINCON ID.
+                // Correct metadata format is crucial for legacy/S1/S2 mixed environments.
+                // We use the raw RINCON ID (RINCON_XXXXX) without 'uuid:' for the item ID, but keep it in the URI.
                 string rinconId = $"RINCON_{masterRinconHex}";
                 string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"0\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
 
