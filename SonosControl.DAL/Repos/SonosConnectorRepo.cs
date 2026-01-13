@@ -978,14 +978,11 @@ namespace SonosControl.DAL.Repos
                 }
 
                 // The URI for the slave to join the master's group.
-                // Using "x-rincon-group:RINCON_..." (no uuid prefix) matches the metadata ID format and is required by some legacy firmwares.
-                string groupUri = $"x-rincon-group:RINCON_{masterRinconHex}";
+                // We use the standard x-rincon-group:uuid:RINCON_... format.
+                string groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
 
-                // Correct metadata format is crucial for legacy/S1/S2 mixed environments.
-                // We use the raw RINCON ID (RINCON_XXXXX) without 'uuid:' for the item ID.
-                string rinconId = $"RINCON_{masterRinconHex}";
-                // Changing parentID to "0" to match strict UPnP hierarchy expectations for root items.
-                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"{rinconId}\" parentID=\"0\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
+                // Sending empty metadata is a valid way to join a group without triggering XML parsing errors on legacy devices.
+                string groupMetaData = "";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
