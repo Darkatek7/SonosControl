@@ -674,17 +674,17 @@
                 case "station":
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
                     await AddLog("Station Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"Station changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
+                    await NotificationService.SendNotificationAsync($"Station changed to {url} on {SelectedSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "spotify":
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
                     await AddLog("Spotify Track Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"Spotify track changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
+                    await NotificationService.SendNotificationAsync($"Spotify track changed to {url} on {SelectedSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "youtube":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"YouTube Music changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
+                    await NotificationService.SendNotificationAsync($"YouTube Music changed to {url} on {SelectedSpeakerIp}", await GetCurrentUserAsync());
                     break;
             }
             await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
@@ -1057,14 +1057,14 @@
                 await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
                 _isPlaying = true;
                 await AddLog("Playback Started");
-                await NotificationService.SendNotificationAsync($"Playback started on {SelectedSpeakerIp}", GetCurrentUser());
+                await NotificationService.SendNotificationAsync($"Playback started on {SelectedSpeakerIp}", await GetCurrentUserAsync());
             }
             else
             {
                 await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
                 _isPlaying = false;
                 await AddLog("Playback Paused");
-                await NotificationService.SendNotificationAsync($"Playback paused on {SelectedSpeakerIp}", GetCurrentUser());
+                await NotificationService.SendNotificationAsync($"Playback paused on {SelectedSpeakerIp}", await GetCurrentUserAsync());
             }
         }
         finally
@@ -1100,7 +1100,7 @@
 
             await Task.WhenAll(tasks);
             await AddLog("Sync Play Started (Cloned URI)", "All speakers");
-            await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", GetCurrentUser());
+            await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", await GetCurrentUserAsync());
         }
         finally
         {
@@ -1128,14 +1128,14 @@
             await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, slaveIps);
 
             await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
-            await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", GetCurrentUser());
+            await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", await GetCurrentUserAsync());
 
             isGroupModalOpen = false;
         }
         catch (Exception ex)
         {
             await AddLog("Group Creation Failed", ex.Message);
-            await NotificationService.SendNotificationAsync($"Group creation failed for master {SelectedSpeakerIp}: {ex.Message}", GetCurrentUser());
+            await NotificationService.SendNotificationAsync($"Group creation failed for master {SelectedSpeakerIp}: {ex.Message}", await GetCurrentUserAsync());
         }
         finally
         {
@@ -1152,7 +1152,7 @@
         {
             await _uow.ISonosConnectorRepo.UngroupSpeaker(SelectedSpeakerIp);
             await AddLog("Speaker Ungrouped", SelectedSpeakerIp);
-            await NotificationService.SendNotificationAsync($"Speaker {SelectedSpeakerIp} ungrouped", GetCurrentUser());
+            await NotificationService.SendNotificationAsync($"Speaker {SelectedSpeakerIp} ungrouped", await GetCurrentUserAsync());
         }
         finally
         {
@@ -1161,9 +1161,10 @@
         }
     }
 
-    private string GetCurrentUser()
+    private async Task<string> GetCurrentUserAsync()
     {
-        return AuthenticationStateProvider.GetAuthenticationStateAsync().Result.User.Identity?.Name ?? "Unknown";
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        return authState.User.Identity?.Name ?? "Unknown";
     }
 
     private async Task<bool> IsPlaying()
