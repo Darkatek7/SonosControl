@@ -957,12 +957,14 @@ namespace SonosControl.DAL.Repos
 
         public async Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
-            var masterUuid = await GetSpeakerUUID(masterIp, cancellationToken);
-            if (masterUuid == null)
+            var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken);
+            if (masterRinconHex == null)
             {
-                Console.WriteLine($"Error: Could not get UUID for master speaker {masterIp}.");
+                Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
                 return;
             }
+
+            var masterUuid = $"uuid:RINCON_{masterRinconHex}";
 
             foreach (var slaveIp in slaveIps)
             {
@@ -977,7 +979,11 @@ namespace SonosControl.DAL.Repos
 
                 // The URI for the slave to join the master's group
                 string groupUri = $"x-rincon-group:{masterUuid}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:sonos='http://www.sonos.com/ServiceTypes/1#' xmlns='urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/'><item id='{masterUuid}' parentID='0' restricted='true'><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.sonos-playlist</upnp:class><desc id='cdudn' nameSpace='urn:schemas-rinconnetworks-com:metadata-1-0/'>SA_RINCON{masterUuid}</desc></item></DIDL-Lite>";
+
+                // Correct metadata format is crucial for legacy/S1/S2 mixed environments
+                // We use the raw RINCON ID (RINCON_XXXXX) prefixed with SA_ for the desc tag.
+                string rinconId = $"RINCON_{masterRinconHex}";
+                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"{masterUuid}\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
@@ -990,6 +996,8 @@ namespace SonosControl.DAL.Repos
                     </u:SetAVTransportURI>
                   </s:Body>
                 </s:Envelope>";
+
+                Console.WriteLine($"Grouping {slaveIp} to {masterIp}. Metadata: {groupMetaData}");
 
                 try
                 {
