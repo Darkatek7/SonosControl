@@ -27,6 +27,7 @@ namespace SonosControl.Web.Services
                 using (var scope = _scopeFactory.CreateScope())
                 {
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+                    var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
                     // Continuously evaluate settings until start time is reached
                     var (settings, schedule) = await WaitUntilStartTime(uow, stoppingToken);
@@ -41,9 +42,18 @@ namespace SonosControl.Web.Services
                     var stop = schedule?.StopTime ?? settings.StopTime;
                     var speakers = settings.Speakers.ToList();
 
-                    await StartSpeaker(uow, speakers, settings, schedule, stoppingToken);
+                    try
+                    {
+                        await StartSpeaker(uow, speakers, settings, schedule, stoppingToken);
+                        await notificationService.SendNotificationAsync($"Automation started playback on {speakers.Count} speakers.");
+                    }
+                    catch (Exception ex)
+                    {
+                        await notificationService.SendNotificationAsync($"Automation failed to start playback: {ex.Message}");
+                    }
 
                     await StopSpeaker(uow, speakers, stop, schedule, stoppingToken);
+                    await notificationService.SendNotificationAsync($"Automation stopped playback.");
                 }
             }
         }
