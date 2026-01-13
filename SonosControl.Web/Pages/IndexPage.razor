@@ -11,6 +11,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject INotificationService NotificationService
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Sonos Control</PageTitle>
@@ -33,13 +34,28 @@
                         {
                             <div class="mb-3">
                                 <label for="activeSpeakerSelect" class="form-label text-muted small">Active Speaker</label>
-                                <div class="d-flex gap-2">
+                                <div class="d-flex gap-2 align-items-center">
                                     <select id="activeSpeakerSelect" class="form-select" @bind="SelectedSpeakerIp">
                                         @foreach (var speaker in _settings.Speakers)
                                         {
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
+                                    <div class="btn-group">
+                                        <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@_isGrouping" title="Group speakers">
+                                            @if (_isGrouping)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            }
+                                            else
+                                            {
+                                                <span>🔗 Group</span>
+                                            }
+                                        </button>
+                                        <button class="btn btn-outline-secondary" @onclick="UngroupCurrent" disabled="@_isGrouping" title="Ungroup active speaker">
+                                            <span>⛓️‍💥</span>
+                                        </button>
+                                    </div>
                                     <button class="btn btn-outline-info" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
                                         @if (_isSyncing)
                                         {
@@ -304,6 +320,13 @@
 
 <AddMediaItemModal @ref="_addMediaItemModal" OnSave="SaveNewMediaItem" ErrorMessage="@_addModalError" OnClose="() => _addModalError = null"/>
 
+<GroupSpeakersModal Show="isGroupModalOpen"
+                    Speakers="@(_settings?.Speakers ?? new())"
+                    MasterIp="@SelectedSpeakerIp"
+                    IsLoading="@_isGrouping"
+                    OnClose="CloseGroupModal"
+                    OnGroup="HandleCreateGroup" />
+
 @code {
     public class SpeakerStatusViewModel
     {
@@ -317,6 +340,8 @@
     private SonosSettings? _settings;
     private bool _isPlaying;
     private bool _isSyncing;
+    private bool _isGrouping;
+    private bool isGroupModalOpen;
     private bool _isMainPlaybackLoading;
     private bool _isNextTrackLoading;
     private bool _isSpotifyUrlLoading;
@@ -649,14 +674,17 @@
                 case "station":
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
                     await AddLog("Station Changed", $"URL: {url}");
+                    await NotificationService.SendNotificationAsync($"Station changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
                     break;
                 case "spotify":
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
                     await AddLog("Spotify Track Changed", $"URL: {url}");
+                    await NotificationService.SendNotificationAsync($"Spotify track changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
                     break;
                 case "youtube":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_settings.IP_Adress, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
+                    await NotificationService.SendNotificationAsync($"YouTube Music changed to {url} on {SelectedSpeakerIp}", GetCurrentUser());
                     break;
             }
             await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
@@ -1029,12 +1057,14 @@
                 await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
                 _isPlaying = true;
                 await AddLog("Playback Started");
+                await NotificationService.SendNotificationAsync($"Playback started on {SelectedSpeakerIp}", GetCurrentUser());
             }
             else
             {
                 await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
                 _isPlaying = false;
                 await AddLog("Playback Paused");
+                await NotificationService.SendNotificationAsync($"Playback paused on {SelectedSpeakerIp}", GetCurrentUser());
             }
         }
         finally
@@ -1054,56 +1084,86 @@
 
         try
         {
-            // Determine what to play based on current state of the selected speaker
-            // However, Sonos "Join Group" is not implemented in repo, so we just start playback on all speakers
-            // If we want to play the SAME content, we would need to know the current content URL.
-            // For now, let's just send the "Play" command to all speakers.
-            // A better approach if supported would be to set the URI for all speakers to the current one.
-
-            // Let's try to get current station URI from current speaker
             var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(SelectedSpeakerIp);
-            var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
 
-            if (string.IsNullOrEmpty(currentUri))
+            var tasks = _settings.Speakers.Select(async speaker =>
             {
-                // Just trigger play on all (Parallel)
-                var tasks = _settings.Speakers.Select(speaker =>
-                    _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress));
+                if (speaker.IpAddress == SelectedSpeakerIp) return;
 
-                await Task.WhenAll(tasks);
-                await AddLog("Sync Play Started (Resume)", "All speakers");
-            }
-            else
-            {
-                // Set URI on all speakers and play (Parallel)
-                // Note: This is not true sync (multi-room), it just plays same content independently.
-                var tasks = _settings.Speakers.Select(async speaker =>
+                if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
                 {
-                    if (speaker.IpAddress == SelectedSpeakerIp) return; // Already set
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
+                }
 
-                    // We need to determine if it is a station or track.
-                    // The repo has methods for TuneIn and Spotify/Youtube.
-                    // Getting the exact metadata to replay on another speaker is complex without full UPnP access.
-                    // Fallback to just StartPlaying if we can't easily clone the stream.
+                await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
+            });
 
-                    // For radio stations it is easier if we have the URL.
-                    if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
-                    {
-                        await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
-                    }
-
-                    await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
-                });
-
-                await Task.WhenAll(tasks);
-                await AddLog("Sync Play Started (Cloned URI)", "All speakers");
-            }
+            await Task.WhenAll(tasks);
+            await AddLog("Sync Play Started (Cloned URI)", "All speakers");
+            await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", GetCurrentUser());
         }
         finally
         {
             _isSyncing = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private void OpenGroupModal() => isGroupModalOpen = true;
+    private void CloseGroupModal() => isGroupModalOpen = false;
+
+    private async Task HandleCreateGroup(List<string> slaveIps)
+    {
+        if (slaveIps == null || !slaveIps.Any()) return;
+
+        _isGrouping = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            // Stop slave speakers first to ensure clean grouping
+            await Task.WhenAll(slaveIps.Select(ip => _uow.ISonosConnectorRepo.StopPlaying(ip)));
+
+            // Create the group
+            await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, slaveIps);
+
+            await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
+            await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", GetCurrentUser());
+
+            isGroupModalOpen = false;
+        }
+        catch (Exception ex)
+        {
+            await AddLog("Group Creation Failed", ex.Message);
+            await NotificationService.SendNotificationAsync($"Group creation failed for master {SelectedSpeakerIp}: {ex.Message}", GetCurrentUser());
+        }
+        finally
+        {
+            _isGrouping = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task UngroupCurrent()
+    {
+        _isGrouping = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await _uow.ISonosConnectorRepo.UngroupSpeaker(SelectedSpeakerIp);
+            await AddLog("Speaker Ungrouped", SelectedSpeakerIp);
+            await NotificationService.SendNotificationAsync($"Speaker {SelectedSpeakerIp} ungrouped", GetCurrentUser());
+        }
+        finally
+        {
+            _isGrouping = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetCurrentUser()
+    {
+        return AuthenticationStateProvider.GetAuthenticationStateAsync().Result.User.Identity?.Name ?? "Unknown";
     }
 
     private async Task<bool> IsPlaying()

@@ -21,6 +21,7 @@ public class SonosControlServiceStartSpeakerTests
     {
         var serviceProvider = new Mock<IServiceProvider>();
         serviceProvider.Setup(x => x.GetService(typeof(IUnitOfWork))).Returns(uow);
+        serviceProvider.Setup(x => x.GetService(typeof(INotificationService))).Returns(Mock.Of<INotificationService>());
 
         var serviceScope = new Mock<IServiceScope>();
         serviceScope.Setup(x => x.ServiceProvider).Returns(serviceProvider.Object);
