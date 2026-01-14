@@ -7,11 +7,15 @@
   "Speakers": [
     {
       "Name": "op",
-      "IpAddress": "10.1.12.251"
+      "IpAddress": "10.1.12.251",
+      "Uuid": null,
+      "StartupVolume": null
     },
     {
       "Name": "küch",
-      "IpAddress": "10.1.12.252"
+      "IpAddress": "10.1.12.252",
+      "Uuid": null,
+      "StartupVolume": null
     }
   ],
   "Stations": [

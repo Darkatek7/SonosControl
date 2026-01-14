@@ -197,6 +197,12 @@ namespace SonosControl.DAL.Repos
 
         public async Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default)
         {
+            var info = await GetTrackInfoAsync(ip, cancellationToken);
+            return info?.GetDisplayString() ?? "No metadata available";
+        }
+
+        public async Task<SonosTrackInfo?> GetTrackInfoAsync(string ip, CancellationToken cancellationToken = default)
+        {
             try
             {
                 var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
@@ -228,27 +234,46 @@ namespace SonosControl.DAL.Repos
                 {
                     var metadataXml = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
 
-                    // Try dc:title first
                     var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
                     var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
+                    var albumMatch = Regex.Match(metadataXml, @"<upnp:album>(.*?)</upnp:album>");
                     var streamContentMatch = Regex.Match(metadataXml, @"<r:streamContent>(.*?)</r:streamContent>");
+                    var albumArtMatch = Regex.Match(metadataXml, @"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
 
-                    if (streamContentMatch.Success)
+                    var trackInfo = new SonosTrackInfo
                     {
-                        return streamContentMatch.Groups[1].Value; // Use this if available
+                        Title = titleMatch.Success ? titleMatch.Groups[1].Value : "",
+                        Artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "",
+                        Album = albumMatch.Success ? albumMatch.Groups[1].Value : "",
+                        StreamContent = streamContentMatch.Success ? streamContentMatch.Groups[1].Value : null
+                    };
+
+                    if (albumArtMatch.Success)
+                    {
+                        var artUri = albumArtMatch.Groups[1].Value;
+                        if (!string.IsNullOrWhiteSpace(artUri))
+                        {
+                            // If it's a relative path, prepend the speaker's address
+                            if (artUri.StartsWith("/"))
+                            {
+                                trackInfo.AlbumArtUri = $"http://{ip}:1400{artUri}";
+                            }
+                            else
+                            {
+                                trackInfo.AlbumArtUri = artUri;
+                            }
+                        }
                     }
 
-                    var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Title";
-                    var artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "Unknown Artist";
-
-                    return $"{title} — {artist}";
+                    return trackInfo;
                 }
 
-                return "No metadata available";
+                return null;
             }
             catch (Exception ex)
             {
-                return $"Error: {ex.Message}";
+                Console.WriteLine($"Error getting track info: {ex.Message}");
+                return null;
             }
         }
 

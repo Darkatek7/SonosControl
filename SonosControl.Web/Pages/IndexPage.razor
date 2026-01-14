@@ -82,7 +82,14 @@
 
                         <div class="card currently-playing-card">
                             <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
-                                <div class="display-5">🎵</div>
+                                @if (!string.IsNullOrWhiteSpace(currentTrackArtUrl))
+                                {
+                                    <img src="@currentTrackArtUrl" alt="Album Art" class="img-fluid rounded" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
+                                }
+                                else
+                                {
+                                    <div class="display-5">🎵</div>
+                                }
                                 <div class="flex-grow-1">
                                     <h5 class="mb-2">Currently Playing</h5>
                                     <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
@@ -421,6 +428,7 @@
     private string currentStationDisplay = "Loading...";
 
     private string currentlyPlaying = "Loading...";
+    private string? currentTrackArtUrl;
     private string trackProgress = "";
     private Timer? _stationUpdateTimer;
 
@@ -575,10 +583,10 @@
         {
             // Execute fetching in parallel
             var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-            var trackTask = _uow.ISonosConnectorRepo.GetCurrentTrackAsync(_settings.IP_Adress);
+            var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(_settings.IP_Adress);
             var progressTask = _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
 
-            await Task.WhenAll(stationTask, trackTask, progressTask);
+            await Task.WhenAll(stationTask, trackInfoTask, progressTask);
 
             var rawStationUrl = await stationTask;
             currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
@@ -609,7 +617,18 @@
                 _isSpotifyPlaying = false;
             }
 
-            currentlyPlaying = (await trackTask) ?? "";
+            var trackInfo = await trackInfoTask;
+            if (trackInfo != null)
+            {
+                 currentlyPlaying = trackInfo.GetDisplayString();
+                 currentTrackArtUrl = trackInfo.AlbumArtUri;
+            }
+            else
+            {
+                currentlyPlaying = "No metadata available";
+                currentTrackArtUrl = null;
+            }
+
             var progress = await progressTask;
 
             if (progress.Duration == TimeSpan.Zero)

@@ -13,6 +13,7 @@ namespace SonosControl.DAL.Interfaces
         Task StartPlaying(string ip);
         Task StopPlaying(string ip);
         Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default);
+        Task<SonosTrackInfo?> GetTrackInfoAsync(string ip, CancellationToken cancellationToken = default);
         Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default);
         Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default);
         Task<string> GetCurrentStationAsync(string ip, CancellationToken cancellationToken = default);
