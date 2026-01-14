@@ -1015,6 +1015,8 @@ namespace SonosControl.DAL.Repos
                     else
                     {
                         Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
+                        // Ensure the slave starts playing the group stream
+                        await StartPlaying(slaveIp);
                     }
                 }
                 catch (Exception ex)
