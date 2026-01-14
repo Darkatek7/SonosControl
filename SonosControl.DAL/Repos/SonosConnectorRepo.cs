@@ -978,12 +978,12 @@ namespace SonosControl.DAL.Repos
                 }
 
                 // The URI for the slave to join the master's group.
-                // Using the legacy format without "uuid:" prefix for the URI might be the key for mixed environments.
-                string groupUri = $"x-rincon-group:RINCON_{masterRinconHex}";
+                // Standard modern format typically includes uuid: prefix.
+                string groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
 
-                // Using id="0" and parentID="0" is a safe generic fallback when specific IDs fail.
+                // Trying a combination of generic IDs and no SA_ prefix in description.
                 string rinconId = $"RINCON_{masterRinconHex}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"0\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">SA_{rinconId}</desc></item></DIDL-Lite>";
+                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">{rinconId}</desc></item></DIDL-Lite>";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
