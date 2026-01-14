@@ -198,7 +198,11 @@ namespace SonosControl.DAL.Repos
         public async Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default)
         {
             var info = await GetTrackInfoAsync(ip, cancellationToken);
-            return info?.GetDisplayString() ?? "No metadata available";
+            if (info != null && info.IsValidMetadata())
+            {
+                return info.GetDisplayString();
+            }
+            return "No metadata available";
         }
 
         public async Task<SonosTrackInfo?> GetTrackInfoAsync(string ip, CancellationToken cancellationToken = default)

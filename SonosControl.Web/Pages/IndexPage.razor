@@ -459,7 +459,11 @@
         var selectedStatus = _speakerStatuses.FirstOrDefault(s => s.IpAddress == SelectedSpeakerIp);
         if (selectedStatus != null && selectedStatus.IsPlaying && string.IsNullOrEmpty(selectedStatus.Media))
         {
-            if (!string.IsNullOrWhiteSpace(currentlyPlaying) && !currentlyPlaying.Contains("sonos.com") && !currentlyPlaying.Contains("Stream"))
+            // Note: currentlyPlaying is now already validated in LoadCurrentStation via IsValidMetadata()
+            // However, "No metadata available" is a valid value for UI but shouldn't be the 'Media' if we have a station name.
+            bool isTrackValid = !string.IsNullOrWhiteSpace(currentlyPlaying) && currentlyPlaying != "No metadata available";
+
+            if (isTrackValid)
             {
                 selectedStatus.Media = currentlyPlaying;
             }
@@ -518,18 +522,19 @@
                 string media = "";
                 if (isPlaying)
                 {
-                    var trackTask = _uow.ISonosConnectorRepo.GetCurrentTrackAsync(speaker.IpAddress);
+                    // Use GetTrackInfoAsync to allow validation
+                    var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(speaker.IpAddress);
                     var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
 
-                    await Task.WhenAll(trackTask, rawStationUrlTask);
+                    await Task.WhenAll(trackInfoTask, rawStationUrlTask);
 
-                    var track = await trackTask;
+                    var trackInfo = await trackInfoTask;
                     var rawStationUrl = await rawStationUrlTask;
                     var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
-                    if (!string.IsNullOrWhiteSpace(track) && !track.Contains("sonos.com") && !track.Contains("Stream"))
+                    if (trackInfo != null && trackInfo.IsValidMetadata())
                     {
-                        media = track;
+                        media = trackInfo.GetDisplayString();
                     }
                     else if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
                     {
@@ -618,15 +623,27 @@
             }
 
             var trackInfo = await trackInfoTask;
-            if (trackInfo != null)
+            if (trackInfo != null && trackInfo.IsValidMetadata())
             {
                  currentlyPlaying = trackInfo.GetDisplayString();
                  currentTrackArtUrl = trackInfo.AlbumArtUri;
             }
             else
             {
+                // Fallback to station display if track info is invalid/missing
                 currentlyPlaying = "No metadata available";
                 currentTrackArtUrl = null;
+
+                // Attempt to use the Station Name if available and track is invalid
+                if (!string.IsNullOrWhiteSpace(currentStationDisplay) && currentStationDisplay != "Loading...")
+                {
+                    // If we are playing a station, we might want to show the Station Name as "Track"
+                    // or just leave "currentlyPlaying" as "No metadata" and let the "Station:" field show it.
+                    // The previous logic put the Station Name into "Media" in the list.
+                    // Here, "Currently Playing" card has separate Station and Track fields.
+                    // If Track is garbage, we leave it empty or "No metadata".
+                    currentlyPlaying = "No metadata available";
+                }
             }
 
             var progress = await progressTask;
