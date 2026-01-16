@@ -25,7 +25,7 @@ namespace SonosControl.DAL.Interfaces
         Task NextTrack(string ip, CancellationToken cancellationToken = default);
         Task RebootDeviceAsync(string ip, CancellationToken cancellationToken = default);
         Task<string?> GetSpeakerUUID(string ip, CancellationToken cancellationToken = default);
-        Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default);
+        Task<bool> CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default);
         Task UngroupSpeaker(string ip, CancellationToken cancellationToken = default);
         Task<IEnumerable<string>> GetAllSpeakersInGroup(string ip, CancellationToken cancellationToken = default);
         Task SetSpeakerVolume(string ip, int volume, CancellationToken cancellationToken = default);
