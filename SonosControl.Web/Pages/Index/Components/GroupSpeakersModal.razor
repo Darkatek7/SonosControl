@@ -1,0 +1,97 @@
+@using SonosControl.DAL.Models
+@using Microsoft.AspNetCore.Components
+
+<div class="modal fade @(Show ? "show" : "")" style="display: @(Show ? "block" : "none");" tabindex="-1" role="dialog" aria-labelledby="groupModalLabel" aria-hidden="@(!Show)">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content surface-1 border border-secondary shadow-lg">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title" id="groupModalLabel">🔗 Group Speakers</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="OnClose" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">Select speakers to join <strong>@MasterName</strong>.</p>
+
+                @if (!AvailableSpeakers.Any())
+                {
+                    <div class="alert alert-warning">No other speakers available to group.</div>
+                }
+                else
+                {
+                    <div class="list-group">
+                        @foreach (var speaker in AvailableSpeakers)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <input class="form-check-input me-2" type="checkbox" id="chk-@speaker.IpAddress"
+                                           checked="@IsSelected(speaker.IpAddress)"
+                                           @onchange="@(e => ToggleSelection(speaker.IpAddress, e.Value))" />
+                                    <label class="form-check-label stretched-link" for="chk-@speaker.IpAddress">
+                                        @speaker.Name
+                                    </label>
+                                </div>
+                                <span class="badge bg-secondary text-light">@speaker.IpAddress</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-outline-secondary" @onclick="OnClose">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="HandleGroup" disabled="@(!_selectedIps.Any())">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span class="visually-hidden">Grouping...</span>
+                    }
+                    else
+                    {
+                        <span>Group Speakers</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Show)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<List<string>> OnGroup { get; set; }
+    [Parameter] public List<SonosSpeaker> Speakers { get; set; } = new();
+    [Parameter] public string MasterIp { get; set; } = "";
+    [Parameter] public bool IsLoading { get; set; }
+
+    private List<string> _selectedIps = new();
+
+    private string MasterName => Speakers.FirstOrDefault(s => s.IpAddress == MasterIp)?.Name ?? "Master";
+
+    private IEnumerable<SonosSpeaker> AvailableSpeakers => Speakers.Where(s => s.IpAddress != MasterIp);
+
+    private bool IsSelected(string ip) => _selectedIps.Contains(ip);
+
+    private void ToggleSelection(string ip, object? value)
+    {
+        if (value is bool isChecked && isChecked)
+        {
+            if (!_selectedIps.Contains(ip)) _selectedIps.Add(ip);
+        }
+        else
+        {
+            _selectedIps.Remove(ip);
+        }
+    }
+
+    private async Task HandleGroup()
+    {
+        if (_selectedIps.Any())
+        {
+            await OnGroup.InvokeAsync(_selectedIps);
+            _selectedIps.Clear();
+        }
+    }
+}
