@@ -49,7 +49,8 @@ public class SonosControlServiceTests
         var start = TimeOnly.FromDateTime(initial.AddMilliseconds(500).DateTime);
         var settings = new SonosSettings
         {
-            StartTime = start
+            StartTime = start,
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
@@ -86,7 +87,8 @@ public class SonosControlServiceTests
             DailySchedules = new Dictionary<DayOfWeek, DaySchedule>
             {
                 [DateTime.Now.DayOfWeek] = schedule
-            }
+            },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -115,7 +117,8 @@ public class SonosControlServiceTests
 
         var settings = new SonosSettings
         {
-            StartTime = startTime
+            StartTime = startTime,
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -178,7 +181,8 @@ public class SonosControlServiceTests
             {
                 [today] = todaySchedule,
                 [tomorrow] = tomorrowSchedule
-            }
+            },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -229,7 +233,8 @@ public class SonosControlServiceTests
         var settings = new SonosSettings
         {
             StartTime = new TimeOnly(7, 0),
-            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule }
+            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -266,7 +271,8 @@ public class SonosControlServiceTests
         var settings = new SonosSettings
         {
             StartTime = new TimeOnly(7, 0),
-            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule }
+            HolidaySchedules = new List<HolidaySchedule> { holidaySchedule },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -319,7 +325,8 @@ public class SonosControlServiceTests
             {
                 [tomorrow] = tomorrowSchedule
             },
-            HolidaySchedules = new List<HolidaySchedule> { skipHoliday }
+            HolidaySchedules = new List<HolidaySchedule> { skipHoliday },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -374,6 +381,51 @@ public class SonosControlServiceTests
 
         sonosRepo.VerifyNoOtherCalls();
     }
+
+    [Fact]
+    public async Task WaitUntilStartTime_SkipsInactiveDays()
+    {
+        var initial = new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero); // Monday
+        var timeProvider = new ManualTimeProvider(initial);
+
+        // Monday is inactive
+        var activeDays = new List<DayOfWeek> { DayOfWeek.Tuesday };
+        var settings = new SonosSettings
+        {
+            StartTime = new TimeOnly(9, 0),
+            ActiveDays = activeDays,
+            DailySchedules = new Dictionary<DayOfWeek, DaySchedule>
+            {
+                [DayOfWeek.Monday] = new DaySchedule { StartTime = new TimeOnly(9, 0) },
+                [DayOfWeek.Tuesday] = new DaySchedule { StartTime = new TimeOnly(9, 0) }
+            }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
+
+        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
+
+        // Expected next start is Tuesday at 9:00
+        var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).AddHours(9), initial.Offset);
+
+        // Advance close to it
+        timeProvider.Advance(expectedStart - timeProvider.LocalNow - TimeSpan.FromSeconds(1));
+        Assert.False(waitTask.IsCompleted);
+
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+
+        var result = await waitTask;
+        Assert.Same(settings.DailySchedules[DayOfWeek.Tuesday], result.schedule);
+        Assert.Equal(expectedStart, timeProvider.LocalNow, TimeSpan.FromSeconds(1));
+    }
+
 
     private sealed class ManualTimeProvider : TimeProvider
     {
