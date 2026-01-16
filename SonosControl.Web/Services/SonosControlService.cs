@@ -83,28 +83,30 @@ namespace SonosControl.Web.Services
 
             var targetSpeakers = new List<string>();
 
+            // Ungroup all speakers first to ensure a clean slate
+            await Task.WhenAll(speakers.Select(async speaker =>
+            {
+                await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
+                // Set volume for each speaker
+                int volume = speaker.StartupVolume ?? settings.Volume;
+                await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, volume, cancellationToken);
+            }));
+
             if (isSynced)
             {
-                targetSpeakers.AddRange(speakers.Select(s => s.IpAddress));
+                // In synced mode, we group everyone to the master, and only command the master
+                targetSpeakers.Add(masterIp);
 
-                // Ungroup all speakers first to ensure a clean slate
-                await Task.WhenAll(speakers.Select(async speaker =>
+                var slaveIps = speakers.Skip(1).Select(s => s.IpAddress);
+                if (slaveIps.Any())
                 {
-                    await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
-                    // Set volume for each speaker
-                    int volume = speaker.StartupVolume ?? settings.Volume;
-                    await uow.ISonosConnectorRepo.SetSpeakerVolume(speaker.IpAddress, volume, cancellationToken);
-                }));
+                    await uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                }
             }
             else
             {
-                targetSpeakers.Add(masterIp);
-                var masterSpeaker = speakers.First();
-
-                // Ensure the single speaker is ungrouped if it was previously part of a group
-                await uow.ISonosConnectorRepo.UngroupSpeaker(masterIp, cancellationToken);
-                int volume = masterSpeaker.StartupVolume ?? settings.Volume;
-                await uow.ISonosConnectorRepo.SetSpeakerVolume(masterIp, volume, cancellationToken);
+                // In independent mode, we target all speakers individually
+                targetSpeakers.AddRange(speakers.Select(s => s.IpAddress));
             }
 
             Func<string, Task> playAction = null;
@@ -299,6 +301,13 @@ namespace SonosControl.Web.Services
 
         private static DaySchedule? GetScheduleForDate(SonosSettings settings, DateOnly date)
         {
+            var day = date.DayOfWeek;
+
+            // Master switch: if day is not active, no playback (even if holiday).
+            // Default to true (Active) if ActiveDays is null for backward compatibility.
+            if (settings.ActiveDays != null && !settings.ActiveDays.Contains(day))
+                return null;
+
             if (settings.HolidaySchedules != null)
             {
                 var holiday = settings.HolidaySchedules.FirstOrDefault(h => h.Date == date);
@@ -306,7 +315,6 @@ namespace SonosControl.Web.Services
                     return holiday;
             }
 
-            var day = date.DayOfWeek;
             if (settings.DailySchedules != null && settings.DailySchedules.TryGetValue(day, out var schedule))
                 return schedule;
 
@@ -324,6 +332,12 @@ namespace SonosControl.Web.Services
                 var schedule = GetScheduleForDate(settings, candidateDate);
 
                 if (schedule != null && ShouldSkipPlayback(schedule))
+                    continue;
+
+                // If no schedule found (and not holiday override), check if day is active.
+                // If not active, skip it entirely instead of falling back to default settings.
+                // Also respect backward compatibility (null ActiveDays = all active).
+                if (schedule == null && settings.ActiveDays != null && !settings.ActiveDays.Contains(candidateDate.DayOfWeek))
                     continue;
 
                 var candidateStart = schedule?.StartTime ?? settings.StartTime;
