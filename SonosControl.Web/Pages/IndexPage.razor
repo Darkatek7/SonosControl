@@ -1084,21 +1084,9 @@
 
         try
         {
-            var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(SelectedSpeakerIp);
+            var slaveIps = _settings.Speakers.Where(s => s.IpAddress != SelectedSpeakerIp).Select(s => s.IpAddress).ToList();
+            await ApplyLegacySync(SelectedSpeakerIp, slaveIps);
 
-            var tasks = _settings.Speakers.Select(async speaker =>
-            {
-                if (speaker.IpAddress == SelectedSpeakerIp) return;
-
-                if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
-                {
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speaker.IpAddress, currentUri);
-                }
-
-                await _uow.ISonosConnectorRepo.StartPlaying(speaker.IpAddress);
-            });
-
-            await Task.WhenAll(tasks);
             await AddLog("Sync Play Started (Cloned URI)", "All speakers");
             await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", await GetCurrentUserAsync());
         }
@@ -1107,6 +1095,23 @@
             _isSyncing = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private async Task ApplyLegacySync(string masterIp, IEnumerable<string> slaveIps)
+    {
+        var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(masterIp);
+
+        var tasks = slaveIps.Select(async slaveIp =>
+        {
+             if (currentUri.StartsWith("x-rincon-mp3radio://") || currentUri.StartsWith("http"))
+            {
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(slaveIp, currentUri);
+            }
+
+            await _uow.ISonosConnectorRepo.StartPlaying(slaveIp);
+        });
+
+        await Task.WhenAll(tasks);
     }
 
     private void OpenGroupModal() => isGroupModalOpen = true;
@@ -1124,11 +1129,21 @@
             // Stop slave speakers first to ensure clean grouping
             await Task.WhenAll(slaveIps.Select(ip => _uow.ISonosConnectorRepo.StopPlaying(ip)));
 
-            // Create the group
-            await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, slaveIps);
+            // Try to create the group via UPnP
+            bool success = await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, slaveIps);
 
-            await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
-            await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", await GetCurrentUserAsync());
+            if (success)
+            {
+                await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
+                await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", await GetCurrentUserAsync());
+            }
+            else
+            {
+                Console.WriteLine("Native grouping failed. Falling back to legacy sync.");
+                await AddLog("Group Creation Failed - Fallback", $"Master: {SelectedSpeakerIp}. Attempting legacy sync.");
+                await ApplyLegacySync(SelectedSpeakerIp, slaveIps);
+                await NotificationService.SendNotificationAsync($"Group failed (UPnP error). Fallback Sync started for {SelectedSpeakerIp}", await GetCurrentUserAsync());
+            }
 
             isGroupModalOpen = false;
         }

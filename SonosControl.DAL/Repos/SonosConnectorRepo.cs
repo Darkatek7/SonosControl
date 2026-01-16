@@ -955,16 +955,17 @@ namespace SonosControl.DAL.Repos
             return rinconId != null ? $"uuid:RINCON_{rinconId}" : null;
         }
 
-        public async Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
+        public async Task<bool> CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
             var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken);
             if (masterRinconHex == null)
             {
                 Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
-                return;
+                return false;
             }
 
             var masterUuid = $"uuid:RINCON_{masterRinconHex}";
+            bool overallSuccess = true;
 
             foreach (var slaveIp in slaveIps)
             {
@@ -974,6 +975,7 @@ namespace SonosControl.DAL.Repos
                 if (slaveUuid == null)
                 {
                     Console.WriteLine($"Error: Could not get UUID for slave speaker {slaveIp}. Skipping.");
+                    overallSuccess = false;
                     continue;
                 }
 
@@ -1011,6 +1013,7 @@ namespace SonosControl.DAL.Repos
                     {
                         var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
                         Console.WriteLine($"Error: Speaker {slaveIp} could not join group. Status: {response.StatusCode}. Response: {errorContent}");
+                        overallSuccess = false;
                     }
                     else
                     {
@@ -1022,8 +1025,10 @@ namespace SonosControl.DAL.Repos
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: Speaker {slaveIp} could not join group: {ex.Message}");
+                    overallSuccess = false;
                 }
             }
+            return overallSuccess;
         }
 
         public async Task UngroupSpeaker(string ip, CancellationToken cancellationToken = default)
