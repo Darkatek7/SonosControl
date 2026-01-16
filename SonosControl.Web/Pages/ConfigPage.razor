@@ -88,6 +88,18 @@ else
                     </div>
 
                     <div class="config-field">
+                        <label class="form-label">📢 Discord Webhook</label>
+                        <input type="text" class="form-control"
+                               @bind-value="_settings.DiscordWebhookUrl"
+                               @bind-value:event="oninput"
+                               @bind-value:after="SaveSettings"
+                               placeholder="https://discord.com/api/webhooks/..." />
+                        <div class="form-text text-muted text-opacity-75">
+                            Notifications will be sent here for playback events and errors.
+                        </div>
+                    </div>
+
+                    <div class="config-field">
                         <label class="form-label">🎵 Auto Play</label>
                         <select class="form-select"
                                 @bind="AutoPlaySelection" @bind:event="onchange">

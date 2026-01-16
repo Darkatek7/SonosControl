@@ -984,14 +984,17 @@ namespace SonosControl.DAL.Repos
             return rinconId != null ? $"uuid:RINCON_{rinconId}" : null;
         }
 
-        public async Task CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
+        public async Task<bool> CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
-            var masterUuid = await GetSpeakerUUID(masterIp, cancellationToken);
-            if (masterUuid == null)
+            var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken);
+            if (masterRinconHex == null)
             {
-                Console.WriteLine($"Error: Could not get UUID for master speaker {masterIp}.");
-                return;
+                Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
+                return false;
             }
+
+            var masterUuid = $"uuid:RINCON_{masterRinconHex}";
+            bool overallSuccess = true;
 
             foreach (var slaveIp in slaveIps)
             {
@@ -1001,12 +1004,17 @@ namespace SonosControl.DAL.Repos
                 if (slaveUuid == null)
                 {
                     Console.WriteLine($"Error: Could not get UUID for slave speaker {slaveIp}. Skipping.");
+                    overallSuccess = false;
                     continue;
                 }
 
-                // The URI for the slave to join the master's group
-                string groupUri = $"x-rincon-group:{masterUuid}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:sonos='http://www.sonos.com/ServiceTypes/1#' xmlns='urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/'><item id='{masterUuid}' parentID='0' restricted='true'><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.sonos-playlist</upnp:class><desc id='cdudn' nameSpace='urn:schemas-rinconnetworks-com:metadata-1-0/'>SA_RINCON{masterUuid}</desc></item></DIDL-Lite>";
+                // The URI for the slave to join the master's group.
+                // Standard modern format typically includes uuid: prefix.
+                string groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
+
+                // Trying a combination of generic IDs and no SA_ prefix in description.
+                string rinconId = $"RINCON_{masterRinconHex}";
+                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">{rinconId}</desc></item></DIDL-Lite>";
 
                 string soapRequest = $@"
                 <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
@@ -1020,6 +1028,8 @@ namespace SonosControl.DAL.Repos
                   </s:Body>
                 </s:Envelope>";
 
+                Console.WriteLine($"Grouping {slaveIp} to {masterIp}. Metadata: {groupMetaData}");
+
                 try
                 {
                     var client = CreateClient();
@@ -1028,14 +1038,26 @@ namespace SonosControl.DAL.Repos
                     content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
 
                     var response = await client.PostAsync(url, content, cancellationToken);
-                    response.EnsureSuccessStatusCode();
-                    Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                        Console.WriteLine($"Error: Speaker {slaveIp} could not join group. Status: {response.StatusCode}. Response: {errorContent}");
+                        overallSuccess = false;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
+                        // Ensure the slave starts playing the group stream
+                        await StartPlaying(slaveIp);
+                    }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: Speaker {slaveIp} could not join group: {ex.Message}");
+                    overallSuccess = false;
                 }
             }
+            return overallSuccess;
         }
 
         public async Task UngroupSpeaker(string ip, CancellationToken cancellationToken = default)
