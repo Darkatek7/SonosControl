@@ -42,7 +42,7 @@
                                         }
                                     </select>
                                     <div class="btn-group">
-                                        <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@_isGrouping" title="Group speakers">
+                                        <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
                                             @if (_isGrouping)
                                             {
                                                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -52,8 +52,15 @@
                                                 <span>🔗 Group</span>
                                             }
                                         </button>
-                                        <button class="btn btn-outline-secondary" @onclick="UngroupCurrent" disabled="@_isGrouping" title="Ungroup active speaker">
-                                            <span>⛓️‍💥</span>
+                                        <button class="btn btn-outline-secondary" @onclick="UngroupCurrent" disabled="@(_isGrouping || _isUngrouping)" title="Ungroup active speaker" aria-label="Ungroup active speaker">
+                                            @if (_isUngrouping)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            }
+                                            else
+                                            {
+                                                <span>⛓️‍💥</span>
+                                            }
                                         </button>
                                     </div>
                                     <button class="btn btn-outline-info" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
@@ -348,6 +355,7 @@
     private bool _isPlaying;
     private bool _isSyncing;
     private bool _isGrouping;
+    private bool _isUngrouping;
     private bool isGroupModalOpen;
     private bool _isMainPlaybackLoading;
     private bool _isNextTrackLoading;
@@ -1197,7 +1205,7 @@
 
     private async Task UngroupCurrent()
     {
-        _isGrouping = true;
+        _isUngrouping = true;
         await InvokeAsync(StateHasChanged);
         try
         {
@@ -1207,7 +1215,7 @@
         }
         finally
         {
-            _isGrouping = false;
+            _isUngrouping = false;
             await InvokeAsync(StateHasChanged);
         }
     }
