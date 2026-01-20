@@ -24,12 +24,14 @@ namespace SonosControl.Tests
         private Mock<ISettingsRepo> _mockSettingsRepo;
         private ApplicationDbContext _db;
         private Mock<AuthenticationStateProvider> _mockAuthProvider;
+        private Mock<INotificationService> _mockNotificationService;
 
         public IndexPagePerfTests()
         {
             _mockUow = new Mock<IUnitOfWork>();
             _mockSonosRepo = new Mock<ISonosConnectorRepo>();
             _mockSettingsRepo = new Mock<ISettingsRepo>();
+            _mockNotificationService = new Mock<INotificationService>();
 
             // Use InMemory database instead of mocking DbContext directly
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -45,6 +47,7 @@ namespace SonosControl.Tests
             Services.AddSingleton(_mockUow.Object);
             Services.AddSingleton(_db);
             Services.AddSingleton(_mockAuthProvider.Object);
+            Services.AddSingleton(_mockNotificationService.Object);
 
             // Mock auth state
             var identity = new System.Security.Claims.ClaimsIdentity(new[]
