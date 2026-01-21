@@ -56,9 +56,9 @@ else
                                                        @onchange="async (e) => await UpdateStartupVolume(speaker, e.Value)"
                                                        disabled="@(!canEditIp)"
                                                        placeholder="@_settings.Volume"
-                                                       aria-label="Startup Volume" />
+                                                       aria-label="@($"Startup Volume for {speaker.Name}")" />
                                             </div>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)">Remove</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="@($"Remove speaker {speaker.Name}")">Remove</button>
                                         </div>
                                     </div>
                                 }
@@ -205,15 +205,18 @@ else
                                     <td>@day.ToString().Substring(0, 3)</td>
                                     <td>
                                         <input type="time" class="form-control" value="@schedule.StartTime.ToString("HH:mm")"
+                                               aria-label="@($"{day} Start Time")"
                                                @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StartTime = t; await SaveSettings(); } }"/>
                                     </td>
                                     <td>
                                         <input type="time" class="form-control" value="@schedule.StopTime.ToString("HH:mm")"
+                                               aria-label="@($"{day} Stop Time")"
                                                @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StopTime = t; await SaveSettings(); } }"/>
                                     </td>
                                     <td>
                                         <select class="form-select"
                                                 value="@GetScheduleSelection(schedule)"
+                                                aria-label="@($"{day} Play Selection")"
                                                 @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
                                             <option value="">-- None --</option>
                                             <option value="randomStation">Random Station</option>
@@ -240,7 +243,7 @@ else
                                         </select>
                                     </td>
                                     <td class="text-center">
-                                        <InputCheckbox @bind-Value="schedule.IsSyncedPlayback" @bind-Value:after="SaveSettings" />
+                                        <InputCheckbox @bind-Value="schedule.IsSyncedPlayback" @bind-Value:after="SaveSettings" aria-label="@($"{day} Synced Playback")" />
                                     </td>
                                 </tr>
                             }
@@ -291,24 +294,27 @@ else
                             {
                                 <tr>
                                     <td>
-                                        <button class="form-control text-start" @onclick="() => OpenCalendar(holiday)">
+                                        <button class="form-control text-start" @onclick="() => OpenCalendar(holiday)" aria-label="@($"Change date for {holiday.Name}")">
                                             @holiday.Date.ToString("yyyy-MM-dd")
                                         </button>
                                     </td>
                                     <td>
                                         <input type="text" class="form-control" value="@holiday.Name"
+                                               aria-label="@($"Holiday Name for {holiday.Date}")"
                                                @onchange="async e => { holiday.Name = e.Value?.ToString(); await SaveSettings(); }" title="@holiday.Name"/>
                                     </td>
                                     <td>
                                         <input type="time" class="form-control" value="@holiday.StartTime.ToString("HH:mm")"
+                                               aria-label="@($"Start Time for {holiday.Name}")"
                                                @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StartTime = t; await SaveSettings(); } }"/>
                                     </td>
                                     <td>
                                         <input type="time" class="form-control" value="@holiday.StopTime.ToString("HH:mm")"
+                                               aria-label="@($"Stop Time for {holiday.Name}")"
                                                @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StopTime = t; await SaveSettings(); } }"/>
                                     </td>
                                     <td>
-                                        <select class="form-select" value="@GetScheduleSelection(holiday)" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
+                                        <select class="form-select" value="@GetScheduleSelection(holiday)" aria-label="@($"Play Selection for {holiday.Name}")" @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
                                             <option value="skip">-- Do not play --</option>
                                             <option value="randomStation">Random Station</option>
                                             <option value="randomSpotify">Random Spotify</option>
@@ -334,10 +340,10 @@ else
                                         </select>
                                     </td>
                                     <td class="text-center">
-                                        <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @bind-Value:after="SaveSettings" />
+                                        <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @bind-Value:after="SaveSettings" aria-label="@($"Synced Playback for {holiday.Name}")" />
                                     </td>
                                     <td class="text-end">
-                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)">Remove</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")">Remove</button>
                                     </td>
                                 </tr>
                             }
