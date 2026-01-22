@@ -88,6 +88,46 @@ public class IndexPageUXTests
         });
     }
 
+    [Fact]
+    public void IndexPage_HasAccessibleTabs_And_AddButtons()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            // Verify tabs
+            var stationsTab = cut.Find("#tab-stations");
+            Assert.Equal("tab", stationsTab.GetAttribute("role"));
+            Assert.Equal("true", stationsTab.GetAttribute("aria-selected"));
+            Assert.Equal("panel-stations", stationsTab.GetAttribute("aria-controls"));
+
+            var spotifyTab = cut.Find("#tab-spotify");
+            Assert.Equal("tab", spotifyTab.GetAttribute("role"));
+            Assert.Equal("false", spotifyTab.GetAttribute("aria-selected"));
+
+            // Verify content panel
+            var panel = cut.Find("#panel-stations");
+            Assert.Equal("tabpanel", panel.GetAttribute("role"));
+            Assert.Equal("tab-stations", panel.GetAttribute("aria-labelledby"));
+
+            // Verify Add buttons have aria-labels
+            // Note: The visibility depends on which tab is active. Stations is active by default.
+            var addStationBtn = cut.Find("button[aria-label='Add Station']");
+            Assert.NotNull(addStationBtn);
+        });
+
+        // Switch tab to check other buttons
+        cut.Find("#tab-spotify").Click();
+        cut.WaitForAssertion(() =>
+        {
+             var addSpotifyBtn = cut.Find("button[aria-label='Add Spotify Track']");
+             Assert.NotNull(addSpotifyBtn);
+        });
+    }
+
     private sealed class TestResources : IDisposable
     {
         public ApplicationDbContext DbContext { get; }
@@ -147,6 +187,7 @@ public class IndexPageUXTests
         unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
 
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
 
         return new TestResources(dbContext);
     }

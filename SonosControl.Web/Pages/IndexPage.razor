@@ -178,7 +178,7 @@
                                                             <span>🔀</span>
                                                         }
                                                     </button>
-                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal">➕ Add</button>
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal" aria-label="Add Station">➕ Add</button>
                                                 </div>
                                             </div>
                                             <ul class="list-group media-list">
@@ -216,7 +216,7 @@
                                             var tracks = _tracks;
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved Spotify</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal">➕ Add</button>
+                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify Track">➕ Add</button>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @if (tracks.Any())
@@ -253,7 +253,7 @@
                                             var collections = _youTubeCollections;
                                             <div class="d-flex justify-content-between align-items-center mb-3">
                                                 <h5 class="mb-0">Saved YouTube</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal">➕ Add</button>
+                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Music Collection">➕ Add</button>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @if (collections.Any())
