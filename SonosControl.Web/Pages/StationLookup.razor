@@ -32,25 +32,31 @@
     }
 
     <div class="lookup-shell__search">
-        <input class="lookup-shell__search-input form-control"
+        <label for="stationSearch" class="visually-hidden">Search for a radio station</label>
+        <input id="stationSearch"
+               class="lookup-shell__search-input form-control"
                @bind-value="searchTerm"
                @bind-value:event="oninput"
                placeholder="Search for a radio station..."
                @onkeydown="HandleKeyDown"/>
         <button class="lookup-shell__search-button btn btn-primary"
                 @onclick="SearchStations"
-                disabled="@string.IsNullOrWhiteSpace(searchTerm)"
+                disabled="@(string.IsNullOrWhiteSpace(searchTerm) || isLoading)"
                 aria-label="Search stations"
                 title="Search stations">
-            🔍
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span class="visually-hidden">Searching...</span>
+            }
+            else
+            {
+                <span>🔍</span>
+            }
         </button>
     </div>
 
-    @if (isLoading)
-    {
-        <p class="text-center text-muted mb-0">Searching...</p>
-    }
-    else if (results?.Any() == true)
+    @if (results?.Any() == true)
     {
         <ul class="list-group list-group-flush lookup-results">
             @foreach (var station in results)
