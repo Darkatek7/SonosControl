@@ -45,6 +45,10 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- Hall of Fame & Leaderboards -->
+    <div class="row g-4 mb-4">
         <!-- Station Master -->
         <div class="col-md-6 col-lg-3">
             <div class="card h-100 shadow-sm border-0">
@@ -55,9 +59,42 @@
                 </div>
             </div>
         </div>
+
+        <!-- Top Stations (Plays) -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">📻 Top Stations</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most total plays</p>
+                     @RenderLeaderboard(stationPlayCountStats, "plays")
+                </div>
+            </div>
+        </div>
+
+        <!-- The Silencer -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">🤫 The Silencer</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most playback pauses</p>
+                     @RenderLeaderboard(silencerStats, "pauses")
+                </div>
+            </div>
+        </div>
+
+        <!-- The Loner -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">💔 The Loner</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most groups disbanded</p>
+                     @RenderLeaderboard(lonerStats, "ungroups")
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- User Hall of Fame -->
+    <!-- User Hall of Fame (Continued) -->
     <div class="row g-4 mb-4">
         <!-- Top DJ -->
         <div class="col-md-6 col-lg-3">
@@ -352,6 +389,9 @@
     private List<UserStat>? grouperStats;
     private List<UserStat>? nightOwlStats;
     private List<UserStat>? stationMasterStats;
+    private List<UserStat>? stationPlayCountStats;
+    private List<UserStat>? silencerStats;
+    private List<UserStat>? lonerStats;
 
     private double totalDuration;
     private PlaybackHistory? longestSession;
@@ -433,6 +473,36 @@
         stationMasterStats = await Db.Logs
             .Where(l => l.Timestamp >= thirtyDaysAgo)
             .Where(l => l.Action == "Station Changed")
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 6. Top Stations (Plays)
+        stationPlayCountStats = await Db.PlaybackStats
+            .Where(p => p.StartTime >= thirtyDaysAgo)
+            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
+            .GroupBy(p => p.TrackName)
+            .Select(g => new UserStat { User = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 7. The Silencer: Most Playback Paused
+        silencerStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Action == "Playback Paused")
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 8. The Loner: Most Speaker Ungrouped
+        lonerStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Action == "Speaker Ungrouped")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
             .OrderByDescending(x => x.Count)
