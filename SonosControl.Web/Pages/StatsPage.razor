@@ -15,40 +15,59 @@
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Leaderboard -->
-        <div class="col-md-6 col-lg-4">
+    <!-- User Hall of Fame -->
+    <div class="row g-4 mb-4">
+        <!-- Top DJ -->
+        <div class="col-md-6 col-lg-3">
             <div class="card h-100 shadow-sm border-0">
                 <div class="card-body">
-                     <h5 class="card-title mb-3">🏆 Top DJs (Last 30 Days)</h5>
-                     @if (userStats == null)
-                     {
-                         <p>Loading...</p>
-                     }
-                     else if (!userStats.Any())
-                     {
-                         <p class="text-muted">No data available.</p>
-                     }
-                     else
-                     {
-                         <ul class="list-group list-group-flush">
-                             @foreach (var user in userStats)
-                             {
-                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                     <span>
-                                         <span class="fw-bold">@user.User</span>
-                                     </span>
-                                     <span class="badge bg-primary rounded-pill">@user.Count changes</span>
-                                 </li>
-                             }
-                         </ul>
-                     }
+                     <h5 class="card-title mb-3">🎧 Top DJ</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most selections & playback starts</p>
+                     @RenderLeaderboard(topDjStats, "actions")
                 </div>
             </div>
         </div>
 
+        <!-- The Skipper -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">⏭️ The Skipper</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most tracks skipped</p>
+                     @RenderLeaderboard(skipperStats, "skips")
+                </div>
+            </div>
+        </div>
+
+        <!-- The Grouper -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">🔗 The Grouper</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most groups & syncs created</p>
+                     @RenderLeaderboard(grouperStats, "groups")
+                </div>
+            </div>
+        </div>
+
+        <!-- Night Owl -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">🦉 Night Owl</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most active 10PM - 4AM</p>
+                     @RenderLeaderboard(nightOwlStats, "actions")
+                </div>
+            </div>
+        </div>
+
+        <!-- Early Bird (Optional, fitting 4 cols means we pick the best 4. Let's stick to 4) -->
+        <!-- If we wanted 5, we'd need a different grid or carousel. 4 is good. -->
+    </div>
+
+    <div class="row g-4">
          <!-- Top Stations -->
-        <div class="col-md-6 col-lg-8">
+        <div class="col-lg-6">
             <div class="card h-100 shadow-sm border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">📻 Top Stations (by Time)</h5>
@@ -73,7 +92,7 @@
         </div>
 
         <!-- Top Tracks -->
-        <div class="col-12">
+        <div class="col-lg-6">
             <div class="card shadow-sm border-0">
                 <div class="card-body">
                     <h5 class="card-title mb-3">🎵 Top Tracks</h5>
@@ -118,6 +137,32 @@
 </div>
 
 @code {
+    RenderFragment RenderLeaderboard(List<UserStat>? stats, string label) => __builder =>
+    {
+        if (stats == null)
+        {
+            <p>Loading...</p>
+        }
+        else if (!stats.Any())
+        {
+            <p class="text-muted">No data available.</p>
+        }
+        else
+        {
+            <ul class="list-group list-group-flush">
+                @foreach (var user in stats)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>
+                            <span class="fw-bold">@user.User</span>
+                        </span>
+                        <span class="badge bg-primary rounded-pill">@user.Count @label</span>
+                    </li>
+                }
+            </ul>
+        }
+    };
+
     class UserStat
     {
         public string User { get; set; } = "";
@@ -139,7 +184,11 @@
         public int PlayCount { get; set; }
     }
 
-    private List<UserStat>? userStats;
+    private List<UserStat>? topDjStats;
+    private List<UserStat>? skipperStats;
+    private List<UserStat>? grouperStats;
+    private List<UserStat>? nightOwlStats;
+
     private List<StationStat>? stationStats;
     private List<TrackStat>? trackStats;
 
@@ -150,12 +199,61 @@
 
     private async Task LoadStats()
     {
-        // User Leaderboard (Last 30 days)
+        // Limit logs to last 30 days for user stats to keep it relevant
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
 
-        userStats = await Db.Logs
+        // 1. Top DJ: Selections & Playback Starts
+        var djActions = new[]
+        {
+            "Station Changed",
+            "Spotify Track Changed",
+            "YouTube Music Changed",
+            "Spotify URL Played",
+            "Playback Started"
+        };
+
+        topDjStats = await Db.Logs
             .Where(l => l.Timestamp >= thirtyDaysAgo)
-            .Where(l => l.Action.Contains("Changed") || l.Action == "Playback Started")
+            .Where(l => djActions.Contains(l.Action))
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 2. The Skipper: Next Track
+        skipperStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Action == "Next Track")
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 3. The Grouper: Group Created, Sync Play
+        var groupActions = new[]
+        {
+            "Group Created",
+            "Sync Play Started (Cloned URI)"
+        };
+
+        grouperStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => groupActions.Contains(l.Action))
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // 4. Night Owl: 10PM - 4AM UTC (Approx Late Night)
+        // Note: SQLite might not support complex time extraction in LINQ translation easily depending on provider version,
+        // but EF Core usually handles .Hour. If not, we might need client eval or raw SQL.
+        // Assuming EF Core 6/7/8 logic works.
+        nightOwlStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Timestamp.Hour >= 22 || l.Timestamp.Hour < 4)
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
             .OrderByDescending(x => x.Count)
