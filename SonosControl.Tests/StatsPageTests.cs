@@ -70,6 +70,10 @@ public class StatsPageTests
             Assert.Contains("Activity Trends (Last 30 Days)", cut.Markup);
             Assert.Contains("Peak Usage Times", cut.Markup);
             Assert.Contains("Media Consumption", cut.Markup);
+
+            // Verify New Sections
+            Assert.Contains("Total Listening Time", cut.Markup);
+            Assert.Contains("Station Master", cut.Markup);
         });
 
         // Verify that RadzenCharts are present (stubbed)

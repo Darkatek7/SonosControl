@@ -15,6 +15,48 @@
         </div>
     </div>
 
+    <!-- Quick Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0 bg-primary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-0">Total Listening Time</h5>
+                    <h2 class="display-6 fw-bold my-2">@FormatDuration(totalDuration)</h2>
+                    <p class="mb-0 small opacity-75">Last 30 Days</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0 bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-0">Longest Session</h5>
+                    <h2 class="display-6 fw-bold my-2">@(longestSession != null ? FormatDuration(longestSession.DurationSeconds) : "-")</h2>
+                    <p class="mb-0 small opacity-75">@(longestSession?.TrackName ?? "None")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0 bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-0">Most Active Day</h5>
+                    <h2 class="display-6 fw-bold my-2">@mostActiveDay</h2>
+                    <p class="mb-0 small opacity-75">Based on activity</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Station Master -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">📻 Station Master</h5>
+                     <p class="card-subtitle mb-3 text-muted small">Most station changes</p>
+                     @RenderLeaderboard(stationMasterStats, "changes")
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- User Hall of Fame -->
     <div class="row g-4 mb-4">
         <!-- Top DJ -->
@@ -82,7 +124,7 @@
                             <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
                                 <RadzenMarkers MarkerType="MarkerType.Circle" />
                             </RadzenLineSeries>
-                            <RadzenCategoryAxis Padding="20" FormatString="{0:MM/dd}" />
+                            <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
                             <RadzenValueAxis>
                                 <RadzenGridLines Visible="true" />
                             </RadzenValueAxis>
@@ -166,6 +208,28 @@
                              <RadzenColumnOptions Radius="5" />
                              <RadzenValueAxis Formatter="@FormatTimeAxis" />
                          </RadzenChart>
+
+                         <div class="table-responsive mt-3">
+                             <table class="table table-sm table-hover align-middle">
+                                 <thead>
+                                     <tr>
+                                         <th>Station</th>
+                                         <th>Time</th>
+                                         <th>Plays</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     @foreach (var station in stationStats)
+                                     {
+                                         <tr>
+                                             <td class="small fw-bold">@station.Station</td>
+                                             <td class="small">@FormatDuration(station.Duration)</td>
+                                             <td class="small">@station.PlayCount</td>
+                                         </tr>
+                                     }
+                                 </tbody>
+                             </table>
+                         </div>
                      }
                 </div>
             </div>
@@ -254,6 +318,7 @@
         public string Station { get; set; } = "";
         public double Duration { get; set; }
         public double DurationHours => Math.Round(Duration / 3600.0, 2);
+        public int PlayCount { get; set; }
     }
 
     class TrackStat
@@ -286,6 +351,11 @@
     private List<UserStat>? skipperStats;
     private List<UserStat>? grouperStats;
     private List<UserStat>? nightOwlStats;
+    private List<UserStat>? stationMasterStats;
+
+    private double totalDuration;
+    private PlaybackHistory? longestSession;
+    private string mostActiveDay = "-";
 
     private List<DateStat>? activityOverTime;
     private List<HourStat>? activityByHour;
@@ -359,6 +429,26 @@
             .Take(5)
             .ToListAsync();
 
+        // 5. Station Master: Most Station Changes
+        stationMasterStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Action == "Station Changed")
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // Quick Stats
+        totalDuration = await Db.PlaybackStats
+            .Where(p => p.StartTime >= thirtyDaysAgo)
+            .SumAsync(x => x.DurationSeconds);
+
+        longestSession = await Db.PlaybackStats
+             .Where(p => p.StartTime >= thirtyDaysAgo)
+             .OrderByDescending(x => x.DurationSeconds)
+             .FirstOrDefaultAsync();
+
         // Activity Trends
         // Note: For SQLite, Timestamp.Date might require client eval in some EF versions, but usually works in recent ones.
         // If it fails, we can pull data and group in memory. Trying server-side first.
@@ -371,6 +461,16 @@
             .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
             .OrderBy(x => x.Date)
             .ToList();
+
+        // Most Active Day
+        var dayGroup = logsForTrends
+            .GroupBy(l => l.Timestamp.DayOfWeek)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+        if (dayGroup != null)
+        {
+            mostActiveDay = dayGroup.Key.ToString();
+        }
 
         // Peak Usage Times (Hour of Day)
         // Reusing logsForTrends since we already have them in memory for the same period
@@ -391,7 +491,7 @@
         stationStats = await Db.PlaybackStats
             .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
             .GroupBy(p => p.TrackName)
-            .Select(g => new StationStat { Station = g.Key, Duration = g.Sum(x => x.DurationSeconds) })
+            .Select(g => new StationStat { Station = g.Key, Duration = g.Sum(x => x.DurationSeconds), PlayCount = g.Count() })
             .OrderByDescending(x => x.Duration)
             .Take(10)
             .ToListAsync();
