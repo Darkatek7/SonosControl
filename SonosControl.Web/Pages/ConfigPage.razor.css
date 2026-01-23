@@ -212,13 +212,3 @@
     }
 }
 
-/* Dark mode fix for list group items */
-.list-group-item {
-    background-color: var(--surface-1);
-    color: var(--text-primary);
-    border-color: var(--border-subtle);
-}
-
-.list-group-item .text-muted {
-    color: var(--text-secondary) !important;
-}
