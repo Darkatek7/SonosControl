@@ -25,6 +25,17 @@
                 </NavLink>
             </div>
 
+            <AuthorizeView Roles="admin,operator,superadmin">
+                <Authorized>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="stats">
+                            <span class="nav-icon oi oi-graph" aria-hidden="true"></span>
+                            <span>Statistics</span>
+                        </NavLink>
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+
             <AuthorizeView Roles="admin,superadmin">
                 <Authorized>
                     <div class="nav-divider" aria-hidden="true"></div>
