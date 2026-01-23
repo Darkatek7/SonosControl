@@ -130,8 +130,8 @@ app.UseEndpoints(endpoints =>
 });
 
 app.UseRequestLocalization(new RequestLocalizationOptions()
-    .AddSupportedCultures(new[] { "de-AT", "en-US" })
-    .AddSupportedUICultures(new[] { "de-AT", "en-US" })
+    .AddSupportedCultures(new[] { "de-AT", "de-DE", "de", "en-US", "en-GB", "en", "fr-FR", "fr", "es-ES", "es", "it-IT", "it", "nl-NL", "nl" })
+    .AddSupportedUICultures(new[] { "de-AT", "de-DE", "de", "en-US", "en-GB", "en", "fr-FR", "fr", "es-ES", "es", "it-IT", "it", "nl-NL", "nl" })
     .SetDefaultCulture("de-AT"));
 
 app.Run();
