@@ -9,6 +9,7 @@ using System.IO;
 
 using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
+using Radzen;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+builder.Services.AddRadzenComponents();
 builder.Services.AddHttpClient();
 builder.Services.AddHttpClient(nameof(SonosConnectorRepo), client =>
 {
@@ -25,12 +27,13 @@ builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISetti
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 
 builder.Services.AddHostedService<SonosControlService>();
+builder.Services.AddHostedService<PlaybackMonitorService>();
 // builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
 builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
-builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<SonosControl.Web.Services.ThemeService>();
 builder.Services.AddScoped<INotifier, DiscordNotificationService>();
 builder.Services.AddScoped<INotifier, TeamsNotificationService>();
 builder.Services.AddScoped<INotificationService, AggregateNotificationService>();

@@ -1,0 +1,202 @@
+@page "/stats"
+@using SonosControl.Web.Data
+@using SonosControl.Web.Models
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@inject ApplicationDbContext Db
+
+<PageTitle>Statistics - Sonos Control</PageTitle>
+
+<div class="container dashboard-shell">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h3 class="mb-1">📊 Statistics</h3>
+            <p class="text-muted mb-0">Usage insights and playback history.</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Leaderboard -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                     <h5 class="card-title mb-3">🏆 Top DJs (Last 30 Days)</h5>
+                     @if (userStats == null)
+                     {
+                         <p>Loading...</p>
+                     }
+                     else if (!userStats.Any())
+                     {
+                         <p class="text-muted">No data available.</p>
+                     }
+                     else
+                     {
+                         <ul class="list-group list-group-flush">
+                             @foreach (var user in userStats)
+                             {
+                                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                     <span>
+                                         <span class="fw-bold">@user.User</span>
+                                     </span>
+                                     <span class="badge bg-primary rounded-pill">@user.Count changes</span>
+                                 </li>
+                             }
+                         </ul>
+                     }
+                </div>
+            </div>
+        </div>
+
+         <!-- Top Stations -->
+        <div class="col-md-6 col-lg-8">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">📻 Top Stations (by Time)</h5>
+                     @if (stationStats == null)
+                     {
+                         <p>Loading...</p>
+                     }
+                     else if (!stationStats.Any())
+                     {
+                         <p class="text-muted">No data available.</p>
+                     }
+                     else
+                     {
+                         <RadzenChart>
+                             <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
+                             <RadzenColumnOptions Radius="5" />
+                             <RadzenValueAxis Formatter="@FormatTimeAxis" />
+                         </RadzenChart>
+                     }
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Tracks -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">🎵 Top Tracks</h5>
+                     @if (trackStats == null)
+                     {
+                         <p>Loading...</p>
+                     }
+                     else if (!trackStats.Any())
+                     {
+                         <p class="text-muted">No data available.</p>
+                     }
+                     else
+                     {
+                         <div class="table-responsive">
+                             <table class="table table-hover align-middle">
+                                 <thead>
+                                     <tr>
+                                         <th>Track</th>
+                                         <th>Artist</th>
+                                         <th>Total Time</th>
+                                         <th>Play Count</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     @foreach (var track in trackStats)
+                                     {
+                                         <tr>
+                                             <td class="fw-bold">@track.Track</td>
+                                             <td>@track.Artist</td>
+                                             <td>@FormatDuration(track.Duration)</td>
+                                             <td>@track.PlayCount</td>
+                                         </tr>
+                                     }
+                                 </tbody>
+                             </table>
+                         </div>
+                     }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    class UserStat
+    {
+        public string User { get; set; } = "";
+        public int Count { get; set; }
+    }
+
+    class StationStat
+    {
+        public string Station { get; set; } = "";
+        public double Duration { get; set; }
+        public double DurationHours => Math.Round(Duration / 3600.0, 2);
+    }
+
+    class TrackStat
+    {
+        public string Track { get; set; } = "";
+        public string Artist { get; set; } = "";
+        public double Duration { get; set; }
+        public int PlayCount { get; set; }
+    }
+
+    private List<UserStat>? userStats;
+    private List<StationStat>? stationStats;
+    private List<TrackStat>? trackStats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStats();
+    }
+
+    private async Task LoadStats()
+    {
+        // User Leaderboard (Last 30 days)
+        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+
+        userStats = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .Where(l => l.Action.Contains("Changed") || l.Action == "Playback Started")
+            .GroupBy(l => l.PerformedBy)
+            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToListAsync();
+
+        // Top Stations
+        stationStats = await Db.PlaybackStats
+            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
+            .GroupBy(p => p.TrackName)
+            .Select(g => new StationStat { Station = g.Key, Duration = g.Sum(x => x.DurationSeconds) })
+            .OrderByDescending(x => x.Duration)
+            .Take(10)
+            .ToListAsync();
+
+        // Top Tracks
+        trackStats = await Db.PlaybackStats
+            .Where(p => p.MediaType != "Station" && p.MediaType != "Stream" && p.MediaType != "Unknown")
+            .GroupBy(p => new { p.TrackName, p.Artist })
+            .Select(g => new TrackStat
+            {
+                Track = g.Key.TrackName,
+                Artist = g.Key.Artist,
+                Duration = g.Sum(x => x.DurationSeconds),
+                PlayCount = g.Count()
+            })
+            .OrderByDescending(x => x.Duration)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        if (ts.TotalHours >= 1)
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+
+    string FormatTimeAxis(object value)
+    {
+        return $"{value}h";
+    }
+}
