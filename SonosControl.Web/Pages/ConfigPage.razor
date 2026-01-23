@@ -89,11 +89,26 @@ else
 
                     <div class="config-field">
                         <label class="form-label">📢 Discord Webhook</label>
-                        <input type="text" class="form-control"
-                               @bind-value="_settings.DiscordWebhookUrl"
-                               @bind-value:event="oninput"
-                               @bind-value:after="SaveSettings"
-                               placeholder="https://discord.com/api/webhooks/..." />
+                        @if (_editingDiscordWebhook)
+                        {
+                            <div class="input-group">
+                                <input type="text" class="form-control"
+                                       @bind-value="_settings.DiscordWebhookUrl"
+                                       @bind-value:event="oninput"
+                                       @bind-value:after="SaveSettings"
+                                       placeholder="https://discord.com/api/webhooks/..." />
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingDiscordWebhook = false">Done</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex gap-2">
+                                <div class="form-control text-muted text-truncate bg-light">
+                                    @GetTruncatedUrl(_settings.DiscordWebhookUrl)
+                                </div>
+                                <button class="btn btn-outline-primary" @onclick="() => _editingDiscordWebhook = true">Edit</button>
+                            </div>
+                        }
                         <div class="form-text text-muted text-opacity-75">
                             Notifications will be sent here for playback events and errors.
                         </div>
@@ -101,11 +116,26 @@ else
 
                     <div class="config-field">
                         <label class="form-label">💬 Teams Webhook</label>
-                        <input type="text" class="form-control"
-                               @bind-value="_settings.TeamsWebhookUrl"
-                               @bind-value:event="oninput"
-                               @bind-value:after="SaveSettings"
-                               placeholder="https://outlook.office.com/webhook/..." />
+                        @if (_editingTeamsWebhook)
+                        {
+                            <div class="input-group">
+                                <input type="text" class="form-control"
+                                       @bind-value="_settings.TeamsWebhookUrl"
+                                       @bind-value:event="oninput"
+                                       @bind-value:after="SaveSettings"
+                                       placeholder="https://outlook.office.com/webhook/..." />
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingTeamsWebhook = false">Done</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex gap-2">
+                                <div class="form-control text-muted text-truncate bg-light">
+                                    @GetTruncatedUrl(_settings.TeamsWebhookUrl)
+                                </div>
+                                <button class="btn btn-outline-primary" @onclick="() => _editingTeamsWebhook = true">Edit</button>
+                            </div>
+                        }
                         <div class="form-text text-muted text-opacity-75">
                             Teams notifications will be sent here for playback events and errors.
                         </div>
@@ -385,6 +415,20 @@ else
 @code {
 
     private string _activeTab = "device";
+
+    private bool _editingDiscordWebhook = false;
+    private bool _editingTeamsWebhook = false;
+
+    private string GetTruncatedUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "Not Configured";
+
+        if (url.Length <= 30)
+            return url;
+
+        return url.Substring(0, 30) + "...";
+    }
 
     private SonosSettings? _settings;
 
