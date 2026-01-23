@@ -60,9 +60,89 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Early Bird (Optional, fitting 4 cols means we pick the best 4. Let's stick to 4) -->
-        <!-- If we wanted 5, we'd need a different grid or carousel. 4 is good. -->
+    <!-- Activity Trends -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">📈 Activity Trends (Last 30 Days)</h5>
+                    @if (activityOverTime == null)
+                    {
+                        <p>Loading...</p>
+                    }
+                    else if (!activityOverTime.Any())
+                    {
+                        <p class="text-muted">No activity data available.</p>
+                    }
+                    else
+                    {
+                        <RadzenChart>
+                            <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
+                                <RadzenMarkers MarkerType="MarkerType.Circle" />
+                            </RadzenLineSeries>
+                            <RadzenCategoryAxis Padding="20" FormatString="{0:MM/dd}" />
+                            <RadzenValueAxis>
+                                <RadzenGridLines Visible="true" />
+                            </RadzenValueAxis>
+                        </RadzenChart>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage & Media -->
+    <div class="row g-4 mb-4">
+        <!-- Peak Usage -->
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">⏰ Peak Usage Times</h5>
+                    @if (activityByHour == null)
+                    {
+                        <p>Loading...</p>
+                    }
+                    else if (!activityByHour.Any())
+                    {
+                        <p class="text-muted">No data available.</p>
+                    }
+                    else
+                    {
+                        <RadzenChart>
+                            <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
+                             <RadzenCategoryAxis Step="1" />
+                        </RadzenChart>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Media Consumption -->
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">🥧 Media Consumption</h5>
+                    @if (mediaTypeStats == null)
+                    {
+                        <p>Loading...</p>
+                    }
+                    else if (!mediaTypeStats.Any())
+                    {
+                        <p class="text-muted">No data available.</p>
+                    }
+                    else
+                    {
+                        <RadzenChart>
+                            <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Duration">
+                                <RadzenSeriesDataLabels Visible="true" />
+                            </RadzenDonutSeries>
+                        </RadzenChart>
+                    }
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -184,10 +264,32 @@
         public int PlayCount { get; set; }
     }
 
+    class DateStat
+    {
+        public DateTime Date { get; set; }
+        public int Count { get; set; }
+    }
+
+    class HourStat
+    {
+        public int Hour { get; set; }
+        public int Count { get; set; }
+    }
+
+    class MediaStat
+    {
+        public string MediaType { get; set; } = "";
+        public double Duration { get; set; }
+    }
+
     private List<UserStat>? topDjStats;
     private List<UserStat>? skipperStats;
     private List<UserStat>? grouperStats;
     private List<UserStat>? nightOwlStats;
+
+    private List<DateStat>? activityOverTime;
+    private List<HourStat>? activityByHour;
+    private List<MediaStat>? mediaTypeStats;
 
     private List<StationStat>? stationStats;
     private List<TrackStat>? trackStats;
@@ -248,9 +350,6 @@
             .ToListAsync();
 
         // 4. Night Owl: 10PM - 4AM UTC (Approx Late Night)
-        // Note: SQLite might not support complex time extraction in LINQ translation easily depending on provider version,
-        // but EF Core usually handles .Hour. If not, we might need client eval or raw SQL.
-        // Assuming EF Core 6/7/8 logic works.
         nightOwlStats = await Db.Logs
             .Where(l => l.Timestamp >= thirtyDaysAgo)
             .Where(l => l.Timestamp.Hour >= 22 || l.Timestamp.Hour < 4)
@@ -258,6 +357,34 @@
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .Take(5)
+            .ToListAsync();
+
+        // Activity Trends
+        // Note: For SQLite, Timestamp.Date might require client eval in some EF versions, but usually works in recent ones.
+        // If it fails, we can pull data and group in memory. Trying server-side first.
+        var logsForTrends = await Db.Logs
+            .Where(l => l.Timestamp >= thirtyDaysAgo)
+            .ToListAsync(); // Pulling into memory to ensure GroupBy Date works safely across all providers including SQLite
+
+        activityOverTime = logsForTrends
+            .GroupBy(l => l.Timestamp.Date)
+            .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        // Peak Usage Times (Hour of Day)
+        // Reusing logsForTrends since we already have them in memory for the same period
+        activityByHour = logsForTrends
+            .GroupBy(l => l.Timestamp.Hour)
+            .Select(g => new HourStat { Hour = g.Key, Count = g.Count() })
+            .OrderBy(x => x.Hour)
+            .ToList();
+
+        // Media Consumption
+        mediaTypeStats = await Db.PlaybackStats
+            .GroupBy(p => p.MediaType)
+            .Select(g => new MediaStat { MediaType = g.Key, Duration = g.Sum(x => x.DurationSeconds) })
+            .OrderByDescending(x => x.Duration)
             .ToListAsync();
 
         // Top Stations
