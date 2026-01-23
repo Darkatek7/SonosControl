@@ -13,6 +13,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<LogEntry> Logs { get; set; }
+    public DbSet<PlaybackHistory> PlaybackStats { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
