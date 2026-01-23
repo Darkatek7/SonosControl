@@ -182,6 +182,7 @@
   ],
   "AllowUserRegistration": true,
   "DiscordWebhookUrl": null,
+  "TeamsWebhookUrl": null,
   "NowPlayingGradientStartColor": "#0f172a",
   "NowPlayingGradientMidColor": "#1e3a8a",
   "NowPlayingGradientEndColor": "#0f766e"
