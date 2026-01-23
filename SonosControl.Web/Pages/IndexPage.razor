@@ -131,24 +131,47 @@
                                 <ul class="list-group list-group-flush media-list">
                                     @if (_speakerStatuses.Any())
                                     {
-                                        @foreach (var status in _speakerStatuses.OrderBy(s => s.Name))
+                                        var roots = _speakerStatuses
+                                            .Where(s => string.IsNullOrEmpty(s.MasterUuid) || !_speakerStatuses.Any(m => m.Uuid == s.MasterUuid))
+                                            .OrderBy(s => s.Name);
+
+                                        foreach (var root in roots)
                                         {
                                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 <div class="d-flex align-items-center">
-                                                    <span class="me-2 status-indicator @(status.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                                    <span class="me-2 status-indicator @(root.IsPlaying ? "status-playing" : "status-paused")"></span>
                                                     <div>
-                                                        <span class="fw-bold">@status.Name</span>
-                                                        @if (status.IsPlaying && !string.IsNullOrWhiteSpace(status.Media))
+                                                        <span class="fw-bold">@root.Name</span>
+                                                        @if (root.IsPlaying && !string.IsNullOrWhiteSpace(root.Media))
                                                         {
                                                             <br/>
-                                                            <small class="text-muted">@status.Media</small>
+                                                            <small class="text-muted">@root.Media</small>
                                                         }
                                                     </div>
                                                 </div>
-                                                <span class="badge rounded-pill text-uppercase @(status.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
-                                                    @(status.IsPlaying ? "Playing" : "Paused")
+                                                <span class="badge rounded-pill text-uppercase @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                    @(root.IsPlaying ? "Playing" : "Paused")
                                                 </span>
                                             </li>
+
+                                            var children = _speakerStatuses.Where(s => s.MasterUuid == root.Uuid).OrderBy(s => s.Name);
+                                            foreach (var child in children)
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center ms-4 ps-4 border-start border-3 border-secondary" style="background-color: var(--surface-2);">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="me-2 text-muted">↳</span>
+                                                        <span class="me-2 status-indicator @(child.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                                        <div>
+                                                            <span class="fw-bold">@child.Name</span>
+                                                            <br/>
+                                                            <small class="text-muted">Linked to @root.Name</small>
+                                                        </div>
+                                                    </div>
+                                                    <span class="badge rounded-pill text-uppercase @(child.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                        @(child.IsPlaying ? "Playing" : "Paused")
+                                                    </span>
+                                                </li>
+                                            }
                                         }
                                     }
                                     else
@@ -346,8 +369,10 @@
     {
         public string? Name { get; set; }
         public string? IpAddress { get; set; }
+        public string? Uuid { get; set; }
         public bool IsPlaying { get; set; }
         public string? Media { get; set; }
+        public string? MasterUuid { get; set; }
     }
 
     private List<SpeakerStatusViewModel> _speakerStatuses = new();
@@ -534,35 +559,43 @@
         {
             try
             {
-                var isPlaying = await _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+                var isPlayingTask = _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+                var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
 
-                // OPTIMIZATION: If this is the selected speaker, update main state and skip redundant fetches.
-                // The main view data (Track, Station) is fetched in parallel by LoadCurrentStation.
+                await Task.WhenAll(isPlayingTask, rawStationUrlTask);
+
+                var isPlaying = await isPlayingTask;
+                var rawStationUrl = await rawStationUrlTask;
+
+                string? masterUuid = null;
+                if (!string.IsNullOrEmpty(rawStationUrl) && rawStationUrl.StartsWith("x-rincon-group:"))
+                {
+                    var match = Regex.Match(rawStationUrl, @"(uuid:RINCON_[A-F0-9]+)");
+                    if (match.Success)
+                    {
+                        masterUuid = match.Groups[1].Value;
+                    }
+                }
+
+                // OPTIMIZATION: If this is the selected speaker, update main state
                 if (speaker.IpAddress == SelectedSpeakerIp)
                 {
                     _isPlaying = isPlaying;
-                    // We return a partial VM here; UpdatePageDataAsync will fill in the Media property
-                    // using the data fetched by LoadCurrentStation to avoid double-fetching.
                     return new SpeakerStatusViewModel
                     {
                         Name = speaker.Name,
                         IpAddress = speaker.IpAddress,
+                        Uuid = speaker.Uuid,
                         IsPlaying = isPlaying,
-                        Media = null // Will be populated in UpdatePageDataAsync
+                        Media = null, // Will be populated in UpdatePageDataAsync
+                        MasterUuid = masterUuid
                     };
                 }
 
                 string media = "";
                 if (isPlaying)
                 {
-                    // Use GetTrackInfoAsync to allow validation
-                    var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(speaker.IpAddress);
-                    var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
-
-                    await Task.WhenAll(trackInfoTask, rawStationUrlTask);
-
-                    var trackInfo = await trackInfoTask;
-                    var rawStationUrl = await rawStationUrlTask;
+                    var trackInfo = await _uow.ISonosConnectorRepo.GetTrackInfoAsync(speaker.IpAddress);
                     var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
 
                     if (trackInfo != null && trackInfo.IsValidMetadata())
@@ -590,13 +623,19 @@
                         }
                     }
                 }
+                else if (masterUuid != null)
+                {
+                     media = "Grouped";
+                }
 
                 return new SpeakerStatusViewModel
                 {
                     Name = speaker.Name,
                     IpAddress = speaker.IpAddress,
+                    Uuid = speaker.Uuid,
                     IsPlaying = isPlaying,
-                    Media = media
+                    Media = media,
+                    MasterUuid = masterUuid
                 };
             }
             catch
@@ -605,8 +644,10 @@
                 {
                     Name = speaker.Name,
                     IpAddress = speaker.IpAddress,
+                    Uuid = speaker.Uuid,
                     IsPlaying = false,
-                    Media = "Offline"
+                    Media = "Offline",
+                    MasterUuid = null
                 };
             }
         }).ToList();
@@ -1054,6 +1095,7 @@
                     // removing the need for a separate sequential IsPlaying() call.
                     await Task.WhenAll(
                         EnsureVolumeAsync(),
+                        EnsureSpeakerUuids(),
                         UpdatePageDataAsync()
                     );
 
@@ -1065,6 +1107,30 @@
             {
                 Console.Error.WriteLine($"Error in OnAfterRenderAsync: {ex}");
             }
+        }
+    }
+
+    private async Task EnsureSpeakerUuids()
+    {
+        if (_settings?.Speakers == null) return;
+
+        bool anyUpdated = false;
+        foreach (var speaker in _settings.Speakers)
+        {
+            if (string.IsNullOrEmpty(speaker.Uuid))
+            {
+                var uuid = await _uow.ISonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress);
+                if (!string.IsNullOrEmpty(uuid))
+                {
+                    speaker.Uuid = uuid;
+                    anyUpdated = true;
+                }
+            }
+        }
+
+        if (anyUpdated)
+        {
+            await SaveSettings();
         }
     }
 
