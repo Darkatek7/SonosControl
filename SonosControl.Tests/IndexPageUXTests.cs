@@ -89,6 +89,74 @@ public class IndexPageUXTests
     }
 
     [Fact]
+    public void IndexPage_RendersGroupedSpeakers_Correctly()
+    {
+        using var ctx = new TestContext();
+
+        // Setup speakers - MUST use valid Hex characters for Regex matching in component
+        var master = new SonosSpeaker { Name = "Living Room", IpAddress = "192.168.1.10", Uuid = "uuid:RINCON_1234567890ABCDEF" };
+        var slave = new SonosSpeaker { Name = "Kitchen", IpAddress = "192.168.1.11", Uuid = "uuid:RINCON_0000000000000000" };
+        var speakers = new List<SonosSpeaker> { master, slave };
+
+        var settings = new SonosSettings
+        {
+            IP_Adress = master.IpAddress,
+            Speakers = speakers
+        };
+
+        // Mocks
+        var auth = ctx.AddTestAuthorization();
+        auth.SetAuthorized("tester");
+        auth.SetRoles("admin");
+
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        var dbContext = new ApplicationDbContext(options);
+        ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+
+        var connectorRepo = new Mock<ISonosConnectorRepo>();
+        connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
+        connectorRepo.Setup(r => r.IsPlaying(It.IsAny<string>())).ReturnsAsync(true);
+        connectorRepo.Setup(r => r.GetTrackInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosTrackInfo { Title = "Test Track", Artist = "Test Artist" });
+        connectorRepo.Setup(r => r.GetTrackProgressAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
+        connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
+
+        // Grouping setup: Master playing stream, Slave playing group stream
+        connectorRepo.Setup(r => r.GetCurrentStationAsync(master.IpAddress, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://somestream.com");
+        connectorRepo.Setup(r => r.GetCurrentStationAsync(slave.IpAddress, It.IsAny<CancellationToken>()))
+            .ReturnsAsync($"x-rincon-group:{master.Uuid}"); // Slave points to Master
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
+        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
+
+        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            // Verify Master is present
+            Assert.Contains("Living Room", cut.Markup);
+
+            // Verify Slave is present and has visual indication of grouping
+            Assert.Contains("Kitchen", cut.Markup);
+            Assert.Contains("Linked to Living Room", cut.Markup);
+            Assert.Contains("↳", cut.Markup); // The arrow indicator
+        });
+    }
+
+    [Fact]
     public void IndexPage_HasAccessibleTabs_And_AddButtons()
     {
         using var ctx = new TestContext();
