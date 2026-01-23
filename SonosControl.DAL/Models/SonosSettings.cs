@@ -51,6 +51,7 @@ namespace SonosControl.DAL.Models
         public bool AllowUserRegistration { get; set; } = true;
 
         public string? DiscordWebhookUrl { get; set; }
+        public string? TeamsWebhookUrl { get; set; }
 
         public string NowPlayingGradientStartColor { get; set; } = DefaultNowPlayingGradientStartColor;
         public string NowPlayingGradientMidColor { get; set; } = DefaultNowPlayingGradientMidColor;

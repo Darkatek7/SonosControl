@@ -8,13 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace SonosControl.Web.Services
 {
-    public class DiscordNotificationService : INotifier
+    public class TeamsNotificationService : INotifier
     {
         private readonly ISettingsRepo _settingsRepo;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ILogger<DiscordNotificationService> _logger;
+        private readonly ILogger<TeamsNotificationService> _logger;
 
-        public DiscordNotificationService(ISettingsRepo settingsRepo, IHttpClientFactory httpClientFactory, ILogger<DiscordNotificationService> logger)
+        public TeamsNotificationService(ISettingsRepo settingsRepo, IHttpClientFactory httpClientFactory, ILogger<TeamsNotificationService> logger)
         {
             _settingsRepo = settingsRepo;
             _httpClientFactory = httpClientFactory;
@@ -26,7 +26,7 @@ namespace SonosControl.Web.Services
             try
             {
                 var settings = await _settingsRepo.GetSettings();
-                if (string.IsNullOrWhiteSpace(settings?.DiscordWebhookUrl))
+                if (string.IsNullOrWhiteSpace(settings?.TeamsWebhookUrl))
                 {
                     return;
                 }
@@ -39,23 +39,23 @@ namespace SonosControl.Web.Services
 
                 var payload = new
                 {
-                    content = fullMessage
+                    text = fullMessage
                 };
 
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                using var client = _httpClientFactory.CreateClient("DiscordWebhook");
-                var response = await client.PostAsync(settings.DiscordWebhookUrl, content);
+                using var client = _httpClientFactory.CreateClient("TeamsWebhook");
+                var response = await client.PostAsync(settings.TeamsWebhookUrl, content);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogError("Failed to send Discord notification. Status Code: {StatusCode}", response.StatusCode);
+                    _logger.LogError("Failed to send Teams notification. Status Code: {StatusCode}", response.StatusCode);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending Discord notification.");
+                _logger.LogError(ex, "Error sending Teams notification.");
             }
         }
     }
