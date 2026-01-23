@@ -931,3 +931,24 @@ a:focus-visible {
 [data-theme='dark'] .config-shell .nav-link:hover:not(.active) {
     background-color: var(--surface-2);
 }
+
+/* Global fix for list group items in dark mode */
+.list-group-item {
+    background-color: var(--surface-1);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
+}
+
+.list-group-item .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* Force text-muted to use theme variable */
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Dark mode fix for bg-light */
+[data-theme='dark'] .bg-light {
+    background-color: var(--surface-2) !important;
+}
