@@ -845,13 +845,8 @@ a:focus-visible {
         border-bottom: 1px solid var(--border-strong);
     }
 
-    .app-top-bar__identity {
+    .app-top-bar {
         display: none;
-    }
-
-    .app-top-bar__content {
-        flex-wrap: wrap;
-        gap: var(--spacing-sm);
     }
 
     .nav-shell {
@@ -897,6 +892,28 @@ a:focus-visible {
 }
 [data-theme='dark'] .media-list .active-media {
     background-color: color-mix(in srgb, var(--brand-accent) 30%, var(--surface-2));
+}
+
+@media (max-width: 576px) {
+    .speaker-controls {
+        width: 100%;
+    }
+
+    .speaker-controls .btn-group {
+        display: flex;
+        flex: 1;
+    }
+
+    .speaker-controls .btn-group .btn {
+        flex: 1;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .speaker-controls .btn {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
 }
 
 /* Config page tabs */
