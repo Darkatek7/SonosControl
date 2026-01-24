@@ -496,6 +496,12 @@ a:focus-visible {
     padding: var(--spacing-lg) 0;
 }
 
+@media (max-width: 768px) {
+    .dashboard-shell {
+        padding: var(--spacing-md) 0;
+    }
+}
+
 .dashboard-panel {
     border-radius: var(--bs-border-radius-xl);
     border: 1px solid var(--bs-border-color);
@@ -524,6 +530,7 @@ a:focus-visible {
     .dashboard-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        /* grid-template-areas removed as current markup structure does not match the old areas. */
     }
 }
 
