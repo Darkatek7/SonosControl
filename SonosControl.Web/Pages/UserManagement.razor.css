@@ -30,7 +30,7 @@
 .user-management__table-wrapper {
     border-radius: var(--bs-border-radius-lg);
     border: 1px solid var(--border-strong);
-    overflow: hidden;
+    overflow-x: auto;
     background-color: var(--surface-1);
     box-shadow: var(--shadow-xs);
 }
@@ -106,11 +106,13 @@
     text-align: center;
 }
 
-@media (max-width: 576px) {
+@media (max-width: 768px) {
     .user-management-shell {
         padding: var(--spacing-md);
     }
+}
 
+@media (max-width: 576px) {
     .user-management__header {
         flex-direction: column;
         align-items: flex-start;
