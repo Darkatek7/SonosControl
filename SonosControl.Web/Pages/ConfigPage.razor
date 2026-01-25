@@ -96,8 +96,10 @@ else
                                        @bind-value="_settings.DiscordWebhookUrl"
                                        @bind-value:event="oninput"
                                        @bind-value:after="SaveSettings"
-                                       placeholder="https://discord.com/api/webhooks/..." />
-                                <button class="btn btn-outline-secondary" @onclick="() => _editingDiscordWebhook = false">Done</button>
+                                       placeholder="https://discord.com/api/webhooks/..."
+                                       aria-label="Discord Webhook URL"
+                                       autofocus />
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingDiscordWebhook = false" aria-label="Finish editing Discord Webhook">Done</button>
                             </div>
                         }
                         else
@@ -106,7 +108,7 @@ else
                                 <div class="form-control text-muted text-truncate surface-2">
                                     @GetTruncatedUrl(_settings.DiscordWebhookUrl)
                                 </div>
-                                <button class="btn btn-outline-primary" @onclick="() => _editingDiscordWebhook = true">Edit</button>
+                                <button class="btn btn-outline-primary" @onclick="() => _editingDiscordWebhook = true" aria-label="Edit Discord Webhook">Edit</button>
                             </div>
                         }
                         <div class="form-text text-muted text-opacity-75">
@@ -123,8 +125,10 @@ else
                                        @bind-value="_settings.TeamsWebhookUrl"
                                        @bind-value:event="oninput"
                                        @bind-value:after="SaveSettings"
-                                       placeholder="https://outlook.office.com/webhook/..." />
-                                <button class="btn btn-outline-secondary" @onclick="() => _editingTeamsWebhook = false">Done</button>
+                                       placeholder="https://outlook.office.com/webhook/..."
+                                       aria-label="Teams Webhook URL"
+                                       autofocus />
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingTeamsWebhook = false" aria-label="Finish editing Teams Webhook">Done</button>
                             </div>
                         }
                         else
@@ -133,7 +137,7 @@ else
                                 <div class="form-control text-muted text-truncate surface-2">
                                     @GetTruncatedUrl(_settings.TeamsWebhookUrl)
                                 </div>
-                                <button class="btn btn-outline-primary" @onclick="() => _editingTeamsWebhook = true">Edit</button>
+                                <button class="btn btn-outline-primary" @onclick="() => _editingTeamsWebhook = true" aria-label="Edit Teams Webhook">Edit</button>
                             </div>
                         }
                         <div class="form-text text-muted text-opacity-75">
