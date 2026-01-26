@@ -60,6 +60,10 @@
 }
 
 @media (max-width: 768px) {
+    .section-card {
+        padding: var(--spacing-md);
+    }
+
     .section-card__header {
         flex-direction: column;
         align-items: flex-start;

@@ -27,7 +27,7 @@
 
 .config-field-stack {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: var(--spacing-lg);
 }
 
@@ -178,6 +178,10 @@
 }
 
 @media (max-width: 768px) {
+    .config-shell {
+        padding: var(--spacing-md);
+    }
+
     .config-shell__header {
         flex-direction: column;
     }
