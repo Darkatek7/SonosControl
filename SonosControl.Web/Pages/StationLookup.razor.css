@@ -115,6 +115,8 @@
 @media (max-width: 768px) {
     .lookup-shell {
         padding: var(--spacing-md);
+        margin: var(--spacing-md) auto;
+        width: auto;
     }
 
     .lookup-shell__search {

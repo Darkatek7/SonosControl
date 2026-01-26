@@ -1,3 +1,16 @@
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.AspNetCore.Http
+@using Microsoft.JSInterop
+@using SonosControl.Web.Models
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject SonosControl.Web.Services.ThemeService ThemeService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
 <div class="nav-shell">
     <div class="nav-brand-row px-3">
         <div class="nav-brand-mark">SC</div>
@@ -10,8 +23,8 @@
         </button>
     </div>
 
-    <div class="@NavMenuCssClass nav-scrollable px-3" @onclick="ToggleNavMenu">
-        <nav class="nav-links">
+    <div class="@NavMenuCssClass nav-scrollable px-3">
+        <nav class="nav-links" @onclick="ToggleNavMenu">
             <div class="nav-item">
                 <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                     <span class="nav-icon oi oi-home" aria-hidden="true"></span>
@@ -60,6 +73,58 @@
                 </Authorized>
             </AuthorizeView>
         </nav>
+
+    </div>
+
+    <!-- Mobile User Controls -->
+    <div class="d-lg-none mt-auto px-3 pb-3 border-top pt-3">
+        <AuthorizeView>
+            <Authorized>
+                <div class="mb-4 px-1">
+                    <span class="text-muted small text-uppercase d-block mb-2 fw-bold" style="letter-spacing: 0.1em;">Theme</span>
+                    <div class="btn-group w-100 shadow-sm" role="group" aria-label="Theme preference">
+                        @foreach (var mode in ThemeOptions)
+                        {
+                            <button type="button"
+                                    class="@GetThemeButtonClasses(mode) flex-grow-1"
+                                    aria-pressed="@(mode == _userThemePreference)"
+                                    @onclick="() => ChangeThemeAsync(mode)">
+                                @GetThemeLabel(mode)
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="px-1 d-flex flex-column gap-2">
+                    <div class="d-flex align-items-center gap-2 mb-2 px-1">
+                            <div class="d-flex align-items-center justify-content-center bg-light rounded-circle" style="width: 32px; height: 32px;">
+                            <span class="oi oi-person text-secondary" style="font-size: 0.9rem;"></span>
+                            </div>
+                            <div class="d-flex flex-column" style="line-height: 1.2;">
+                            <span class="fw-bold small">Signed in as</span>
+                            <span class="text-truncate" style="max-width: 180px;">@context.User.Identity?.Name</span>
+                            </div>
+                    </div>
+
+                    <a href="/useredit" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2">
+                        <span class="oi oi-cog" aria-hidden="true"></span> <span>Profile Settings</span>
+                    </a>
+
+                    <form method="post" action="/auth/logout" class="w-100 m-0">
+        <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
+                        <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+                                <span class="oi oi-account-logout" aria-hidden="true"></span> <span>Log Out</span>
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="d-flex flex-column gap-2 px-1">
+                    <a href="/auth/login" class="btn btn-outline-primary w-100">Log In</a>
+                    <a href="/register" class="btn btn-primary w-100">Register</a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
     </div>
 
     <div class="nav-footer px-3">
@@ -69,11 +134,113 @@
 
 @code {
     private bool collapseNavMenu = true;
-
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    [Parameter]
+    public string? AntiforgeryToken { get; set; }
+
+    // Auth & User State
+    private string? firstName;
+    private bool isAuthenticated;
+    private string? userId;
+
+    // Theme State
+    private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
+    private static readonly ThemePreferenceMode[] ThemeOptions = new[]
+    {
+        ThemePreferenceMode.System,
+        ThemePreferenceMode.Light,
+        ThemePreferenceMode.Dark
+    };
+    private bool _hasAppliedThemeOnClient;
+    private bool _themeSubscriptionRegistered;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Init User
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+
+        if (isAuthenticated)
+        {
+            var appUser = await UserManager.GetUserAsync(user);
+            firstName = appUser?.FirstName ?? user.Identity?.Name;
+            userId = appUser?.Id;
+        }
+
+        // Init Theme
+        // We don't need to InitializeAsync() here as MainLayout likely did it,
+        // but it's safe to check current preference.
+        // Actually, ThemeService is Scoped, so it shares state.
+        _userThemePreference = ThemeService.CurrentPreference;
+    }
 
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task ChangeThemeAsync(ThemePreferenceMode mode)
+    {
+        if (!isAuthenticated || _userThemePreference == mode)
+        {
+            return;
+        }
+
+        _userThemePreference = mode;
+        await ThemeService.SetPreferenceAsync(mode);
+    }
+
+    private static string GetThemeLabel(ThemePreferenceMode mode) => mode switch
+    {
+        ThemePreferenceMode.Light => "Light",
+        ThemePreferenceMode.Dark => "Dark",
+        _ => "System"
+    };
+
+    private string GetThemeButtonClasses(ThemePreferenceMode mode)
+        => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
+
+    private async Task ApplyThemePreferenceAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosTheme.apply", ThemeService.CurrentPreferenceIdentifier);
+        }
+        catch (JSException)
+        {
+            // Ignore
+        }
+    }
+
+    private void OnThemePreferenceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _userThemePreference = ThemeService.CurrentPreference;
+            await ApplyThemePreferenceAsync();
+            StateHasChanged();
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!_themeSubscriptionRegistered)
+            {
+                ThemeService.OnPreferenceChanged += OnThemePreferenceChanged;
+                _themeSubscriptionRegistered = true;
+            }
+        }
+    }
+
+    void IDisposable.Dispose()
+    {
+        if (_themeSubscriptionRegistered)
+        {
+            ThemeService.OnPreferenceChanged -= OnThemePreferenceChanged;
+        }
     }
 }

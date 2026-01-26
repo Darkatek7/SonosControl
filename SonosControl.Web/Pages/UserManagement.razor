@@ -52,7 +52,8 @@
                     <FormStatus StatusMessage="@errorMessage" Severity="FormStatus.AlertSeverity.Danger" />
                 }
 
-                <div class="table-responsive user-management__table-wrapper">
+                <!-- Desktop Table View -->
+                <div class="d-none d-md-block table-responsive user-management__table-wrapper">
                     <table class="table user-management-table mb-0">
                         <thead>
                         <tr>
@@ -131,7 +132,84 @@
                     </table>
                 </div>
 
-                <div class="user-management__legend">
+                <!-- Mobile Card View -->
+                <div class="d-md-none stack-md">
+                    @foreach (var user in users)
+                    {
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body p-3">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px;">
+                                            <span class="oi oi-person text-secondary"></span>
+                                        </div>
+                                        <div style="min-width: 0;">
+                                            <h6 class="mb-0 fw-bold text-truncate">@user.UserName</h6>
+                                            <div class="small text-muted text-truncate">@user.Email</div>
+                                        </div>
+                                    </div>
+                                    <span class="badge rounded-pill @(IsUserActive(user) ? "bg-success" : "bg-danger")">
+                                        @(IsUserActive(user) ? "Active" : "Inactive")
+                                    </span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <span class="text-uppercase text-muted small fw-bold d-block mb-1" style="font-size: 0.7rem;">Roles</span>
+                                    @if (userRoles[user.Id].Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var role in userRoles[user.Id])
+                                            {
+                                                <span class="badge bg-light text-dark border">@role</span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small fst-italic">No roles assigned</span>
+                                    }
+                                </div>
+
+                                @if (!IsCurrentUser(user))
+                                {
+                                    <hr class="my-3 text-muted opacity-25" />
+                                    <div class="d-grid gap-2">
+                                        @if (isSuperAdmin)
+                                        {
+                                            <div class="row g-2">
+                                                <div class="col-6">
+                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("admin") ? "btn-outline-danger" : "btn-outline-primary")" @onclick='() => ToggleRole(user, "admin")'>
+                                                        <span class="oi @(userRoles[user.Id].Contains("admin") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> Admin
+                                                    </button>
+                                                </div>
+                                                <div class="col-6">
+                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("operator") ? "btn-outline-danger" : "btn-outline-secondary")" @onclick='() => ToggleRole(user, "operator")'>
+                                                        <span class="oi @(userRoles[user.Id].Contains("operator") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> Operator
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => DeleteUser(user)" disabled="@(!isSuperAdmin && userRoles[user.Id].Contains("superadmin"))">
+                                                    <span class="oi oi-trash" aria-hidden="true"></span> Delete
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-sm w-100 @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")" @onclick='() => ToggleUserActivation(user)'>
+                                                    <span class="oi @(IsUserActive(user) ? "oi-ban" : "oi-check")" aria-hidden="true"></span> @(IsUserActive(user) ? "Block" : "Activate")
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="user-management__legend d-none d-md-block">
                     <strong>Legend:</strong>
                     <span class="ms-3">✔ = Active</span>
                     <span class="ms-3">⛔ = Deactivated</span>
