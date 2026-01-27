@@ -100,7 +100,18 @@ namespace SonosControl.Web.Services
                 var slaveIps = speakers.Skip(1).Select(s => s.IpAddress);
                 if (slaveIps.Any())
                 {
-                    await uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                    bool groupSuccess = await uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                    if (!groupSuccess)
+                    {
+                        Console.WriteLine($"{now:g}: Grouping failed or partial. Falling back to individual playback for all speakers.");
+                        foreach (var slave in slaveIps)
+                        {
+                            if (!targetSpeakers.Contains(slave))
+                            {
+                                targetSpeakers.Add(slave);
+                            }
+                        }
+                    }
                 }
             }
             else
