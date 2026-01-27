@@ -4,7 +4,7 @@
 }
 
 <div class="auth-shell">
-    <form method="post" action="/auth/login" class="auth-card panel stack-sm">
+    <form id="loginForm" method="post" action="/auth/login" class="auth-card panel stack-sm">
         @Html.AntiForgeryToken()
         <h2 class="fw-semibold text-center mb-3">🔒 Login</h2>
 
@@ -35,10 +35,30 @@
             <label for="rememberMe" class="form-check-label">Remember Me</label>
         </div>
 
-        <button type="submit" class="btn btn-primary w-100">Log In</button>
+        <button id="loginBtn" type="submit" class="btn btn-primary w-100">
+            <span id="loginBtnText">Log In</span>
+            <span id="loginSpinner" class="d-none">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Logging in...
+            </span>
+        </button>
 
         <div class="text-center mt-3">
             <a href="/register" class="auth-link text-decoration-none">Don’t have an account? Register</a>
         </div>
     </form>
 </div>
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', function() {
+        var btn = document.getElementById('loginBtn');
+        var text = document.getElementById('loginBtnText');
+        var spinner = document.getElementById('loginSpinner');
+
+        btn.classList.add('disabled');
+        btn.style.pointerEvents = 'none';
+
+        text.classList.add('d-none');
+        spinner.classList.remove('d-none');
+    });
+</script>
