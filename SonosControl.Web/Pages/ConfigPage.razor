@@ -76,14 +76,24 @@ else
                                 <div class="alert alert-danger mb-2 p-2 small">@_speakerValidationMessage</div>
                             }
                             <div class="mb-2">
-                                <label class="form-label">Name</label>
-                                <input type="text" class="form-control" @bind="_newSpeakerName" placeholder="e.g. Living Room" disabled="@(!canEditIp)" />
+                                <label class="form-label" for="newSpeakerName">Name</label>
+                                <input id="newSpeakerName" type="text" class="form-control" @bind="_newSpeakerName" placeholder="e.g. Living Room" disabled="@(!canEditIp)" />
                             </div>
                             <div class="mb-2">
-                                <label class="form-label">IP Address</label>
-                                <input type="text" class="form-control" @bind="_newSpeakerIp" placeholder="e.g. 192.168.1.50" disabled="@(!canEditIp)" />
+                                <label class="form-label" for="newSpeakerIp">IP Address</label>
+                                <input id="newSpeakerIp" type="text" class="form-control" @bind="_newSpeakerIp" placeholder="e.g. 192.168.1.50" disabled="@(!canEditIp)" />
                             </div>
-                            <button class="btn btn-primary btn-sm" @onclick="AddSpeaker" disabled="@(!canEditIp || string.IsNullOrWhiteSpace(_newSpeakerIp))">Add Speaker</button>
+                            <button class="btn btn-primary btn-sm" @onclick="AddSpeaker" disabled="@(!canEditIp || string.IsNullOrWhiteSpace(_newSpeakerIp) || _isAddingSpeaker)">
+                                @if (_isAddingSpeaker)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    <span class="visually-hidden">Adding...</span>
+                                }
+                                else
+                                {
+                                    <span>Add Speaker</span>
+                                }
+                            </button>
                         </div>
                     </div>
 
@@ -1410,6 +1420,7 @@ else
     private string _newSpeakerName = "";
     private string _newSpeakerIp = "";
     private string? _speakerValidationMessage;
+    private bool _isAddingSpeaker;
 
     private bool ValidateIpAddress(string ip)
     {
@@ -1440,14 +1451,22 @@ else
             return;
         }
 
-        var name = string.IsNullOrWhiteSpace(_newSpeakerName) ? "New Speaker" : _newSpeakerName;
+        _isAddingSpeaker = true;
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(_newSpeakerName) ? "New Speaker" : _newSpeakerName;
 
-        _settings.Speakers.Add(new SonosSpeaker { Name = name, IpAddress = _newSpeakerIp });
-        _newSpeakerName = "";
-        _newSpeakerIp = "";
+            _settings.Speakers.Add(new SonosSpeaker { Name = name, IpAddress = _newSpeakerIp });
+            _newSpeakerName = "";
+            _newSpeakerIp = "";
 
-        await SaveSettings();
-        await AddLog("Speaker Added", $"{name} ({_newSpeakerIp})");
+            await SaveSettings();
+            await AddLog("Speaker Added", $"{name} ({_newSpeakerIp})");
+        }
+        finally
+        {
+            _isAddingSpeaker = false;
+        }
     }
 
     private async Task RemoveSpeaker(SonosSpeaker speaker)
