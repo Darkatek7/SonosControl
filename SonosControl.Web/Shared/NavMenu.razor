@@ -18,12 +18,12 @@
             <span class="nav-brand-title">SonosControl</span>
             <span class="nav-brand-subtitle">Command center</span>
         </div>
-        <button title="Navigation menu" class="navbar-toggler nav-toggler" @onclick="ToggleNavMenu">
+        <button title="Navigation menu" class="navbar-toggler nav-toggler" @onclick="ToggleNavMenu" aria-label="Toggle navigation" aria-expanded="@(!collapseNavMenu)" aria-controls="nav-menu-container">
             <span class="navbar-toggler-icon"></span>
         </button>
     </div>
 
-    <div class="@NavMenuCssClass nav-scrollable px-3">
+    <div id="nav-menu-container" class="@NavMenuCssClass nav-scrollable px-3">
         <nav class="nav-links" @onclick="ToggleNavMenu">
             <div class="nav-item">
                 <NavLink class="nav-link" href="" Match="NavLinkMatch.All">

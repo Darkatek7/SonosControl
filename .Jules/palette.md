@@ -9,3 +9,7 @@
 ## 2026-02-12 - MVC View Form Feedback
 **Learning:** Standard ASP.NET MVC Views cannot rely on Blazor's `@onclick` state management. For simple form submissions like Login, vanilla JavaScript `submit` event listeners are the most robust way to provide immediate feedback (loading spinner, disabled state) without needing complex frontend frameworks.
 **Action:** Use simple script injection for loading states on MVC Views (like Login/Logout) to improve perceived performance and prevent double-submit.
+
+## 2026-06-15 - Hamburger Menu Accessibility
+**Learning:** Collapsible navigation menus ("hamburger menus") often lack state information. Screen reader users can find the button but don't know if the menu is open or closed, or what it controls.
+**Action:** Always add `aria-expanded` (linked to state), `aria-label="Toggle navigation"`, and `aria-controls="[menu-container-id]"` to the toggle button.
