@@ -9,3 +9,7 @@
 ## 2026-02-12 - MVC View Form Feedback
 **Learning:** Standard ASP.NET MVC Views cannot rely on Blazor's `@onclick` state management. For simple form submissions like Login, vanilla JavaScript `submit` event listeners are the most robust way to provide immediate feedback (loading spinner, disabled state) without needing complex frontend frameworks.
 **Action:** Use simple script injection for loading states on MVC Views (like Login/Logout) to improve perceived performance and prevent double-submit.
+
+## 2026-06-15 - Autofocus in Modals
+**Learning:** Blazor's `autofocus` attribute only triggers on the initial render. For modals that are hidden/shown via CSS classes (e.g., `d-none`/`d-block`), `autofocus` won't work on subsequent opens.
+**Action:** Conditionally render the modal content (e.g., `@if (isOpen)`) to force a re-render when the modal opens, ensuring `autofocus` triggers every time.
