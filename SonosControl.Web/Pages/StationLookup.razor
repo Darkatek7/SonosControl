@@ -85,8 +85,16 @@
                                 class="lookup-action-button btn btn-outline-success"
                                 @onclick="() => PlayStation(station.Url)"
                                 aria-label="@($"Play {station.Name}")"
-                                title="@($"Play {station.Name}")">
-                            🔊
+                                title="@($"Play {station.Name}")"
+                                disabled="@IsLoading($"play-{station.Url}")">
+                            @if (IsLoading($"play-{station.Url}"))
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            }
+                            else
+                            {
+                                <span>🔊</span>
+                            }
                         </button>
                         @if (IsStationSaved(station))
                         {
@@ -100,8 +108,16 @@
                                     class="lookup-action-button btn btn-outline-primary"
                                     @onclick="() => SaveStation(station)"
                                     aria-label="@($"Save {station.Name}")"
-                                    title="@($"Save {station.Name}")">
-                                💾
+                                    title="@($"Save {station.Name}")"
+                                    disabled="@IsLoading($"save-{station.Url}")">
+                                @if (IsLoading($"save-{station.Url}"))
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <span>💾</span>
+                                }
                             </button>
                         }
                     </div>
@@ -120,6 +136,7 @@
     private string? searchTerm;
     private List<RadioStation>? results;
     private bool isLoading = false;
+    private HashSet<string> _loadingStates = new();
     private string? saveSuccessMessage;
     private bool isAuthenticated;
 
@@ -175,6 +192,8 @@
         }
     }
     
+    private bool IsLoading(string key) => _loadingStates.Contains(key);
+
     private bool IsStationSaved(RadioStation station)
     {
         if (_settings?.Stations == null) return false;
@@ -228,9 +247,21 @@
     {
         if (_settings is not null)
         {
-            await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
-            Console.WriteLine($@"Station {url} played successfully.");
-            await AddLog("Playing Station", $"station: {url}");
+            var key = $"play-{url}";
+            _loadingStates.Add(key);
+            StateHasChanged();
+
+            try
+            {
+                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
+                Console.WriteLine($@"Station {url} played successfully.");
+                await AddLog("Playing Station", $"station: {url}");
+            }
+            finally
+            {
+                _loadingStates.Remove(key);
+                StateHasChanged();
+            }
         }
     }
 
@@ -256,16 +287,20 @@
             return;
         }
 
-        _settings.Stations ??= new List<TuneInStation>();
+        var key = $"save-{station.Url}";
+        _loadingStates.Add(key);
+        StateHasChanged();
 
-        if (IsStationSaved(station))
-        {
-            addStationErrorMessage = "Station is already saved.";
-            return;
-        }
-        
         try
         {
+            _settings.Stations ??= new List<TuneInStation>();
+
+            if (IsStationSaved(station))
+            {
+                addStationErrorMessage = "Station is already saved.";
+                return;
+            }
+
             _settings.Stations.Add(new TuneInStation { Name = station.Name, Url = station.Url });
             await SaveSettings();
             await AddLog("Added Station", $"station: {station.Name}, ({station.Url})");
@@ -280,6 +315,11 @@
         catch (Exception ex)
         {
             addStationErrorMessage = $"Error saving station: {ex.Message}";
+        }
+        finally
+        {
+            _loadingStates.Remove(key);
+            StateHasChanged();
         }
     }
 
