@@ -1,44 +1,45 @@
 @using SonosControl.DAL.Models
 
-<div class="modal fade show @(_show ? "d-block" : "d-none")" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">@Title</h5>
-                <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                @if (!string.IsNullOrEmpty(ErrorMessage))
-                {
-                    <div class="alert alert-danger">@ErrorMessage</div>
-                }
+@if (_show)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Title</h5>
+                    <button type="button" class="btn-close" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        <div class="alert alert-danger">@ErrorMessage</div>
+                    }
 
-                <div class="mb-3">
-                    <label class="form-label">Name</label>
-                    <input type="text" class="form-control" @bind="Name" @bind:event="oninput" placeholder="My favorite playlist" />
+                    <div class="mb-3">
+                        <label for="mediaName" class="form-label">Name</label>
+                        <input @ref="_nameInput" id="mediaName" type="text" class="form-control" @bind="Name" @bind:event="oninput" placeholder="My favorite playlist" />
+                    </div>
+                    <div class="mb-3">
+                        <label for="mediaUrl" class="form-label">URL</label>
+                        <input id="mediaUrl" type="text" class="form-control" @bind="Url" @bind:event="oninput" placeholder="https://..." />
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">URL</label>
-                    <input type="text" class="form-control" @bind="Url" @bind:event="oninput" placeholder="https://..." />
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="HandleSave" disabled="@IsSaveDisabled">
+                        Save
+                    </button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="Close">Cancel</button>
-                <button type="button" class="btn btn-primary" @onclick="HandleSave" disabled="@IsSaveDisabled">
-                    Save
-                </button>
             </div>
         </div>
     </div>
-</div>
-
-@if (_show)
-{
     <div class="modal-backdrop fade show"></div>
 }
 
 @code {
     private bool _show;
+    private ElementReference _nameInput;
+    private bool _focusNextRender;
 
     [Parameter]
     public string? ErrorMessage { get; set; }
@@ -61,7 +62,24 @@
         Name = "";
         Url = "";
         _show = true;
+        _focusNextRender = true;
         StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusNextRender)
+        {
+            _focusNextRender = false;
+            try
+            {
+                await _nameInput.FocusAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore focus errors (e.g. element not visible)
+            }
+        }
     }
 
     private async Task Close()
