@@ -98,11 +98,11 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label">📢 Discord Webhook</label>
+                        <label class="form-label" for="discordWebhook">📢 Discord Webhook</label>
                         @if (_editingDiscordWebhook)
                         {
                             <div class="input-group">
-                                <input type="url" class="form-control"
+                                <input id="discordWebhook" type="url" class="form-control"
                                        @bind-value="_settings.DiscordWebhookUrl"
                                        @bind-value:event="oninput"
                                        @bind-value:after="SaveSettings"
@@ -127,11 +127,11 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label">💬 Teams Webhook</label>
+                        <label class="form-label" for="teamsWebhook">💬 Teams Webhook</label>
                         @if (_editingTeamsWebhook)
                         {
                             <div class="input-group">
-                                <input type="url" class="form-control"
+                                <input id="teamsWebhook" type="url" class="form-control"
                                        @bind-value="_settings.TeamsWebhookUrl"
                                        @bind-value:event="oninput"
                                        @bind-value:after="SaveSettings"
@@ -156,8 +156,8 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label">🎵 Auto Play</label>
-                        <select class="form-select"
+                        <label class="form-label" for="autoPlay">🎵 Auto Play</label>
+                        <select id="autoPlay" class="form-select"
                                 @bind="AutoPlaySelection" @bind:event="onchange">
                             <option value="">-- None --</option>
                             <option value="randomStation">Random Station</option>
@@ -185,8 +185,8 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label">🔊 Max Volume</label>
-                        <input type="number" class="form-control"
+                        <label class="form-label" for="maxVolume">🔊 Max Volume</label>
+                        <input id="maxVolume" type="number" class="form-control"
                                min="0" max="100"
                                @bind-value="MaxVolume"
                                @bind-value:event="oninput"/>
@@ -200,20 +200,20 @@ else
             {
                 <div class="schedule-grid">
                     <div class="schedule-field">
-                        <label class="form-label">⏰ Start Time</label>
-                        <input type="time" class="form-control"
+                        <label class="form-label" for="startTime">⏰ Start Time</label>
+                        <input id="startTime" type="time" class="form-control"
                                @bind-value="StartTime"
                                @bind-value:event="oninput"/>
                     </div>
                     <div class="schedule-field">
-                        <label class="form-label">🛑 Stop Time</label>
-                        <input type="time" class="form-control"
+                        <label class="form-label" for="stopTime">🛑 Stop Time</label>
+                        <input id="stopTime" type="time" class="form-control"
                                @bind-value="StopTime"
                                @bind-value:event="oninput"/>
                     </div>
                     <div class="schedule-field">
-                        <label class="form-label">📅 Server Time</label>
-                        <input type="time" class="form-control"
+                        <label class="form-label" for="serverTime">📅 Server Time</label>
+                        <input id="serverTime" type="time" class="form-control"
                                disabled
                                @bind-value="TimeRightNow"/>
                     </div>
