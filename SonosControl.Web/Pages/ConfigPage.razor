@@ -1,5 +1,6 @@
 @page "/config"
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models
@@ -1327,10 +1328,11 @@ else
 
 
 
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to remove the holiday schedule for '{holiday.Name}'?");
+        if (!confirmed) return;
+
         _settings.HolidaySchedules.Remove(holiday);
-
         await SaveSettings();
-
     }
 
 
@@ -1472,6 +1474,9 @@ else
     private async Task RemoveSpeaker(SonosSpeaker speaker)
     {
         if (_settings is null) return;
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to remove speaker '{speaker.Name}'?");
+        if (!confirmed) return;
 
         _settings.Speakers.Remove(speaker);
         await SaveSettings();
