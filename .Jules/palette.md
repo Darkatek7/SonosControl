@@ -17,3 +17,7 @@
 ## 2024-05-24 - Conditional Input Labeling
 **Learning:** When inputs are conditionally rendered (e.g., toggle edit mode) but the label remains visible, standard `for`/`id` association can be maintained if the label's `for` attribute targets the ID that the input *will* have when rendered. This ensures valid HTML when the input exists, and harmless unassociated labels when it doesn't.
 **Action:** Define `for` on persistent labels and `id` on conditional inputs to maintain accessibility context during state changes.
+
+## 2025-02-20 - Destructive Action Confirmation
+**Learning:** Configuration pages with immediate destructive actions (like removing speakers) carry high risk of accidental data loss, frustrating users.
+**Action:** Implement confirmation dialogs (native `confirm` is acceptable for admin tools) for all irreversible removal actions to provide a safety net.
