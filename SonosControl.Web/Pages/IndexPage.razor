@@ -107,11 +107,11 @@
                             <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
                                 @if (!string.IsNullOrWhiteSpace(currentTrackArtUrl))
                                 {
-                                    <img src="@currentTrackArtUrl" alt="Album Art" class="img-fluid rounded" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
+                                    <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="img-fluid rounded" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
                                 }
                                 else
                                 {
-                                    <div class="display-5">🎵</div>
+                                    <div class="display-5" aria-hidden="true">🎵</div>
                                 }
                                 <div class="flex-grow-1">
                                     <h5 class="mb-2">Currently Playing</h5>
