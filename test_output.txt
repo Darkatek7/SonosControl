@@ -1,0 +1,135 @@
+  Determining projects to restore...
+/app/SonosControl.Tests/SonosControl.Tests.csproj : warning NU1603: SonosControl.Tests depends on bunit (>= 1.27.15) but bunit 1.27.15 was not found. bunit 1.27.17 was resolved instead. [/app/SonosControl.sln]
+  All projects are up-to-date for restore.
+/app/SonosControl.Tests/SonosControl.Tests.csproj : warning NU1603: SonosControl.Tests depends on bunit (>= 1.27.15) but bunit 1.27.15 was not found. bunit 1.27.17 was resolved instead.
+  SonosControl.DAL -> /app/SonosControl.DAL/bin/Debug/net9.0/SonosControl.DAL.dll
+  SonosControl.Web -> /app/SonosControl.Web/bin/Debug/net9.0/SonosControl.Web.dll
+  SonosControl.Tests -> /app/SonosControl.Tests/bin/Debug/net9.0/SonosControl.Tests.dll
+Test run for /app/SonosControl.Tests/bin/Debug/net9.0/SonosControl.Tests.dll (.NETCoreApp,Version=v9.0)
+VSTest version 17.14.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.33]     SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenSynced_PlaysOnAllSpeakers [FAIL]
+[xUnit.net 00:00:01.34]     SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenNotSynced_PlaysOnMasterOnly [FAIL]
+  Failed SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenSynced_PlaysOnAllSpeakers [15 ms]
+  Error Message:
+   Moq.MockException :
+Expected invocation on the mock should never have been performed, but was 1 times: r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>())
+
+Performed invocations:
+
+   Mock<ISonosConnectorRepo:6> (r):
+
+      ISonosConnectorRepo.UngroupSpeaker("192.168.1.101", CancellationToken)
+      ISonosConnectorRepo.SetSpeakerVolume("192.168.1.101", 10, CancellationToken)
+      ISonosConnectorRepo.UngroupSpeaker("192.168.1.102", CancellationToken)
+      ISonosConnectorRepo.SetSpeakerVolume("192.168.1.102", 10, CancellationToken)
+      ISonosConnectorRepo.CreateGroup("192.168.1.101", Enumerable.IListSkipTakeSelectIterator<SonosSpeaker, string>, CancellationToken)
+      ISonosConnectorRepo.SetTuneInStationAsync("192.168.1.101", "https://stream.rockantenne.de/rockantenne/stream/mp3", CancellationToken)
+      ISonosConnectorRepo.SetTuneInStationAsync("192.168.1.102", "https://stream.rockantenne.de/rockantenne/stream/mp3", CancellationToken)
+
+  Stack Trace:
+     at Moq.Mock.Verify(Mock mock, LambdaExpression expression, Times times, String failMessage) in /_/src/Moq/Mock.cs:line 331
+   at Moq.Mock`1.Verify[TResult](Expression`1 expression, Func`1 times) in /_/src/Moq/Mock`1.cs:line 1033
+   at SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenSynced_PlaysOnAllSpeakers() in /app/SonosControl.Tests/SonosControlServiceStartSpeakerTests.cs:line 131
+--- End of stack trace from previous location ---
+  Failed SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenNotSynced_PlaysOnMasterOnly [7 ms]
+  Error Message:
+   Moq.MockException :
+Expected invocation on the mock should never have been performed, but was 1 times: r => r.SetTuneInStationAsync("192.168.1.102", It.IsAny<string>(), It.IsAny<CancellationToken>())
+
+Performed invocations:
+
+   Mock<ISonosConnectorRepo:7> (r):
+
+      ISonosConnectorRepo.UngroupSpeaker("192.168.1.101", CancellationToken)
+      ISonosConnectorRepo.SetSpeakerVolume("192.168.1.101", 10, CancellationToken)
+      ISonosConnectorRepo.UngroupSpeaker("192.168.1.102", CancellationToken)
+      ISonosConnectorRepo.SetSpeakerVolume("192.168.1.102", 10, CancellationToken)
+      ISonosConnectorRepo.SetTuneInStationAsync("192.168.1.101", "https://stream.rockantenne.de/rockantenne/stream/mp3", CancellationToken)
+      ISonosConnectorRepo.SetTuneInStationAsync("192.168.1.102", "https://stream.rockantenne.de/rockantenne/stream/mp3", CancellationToken)
+
+  Stack Trace:
+     at Moq.Mock.Verify(Mock mock, LambdaExpression expression, Times times, String failMessage) in /_/src/Moq/Mock.cs:line 331
+   at Moq.Mock`1.Verify[TResult](Expression`1 expression, Func`1 times) in /_/src/Moq/Mock`1.cs:line 1033
+   at SonosControl.Tests.SonosControlServiceStartSpeakerTests.StartSpeaker_WhenNotSynced_PlaysOnMasterOnly() in /app/SonosControl.Tests/SonosControlServiceStartSpeakerTests.cs:line 171
+--- End of stack trace from previous location ---
+[xUnit.net 00:00:01.47]     SonosControl.Tests.IndexQueueTests.QueuePanel_RendersRadioQueueItems [FAIL]
+  Failed SonosControl.Tests.IndexQueueTests.QueuePanel_RendersRadioQueueItems [10 ms]
+  Error Message:
+   System.InvalidOperationException : Cannot provide a value for property 'NotificationService' on type 'SonosControl.Web.Pages.IndexPage'. There is no registered service of type 'SonosControl.DAL.Interfaces.INotificationService'.
+  Stack Trace:
+     at Microsoft.AspNetCore.Components.ComponentFactory.<>c__DisplayClass9_0.<CreatePropertyInjector>g__Initialize|1(IServiceProvider serviceProvider, IComponent component)
+   at Microsoft.AspNetCore.Components.ComponentFactory.InstantiateComponent(IServiceProvider serviceProvider, Type componentType, IComponentRenderMode callerSpecifiedRenderMode, Nullable`1 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.InstantiateChildComponentOnFrame(RenderTreeFrame[] frames, Int32 frameIndex, Int32 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewComponentFrame(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewSubtree(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InsertNewFrame(DiffContext& diffContext, Int32 newFrameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.AppendDiffEntriesForRange(DiffContext& diffContext, Int32 oldStartIndex, Int32 oldEndIndexExcl, Int32 newStartIndex, Int32 newEndIndexExcl)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.ComputeDiff(Renderer renderer, RenderBatchBuilder batchBuilder, Int32 componentId, ArrayRange`1 oldTree, ArrayRange`1 newTree)
+   at Microsoft.AspNetCore.Components.Rendering.ComponentState.RenderIntoBatch(RenderBatchBuilder batchBuilder, RenderFragment renderFragment, Exception& renderFragmentException)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.ProcessRenderQueue()
+--- End of stack trace from previous location ---
+   at Bunit.Rendering.TestRenderer.AssertNoUnhandledExceptions() in /_/src/bunit.core/Rendering/TestRenderer.cs:line 629
+   at Bunit.Rendering.TestRenderer.Render[TResult](RenderFragment renderFragment, Func`2 activator) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 480
+   at Bunit.Rendering.TestRenderer.RenderFragment(RenderFragment renderFragment) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 101
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree(TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 43
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree[TComponent](TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 23
+   at Bunit.TestContext.Render[TComponent](RenderFragment renderFragment) in /_/src/bunit.web/TestContext.cs:line 68
+   at Bunit.TestContext.RenderComponent[TComponent](Action`1 parameterBuilder) in /_/src/bunit.web/TestContext.cs:line 54
+   at SonosControl.Tests.IndexQueueTests.QueuePanel_RendersRadioQueueItems() in /app/SonosControl.Tests/IndexQueueTests.cs:line 39
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:01.48]     SonosControl.Tests.IndexQueueTests.QueuePanel_HiddenWhenQueueEmpty [FAIL]
+[xUnit.net 00:00:01.48]     SonosControl.Tests.IndexQueueTests.QueuePanel_RendersSpotifyQueueItemsWithArtist [FAIL]
+  Failed SonosControl.Tests.IndexQueueTests.QueuePanel_HiddenWhenQueueEmpty [5 ms]
+  Error Message:
+   System.InvalidOperationException : Cannot provide a value for property 'NotificationService' on type 'SonosControl.Web.Pages.IndexPage'. There is no registered service of type 'SonosControl.DAL.Interfaces.INotificationService'.
+  Stack Trace:
+     at Microsoft.AspNetCore.Components.ComponentFactory.<>c__DisplayClass9_0.<CreatePropertyInjector>g__Initialize|1(IServiceProvider serviceProvider, IComponent component)
+   at Microsoft.AspNetCore.Components.ComponentFactory.InstantiateComponent(IServiceProvider serviceProvider, Type componentType, IComponentRenderMode callerSpecifiedRenderMode, Nullable`1 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.InstantiateChildComponentOnFrame(RenderTreeFrame[] frames, Int32 frameIndex, Int32 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewComponentFrame(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewSubtree(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InsertNewFrame(DiffContext& diffContext, Int32 newFrameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.AppendDiffEntriesForRange(DiffContext& diffContext, Int32 oldStartIndex, Int32 oldEndIndexExcl, Int32 newStartIndex, Int32 newEndIndexExcl)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.ComputeDiff(Renderer renderer, RenderBatchBuilder batchBuilder, Int32 componentId, ArrayRange`1 oldTree, ArrayRange`1 newTree)
+   at Microsoft.AspNetCore.Components.Rendering.ComponentState.RenderIntoBatch(RenderBatchBuilder batchBuilder, RenderFragment renderFragment, Exception& renderFragmentException)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.ProcessRenderQueue()
+--- End of stack trace from previous location ---
+   at Bunit.Rendering.TestRenderer.AssertNoUnhandledExceptions() in /_/src/bunit.core/Rendering/TestRenderer.cs:line 629
+   at Bunit.Rendering.TestRenderer.Render[TResult](RenderFragment renderFragment, Func`2 activator) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 480
+   at Bunit.Rendering.TestRenderer.RenderFragment(RenderFragment renderFragment) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 101
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree(TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 43
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree[TComponent](TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 23
+   at Bunit.TestContext.Render[TComponent](RenderFragment renderFragment) in /_/src/bunit.web/TestContext.cs:line 68
+   at Bunit.TestContext.RenderComponent[TComponent](Action`1 parameterBuilder) in /_/src/bunit.web/TestContext.cs:line 54
+   at SonosControl.Tests.IndexQueueTests.QueuePanel_HiddenWhenQueueEmpty() in /app/SonosControl.Tests/IndexQueueTests.cs:line 90
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+  Failed SonosControl.Tests.IndexQueueTests.QueuePanel_RendersSpotifyQueueItemsWithArtist [5 ms]
+  Error Message:
+   System.InvalidOperationException : Cannot provide a value for property 'NotificationService' on type 'SonosControl.Web.Pages.IndexPage'. There is no registered service of type 'SonosControl.DAL.Interfaces.INotificationService'.
+  Stack Trace:
+     at Microsoft.AspNetCore.Components.ComponentFactory.<>c__DisplayClass9_0.<CreatePropertyInjector>g__Initialize|1(IServiceProvider serviceProvider, IComponent component)
+   at Microsoft.AspNetCore.Components.ComponentFactory.InstantiateComponent(IServiceProvider serviceProvider, Type componentType, IComponentRenderMode callerSpecifiedRenderMode, Nullable`1 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.InstantiateChildComponentOnFrame(RenderTreeFrame[] frames, Int32 frameIndex, Int32 parentComponentId)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewComponentFrame(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InitializeNewSubtree(DiffContext& diffContext, Int32 frameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.InsertNewFrame(DiffContext& diffContext, Int32 newFrameIndex)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.AppendDiffEntriesForRange(DiffContext& diffContext, Int32 oldStartIndex, Int32 oldEndIndexExcl, Int32 newStartIndex, Int32 newEndIndexExcl)
+   at Microsoft.AspNetCore.Components.RenderTree.RenderTreeDiffBuilder.ComputeDiff(Renderer renderer, RenderBatchBuilder batchBuilder, Int32 componentId, ArrayRange`1 oldTree, ArrayRange`1 newTree)
+   at Microsoft.AspNetCore.Components.Rendering.ComponentState.RenderIntoBatch(RenderBatchBuilder batchBuilder, RenderFragment renderFragment, Exception& renderFragmentException)
+   at Microsoft.AspNetCore.Components.RenderTree.Renderer.ProcessRenderQueue()
+--- End of stack trace from previous location ---
+   at Bunit.Rendering.TestRenderer.AssertNoUnhandledExceptions() in /_/src/bunit.core/Rendering/TestRenderer.cs:line 629
+   at Bunit.Rendering.TestRenderer.Render[TResult](RenderFragment renderFragment, Func`2 activator) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 480
+   at Bunit.Rendering.TestRenderer.RenderFragment(RenderFragment renderFragment) in /_/src/bunit.core/Rendering/TestRenderer.cs:line 101
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree(TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 43
+   at Bunit.Extensions.TestContextBaseRenderExtensions.RenderInsideRenderTree[TComponent](TestContextBase testContext, RenderFragment renderFragment) in /_/src/bunit.core/Extensions/TestContextBaseRenderExtensions.cs:line 23
+   at Bunit.TestContext.Render[TComponent](RenderFragment renderFragment) in /_/src/bunit.web/TestContext.cs:line 68
+   at Bunit.TestContext.RenderComponent[TComponent](Action`1 parameterBuilder) in /_/src/bunit.web/TestContext.cs:line 54
+   at SonosControl.Tests.IndexQueueTests.QueuePanel_RendersSpotifyQueueItemsWithArtist() in /app/SonosControl.Tests/IndexQueueTests.cs:line 65
+   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
