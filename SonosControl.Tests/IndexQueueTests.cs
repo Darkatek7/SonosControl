@@ -157,6 +157,7 @@ public class IndexQueueTests
         unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
 
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
 
         return new TestResources(dbContext);
     }
