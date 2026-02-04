@@ -88,9 +88,16 @@
                                         <button type="button"
                                                 class="btn btn-outline-danger user-action-btn"
                                                 @onclick="() => DeleteUser(user)"
-                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")))"
+                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
                                                 aria-label="Delete user">
-                                            Delete
+                                            @if (IsLoading($"delete-{user.Id}"))
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            }
+                                            else
+                                            {
+                                                <span>Delete</span>
+                                            }
                                         </button>
 
                                         @if (isSuperAdmin)
@@ -98,31 +105,59 @@
                                             <button type="button"
                                                     class="btn btn-outline-primary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "admin")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-admin"))">
+                                                @if (IsLoading($"role-{user.Id}-admin"))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
+                                                }
                                             </button>
 
                                             <button type="button"
                                                     class="btn btn-outline-secondary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "operator")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-operator"))">
+                                                @if (IsLoading($"role-{user.Id}-operator"))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
+                                                }
                                             </button>
 
                                             <button type="button"
                                                     class="btn btn-outline-warning user-action-btn"
                                                     @onclick='() => ToggleRole(user, "superadmin")'
-                                                    disabled="@IsCurrentUser(user)">
-                                                @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-superadmin"))">
+                                                @if (IsLoading($"role-{user.Id}-superadmin"))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
+                                                }
                                             </button>
                                         }
 
                                         <button type="button"
                                                 class="btn user-action-btn @GetActivationButtonClass(user)"
                                                 @onclick='() => ToggleUserActivation(user)'
-                                                disabled="@IsCurrentUser(user)"
+                                                disabled="@(IsCurrentUser(user) || IsLoading($"activation-{user.Id}"))"
                                                 aria-label="Toggle user activation status">
-                                            @(IsUserActive(user) ? "✔" : "⛔")
+                                            @if (IsLoading($"activation-{user.Id}"))
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            }
+                                            else
+                                            {
+                                                @(IsUserActive(user) ? "✔" : "⛔")
+                                            }
                                         </button>
                                     </div>
                                 </td>
@@ -178,13 +213,31 @@
                                         {
                                             <div class="row g-2">
                                                 <div class="col-6">
-                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("admin") ? "btn-outline-danger" : "btn-outline-primary")" @onclick='() => ToggleRole(user, "admin")'>
-                                                        <span class="oi @(userRoles[user.Id].Contains("admin") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> Admin
+                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("admin") ? "btn-outline-danger" : "btn-outline-primary")"
+                                                            @onclick='() => ToggleRole(user, "admin")'
+                                                            disabled="@IsLoading($"role-{user.Id}-admin")">
+                                                        @if (IsLoading($"role-{user.Id}-admin"))
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="oi @(userRoles[user.Id].Contains("admin") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> <span>Admin</span>
+                                                        }
                                                     </button>
                                                 </div>
                                                 <div class="col-6">
-                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("operator") ? "btn-outline-danger" : "btn-outline-secondary")" @onclick='() => ToggleRole(user, "operator")'>
-                                                        <span class="oi @(userRoles[user.Id].Contains("operator") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> Operator
+                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("operator") ? "btn-outline-danger" : "btn-outline-secondary")"
+                                                            @onclick='() => ToggleRole(user, "operator")'
+                                                            disabled="@IsLoading($"role-{user.Id}-operator")">
+                                                        @if (IsLoading($"role-{user.Id}-operator"))
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="oi @(userRoles[user.Id].Contains("operator") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> <span>Operator</span>
+                                                        }
                                                     </button>
                                                 </div>
                                             </div>
@@ -192,13 +245,31 @@
 
                                         <div class="row g-2">
                                             <div class="col-6">
-                                                <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => DeleteUser(user)" disabled="@(!isSuperAdmin && userRoles[user.Id].Contains("superadmin"))">
-                                                    <span class="oi oi-trash" aria-hidden="true"></span> Delete
+                                                <button class="btn btn-sm btn-outline-danger w-100"
+                                                        @onclick="() => DeleteUser(user)"
+                                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))">
+                                                    @if (IsLoading($"delete-{user.Id}"))
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="oi oi-trash" aria-hidden="true"></span> <span>Delete</span>
+                                                    }
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-sm w-100 @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")" @onclick='() => ToggleUserActivation(user)'>
-                                                    <span class="oi @(IsUserActive(user) ? "oi-ban" : "oi-check")" aria-hidden="true"></span> @(IsUserActive(user) ? "Block" : "Activate")
+                                                <button class="btn btn-sm w-100 @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
+                                                        @onclick='() => ToggleUserActivation(user)'
+                                                        disabled="@IsLoading($"activation-{user.Id}")">
+                                                    @if (IsLoading($"activation-{user.Id}"))
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="oi @(IsUserActive(user) ? "oi-ban" : "oi-check")" aria-hidden="true"></span> @(IsUserActive(user) ? "Block" : "Activate")
+                                                    }
                                                 </button>
                                             </div>
                                         </div>
@@ -230,6 +301,9 @@
     private bool allowUserRegistration;
     private SonosSettings? _settings;
     private readonly string RegistrationSwitchId = $"allowRegistrationSwitch_{System.Guid.NewGuid():N}";
+
+    private HashSet<string> _loadingStates = new();
+    private bool IsLoading(string key) => _loadingStates.Contains(key);
 
     private string RegistrationSwitchHelperText => allowUserRegistration ? "Open to new users." : "Closed to new signups.";
 
@@ -293,18 +367,30 @@
         var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete user '{user.UserName}'?");
         if (!confirmed) return;
 
-        var result = await UserManager.DeleteAsync(user);
-        if (result.Succeeded)
+        var key = $"delete-{user.Id}";
+        if (_loadingStates.Contains(key)) return;
+        _loadingStates.Add(key);
+        StateHasChanged();
+
+        try
         {
-            users.Remove(user);
-            userRoles.Remove(user.Id);
-            errorMessage = null;
-            StateHasChanged();
-            AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+            var result = await UserManager.DeleteAsync(user);
+            if (result.Succeeded)
+            {
+                users.Remove(user);
+                userRoles.Remove(user.Id);
+                errorMessage = null;
+                AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+            }
+            else
+            {
+                errorMessage = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            }
         }
-        else
+        finally
         {
-            errorMessage = $"Failed to delete user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            _loadingStates.Remove(key);
+            StateHasChanged();
         }
     }
 
@@ -329,36 +415,47 @@
             return;
         }
 
-        if (IsUserActive(user))
+        var key = $"activation-{user.Id}";
+        if (_loadingStates.Contains(key)) return;
+        _loadingStates.Add(key);
+        StateHasChanged();
+
+        try
         {
-            // Deactivate user: enable lockout and set LockoutEnd far in the future
-            user.LockoutEnabled = true;
-            user.LockoutEnd = DateTimeOffset.MaxValue;
-            await AddLog("User deactivated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+            if (IsUserActive(user))
+            {
+                // Deactivate user: enable lockout and set LockoutEnd far in the future
+                user.LockoutEnabled = true;
+                user.LockoutEnd = DateTimeOffset.MaxValue;
+                await AddLog("User deactivated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+            }
+            else
+            {
+                // Reactivate user: disable lockout and clear LockoutEnd
+                user.LockoutEnd = null;
+                user.LockoutEnabled = false;
+                await AddLog("User activated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+            }
+
+            var result = await UserManager.UpdateAsync(user);
+
+            if (result.Succeeded)
+            {
+                errorMessage = null;
+                // Update the local user list to reflect changes
+                var index = users.FindIndex(u => u.Id == user.Id);
+                if (index >= 0)
+                    users[index] = user;
+            }
+            else
+            {
+                errorMessage = $"Failed to update user activation status: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+            }
         }
-        else
+        finally
         {
-            // Reactivate user: disable lockout and clear LockoutEnd
-            user.LockoutEnd = null;
-            user.LockoutEnabled = false;
-            await AddLog("User activated", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
-        }
-
-        var result = await UserManager.UpdateAsync(user);
-
-        if (result.Succeeded)
-        {
-            errorMessage = null;
-            // Update the local user list to reflect changes
-            var index = users.FindIndex(u => u.Id == user.Id);
-            if (index >= 0)
-                users[index] = user;
-
+            _loadingStates.Remove(key);
             StateHasChanged();
-        }
-        else
-        {
-            errorMessage = $"Failed to update user activation status: {string.Join(", ", result.Errors.Select(e => e.Description))}";
         }
     }
 
@@ -385,34 +482,45 @@
             return;
         }
 
-        if (userRoles[user.Id].Contains(role))
-        {
-            var removeResult = await UserManager.RemoveFromRoleAsync(user, role);
-            if (removeResult.Succeeded)
-            {
-                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
-                errorMessage = null;
-            }
-            else
-            {
-                errorMessage = $"Failed to remove role '{role}': {string.Join(", ", removeResult.Errors.Select(e => e.Description))}";
-            }
-        }
-        else
-        {
-            var addResult = await UserManager.AddToRoleAsync(user, role);
-            if (addResult.Succeeded)
-            {
-                userRoles[user.Id] = await UserManager.GetRolesAsync(user);
-                errorMessage = null;
-            }
-            else
-            {
-                errorMessage = $"Failed to add role '{role}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}";
-            }
-        }
-
+        var key = $"role-{user.Id}-{role}";
+        if (_loadingStates.Contains(key)) return;
+        _loadingStates.Add(key);
         StateHasChanged();
+
+        try
+        {
+            if (userRoles[user.Id].Contains(role))
+            {
+                var removeResult = await UserManager.RemoveFromRoleAsync(user, role);
+                if (removeResult.Succeeded)
+                {
+                    userRoles[user.Id] = await UserManager.GetRolesAsync(user);
+                    errorMessage = null;
+                }
+                else
+                {
+                    errorMessage = $"Failed to remove role '{role}': {string.Join(", ", removeResult.Errors.Select(e => e.Description))}";
+                }
+            }
+            else
+            {
+                var addResult = await UserManager.AddToRoleAsync(user, role);
+                if (addResult.Succeeded)
+                {
+                    userRoles[user.Id] = await UserManager.GetRolesAsync(user);
+                    errorMessage = null;
+                }
+                else
+                {
+                    errorMessage = $"Failed to add role '{role}': {string.Join(", ", addResult.Errors.Select(e => e.Description))}";
+                }
+            }
+        }
+        finally
+        {
+            _loadingStates.Remove(key);
+            StateHasChanged();
+        }
     }
 
     private bool IsCurrentUser(ApplicationUser user)
