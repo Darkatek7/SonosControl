@@ -1,21 +1,22 @@
-@page "/"
-@using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.Http
-@using Microsoft.AspNetCore.Identity
-@using SonosControl.Web.Models
-@using System.Text.Json
-@namespace SonosControl.Web.Pages
-@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
-@inject UserManager<ApplicationUser> UserManager
-@inject IHttpContextAccessor HttpContextAccessor
-
+@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@using System.Text.Json
+@namespace SonosControl.Web.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@inject UserManager<ApplicationUser> UserManager
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+
 
 @{
 
     var themePreference = ThemePreferenceMode.System.ToIdentifier();
+    var antiforgeryToken = Antiforgery.GetAndStoreTokens(ViewContext.HttpContext).RequestToken;
 
-    var principal = HttpContextAccessor.HttpContext?.User;
+    var principal = ViewContext.HttpContext.User;
 
     if (principal?.Identity?.IsAuthenticated ?? false)
 
@@ -110,7 +111,7 @@
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
 </head>
 <body>
-    <component type="typeof(App)" render-mode="ServerPrerendered" />
+    <component type="typeof(App)" render-mode="ServerPrerendered" param-AntiforgeryToken="antiforgeryToken" />
 
     <div id="blazor-error-ui">
         <environment include="Staging,Production">
