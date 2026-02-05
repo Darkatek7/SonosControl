@@ -8,8 +8,6 @@
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
-@inject IAntiforgery Antiforgery
-@inject IHttpContextAccessor HttpContextAccessor
 @inject SonosControl.Web.Services.ThemeService ThemeService
 @inject IJSRuntime JSRuntime
 
@@ -17,7 +15,7 @@
 
 <div class="app-shell">
     <aside class="app-sidebar">
-        <NavMenu AntiforgeryToken="@antiforgeryToken" />
+        <NavMenu AntiforgeryToken="@AntiforgeryToken" />
     </aside>
 
     <main class="app-main">
@@ -48,7 +46,7 @@
                         <span class="top-bar-greeting">Hello, @firstName!</span>
 
                         <form method="post" action="/auth/logout" class="top-bar-logout">
-                            <input type="hidden" name="__RequestVerificationToken" value="@antiforgeryToken" />
+                            <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
                             <button type="submit" class="btn btn-sm btn-danger">Logout</button>
                         </form>
 
@@ -77,7 +75,10 @@
     private string? firstName;
     private bool isAuthenticated;
     private string? userId;
-    private string? antiforgeryToken;
+
+    [CascadingParameter(Name = "AntiforgeryToken")]
+    public string? AntiforgeryToken { get; set; }
+
     private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
     private static readonly ThemePreferenceMode[] ThemeOptions = new[]
     {
@@ -90,7 +91,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        antiforgeryToken = Antiforgery.GetAndStoreTokens(HttpContextAccessor.HttpContext!).RequestToken;
+        // Token is now received via CascadingParameter
 
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
@@ -112,7 +113,7 @@
     {
         var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
         var request = new HttpRequestMessage(HttpMethod.Post, "auth/logout");
-        request.Headers.Add("RequestVerificationToken", antiforgeryToken);
+        request.Headers.Add("RequestVerificationToken", AntiforgeryToken);
         var response = await http.SendAsync(request);
         if (response.IsSuccessStatusCode)
         {
@@ -193,4 +194,3 @@
         }
     }
 }
-
