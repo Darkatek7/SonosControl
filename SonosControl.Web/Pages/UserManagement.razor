@@ -89,7 +89,7 @@
                                                 class="btn btn-outline-danger user-action-btn"
                                                 @onclick="() => DeleteUser(user)"
                                                 disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
-                                                aria-label="Delete user">
+                                                aria-label="@($"Delete user {user.UserName}")">
                                             @if (IsLoading($"delete-{user.Id}"))
                                             {
                                                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -105,7 +105,8 @@
                                             <button type="button"
                                                     class="btn btn-outline-primary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "admin")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-admin"))">
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-admin"))"
+                                                    aria-label="@($"{(userRoles[user.Id].Contains("admin") ? "Remove" : "Add")} Admin role for {user.UserName}")">
                                                 @if (IsLoading($"role-{user.Id}-admin"))
                                                 {
                                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -119,7 +120,8 @@
                                             <button type="button"
                                                     class="btn btn-outline-secondary user-action-btn"
                                                     @onclick='() => ToggleRole(user, "operator")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-operator"))">
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-operator"))"
+                                                    aria-label="@($"{(userRoles[user.Id].Contains("operator") ? "Remove" : "Add")} Operator role for {user.UserName}")">
                                                 @if (IsLoading($"role-{user.Id}-operator"))
                                                 {
                                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -133,7 +135,8 @@
                                             <button type="button"
                                                     class="btn btn-outline-warning user-action-btn"
                                                     @onclick='() => ToggleRole(user, "superadmin")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-superadmin"))">
+                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-superadmin"))"
+                                                    aria-label="@($"{(userRoles[user.Id].Contains("superadmin") ? "Remove" : "Add")} Superuser role for {user.UserName}")">
                                                 @if (IsLoading($"role-{user.Id}-superadmin"))
                                                 {
                                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -149,7 +152,7 @@
                                                 class="btn user-action-btn @GetActivationButtonClass(user)"
                                                 @onclick='() => ToggleUserActivation(user)'
                                                 disabled="@(IsCurrentUser(user) || IsLoading($"activation-{user.Id}"))"
-                                                aria-label="Toggle user activation status">
+                                                aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
                                             @if (IsLoading($"activation-{user.Id}"))
                                             {
                                                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -215,7 +218,8 @@
                                                 <div class="col-6">
                                                     <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("admin") ? "btn-outline-danger" : "btn-outline-primary")"
                                                             @onclick='() => ToggleRole(user, "admin")'
-                                                            disabled="@IsLoading($"role-{user.Id}-admin")">
+                                                            disabled="@IsLoading($"role-{user.Id}-admin")"
+                                                            aria-label="@($"{(userRoles[user.Id].Contains("admin") ? "Remove" : "Add")} Admin role for {user.UserName}")">
                                                         @if (IsLoading($"role-{user.Id}-admin"))
                                                         {
                                                             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -229,7 +233,8 @@
                                                 <div class="col-6">
                                                     <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("operator") ? "btn-outline-danger" : "btn-outline-secondary")"
                                                             @onclick='() => ToggleRole(user, "operator")'
-                                                            disabled="@IsLoading($"role-{user.Id}-operator")">
+                                                            disabled="@IsLoading($"role-{user.Id}-operator")"
+                                                            aria-label="@($"{(userRoles[user.Id].Contains("operator") ? "Remove" : "Add")} Operator role for {user.UserName}")">
                                                         @if (IsLoading($"role-{user.Id}-operator"))
                                                         {
                                                             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -247,7 +252,8 @@
                                             <div class="col-6">
                                                 <button class="btn btn-sm btn-outline-danger w-100"
                                                         @onclick="() => DeleteUser(user)"
-                                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))">
+                                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
+                                                        aria-label="@($"Delete user {user.UserName}")">
                                                     @if (IsLoading($"delete-{user.Id}"))
                                                     {
                                                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -261,7 +267,8 @@
                                             <div class="col-6">
                                                 <button class="btn btn-sm w-100 @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
                                                         @onclick='() => ToggleUserActivation(user)'
-                                                        disabled="@IsLoading($"activation-{user.Id}")">
+                                                        disabled="@IsLoading($"activation-{user.Id}")"
+                                                        aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
                                                     @if (IsLoading($"activation-{user.Id}"))
                                                     {
                                                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
