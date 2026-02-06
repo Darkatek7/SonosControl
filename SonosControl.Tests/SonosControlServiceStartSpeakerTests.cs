@@ -93,9 +93,12 @@ public class SonosControlServiceStartSpeakerTests
     }
 
     [Fact]
-    public async Task StartSpeaker_WhenSynced_PlaysOnAllSpeakers()
+    public async Task StartSpeaker_WhenSynced_GroupsAndPlaysOnMaster()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(true);
+
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
@@ -123,20 +126,20 @@ public class SonosControlServiceStartSpeakerTests
 
         await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
-        // Verify Play action is called on BOTH speakers
+        // Verify Play action is called on Master ONLY (slaves follow)
         sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker1.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
 
-        // Verify Grouping is NOT called (based on new requirement)
-        sonosRepo.Verify(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+        // Verify Grouping IS called
+        sonosRepo.Verify(r => r.CreateGroup(speaker1.IpAddress, It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Once);
 
-        // Verify Ungrouping is called for all
+        // Verify Ungrouping is called for all at the beginning
         sonosRepo.Verify(r => r.UngroupSpeaker(speaker1.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
         sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task StartSpeaker_WhenNotSynced_PlaysOnMasterOnly()
+    public async Task StartSpeaker_WhenNotSynced_PlaysOnAllSpeakersIndependently()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
         var uow = new Mock<IUnitOfWork>();
@@ -166,12 +169,15 @@ public class SonosControlServiceStartSpeakerTests
 
         await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
-        // Verify Play action is called on Master ONLY
+        // Verify Play action is called on ALL speakers independently
         sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker1.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
-        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(speaker2.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
 
-        // Verify Ungrouping is called for Master
+        // Verify Grouping is NOT called
+        sonosRepo.Verify(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Verify Ungrouping is called for all
         sonosRepo.Verify(r => r.UngroupSpeaker(speaker1.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
-        sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
     }
 }

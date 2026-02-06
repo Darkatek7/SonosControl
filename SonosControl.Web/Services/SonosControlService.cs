@@ -30,7 +30,7 @@ namespace SonosControl.Web.Services
                     var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
                     // Continuously evaluate settings until start time is reached
-                    var (settings, schedule) = await WaitUntilStartTime(uow, stoppingToken);
+                    var (settings, schedule, startTime) = await WaitUntilStartTime(uow, stoppingToken);
 
                     if (settings == null || settings.Speakers == null || !settings.Speakers.Any())
                     {
@@ -39,8 +39,16 @@ namespace SonosControl.Web.Services
                         continue;
                     }
 
-                    var stop = schedule?.StopTime ?? settings.StopTime;
+                    var stopTimeOnly = schedule?.StopTime ?? settings.StopTime;
                     var speakers = settings.Speakers.ToList();
+
+                    var startTimeOnly = TimeOnly.FromDateTime(startTime.LocalDateTime);
+                    TimeSpan duration = stopTimeOnly - startTimeOnly;
+                    if (duration < TimeSpan.Zero)
+                    {
+                        duration = duration.Add(TimeSpan.FromDays(1));
+                    }
+                    var stopDateTime = startTime.Add(duration);
 
                     try
                     {
@@ -52,7 +60,7 @@ namespace SonosControl.Web.Services
                         await notificationService.SendNotificationAsync($"Automation failed to start playback: {ex.Message}");
                     }
 
-                    await StopSpeaker(uow, speakers, stop, schedule, stoppingToken);
+                    await StopSpeaker(uow, speakers, stopDateTime, schedule, stoppingToken);
                     await notificationService.SendNotificationAsync($"Automation stopped playback.");
                 }
             }
@@ -229,7 +237,7 @@ namespace SonosControl.Web.Services
             return settings.YouTubeMusicCollections[index].Url;
         }
 
-        private async Task<(SonosSettings settings, DaySchedule? schedule)> WaitUntilStartTime(IUnitOfWork uow, CancellationToken token)
+        private async Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> WaitUntilStartTime(IUnitOfWork uow, CancellationToken token)
         {
             TimeOnly? previousStart = null;
             DayOfWeek? previousDay = null;
@@ -256,12 +264,15 @@ namespace SonosControl.Web.Services
                 }
 
                 if (todaySchedule != null && previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
-                    return (settings, todaySchedule);
+                {
+                    var todayStartTime = new DateTimeOffset(todayDate.ToDateTime(todayStart), now.Offset);
+                    return (settings, todaySchedule, todayStartTime);
+                }
 
                 var (target, schedule, start, startDay) = DetermineNextStart(settings, now);
 
                 if (target <= now)
-                    return (settings, schedule);
+                    return (settings, schedule, target);
 
                 var remaining = target - now;
 
@@ -397,24 +408,15 @@ namespace SonosControl.Web.Services
             return false;
         }
 
-        private async Task StopSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, TimeOnly stopTime, DaySchedule? schedule, CancellationToken cancellationToken)
+        private async Task StopSpeaker(IUnitOfWork uow, IEnumerable<SonosSpeaker> speakers, DateTimeOffset stopDateTime, DaySchedule? schedule, CancellationToken cancellationToken)
         {
             var now = _timeProvider.GetLocalNow();
-            TimeOnly timeNow = TimeOnly.FromDateTime(now.LocalDateTime);
-            var timeDifference = stopTime - timeNow;
+            var timeDifference = stopDateTime - now;
             bool isSynced = schedule?.IsSyncedPlayback ?? true;
 
-            var targetSpeakers = new List<string>();
-            if (isSynced)
-            {
-                targetSpeakers.AddRange(speakers.Select(s => s.IpAddress));
-            }
-            else
-            {
-                targetSpeakers.Add(speakers.First().IpAddress);
-            }
+            var targetSpeakers = speakers.Select(s => s.IpAddress).ToList();
 
-            if (stopTime <= timeNow)
+            if (stopDateTime <= now)
             {
                 await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.StopPlaying(ip)));
                 Console.WriteLine($"{now:g}: Paused Playing");
@@ -425,7 +427,7 @@ namespace SonosControl.Web.Services
                 if (timeDifference.TotalMilliseconds > 0)
                 {
                      // Convert using TimeSpan to avoid manual ms calculations
-                     TimeSpan t = timeDifference; // TimeOnly subtraction returns TimeSpan
+                     TimeSpan t = timeDifference;
                      delayInMs = string.Format("{0:D2}h:{1:D2}m:{2:D2}s:{3:D3}ms",
                         t.Hours,
                         t.Minutes,
