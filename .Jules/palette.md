@@ -21,3 +21,7 @@
 ## 2025-02-20 - Destructive Action Confirmation
 **Learning:** Configuration pages with immediate destructive actions (like removing speakers) carry high risk of accidental data loss, frustrating users.
 **Action:** Implement confirmation dialogs (native `confirm` is acceptable for admin tools) for all irreversible removal actions to provide a safety net.
+
+## 2026-06-25 - BUnit Input Value Testing
+**Learning:** BUnit's `NodeValue` on input elements often returns `null` instead of the current value, leading to confusing test failures.
+**Action:** Use `GetAttribute("value")` or verify state changes via other DOM elements (like conditional buttons) instead of asserting `NodeValue` directly.

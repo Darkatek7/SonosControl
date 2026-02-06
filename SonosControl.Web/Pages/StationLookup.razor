@@ -33,12 +33,21 @@
 
     <div class="lookup-shell__search">
         <label for="stationSearch" class="visually-hidden">Search for a radio station</label>
-        <input id="stationSearch"
-               class="lookup-shell__search-input form-control"
-               @bind-value="searchTerm"
-               @bind-value:event="oninput"
-               placeholder="Search for a radio station..."
-               @onkeydown="HandleKeyDown"/>
+        <div class="lookup-search-wrapper">
+            <input id="stationSearch"
+                   @ref="searchInput"
+                   class="lookup-shell__search-input form-control"
+                   @bind-value="searchTerm"
+                   @bind-value:event="oninput"
+                   placeholder="Search for a radio station..."
+                   @onkeydown="HandleKeyDown"/>
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button type="button" class="lookup-clear-button" @onclick="ClearSearch" aria-label="Clear search" title="Clear search">
+                    ✖
+                </button>
+            }
+        </div>
         <button class="lookup-shell__search-button btn btn-primary"
                 @onclick="SearchStations"
                 disabled="@(string.IsNullOrWhiteSpace(searchTerm) || isLoading)"
@@ -134,6 +143,7 @@
 @code {
     private SonosSettings? _settings;
     private string? searchTerm;
+    private ElementReference searchInput;
     private List<RadioStation>? results;
     private bool isLoading = false;
     private HashSet<string> _loadingStates = new();
@@ -221,6 +231,13 @@
         {
             await SearchStations();
         }
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
+        results = null;
+        await searchInput.FocusAsync();
     }
 
     private string GetCleanUrl(string url)
