@@ -18,10 +18,10 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceTests
 {
-    private static Task<(SonosSettings settings, DaySchedule? schedule)> InvokeWait(SonosControlService svc, IUnitOfWork uow, CancellationToken token)
+    private static Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> InvokeWait(SonosControlService svc, IUnitOfWork uow, CancellationToken token)
     {
         var method = typeof(SonosControlService).GetMethod("WaitUntilStartTime", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var task = (Task<(SonosSettings, DaySchedule?)>)method.Invoke(svc, new object[] { uow, token })!;
+        var task = (Task<(SonosSettings, DaySchedule?, DateTimeOffset)>)method.Invoke(svc, new object[] { uow, token })!;
         return task;
     }
 
