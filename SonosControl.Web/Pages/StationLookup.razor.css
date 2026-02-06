@@ -33,16 +33,47 @@
     width: 100%;
 }
 
-.lookup-shell__search-input {
+.lookup-search-wrapper {
+    position: relative;
     flex: 1;
     min-width: 220px;
+}
+
+.lookup-shell__search-input {
+    width: 100%;
     background-color: var(--surface-0);
     border: 1px solid var(--border-strong);
     border-radius: var(--bs-border-radius);
     color: var(--text-primary);
     padding: var(--spacing-xs) var(--spacing-sm);
+    padding-right: 2.5rem;
     box-shadow: var(--shadow-xs);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lookup-clear-button {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.lookup-clear-button:hover {
+    color: var(--text-primary);
+    background-color: var(--surface-2);
 }
 
 .lookup-shell__search-input:focus {
