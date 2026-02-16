@@ -11,6 +11,7 @@ using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Services;
 using Xunit;
+using Xunit.Sdk;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
@@ -18,11 +19,107 @@ namespace SonosControl.Tests;
 
 public class SonosControlServiceTests
 {
+    private static DateTimeOffset LocalInstant(int year, int month, int day, int hour, int minute, int second)
+    {
+        var local = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified);
+        var offset = TimeZoneInfo.Local.GetUtcOffset(local);
+        return new DateTimeOffset(local, offset);
+    }
+
     private static Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> InvokeWait(SonosControlService svc, IUnitOfWork uow, CancellationToken token)
     {
         var method = typeof(SonosControlService).GetMethod("WaitUntilStartTime", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var task = (Task<(SonosSettings, DaySchedule?, DateTimeOffset)>)method.Invoke(svc, new object[] { uow, token })!;
         return task;
+    }
+
+    private static async Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> InvokeWaitDeterministic(
+        SonosControlService svc,
+        IUnitOfWork uow,
+        ManualTimeProvider timeProvider,
+        TimeSpan maxVirtualAdvance,
+        TimeSpan step,
+        TimeSpan realTimeout)
+    {
+        if (maxVirtualAdvance <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxVirtualAdvance));
+        }
+
+        if (step <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(step));
+        }
+
+        using var cts = new CancellationTokenSource(realTimeout);
+        var waitTask = InvokeWait(svc, uow, cts.Token);
+        var advanced = TimeSpan.Zero;
+        var firstScheduleWait = Stopwatch.StartNew();
+
+        // Ensure WaitUntilStartTime has actually reached its first delay point
+        // before we begin advancing virtual time.
+        while (!waitTask.IsCompleted && timeProvider.NextScheduledTime is null && firstScheduleWait.Elapsed < realTimeout)
+        {
+            await Task.Yield();
+        }
+
+        var noScheduleWait = Stopwatch.StartNew();
+        while (!waitTask.IsCompleted && advanced < maxVirtualAdvance)
+        {
+            var nextScheduledTime = timeProvider.NextScheduledTime;
+            if (nextScheduledTime is null)
+            {
+                if (noScheduleWait.Elapsed >= realTimeout)
+                {
+                    break;
+                }
+
+                await Task.Yield();
+                continue;
+            }
+
+            noScheduleWait.Restart();
+
+            var deltaToNext = nextScheduledTime.Value - timeProvider.LocalNow;
+            if (deltaToNext < TimeSpan.Zero)
+            {
+                deltaToNext = TimeSpan.Zero;
+            }
+
+            var remainingBudget = maxVirtualAdvance - advanced;
+            var delta = deltaToNext < remainingBudget ? deltaToNext : remainingBudget;
+            if (step > TimeSpan.Zero && step < delta)
+            {
+                delta = step;
+            }
+
+            timeProvider.Advance(delta);
+            advanced += delta;
+            await Task.Yield();
+        }
+
+        if (waitTask.IsCompletedSuccessfully)
+        {
+            return await waitTask;
+        }
+
+        if (waitTask.IsCanceled)
+        {
+            throw new XunitException(
+                $"WaitUntilStartTime was canceled before completion. " +
+                $"Advanced {advanced} of {maxVirtualAdvance}.");
+        }
+
+        if (waitTask.IsFaulted)
+        {
+            return await waitTask;
+        }
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waitTask);
+        throw new XunitException(
+            $"WaitUntilStartTime did not complete within virtual-time budget. " +
+            $"Advanced {advanced} of {maxVirtualAdvance}.");
     }
 
     private IServiceScopeFactory CreateMockScopeFactory(IUnitOfWork uow)
@@ -43,10 +140,10 @@ public class SonosControlServiceTests
     [Fact]
     public async Task WaitUntilStartTime_WaitsUntilSettingStart()
     {
-        var initial = new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 1, 1, 8, 0, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
-        var start = TimeOnly.FromDateTime(initial.AddMilliseconds(500).DateTime);
+        var start = new TimeOnly(8, 0, 0, 500);
         var settings = new SonosSettings
         {
             StartTime = start,
@@ -60,18 +157,18 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
-        timeProvider.Advance(TimeSpan.FromMilliseconds(300));
-        Assert.False(waitTask.IsCompleted);
-
-        timeProvider.Advance(TimeSpan.FromMilliseconds(200));
-
-        var result = await waitTask;
+        var expectedStart = new DateTimeOffset(initial.Date.Add(start.ToTimeSpan()), initial.Offset);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(settings, result.settings);
         Assert.Null(result.schedule);
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
     }
 
     [Fact]
@@ -112,7 +209,7 @@ public class SonosControlServiceTests
     public async Task WaitUntilStartTime_WhenStartTimeAlreadyPassed_WaitsForNextDay_DefaultSettings()
     {
         var startTime = new TimeOnly(7, 30);
-        var initial = new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 1, 1, 8, 0, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
         var settings = new SonosSettings
@@ -129,23 +226,16 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
-        await Task.Delay(50);
-        Assert.False(waitTask.IsCompleted);
-
         var now = timeProvider.LocalNow;
         var nextRun = new DateTimeOffset(now.Date.AddDays(1).Add(startTime.ToTimeSpan()), now.Offset);
-        var advanceAlmostToStart = nextRun - now - TimeSpan.FromSeconds(1);
-        Assert.True(advanceAlmostToStart > TimeSpan.Zero);
-
-        timeProvider.Advance(advanceAlmostToStart);
-        Assert.False(waitTask.IsCompleted);
-
-        timeProvider.Advance(TimeSpan.FromSeconds(1));
-
-        var result = await waitTask;
+        var maxVirtualAdvance = (nextRun - now) + TimeSpan.FromMinutes(1);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            maxVirtualAdvance,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(settings, result.settings);
         Assert.Null(result.schedule);
@@ -157,7 +247,7 @@ public class SonosControlServiceTests
     [Fact]
     public async Task WaitUntilStartTime_WhenTodayScheduleHasPassed_UsesNextDaySchedule()
     {
-        var initial = new DateTimeOffset(2024, 1, 1, 23, 55, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 1, 1, 23, 55, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
         var today = initial.DayOfWeek;
@@ -194,22 +284,16 @@ public class SonosControlServiceTests
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
 
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
-        await Task.Delay(50);
-        Assert.False(waitTask.IsCompleted);
-
         var now = timeProvider.LocalNow;
         var nextRun = new DateTimeOffset(now.Date.AddDays(1).Add(tomorrowSchedule.StartTime.ToTimeSpan()), now.Offset);
-        var advanceAlmostToStart = nextRun - now - TimeSpan.FromSeconds(1);
-        Assert.True(advanceAlmostToStart > TimeSpan.Zero);
-
-        timeProvider.Advance(advanceAlmostToStart);
-        Assert.False(waitTask.IsCompleted);
-
-        timeProvider.Advance(TimeSpan.FromSeconds(1));
-
-        var result = await waitTask;
+        var maxVirtualAdvance = (nextRun - now) + TimeSpan.FromMinutes(1);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            maxVirtualAdvance,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(settings, result.settings);
         Assert.Same(tomorrowSchedule, result.schedule);
@@ -218,9 +302,52 @@ public class SonosControlServiceTests
     }
 
     [Fact]
+    public async Task WaitUntilStartTime_WhenTodayScheduleHasPassed_CompletesWithinBudget()
+    {
+        var initial = LocalInstant(2024, 1, 1, 23, 55, 0);
+        var timeProvider = new ManualTimeProvider(initial);
+
+        var today = initial.DayOfWeek;
+        var tomorrow = (DayOfWeek)(((int)today + 1) % 7);
+
+        var settings = new SonosSettings
+        {
+            StartTime = new TimeOnly(6, 0),
+            DailySchedules = new Dictionary<DayOfWeek, DaySchedule>
+            {
+                [today] = new DaySchedule { StartTime = new TimeOnly(23, 50) },
+                [tomorrow] = new DaySchedule { StartTime = new TimeOnly(0, 1), SpotifyUrl = "spotify:track:example" }
+            },
+            ActiveDays = Enum.GetValues<DayOfWeek>().ToList()
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
+
+        var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).AddHours(0).AddMinutes(1), initial.Offset);
+        var maxVirtualAdvance = TimeSpan.FromMinutes(8);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            maxVirtualAdvance,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(3));
+
+        Assert.Equal(expectedStart, result.startTime);
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
+    }
+
+    [Fact]
     public async Task WaitUntilStartTime_UsesHolidayScheduleForToday()
     {
-        var initial = new DateTimeOffset(2024, 12, 25, 5, 0, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 12, 25, 5, 0, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
         var holidaySchedule = new HolidaySchedule
@@ -245,27 +372,31 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
-        timeProvider.Advance(TimeSpan.FromMinutes(5));
-
-        var result = await waitTask;
+        var expectedStart = new DateTimeOffset(initial.Date.Add(holidaySchedule.StartTime.ToTimeSpan()), initial.Offset);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            TimeSpan.FromMinutes(10),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(holidaySchedule, result.schedule);
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
     }
 
     [Fact]
     public async Task WaitUntilStartTime_WhenHolidayIsNextDay_SelectsHolidayStart()
     {
-        var initial = new DateTimeOffset(2024, 12, 24, 23, 30, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 12, 24, 23, 30, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
         var holidayDate = DateOnly.FromDateTime(initial.AddDays(1).Date);
         var holidaySchedule = new HolidaySchedule
         {
             Date = holidayDate,
-            StartTime = new TimeOnly(6, 15)
+            StartTime = new TimeOnly(6, 15),
+            SpotifyUrl = "spotify:track:holiday-next-day"
         };
 
         var settings = new SonosSettings
@@ -283,13 +414,14 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
         var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(holidaySchedule.StartTime.ToTimeSpan()), initial.Offset);
-        timeProvider.Advance(expectedStart - timeProvider.LocalNow);
-
-        var result = await waitTask;
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            TimeSpan.FromHours(8),
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(holidaySchedule, result.schedule);
         Assert.Equal(expectedStart, timeProvider.LocalNow);
@@ -298,7 +430,7 @@ public class SonosControlServiceTests
     [Fact]
     public async Task WaitUntilStartTime_SkipsHolidaySchedulesMarkedDontPlay()
     {
-        var initial = new DateTimeOffset(2024, 6, 1, 5, 0, 0, TimeSpan.Zero);
+        var initial = LocalInstant(2024, 6, 1, 5, 0, 0);
         var timeProvider = new ManualTimeProvider(initial);
 
         var today = initial.DayOfWeek;
@@ -337,13 +469,14 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
         var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).Add(tomorrowSchedule.StartTime.ToTimeSpan()), initial.Offset);
-        timeProvider.Advance(expectedStart - timeProvider.LocalNow);
-
-        var result = await waitTask;
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            TimeSpan.FromHours(26),
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromSeconds(3));
 
         Assert.Same(tomorrowSchedule, result.schedule);
         Assert.Equal(expectedStart, timeProvider.LocalNow);
@@ -385,7 +518,7 @@ public class SonosControlServiceTests
     [Fact]
     public async Task WaitUntilStartTime_SkipsInactiveDays()
     {
-        var initial = new DateTimeOffset(2024, 1, 1, 8, 0, 0, TimeSpan.Zero); // Monday
+        var initial = LocalInstant(2024, 1, 1, 8, 0, 0); // Monday
         var timeProvider = new ManualTimeProvider(initial);
 
         // Monday is inactive
@@ -409,21 +542,17 @@ public class SonosControlServiceTests
 
         var scopeFactory = CreateMockScopeFactory(uow.Object);
         var svc = new SonosControlService(scopeFactory, timeProvider, timeProvider.DelayAsync);
-
-        var waitTask = InvokeWait(svc, uow.Object, CancellationToken.None);
-
-        // Expected next start is Tuesday at 9:00
         var expectedStart = new DateTimeOffset(initial.Date.AddDays(1).AddHours(9), initial.Offset);
+        var result = await InvokeWaitDeterministic(
+            svc,
+            uow.Object,
+            timeProvider,
+            TimeSpan.FromHours(26),
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromSeconds(3));
 
-        // Advance close to it
-        timeProvider.Advance(expectedStart - timeProvider.LocalNow - TimeSpan.FromSeconds(1));
-        Assert.False(waitTask.IsCompleted);
-
-        timeProvider.Advance(TimeSpan.FromSeconds(2));
-
-        var result = await waitTask;
         Assert.Same(settings.DailySchedules[DayOfWeek.Tuesday], result.schedule);
-        Assert.Equal(expectedStart, timeProvider.LocalNow, TimeSpan.FromSeconds(1));
+        Assert.Equal(expectedStart, timeProvider.LocalNow);
     }
 
 
@@ -449,13 +578,40 @@ public class SonosControlServiceTests
             }
         }
 
+        public int ScheduledCount
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _scheduled.Count;
+                }
+            }
+        }
+
+        public DateTimeOffset? NextScheduledTime
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    if (_scheduled.Count == 0)
+                    {
+                        return null;
+                    }
+
+                    return _scheduled.Keys[0];
+                }
+            }
+        }
+
         public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
 
         public override DateTimeOffset GetUtcNow()
         {
             lock (_lock)
             {
-                return _current.ToUniversalTime();
+                return _current;
             }
         }
 

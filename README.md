@@ -122,6 +122,7 @@ Prefer to develop or preview without Docker?
 
 ```bash
 dotnet restore
+cp SonosControl.Web/Data/config.template.json SonosControl.Web/Data/config.json  # first run only
 cd SonosControl.Web
 dotnet ef database update   # optional, migrations run automatically at runtime
 DOTNET_ENVIRONMENT=Development dotnet run
@@ -172,6 +173,7 @@ Sonos automation rules live in `Data/config.json`. A full example:
 ```
 
 The UI keeps this file synchronized; manual edits are optional but handy for infrastructure automation.
+The repository tracks `SonosControl.Web/Data/config.template.json` as a safe baseline; `Data/config.json` is runtime state and intentionally not versioned.
 
 ### Daily Scheduling & Automation Rules
 - **Global defaults:** Set the Sonos IP, volume, start, and stop times under *Configuration → Speaker Settings*.
@@ -183,6 +185,7 @@ The UI keeps this file synchronized; manual edits are optional but handy for inf
 ### Data Protection Keys & Persistent Storage
 - **`Data/` volume:** Stores `config.json` and `app.db` (Identity, logs, schedules). Back it up to retain history and user accounts.
 - **Data protection keys:** Persist `/root/.aspnet/DataProtection-Keys` (Docker) or the directory specified by `DataProtection:KeysDirectory` to keep login cookies valid across restarts or multi-instance deployments.
+- **Rotation guidance:** Data protection keys are runtime secrets and should not be committed to source control. If keys were previously committed, rotate them once in each environment and redeploy.
 
 ---
 
@@ -232,6 +235,8 @@ The solution ships with comprehensive unit tests covering repositories and the a
 ```bash
 dotnet test
 ```
+
+On Windows, stop any running `dotnet run` instance before builds/tests to avoid assembly file-lock errors.
 
 For the mobile Playwright smoke suite, run a single command from the repository root:
 
