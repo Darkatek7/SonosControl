@@ -1,0 +1,88 @@
+name: Bug report
+description: Report a reproducible problem in SonosControl.
+title: "[Bug]: "
+labels:
+  - bug
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report.
+        Please provide enough detail for us to reproduce and triage quickly.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-sentence description of the bug.
+      placeholder: Playback stops after pressing Sync Play
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps so we can reproduce reliably.
+      placeholder: |
+        1. Go to Home
+        2. Select speaker
+        3. Click Sync Play
+        4. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App version / commit
+      description: Release tag or commit SHA if known.
+      placeholder: main@abcdef1
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: Host OS where SonosControl runs.
+      placeholder: Windows 11 / Ubuntu 24.04 / Docker on NAS
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: Browser used for the UI, if relevant.
+      placeholder: Chrome 122
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and errors
+      description: Paste relevant log excerpts, stack traces, or screenshots.
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and this bug has not already been reported.
+          required: true

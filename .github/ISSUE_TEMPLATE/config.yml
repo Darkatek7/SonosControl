@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/Darkatek7/SonosControl/blob/main/SECURITY.md
+    about: Do not use public issues for vulnerabilities. Follow the private reporting process.
+  - name: Usage help and documentation
+    url: https://github.com/Darkatek7/SonosControl#docs-index
+    about: Check the README and docs for setup, troubleshooting, and contributor workflows.
