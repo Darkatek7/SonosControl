@@ -294,7 +294,8 @@
     }
 
     private List<string?> allUsers = new();
-    private System.Timers.Timer? debounceTimer;
+    private CancellationTokenSource? _searchDebounceCts;
+    private CancellationTokenSource? _refreshCts;
 
     protected override async Task OnInitializedAsync()
     {
@@ -304,22 +305,36 @@
 
     private async Task LoadInitialData()
     {
-        allUsers = await Db.Logs.Select(l => l.PerformedBy).Distinct().ToListAsync();
+        allUsers = await Db.Logs
+            .AsNoTracking()
+            .Select(l => l.PerformedBy)
+            .Distinct()
+            .OrderBy(u => u)
+            .ToListAsync();
     }
 
     private async Task RefreshLogs()
     {
+        CancellationTokenSource? previousCts = null;
+        CancellationToken token;
+
+        previousCts = _refreshCts;
+        _refreshCts = new CancellationTokenSource();
+        previousCts?.Cancel();
+        token = _refreshCts.Token;
+
         int countToTake = selectedLogCount == -1 ? customLogCount : selectedLogCount;
         if (countToTake <= 0) countToTake = 100;
 
-        var query = Db.Logs.AsQueryable();
+        var query = Db.Logs.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
+            var trimmedSearch = searchTerm.Trim();
             query = query.Where(l =>
-                l.Action.Contains(searchTerm) ||
-                (l.PerformedBy != null && l.PerformedBy.Contains(searchTerm)) ||
-                (l.Details != null && l.Details.Contains(searchTerm)));
+                l.Action.Contains(trimmedSearch) ||
+                (l.PerformedBy != null && l.PerformedBy.Contains(trimmedSearch)) ||
+                (l.Details != null && l.Details.Contains(trimmedSearch)));
         }
 
         if (!string.IsNullOrEmpty(selectedUser))
@@ -329,33 +344,52 @@
 
         if (startDate.HasValue)
         {
-            query = query.Where(l => l.Timestamp.Date >= startDate.Value.Date);
+            var startInclusive = startDate.Value.Date;
+            query = query.Where(l => l.Timestamp >= startInclusive);
         }
 
         if (endDate.HasValue)
         {
-            query = query.Where(l => l.Timestamp.Date <= endDate.Value.Date);
+            var endExclusive = endDate.Value.Date.AddDays(1);
+            query = query.Where(l => l.Timestamp < endExclusive);
         }
 
-        logs = await query
-            .OrderByDescending(l => l.Timestamp)
-            .Take(countToTake)
-            .ToListAsync();
-        
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            logs = await query
+                .OrderByDescending(l => l.Timestamp)
+                .Take(countToTake)
+                .ToListAsync(token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            return;
+        }
+        finally
+        {
+            previousCts?.Dispose();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void DebounceRefresh()
     {
-        debounceTimer?.Stop();
-        debounceTimer = new System.Timers.Timer(300); // 300ms debounce delay
-        debounceTimer.Elapsed += async (sender, e) =>
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        _searchDebounceCts = new CancellationTokenSource();
+        _ = DebouncedRefreshAsync(_searchDebounceCts.Token);
+    }
+
+    private async Task DebouncedRefreshAsync(CancellationToken token)
+    {
+        try
         {
+            await Task.Delay(300, token);
             await InvokeAsync(RefreshLogs);
-            debounceTimer.Stop();
-            debounceTimer.Dispose();
-        };
-        debounceTimer.Start();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
     }
 
     private async Task ClearFilters()
@@ -369,7 +403,10 @@
 
     public void Dispose()
     {
-        debounceTimer?.Dispose();
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+        _refreshCts?.Cancel();
+        _refreshCts?.Dispose();
     }
 
 }

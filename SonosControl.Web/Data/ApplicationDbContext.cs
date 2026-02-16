@@ -33,6 +33,17 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // add other overrides if necessary
         });
 
+        builder.Entity<LogEntry>(entity =>
+        {
+            entity.HasIndex(l => l.Timestamp);
+            entity.HasIndex(l => new { l.PerformedBy, l.Timestamp });
+        });
+
+        builder.Entity<PlaybackHistory>(entity =>
+        {
+            entity.HasIndex(p => new { p.StartTime, p.MediaType });
+        });
+
         // You may need to adjust other Identity entities similarly if errors come up
     }
 }

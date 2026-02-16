@@ -9,6 +9,7 @@ using SonosControl.Web.Data;
 using SonosControl.Web.Pages;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -69,7 +70,11 @@ public class StationLookupUXTests
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
 
+        var httpClientFactory = new Mock<IHttpClientFactory>();
+        httpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(new HttpClient());
+
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton<IHttpClientFactory>(httpClientFactory.Object);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         return new TestResources(dbContext);

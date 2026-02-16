@@ -419,10 +419,10 @@
 
     private async Task LoadStats()
     {
-        // Limit logs to last 30 days for user stats to keep it relevant
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+        var logsInWindow = Db.Logs.AsNoTracking().Where(l => l.Timestamp >= thirtyDaysAgo);
+        var playbackInWindow = Db.PlaybackStats.AsNoTracking().Where(p => p.StartTime >= thirtyDaysAgo);
 
-        // 1. Top DJ: Selections & Playback Starts
         var djActions = new[]
         {
             "Station Changed",
@@ -432,8 +432,7 @@
             "Playback Started"
         };
 
-        topDjStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        topDjStats = await logsInWindow
             .Where(l => djActions.Contains(l.Action))
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -441,9 +440,7 @@
             .Take(5)
             .ToListAsync();
 
-        // 2. The Skipper: Next Track
-        skipperStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        skipperStats = await logsInWindow
             .Where(l => l.Action == "Next Track")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -451,15 +448,13 @@
             .Take(5)
             .ToListAsync();
 
-        // 3. The Grouper: Group Created, Sync Play
         var groupActions = new[]
         {
             "Group Created",
             "Sync Play Started (Cloned URI)"
         };
 
-        grouperStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        grouperStats = await logsInWindow
             .Where(l => groupActions.Contains(l.Action))
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -467,9 +462,7 @@
             .Take(5)
             .ToListAsync();
 
-        // 4. Night Owl: 10PM - 4AM UTC (Approx Late Night)
-        nightOwlStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        nightOwlStats = await logsInWindow
             .Where(l => l.Timestamp.Hour >= 22 || l.Timestamp.Hour < 4)
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -477,9 +470,7 @@
             .Take(5)
             .ToListAsync();
 
-        // 5. Station Master: Most Station Changes
-        stationMasterStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        stationMasterStats = await logsInWindow
             .Where(l => l.Action == "Station Changed")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -487,9 +478,7 @@
             .Take(5)
             .ToListAsync();
 
-        // 6. Top Stations (Plays)
-        stationPlayCountStats = await Db.PlaybackStats
-            .Where(p => p.StartTime >= thirtyDaysAgo)
+        stationPlayCountStats = await playbackInWindow
             .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
             .GroupBy(p => p.TrackName)
             .Select(g => new UserStat { User = g.Key, Count = g.Count() })
@@ -497,9 +486,7 @@
             .Take(5)
             .ToListAsync();
 
-        // 7. The Silencer: Most Playback Paused
-        silencerStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        silencerStats = await logsInWindow
             .Where(l => l.Action == "Playback Paused")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
@@ -507,66 +494,61 @@
             .Take(5)
             .ToListAsync();
 
-        // 8. The Loner: Most Speaker Ungrouped
-        lonerStats = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
+        lonerStats = await logsInWindow
             .Where(l => l.Action == "Speaker Ungrouped")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .Take(5)
             .ToListAsync();
+        await InvokeAsync(StateHasChanged);
 
-        // Quick Stats
-        totalDuration = await Db.PlaybackStats
-            .Where(p => p.StartTime >= thirtyDaysAgo)
+        totalDuration = await playbackInWindow
             .SumAsync(x => x.DurationSeconds);
 
-        longestSession = await Db.PlaybackStats
-             .Where(p => p.StartTime >= thirtyDaysAgo)
-             .OrderByDescending(x => x.DurationSeconds)
-             .FirstOrDefaultAsync();
+        longestSession = await playbackInWindow
+            .OrderByDescending(x => x.DurationSeconds)
+            .FirstOrDefaultAsync();
+        await InvokeAsync(StateHasChanged);
 
-        // Activity Trends
-        // Note: For SQLite, Timestamp.Date might require client eval in some EF versions, but usually works in recent ones.
-        // If it fails, we can pull data and group in memory. Trying server-side first.
-        var logsForTrends = await Db.Logs
-            .Where(l => l.Timestamp >= thirtyDaysAgo)
-            .ToListAsync(); // Pulling into memory to ensure GroupBy Date works safely across all providers including SQLite
-
-        activityOverTime = logsForTrends
-            .GroupBy(l => l.Timestamp.Date)
-            .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
-            .OrderBy(x => x.Date)
-            .ToList();
-
-        // Most Active Day
-        var dayGroup = logsForTrends
-            .GroupBy(l => l.Timestamp.DayOfWeek)
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault();
-        if (dayGroup != null)
+        try
         {
-            mostActiveDay = dayGroup.Key.ToString();
+            activityOverTime = await logsInWindow
+                .GroupBy(l => l.Timestamp.Date)
+                .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Date)
+                .ToListAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            var timestamps = await logsInWindow.Select(l => l.Timestamp).ToListAsync();
+            activityOverTime = timestamps
+                .GroupBy(ts => ts.Date)
+                .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
+                .OrderBy(x => x.Date)
+                .ToList();
         }
 
-        // Peak Usage Times (Hour of Day)
-        // Reusing logsForTrends since we already have them in memory for the same period
-        activityByHour = logsForTrends
+        var activeDayGroup = activityOverTime?
+            .GroupBy(x => x.Date.DayOfWeek)
+            .OrderByDescending(g => g.Sum(x => x.Count))
+            .FirstOrDefault();
+        mostActiveDay = activeDayGroup?.Key.ToString() ?? "-";
+
+        activityByHour = await logsInWindow
             .GroupBy(l => l.Timestamp.Hour)
             .Select(g => new HourStat { Hour = g.Key, Count = g.Count() })
             .OrderBy(x => x.Hour)
-            .ToList();
+            .ToListAsync();
+        await InvokeAsync(StateHasChanged);
 
-        // Media Consumption
-        mediaTypeStats = await Db.PlaybackStats
+        mediaTypeStats = await playbackInWindow
             .GroupBy(p => p.MediaType)
             .Select(g => new MediaStat { MediaType = g.Key, Duration = g.Sum(x => x.DurationSeconds) })
             .OrderByDescending(x => x.Duration)
             .ToListAsync();
 
-        // Top Stations
-        stationStats = await Db.PlaybackStats
+        stationStats = await playbackInWindow
             .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
             .GroupBy(p => p.TrackName)
             .Select(g => new StationStat { Station = g.Key, Duration = g.Sum(x => x.DurationSeconds), PlayCount = g.Count() })
@@ -574,8 +556,7 @@
             .Take(10)
             .ToListAsync();
 
-        // Top Tracks
-        trackStats = await Db.PlaybackStats
+        trackStats = await playbackInWindow
             .Where(p => p.MediaType != "Station" && p.MediaType != "Stream" && p.MediaType != "Unknown")
             .GroupBy(p => new { p.TrackName, p.Artist })
             .Select(g => new TrackStat
@@ -588,6 +569,7 @@
             .OrderByDescending(x => x.Duration)
             .Take(20)
             .ToListAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     private string FormatDuration(double seconds)

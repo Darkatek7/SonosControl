@@ -6,9 +6,11 @@
 @inject IUnitOfWork _uow
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpClientFactory HttpClientFactory
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models
+@implements IDisposable
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 
@@ -29,6 +31,11 @@
     @if (!string.IsNullOrEmpty(addStationErrorMessage))
     {
         <div class="alert alert-danger mb-0">@addStationErrorMessage</div>
+    }
+
+    @if (!string.IsNullOrEmpty(searchErrorMessage))
+    {
+        <div class="alert alert-warning mb-0">@searchErrorMessage</div>
     }
 
     <div class="lookup-shell__search">
@@ -148,7 +155,11 @@
     private bool isLoading = false;
     private HashSet<string> _loadingStates = new();
     private string? saveSuccessMessage;
+    private string? searchErrorMessage;
     private bool isAuthenticated;
+    private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _saveMessageCts;
+    private bool _isDisposing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -166,15 +177,29 @@
 
     private async Task SearchStations()
     {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return;
+        }
+
+        var requestCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var previousCts = _searchCts;
+        _searchCts = requestCts;
+        previousCts?.Cancel();
+        previousCts?.Dispose();
+
         isLoading = true;
         results = null;
+        searchErrorMessage = null;
         StateHasChanged();
 
         try
         {
-            var http = new HttpClient();
-            string apiUrl = $"https://de1.api.radio-browser.info/json/stations/search?name={Uri.EscapeDataString(searchTerm ?? string.Empty)}";
-            var searchResults = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl);
+            var token = requestCts.Token;
+            var http = HttpClientFactory.CreateClient("RadioBrowser");
+            var query = Uri.EscapeDataString(searchTerm.Trim());
+            var apiUrl = $"json/stations/search?name={query}";
+            var searchResults = await http.GetFromJsonAsync<List<RadioStation>>(apiUrl, token);
 
             if (searchResults is not null)
             {
@@ -190,15 +215,28 @@
                 results = new List<RadioStation>();
             }
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (!_isDisposing && ReferenceEquals(_searchCts, requestCts))
         {
-            Console.WriteLine("Error fetching stations: " + ex.Message);
+            searchErrorMessage = "Station lookup timed out. Try a narrower search.";
+            results = new List<RadioStation>();
+        }
+        catch (HttpRequestException ex) when (ReferenceEquals(_searchCts, requestCts))
+        {
+            searchErrorMessage = $"Station lookup failed: {ex.Message}";
+            results = new List<RadioStation>();
+        }
+        catch (Exception ex) when (ReferenceEquals(_searchCts, requestCts))
+        {
+            searchErrorMessage = $"Error fetching stations: {ex.Message}";
             results = new List<RadioStation>();
         }
         finally
         {
-            isLoading = false;
-            StateHasChanged();
+            if (ReferenceEquals(_searchCts, requestCts))
+            {
+                isLoading = false;
+                StateHasChanged();
+            }
         }
     }
     
@@ -237,6 +275,7 @@
     {
         searchTerm = string.Empty;
         results = null;
+        searchErrorMessage = null;
         await searchInput.FocusAsync();
     }
 
@@ -323,11 +362,7 @@
             await AddLog("Added Station", $"station: {station.Name}, ({station.Url})");
 
             saveSuccessMessage = $"✅ \"{station.Name}\" saved!";
-
-            StateHasChanged();
-            await Task.Delay(3000);
-            saveSuccessMessage = null;
-            StateHasChanged();
+            ScheduleSaveMessageClear();
         }
         catch (Exception ex)
         {
@@ -375,6 +410,36 @@
 
         Db.Logs.Add(log);
         await Db.SaveChangesAsync();
+    }
+
+    private void ScheduleSaveMessageClear()
+    {
+        _saveMessageCts?.Cancel();
+        _saveMessageCts?.Dispose();
+        _saveMessageCts = new CancellationTokenSource();
+        _ = ClearSaveMessageAfterDelayAsync(_saveMessageCts.Token);
+    }
+
+    private async Task ClearSaveMessageAfterDelayAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(3000, token);
+            saveSuccessMessage = null;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _isDisposing = true;
+        _searchCts?.Cancel();
+        _searchCts?.Dispose();
+        _saveMessageCts?.Cancel();
+        _saveMessageCts?.Dispose();
     }
 }
 

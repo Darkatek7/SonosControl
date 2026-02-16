@@ -4,12 +4,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Bunit;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
 using SonosControl.Web.Pages;
+using SonosControl.Web.Services;
 using Xunit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -48,6 +50,12 @@ namespace SonosControl.Tests
             Services.AddSingleton(_db);
             Services.AddSingleton(_mockAuthProvider.Object);
             Services.AddSingleton(_mockNotificationService.Object);
+            Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
+            Services.AddSingleton<IConfiguration>(configuration);
 
             // Mock auth state
             var identity = new System.Security.Claims.ClaimsIdentity(new[]

@@ -557,6 +557,19 @@ a:focus-visible {
     overflow-wrap: anywhere;
 }
 
+.index-refresh-badge {
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+}
+
+.index-refresh-meta {
+    font-size: 0.78rem;
+}
+
+.index-command-status {
+    border: 1px solid var(--border-subtle);
+}
+
 .toolbar-actions {
     display: flex;
     flex-wrap: wrap;

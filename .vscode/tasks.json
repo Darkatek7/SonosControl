@@ -45,6 +45,19 @@
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "run web (localhost:5107)",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/SonosControl.Web",
+                "--urls",
+                "http://localhost:5107"
+            ],
+            "problemMatcher": []
         }
     ]
 }
