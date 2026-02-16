@@ -1,0 +1,38 @@
+name: Docs Quality
+
+on:
+  pull_request:
+    paths:
+      - "README.md"
+      - "docs/**"
+      - "scripts/check_markdown_links.py"
+      - ".markdownlint-cli2.jsonc"
+      - ".github/workflows/docs-quality.yml"
+  push:
+    branches: ["**"]
+    paths:
+      - "README.md"
+      - "docs/**"
+      - "scripts/check_markdown_links.py"
+      - ".markdownlint-cli2.jsonc"
+      - ".github/workflows/docs-quality.yml"
+
+jobs:
+  markdown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Markdown lint
+        uses: DavidAnson/markdownlint-cli2-action@v20
+        with:
+          config: ".markdownlint-cli2.jsonc"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate markdown links and image refs
+        run: python scripts/check_markdown_links.py README.md docs
