@@ -1,0 +1,58 @@
+{
+  "Volume": 10,
+  "MaxVolume": 25,
+  "StartTime": "06:00:00",
+  "StopTime": "18:00:00",
+  "IP_Adress": "10.0.0.1",
+  "Speakers": [
+    {
+      "Name": "speaker-1",
+      "IpAddress": "10.0.0.101",
+      "Uuid": null,
+      "StartupVolume": null
+    }
+  ],
+  "Stations": [
+    {
+      "Name": "Antenne Vorarlberg",
+      "Url": "web.radio.antennevorarlberg.at/av-live/stream/mp3"
+    },
+    {
+      "Name": "Radio V",
+      "Url": "orf-live.ors-shoutcast.at/vbg-q2a"
+    }
+  ],
+  "SpotifyTracks": [
+    {
+      "Name": "Top 50 Global",
+      "Url": "https://open.spotify.com/playlist/37i9dQZEVXbMDoHDwVN2tF"
+    }
+  ],
+  "YouTubeMusicCollections": [
+    {
+      "Name": "Supermix",
+      "Url": "https://music.youtube.com/playlist?list=LM"
+    }
+  ],
+  "AutoPlayStationUrl": null,
+  "AutoPlaySpotifyUrl": null,
+  "AutoPlayYouTubeMusicUrl": null,
+  "AutoPlayRandomStation": false,
+  "AutoPlayRandomSpotify": false,
+  "AutoPlayRandomYouTubeMusic": false,
+  "DailySchedules": {},
+  "HolidaySchedules": [],
+  "ActiveDays": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "AllowUserRegistration": true,
+  "DiscordWebhookUrl": null,
+  "TeamsWebhookUrl": null,
+  "NowPlayingGradientStartColor": "#0f172a",
+  "NowPlayingGradientMidColor": "#1e3a8a",
+  "NowPlayingGradientEndColor": "#0f766e"
+}

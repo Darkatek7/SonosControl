@@ -263,7 +263,10 @@ namespace SonosControl.Web.Services
                     todaySchedule = null;
                 }
 
-                if (todaySchedule != null && previousDay == now.DayOfWeek && previousStart == todayStart && todayStart <= currentTime)
+                if (todaySchedule != null
+                    && previousTarget is DateTimeOffset scheduledTarget
+                    && scheduledTarget.Date == now.Date
+                    && now >= scheduledTarget)
                 {
                     var todayStartTime = new DateTimeOffset(todayDate.ToDateTime(todayStart), now.Offset);
                     return (settings, todaySchedule, todayStartTime);
