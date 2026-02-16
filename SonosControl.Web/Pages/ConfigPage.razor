@@ -26,11 +26,13 @@ else
             <p class="text-muted small mb-0">Changes save automatically.</p>
         </header>
 
-        <nav class="nav nav-tabs px-4">
+        <div class="config-tabs-scroll">
+        <nav class="nav nav-tabs px-4 config-tabs">
             <button class="nav-link @(_activeTab == "device" ? "active" : "")" @onclick="@(() => _activeTab = "device")">🎛️ Device</button>
             <button class="nav-link @(_activeTab == "schedules" ? "active" : "")" @onclick="@(() => _activeTab = "schedules")">📅 Schedules</button>
             <button class="nav-link @(_activeTab == "holidays" ? "active" : "")" @onclick="@(() => _activeTab = "holidays")">🎯 Holidays</button>
         </nav>
+        </div>
 
         <div class="tab-content p-4">
             @if (_activeTab == "device")
@@ -49,7 +51,7 @@ else
                                             <div class="text-muted small">@speaker.IpAddress</div>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
-                                            <div class="input-group input-group-sm" style="width: 130px;">
+                                            <div class="input-group input-group-sm speaker-volume-group">
                                                 <span class="input-group-text">Vol</span>
                                                 <input type="number" class="form-control"
                                                        min="0" max="100"
@@ -239,7 +241,7 @@ else
                     </div>
                 </div>
 
-                <div class="daily-schedule-table-wrapper">
+                <div class="daily-schedule-table-wrapper d-none d-md-block">
                     <div class="daily-schedule-table-scroll">
                         <table class="table daily-schedule-table table-dark table-striped mb-0 align-middle">
                             <thead>
@@ -308,6 +310,82 @@ else
                         </table>
                     </div>
                 </div>
+
+                <div class="schedule-card-list d-md-none">
+                    @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int) d + 6) % 7))
+                    {
+                        if (!_settings.DailySchedules.ContainsKey(day))
+                            _settings.DailySchedules[day] = new DaySchedule();
+
+                        var schedule = _settings.DailySchedules[day];
+                        <article class="schedule-card">
+                            <header class="schedule-card__header">
+                                <h6 class="mb-0">@day</h6>
+                            </header>
+
+                            <div class="schedule-card__body">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Start</label>
+                                        <input type="time"
+                                               class="form-control"
+                                               value="@schedule.StartTime.ToString("HH:mm")"
+                                               aria-label="@($"{day} Start Time")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StartTime = t; await SaveSettings(); } }" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Stop</label>
+                                        <input type="time"
+                                               class="form-control"
+                                               value="@schedule.StopTime.ToString("HH:mm")"
+                                               aria-label="@($"{day} Stop Time")"
+                                               @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { schedule.StopTime = t; await SaveSettings(); } }" />
+                                    </div>
+                                </div>
+
+                                <div class="mt-2">
+                                    <label class="form-label small mb-1">Play</label>
+                                    <select class="form-select"
+                                            value="@GetScheduleSelection(schedule)"
+                                            aria-label="@($"{day} Play Selection")"
+                                            @onchange="async e => await SetScheduleSelection(schedule, e.Value?.ToString())">
+                                        <option value="">-- None --</option>
+                                        <option value="randomStation">Random Station</option>
+                                        <option value="randomSpotify">Random Spotify</option>
+                                        <option value="randomYouTube">Random YouTube Music</option>
+                                        <optgroup label="Stations">
+                                            @foreach (var station in _settings.Stations)
+                                            {
+                                                <option value="station:@station.Url">@station.Name</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="Spotify">
+                                            @foreach (var track in _settings.SpotifyTracks)
+                                            {
+                                                <option value="spotify:@track.Url">@track.Name</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="YouTube Music">
+                                            @foreach (var collection in _settings.YouTubeMusicCollections)
+                                            {
+                                                <option value="youtube:@collection.Url">@collection.Name</option>
+                                            }
+                                        </optgroup>
+                                    </select>
+                                </div>
+
+                                <div class="form-check form-switch mt-3">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           checked="@schedule.IsSyncedPlayback"
+                                           @onchange="async e => { schedule.IsSyncedPlayback = e.Value is bool b && b; await SaveSettings(); }"
+                                           aria-label="@($"{day} Synced Playback")" />
+                                    <label class="form-check-label">Synced playback</label>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
             }
             @if (_activeTab == "holidays")
             {
@@ -332,7 +410,7 @@ else
                     <div class="alert alert-danger">@_holidayValidationMessage</div>
                 }
 
-                <div class="holiday-table-wrapper">
+                <div class="holiday-table-wrapper d-none d-md-block">
                     <div class="holiday-table-scroll">
                         <table class="table holiday-schedule-table table-striped table-sm align-middle">
                             <thead>
@@ -414,6 +492,100 @@ else
                         </table>
                     </div>
                 </div>
+
+                <div class="holiday-card-list d-md-none">
+                    @if (!OrderedHolidaySchedules.Any())
+                    {
+                        <div class="alert alert-secondary mb-0">No holiday overrides configured.</div>
+                    }
+                    else
+                    {
+                        @foreach (var holiday in OrderedHolidaySchedules)
+                        {
+                            <article class="holiday-card">
+                                <header class="holiday-card__header">
+                                    <button class="form-control text-start" @onclick="() => OpenCalendar(holiday)" aria-label="@($"Change date for {holiday.Name}")">
+                                        @holiday.Date.ToString("yyyy-MM-dd")
+                                    </button>
+                                </header>
+
+                                <div class="holiday-card__body">
+                                    <div class="mb-2">
+                                        <label class="form-label small mb-1">Name</label>
+                                        <input type="text"
+                                               class="form-control"
+                                               value="@holiday.Name"
+                                               aria-label="@($"Holiday Name for {holiday.Date}")"
+                                               @onchange="async e => { holiday.Name = e.Value?.ToString(); await SaveSettings(); }" />
+                                    </div>
+
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <label class="form-label small mb-1">Start</label>
+                                            <input type="time"
+                                                   class="form-control"
+                                                   value="@holiday.StartTime.ToString("HH:mm")"
+                                                   aria-label="@($"Start Time for {holiday.Name}")"
+                                                   @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StartTime = t; await SaveSettings(); } }" />
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="form-label small mb-1">Stop</label>
+                                            <input type="time"
+                                                   class="form-control"
+                                                   value="@holiday.StopTime.ToString("HH:mm")"
+                                                   aria-label="@($"Stop Time for {holiday.Name}")"
+                                                   @onchange="async e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) { holiday.StopTime = t; await SaveSettings(); } }" />
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-2">
+                                        <label class="form-label small mb-1">Play</label>
+                                        <select class="form-select"
+                                                value="@GetScheduleSelection(holiday)"
+                                                aria-label="@($"Play Selection for {holiday.Name}")"
+                                                @onchange="async e => await SetScheduleSelection(holiday, e.Value?.ToString())">
+                                            <option value="skip">-- Do not play --</option>
+                                            <option value="randomStation">Random Station</option>
+                                            <option value="randomSpotify">Random Spotify</option>
+                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <optgroup label="Stations">
+                                                @foreach (var station in _settings.Stations)
+                                                {
+                                                    <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="Spotify">
+                                                @foreach (var track in _settings.SpotifyTracks)
+                                                {
+                                                    <option value="spotify:@track.Url">@track.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube Music">
+                                                @foreach (var collection in _settings.YouTubeMusicCollections)
+                                                {
+                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                }
+                                            </optgroup>
+                                        </select>
+                                    </div>
+
+                                    <div class="d-flex align-items-center justify-content-between mt-3">
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   checked="@holiday.IsSyncedPlayback"
+                                                   @onchange="async e => { holiday.IsSyncedPlayback = e.Value is bool b && b; await SaveSettings(); }"
+                                                   aria-label="@($"Synced Playback for {holiday.Name}")" />
+                                            <label class="form-check-label">Synced playback</label>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")">Remove</button>
+                                    </div>
+                                </div>
+                            </article>
+                        }
+                    }
+                </div>
+
                 <div class="mt-3 text-end">
                     <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
                 </div>

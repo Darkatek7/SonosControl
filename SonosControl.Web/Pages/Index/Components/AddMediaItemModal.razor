@@ -1,9 +1,12 @@
 @using SonosControl.DAL.Models
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
 
 @if (_show)
 {
     <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">@Title</h5>
@@ -40,6 +43,8 @@
     private bool _show;
     private ElementReference _nameInput;
     private bool _focusNextRender;
+    private bool _bodyScrollLocked;
+    private bool _syncBodyLockOnNextRender;
 
     [Parameter]
     public string? ErrorMessage { get; set; }
@@ -63,11 +68,18 @@
         Url = "";
         _show = true;
         _focusNextRender = true;
+        _syncBodyLockOnNextRender = true;
         StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_syncBodyLockOnNextRender)
+        {
+            _syncBodyLockOnNextRender = false;
+            await SetBodyScrollLockAsync(_show);
+        }
+
         if (_focusNextRender)
         {
             _focusNextRender = false;
@@ -85,6 +97,7 @@
     private async Task Close()
     {
         _show = false;
+        await SetBodyScrollLockAsync(false);
         await OnClose.InvokeAsync();
         StateHasChanged();
     }
@@ -98,6 +111,39 @@
         if (string.IsNullOrEmpty(ErrorMessage))
         {
             await Close();
+        }
+    }
+
+    private async Task SetBodyScrollLockAsync(bool shouldLock)
+    {
+        if (_bodyScrollLocked == shouldLock)
+        {
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.setBodyScrollLock", shouldLock);
+            _bodyScrollLocked = shouldLock;
+        }
+        catch (JSException)
+        {
+            // Ignore when JS interop is unavailable.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_bodyScrollLocked)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("window.sonosUi.setBodyScrollLock", false);
+            }
+            catch (JSException)
+            {
+                // Ignore.
+            }
         }
     }
 }

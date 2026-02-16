@@ -23,3 +23,15 @@
 .timer-modal__content .modal-footer {
     border-top: 1px solid var(--bs-border-color);
 }
+
+@media (max-width: 767.98px) {
+    .timer-modal-backdrop {
+        padding: 0;
+    }
+
+    .timer-modal__content {
+        width: 100%;
+        min-height: 100vh;
+        border-radius: 0;
+    }
+}

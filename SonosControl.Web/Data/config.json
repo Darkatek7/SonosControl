@@ -1,5 +1,5 @@
 {
-  "Volume": 19,
+  "Volume": 9,
   "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
@@ -8,13 +8,13 @@
     {
       "Name": "op",
       "IpAddress": "10.1.12.251",
-      "Uuid": null,
+      "Uuid": "uuid:RINCON_949F3E0A5A5801400",
       "StartupVolume": null
     },
     {
       "Name": "küch",
       "IpAddress": "10.1.12.252",
-      "Uuid": null,
+      "Uuid": "uuid:RINCON_74CA60C2ADE201400",
       "StartupVolume": null
     }
   ],

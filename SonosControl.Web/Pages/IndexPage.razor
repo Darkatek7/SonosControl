@@ -35,13 +35,13 @@
                             <div class="mb-3">
                                 <label for="activeSpeakerSelect" class="form-label text-muted small">Active Speaker</label>
                                 <div class="d-flex flex-wrap gap-2 align-items-center speaker-controls">
-                                    <select id="activeSpeakerSelect" class="form-select flex-grow-1" style="min-width: 250px;" @bind="SelectedSpeakerIp">
+                                    <select id="activeSpeakerSelect" class="form-select flex-grow-1 speaker-controls__select" @bind="SelectedSpeakerIp">
                                         @foreach (var speaker in _settings.Speakers)
                                         {
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
-                                    <div class="btn-group">
+                                    <div class="btn-group speaker-controls__pair">
                                         <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
                                             @if (_isGrouping)
                                             {
@@ -63,7 +63,7 @@
                                             }
                                         </button>
                                     </div>
-                                    <button class="btn btn-outline-info" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
+                                    <button class="btn btn-outline-info speaker-controls__sync" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
                                         @if (_isSyncing)
                                         {
                                             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -137,7 +137,7 @@
 
                                         foreach (var root in roots)
                                         {
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <li class="list-group-item d-flex justify-content-between align-items-center speaker-status-item">
                                                 <div class="d-flex align-items-center">
                                                     <span class="me-2 status-indicator @(root.IsPlaying ? "status-playing" : "status-paused")"></span>
                                                     <div>
@@ -157,7 +157,7 @@
                                             var children = _speakerStatuses.Where(s => s.MasterUuid == root.Uuid).OrderBy(s => s.Name);
                                             foreach (var child in children)
                                             {
-                                                <li class="list-group-item d-flex justify-content-between align-items-center ms-4 ps-4 border-start border-3 border-secondary" style="background-color: var(--surface-2);">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center border-start border-3 border-secondary speaker-status-item speaker-status-item--child" style="background-color: var(--surface-2);">
                                                     <div class="d-flex align-items-center">
                                                         <span class="me-2 text-muted">↳</span>
                                                         <span class="me-2 status-indicator @(child.IsPlaying ? "status-playing" : "status-paused")"></span>
@@ -188,9 +188,9 @@
                                     <StationsContent>
                                         @{
                                             var stations = _stations;
-                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
                                                 <h5 class="mb-0">Saved Stations</h5>
-                                                <div>
+                                                <div class="media-list-header__actions">
                                                     <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station" disabled="@_isShuffleLoading">
                                                         @if (_isShuffleLoading)
                                                         {
@@ -209,9 +209,9 @@
                                                 {
                                                     @foreach (var station in stations)
                                                     {
-                                                        <li class="list-group-item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
-                                                            <span>@station.Name</span>
-                                                            <div class="media-actions">
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@station.Name</span>
+                                                            <div class="media-actions media-list__actions">
                                                                 <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name" disabled="@(_loadingMediaUrl == station.Url)">
                                                                     @if (_loadingMediaUrl == station.Url)
                                                                     {
@@ -237,18 +237,20 @@
                                     <SpotifyContent>
                                         @{
                                             var tracks = _tracks;
-                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
                                                 <h5 class="mb-0">Saved Spotify</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify Track">➕ Add</button>
+                                                <div class="media-list-header__actions">
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify Track">➕ Add</button>
+                                                </div>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @if (tracks.Any())
                                                 {
                                                     @foreach (var track in tracks)
                                                     {
-                                                        <li class="list-group-item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
-                                                            <span>@track.Name</span>
-                                                            <div class="media-actions">
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@track.Name</span>
+                                                            <div class="media-actions media-list__actions">
                                                                 <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name" disabled="@(_loadingMediaUrl == track.Url)">
                                                                     @if (_loadingMediaUrl == track.Url)
                                                                     {
@@ -274,18 +276,20 @@
                                     <YouTubeContent>
                                         @{
                                             var collections = _youTubeCollections;
-                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
                                                 <h5 class="mb-0">Saved YouTube</h5>
-                                                <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Music Collection">➕ Add</button>
+                                                <div class="media-list-header__actions">
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Music Collection">➕ Add</button>
+                                                </div>
                                             </div>
                                             <ul class="list-group media-list">
                                                 @if (collections.Any())
                                                 {
                                                     @foreach (var collection in collections)
                                                     {
-                                                        <li class="list-group-item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
-                                                            <span>@collection.Name</span>
-                                                            <div class="media-actions">
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@collection.Name</span>
+                                                            <div class="media-actions media-list__actions">
                                                                 <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name" disabled="@(_loadingMediaUrl == collection.Url)">
                                                                     @if (_loadingMediaUrl == collection.Url)
                                                                     {

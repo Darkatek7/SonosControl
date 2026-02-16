@@ -16,7 +16,7 @@
                 <h2 class="page-title mb-1">📜 System Logs</h2>
                 <p class="text-muted mb-0">A chronological overview of operator activity.</p>
             </div>
-            <div class="toolbar-actions logs-toolbar align-items-center flex-wrap">
+            <div class="toolbar-actions logs-toolbar align-items-center flex-wrap d-none d-md-flex">
                 <div class="logs-toolbar__group d-flex align-items-center gap-2">
                     <label for="logSearch" class="form-label logs-toolbar__label mb-0 visually-hidden">Search</label>
                     <input id="logSearch"
@@ -72,6 +72,75 @@
                                @bind:event="onchange"/>
                     </div>
                 }
+            </div>
+
+            <div class="logs-toolbar-mobile d-md-none w-100">
+                <div class="logs-toolbar__group d-flex align-items-center gap-2 w-100 mb-2">
+                    <label for="logSearchMobile" class="form-label logs-toolbar__label mb-0 visually-hidden">Search</label>
+                    <input id="logSearchMobile"
+                           type="text"
+                           class="form-control form-control-sm"
+                           placeholder="Search logs..."
+                           @bind="searchTerm"
+                           @bind:event="oninput" />
+                </div>
+
+                <details class="logs-filter-panel">
+                    <summary class="logs-filter-panel__summary">Advanced filters</summary>
+                    <div class="logs-filter-panel__body">
+                        <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                            <label for="userFilterMobile" class="form-label logs-toolbar__label mb-0 visually-hidden">User</label>
+                            <select id="userFilterMobile" class="form-select form-select-sm" @bind="selectedUser">
+                                <option value="">All Users</option>
+                                @foreach (var user in allUsers)
+                                {
+                                    <option value="@user">@(user ?? "System")</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                            <label for="startDateMobile" class="form-label logs-toolbar__label mb-0">From</label>
+                            <input id="startDateMobile" type="date" class="form-control form-control-sm" @bind="startDate" />
+                        </div>
+
+                        <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                            <label for="endDateMobile" class="form-label logs-toolbar__label mb-0">To</label>
+                            <input id="endDateMobile" type="date" class="form-control form-control-sm" @bind="endDate" />
+                        </div>
+
+                        <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                            <label for="logCountSelectMobile" class="form-label logs-toolbar__label mb-0">Show</label>
+                            <select id="logCountSelectMobile"
+                                    class="form-select form-select-sm logs-count-select"
+                                    @bind="selectedLogCount">
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="500">500</option>
+                                <option value="1000">1000</option>
+                                <option value="-1">Custom</option>
+                            </select>
+                        </div>
+
+                        @if (selectedLogCount == -1)
+                        {
+                            <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                                <label for="customLogCountMobile" class="form-label logs-toolbar__label mb-0">Count</label>
+                                <input id="customLogCountMobile"
+                                       type="number"
+                                       min="1"
+                                       class="form-control form-control-sm logs-count-input"
+                                       placeholder="Enter number"
+                                       @bind="customLogCount"
+                                       @bind:event="onchange" />
+                            </div>
+                        }
+
+                        <div class="logs-toolbar__group d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-secondary w-100" @onclick="ClearFilters">Clear filters</button>
+                        </div>
+                    </div>
+                </details>
             </div>
         </header>
 

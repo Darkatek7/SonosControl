@@ -110,6 +110,16 @@
     .user-management-shell {
         padding: var(--spacing-md);
     }
+
+    .user-management-shell .d-md-none .card {
+        border-radius: var(--bs-border-radius-lg);
+        border: 1px solid var(--border-strong) !important;
+        box-shadow: var(--shadow-xs);
+    }
+
+    .user-management-shell .d-md-none .btn {
+        min-height: 44px;
+    }
 }
 
 @media (max-width: 576px) {
@@ -125,5 +135,9 @@
 
     .user-action-btn {
         width: 100%;
+    }
+
+    .user-management-shell .d-md-none .card-body {
+        padding: var(--spacing-sm);
     }
 }
