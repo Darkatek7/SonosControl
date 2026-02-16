@@ -47,6 +47,15 @@
             "problemMatcher": []
         },
         {
+            "label": "readme screenshots",
+            "type": "shell",
+            "command": "./run-readme-screenshots.ps1",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "run web (localhost:5107)",
             "type": "process",
             "command": "dotnet",
