@@ -77,27 +77,10 @@ Then open `http://localhost:5107`.
 - [Operations and Observability](docs/operations-and-observability.md)
 - [Testing and Troubleshooting](docs/testing-and-troubleshooting.md)
 - [Warning triage notes](docs/quality-warning-triage.md)
-
-## Refresh README Screenshots
-Generate all README screenshots in one step:
-
-```powershell
-.\run-readme-screenshots.ps1
-```
-
-Optional:
-
-```powershell
-.\run-readme-screenshots.ps1 -BaseUrl "http://localhost:5107" -Username "admin" -Password "Test1234."
-```
-
-For best visuals, load representative demo data before capture (saved stations, logs, and at least one managed user).
+- [Contributing Guide](CONTRIBUTING.md)
 
 ## Contributing
-1. Fork and clone the repository.
-2. Create a feature branch.
-3. Run tests with `dotnet test`.
-4. Submit a PR with clear change notes and screenshots for UI updates.
+Contribution workflow, README asset maintenance, and screenshot refresh instructions are documented in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 SonosControl is released under the [Don't Be a Dick Public License](LICENSE.md).
