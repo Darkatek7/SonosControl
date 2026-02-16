@@ -233,6 +233,24 @@ The solution ships with comprehensive unit tests covering repositories and the a
 dotnet test
 ```
 
+For the mobile Playwright smoke suite, run a single command from the repository root:
+
+```powershell
+.\run-mobile-smoke.ps1
+```
+
+If you prefer not to use the wrapper script:
+
+```bash
+python verify_mobile_smoke.py
+```
+
+Optional parameters:
+
+```powershell
+.\run-mobile-smoke.ps1 -BaseUrl "http://localhost:5107" -Username "admin" -Password "Test1234." -NoAutoStart
+```
+
 Continuous integration (GitHub Actions) pushes verified images to Docker Hub.
 
 ---

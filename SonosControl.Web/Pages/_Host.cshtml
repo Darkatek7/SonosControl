@@ -99,6 +99,20 @@
             window.sonosTheme = window.sonosTheme || {};
             window.sonosTheme.apply = applyPreference;
             window.sonosTheme.apply(@Html.Raw(serializedThemePreference));
+
+            window.sonosUi = window.sonosUi || {};
+            window.sonosUi._scrollLockCount = window.sonosUi._scrollLockCount || 0;
+            window.sonosUi.setBodyScrollLock = function (locked) {
+                if (locked) {
+                    window.sonosUi._scrollLockCount += 1;
+                } else {
+                    window.sonosUi._scrollLockCount = Math.max(0, window.sonosUi._scrollLockCount - 1);
+                }
+
+                var shouldLock = window.sonosUi._scrollLockCount > 0;
+                document.documentElement.classList.toggle("scroll-locked", shouldLock);
+                document.body.classList.toggle("scroll-locked", shouldLock);
+            };
         })();
     </script>
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />

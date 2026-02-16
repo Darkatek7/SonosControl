@@ -7,7 +7,7 @@
 
 <PageTitle>Statistics - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell">
+<div class="container dashboard-shell stats-shell">
     <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
         <div>
             <h3 class="mb-1">📊 Statistics</h3>
@@ -157,15 +157,17 @@
                     }
                     else
                     {
-                        <RadzenChart>
-                            <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
-                                <RadzenMarkers MarkerType="MarkerType.Circle" />
-                            </RadzenLineSeries>
-                            <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
-                            <RadzenValueAxis>
-                                <RadzenGridLines Visible="true" />
-                            </RadzenValueAxis>
-                        </RadzenChart>
+                        <div class="stats-chart">
+                            <RadzenChart>
+                                <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
+                                    <RadzenMarkers MarkerType="MarkerType.Circle" />
+                                </RadzenLineSeries>
+                                <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
+                                <RadzenValueAxis>
+                                    <RadzenGridLines Visible="true" />
+                                </RadzenValueAxis>
+                            </RadzenChart>
+                        </div>
                     }
                 </div>
             </div>
@@ -189,10 +191,12 @@
                     }
                     else
                     {
-                        <RadzenChart>
-                            <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
-                             <RadzenCategoryAxis Step="1" />
-                        </RadzenChart>
+                        <div class="stats-chart">
+                            <RadzenChart>
+                                <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
+                                 <RadzenCategoryAxis Step="1" />
+                            </RadzenChart>
+                        </div>
                     }
                 </div>
             </div>
@@ -213,11 +217,13 @@
                     }
                     else
                     {
-                        <RadzenChart>
-                            <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Duration">
-                                <RadzenSeriesDataLabels Visible="true" />
-                            </RadzenDonutSeries>
-                        </RadzenChart>
+                        <div class="stats-chart">
+                            <RadzenChart>
+                                <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Duration">
+                                    <RadzenSeriesDataLabels Visible="true" />
+                                </RadzenDonutSeries>
+                            </RadzenChart>
+                        </div>
                     }
                 </div>
             </div>
@@ -240,13 +246,15 @@
                      }
                      else
                      {
-                         <RadzenChart>
-                             <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
-                             <RadzenColumnOptions Radius="5" />
-                             <RadzenValueAxis Formatter="@FormatTimeAxis" />
-                         </RadzenChart>
+                         <div class="stats-chart">
+                             <RadzenChart>
+                                 <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
+                                 <RadzenColumnOptions Radius="5" />
+                                 <RadzenValueAxis Formatter="@FormatTimeAxis" />
+                             </RadzenChart>
+                         </div>
 
-                         <div class="table-responsive mt-3">
+                         <div class="table-responsive mt-3 stats-table-wrap">
                              <table class="table table-sm table-hover align-middle">
                                  <thead>
                                      <tr>
@@ -287,7 +295,7 @@
                      }
                      else
                      {
-                         <div class="table-responsive">
+                         <div class="table-responsive stats-table-wrap">
                              <table class="table table-hover align-middle">
                                  <thead>
                                      <tr>

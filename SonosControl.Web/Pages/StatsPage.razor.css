@@ -1,0 +1,35 @@
+.stats-shell {
+    padding-bottom: var(--spacing-lg);
+}
+
+.stats-chart {
+    min-height: 240px;
+    overflow-x: auto;
+}
+
+.stats-table-wrap table {
+    min-width: 560px;
+}
+
+@media (max-width: 767.98px) {
+    .stats-shell {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .stats-shell .row {
+        --bs-gutter-x: 0.75rem;
+    }
+
+    .stats-shell .card-body {
+        padding: var(--spacing-md);
+    }
+
+    .stats-chart {
+        min-height: 210px;
+    }
+
+    .stats-shell .display-6 {
+        font-size: 1.8rem;
+    }
+}

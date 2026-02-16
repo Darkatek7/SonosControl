@@ -1,15 +1,12 @@
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Http
 @using Microsoft.JSInterop
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject UserManager<ApplicationUser> UserManager
 @inject SonosControl.Web.Services.ThemeService ThemeService
 @inject IJSRuntime JSRuntime
-@inject NavigationManager Navigation
 
 <div class="nav-shell">
     <div class="nav-brand-row px-3">
@@ -18,21 +15,25 @@
             <span class="nav-brand-title">SonosControl</span>
             <span class="nav-brand-subtitle">Command center</span>
         </div>
-        <button title="Navigation menu" class="navbar-toggler nav-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
+        <button type="button"
+                class="nav-drawer-close d-lg-none"
+                title="Close navigation menu"
+                aria-label="Close navigation menu"
+                @onclick="HandleNavigate">
+            <span class="oi oi-x" aria-hidden="true"></span>
         </button>
     </div>
 
-    <div class="@NavMenuCssClass nav-scrollable px-3">
-        <nav class="nav-links" @onclick="ToggleNavMenu">
+    <div class="nav-scrollable px-3" data-drawer-open="@(IsDrawerOpen ? "true" : "false")">
+        <nav class="nav-links">
             <div class="nav-item">
-                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
                     <span class="nav-icon oi oi-home" aria-hidden="true"></span>
                     <span>Home</span>
                 </NavLink>
             </div>
             <div class="nav-item">
-                <NavLink class="nav-link" href="lookup">
+                <NavLink class="nav-link" href="lookup" @onclick="HandleNavigate">
                     <span class="nav-icon oi oi-magnifying-glass" aria-hidden="true"></span>
                     <span>Station Lookup</span>
                 </NavLink>
@@ -41,7 +42,7 @@
             <AuthorizeView Roles="admin,operator,superadmin">
                 <Authorized>
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="stats">
+                        <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-graph" aria-hidden="true"></span>
                             <span>Statistics</span>
                         </NavLink>
@@ -53,19 +54,19 @@
                 <Authorized>
                     <div class="nav-divider" aria-hidden="true"></div>
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="config">
+                        <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-cog" aria-hidden="true"></span>
                             <span>Sonos Config</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="admin/users">
+                        <NavLink class="nav-link" href="admin/users" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-person" aria-hidden="true"></span>
                             <span>User Management</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="logs">
+                        <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-file" aria-hidden="true"></span>
                             <span>Logs</span>
                         </NavLink>
@@ -76,18 +77,17 @@
 
     </div>
 
-    <!-- Mobile User Controls -->
     <div class="d-lg-none mt-auto px-3 pb-3 border-top pt-3">
         <AuthorizeView>
             <Authorized>
                 <div class="mb-4 px-1">
-                    <span class="text-muted small text-uppercase d-block mb-2 fw-bold" style="letter-spacing: 0.1em;">Theme</span>
+                    <span class="text-muted small text-uppercase d-block mb-2 fw-bold nav-theme-label">Theme</span>
                     <div class="btn-group w-100 shadow-sm" role="group" aria-label="Theme preference">
                         @foreach (var mode in ThemeOptions)
                         {
                             <button type="button"
                                     class="@GetThemeButtonClasses(mode) flex-grow-1"
-                                    aria-pressed="@(mode == _userThemePreference)"
+                                    aria-pressed="@(mode == _userThemePreference ? "true" : "false")"
                                     @onclick="() => ChangeThemeAsync(mode)">
                                 @GetThemeLabel(mode)
                             </button>
@@ -97,21 +97,23 @@
 
                 <div class="px-1 d-flex flex-column gap-2">
                     <div class="d-flex align-items-center gap-2 mb-2 px-1">
-                            <div class="d-flex align-items-center justify-content-center bg-light rounded-circle" style="width: 32px; height: 32px;">
-                            <span class="oi oi-person text-secondary" style="font-size: 0.9rem;"></span>
+                            <div class="d-flex align-items-center justify-content-center bg-light rounded-circle nav-user-avatar">
+                            <span class="oi oi-person text-secondary nav-user-icon"></span>
                             </div>
-                            <div class="d-flex flex-column" style="line-height: 1.2;">
+                            <div class="d-flex flex-column nav-user-meta">
                             <span class="fw-bold small">Signed in as</span>
-                            <span class="text-truncate" style="max-width: 180px;">@context.User.Identity?.Name</span>
+                            <span class="text-truncate nav-user-name">@context.User.Identity?.Name</span>
                             </div>
                     </div>
 
-                    <a href="/useredit" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2">
+                    <a href="/useredit"
+                       class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
+                       @onclick="HandleNavigate">
                         <span class="oi oi-cog" aria-hidden="true"></span> <span>Profile Settings</span>
                     </a>
 
-                    <form method="post" action="/auth/logout" class="w-100 m-0">
-        <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
+                    <form method="post" action="/auth/logout" class="w-100 m-0" @onsubmit="HandleNavigate">
+                        <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
                         <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
                                 <span class="oi oi-account-logout" aria-hidden="true"></span> <span>Log Out</span>
                         </button>
@@ -120,8 +122,8 @@
             </Authorized>
             <NotAuthorized>
                 <div class="d-flex flex-column gap-2 px-1">
-                    <a href="/auth/login" class="btn btn-outline-primary w-100">Log In</a>
-                    <a href="/register" class="btn btn-primary w-100">Register</a>
+                    <a href="/auth/login" class="btn btn-outline-primary w-100" @onclick="HandleNavigate">Log In</a>
+                    <a href="/register" class="btn btn-primary w-100" @onclick="HandleNavigate">Register</a>
                 </div>
             </NotAuthorized>
         </AuthorizeView>
@@ -133,18 +135,17 @@
 </div>
 
 @code {
-    private bool collapseNavMenu = true;
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
     [Parameter]
     public string? AntiforgeryToken { get; set; }
 
-    // Auth & User State
-    private string? firstName;
-    private bool isAuthenticated;
-    private string? userId;
+    [Parameter]
+    public bool IsDrawerOpen { get; set; }
 
-    // Theme State
+    [Parameter]
+    public EventCallback OnNavigate { get; set; }
+
+    private bool isAuthenticated;
+
     private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
     private static readonly ThemePreferenceMode[] ThemeOptions = new[]
     {
@@ -152,33 +153,15 @@
         ThemePreferenceMode.Light,
         ThemePreferenceMode.Dark
     };
-    private bool _hasAppliedThemeOnClient;
     private bool _themeSubscriptionRegistered;
 
     protected override async Task OnInitializedAsync()
     {
-        // Init User
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
 
-        if (isAuthenticated)
-        {
-            var appUser = await UserManager.GetUserAsync(user);
-            firstName = appUser?.FirstName ?? user.Identity?.Name;
-            userId = appUser?.Id;
-        }
-
-        // Init Theme
-        // We don't need to InitializeAsync() here as MainLayout likely did it,
-        // but it's safe to check current preference.
-        // Actually, ThemeService is Scoped, so it shares state.
         _userThemePreference = ThemeService.CurrentPreference;
-    }
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
     }
 
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)
@@ -201,6 +184,11 @@
 
     private string GetThemeButtonClasses(ThemePreferenceMode mode)
         => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
+
+    private Task HandleNavigate()
+    {
+        return OnNavigate.InvokeAsync();
+    }
 
     private async Task ApplyThemePreferenceAsync()
     {

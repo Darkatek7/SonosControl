@@ -25,6 +25,16 @@
     color: var(--text-primary);
 }
 
+.config-tabs-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.config-tabs {
+    min-width: max-content;
+    flex-wrap: nowrap;
+}
+
 .config-field-stack {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -35,6 +45,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-2xs);
+}
+
+.speaker-volume-group {
+    width: 130px;
 }
 
 .device-action-row {
@@ -173,6 +187,33 @@
     width: 100%;
 }
 
+.schedule-card-list,
+.holiday-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.schedule-card,
+.holiday-card {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--bs-border-radius-md);
+    background-color: var(--surface-1);
+    box-shadow: var(--shadow-xs);
+}
+
+.schedule-card__header,
+.holiday-card__header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-2);
+}
+
+.schedule-card__body,
+.holiday-card__body {
+    padding: var(--spacing-md);
+}
+
 .section-card + .section-card {
     margin-top: var(--spacing-lg);
 }
@@ -195,6 +236,15 @@
         grid-template-columns: 1fr;
     }
 
+    .config-tabs {
+        padding-left: var(--spacing-md) !important;
+        padding-right: var(--spacing-md) !important;
+    }
+
+    .config-tabs .nav-link {
+        white-space: nowrap;
+    }
+
     .daily-schedule-table-scroll,
     .holiday-table-scroll {
         max-height: 22rem;
@@ -213,6 +263,11 @@
 
     .holiday-editor .row {
         gap: var(--spacing-sm);
+    }
+
+    .schedule-card__body,
+    .holiday-card__body {
+        padding: var(--spacing-sm);
     }
 }
 

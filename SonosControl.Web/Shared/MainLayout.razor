@@ -4,6 +4,8 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -14,11 +16,56 @@
 <PageTitle>SonosControl.Web</PageTitle>
 
 <div class="app-shell">
-    <aside class="app-sidebar">
-        <NavMenu AntiforgeryToken="@AntiforgeryToken" />
+    <aside id="app-sidebar"
+           class="app-sidebar @(_isDrawerOpen ? "is-open" : string.Empty)"
+           tabindex="-1"
+           @onkeydown="HandleSidebarKeyDown"
+           @ref="_drawerRef">
+        <NavMenu AntiforgeryToken="@AntiforgeryToken"
+                 IsDrawerOpen="@_isDrawerOpen"
+                 OnNavigate="HandleDrawerNavigationAsync" />
     </aside>
 
+    @if (_isDrawerOpen)
+    {
+        <button type="button"
+                class="app-drawer-backdrop"
+                @onclick="CloseDrawerAsync"
+                aria-label="Close navigation menu"></button>
+    }
+
     <main class="app-main">
+        <header class="app-mobile-top-bar d-lg-none">
+            <div class="app-mobile-top-bar__content px-3">
+                <button type="button"
+                        class="app-mobile-menu-button"
+                        aria-label="@(_isDrawerOpen ? "Close navigation menu" : "Open navigation menu")"
+                        aria-controls="app-sidebar"
+                        aria-expanded="@(_isDrawerOpen ? "true" : "false")"
+                        @onclick="ToggleDrawerAsync">
+                    <span class="oi @(_isDrawerOpen ? "oi-x" : "oi-menu")" aria-hidden="true"></span>
+                </button>
+
+                <div class="app-mobile-top-bar__identity">
+                    <span class="app-mobile-top-bar__title">SonosControl</span>
+                    <span class="app-mobile-top-bar__subtitle">Master every room</span>
+                </div>
+
+                <div class="app-mobile-top-bar__actions">
+                    @if (isAuthenticated)
+                    {
+                        <a href="@($"/useredit")" class="top-link top-link--icon app-mobile-top-bar__profile-link" aria-label="Open profile settings">
+                            <span class="oi oi-person" aria-hidden="true"></span>
+                        </a>
+                    }
+                    else
+                    {
+                        <a href="/auth/login" class="top-link top-link--ghost app-mobile-top-bar__login-link">Login</a>
+                    }
+                </div>
+            </div>
+        </header>
+
         <header class="app-top-bar">
             <div class="app-top-bar__content px-4">
                 <div class="app-top-bar__identity">
@@ -35,7 +82,7 @@
                                 {
                                     <button type="button"
                                             class="@GetThemeButtonClasses(mode)"
-                                            aria-pressed="@(mode == _userThemePreference)"
+                                            aria-pressed="@(mode == _userThemePreference ? "true" : "false")"
                                             @onclick="() => ChangeThemeAsync(mode)">
                                         @GetThemeLabel(mode)
                                     </button>
@@ -74,7 +121,6 @@
 @code {
     private string? firstName;
     private bool isAuthenticated;
-    private string? userId;
 
     [CascadingParameter(Name = "AntiforgeryToken")]
     public string? AntiforgeryToken { get; set; }
@@ -88,11 +134,14 @@
     };
     private bool _hasAppliedThemeOnClient;
     private bool _themeSubscriptionRegistered;
+    private bool _navigationSubscriptionRegistered;
+    private bool _isDrawerOpen;
+    private bool _isBodyScrollLocked;
+    private bool _focusDrawerOnNextRender;
+    private ElementReference _drawerRef;
 
     protected override async Task OnInitializedAsync()
     {
-        // Token is now received via CascadingParameter
-
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
@@ -102,24 +151,82 @@
         {
             var appUser = await UserManager.GetUserAsync(user);
             firstName = appUser?.FirstName ?? user.Identity?.Name;
-            userId = appUser?.Id;
         }
 
         await ThemeService.InitializeAsync();
         _userThemePreference = ThemeService.CurrentPreference;
-    }
 
-    private async Task Logout(MouseEventArgs e)
-    {
-        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
-        var request = new HttpRequestMessage(HttpMethod.Post, "auth/logout");
-        request.Headers.Add("RequestVerificationToken", AntiforgeryToken);
-        var response = await http.SendAsync(request);
-        if (response.IsSuccessStatusCode)
+        if (!_navigationSubscriptionRegistered)
         {
-            Navigation.NavigateTo("/");
+            Navigation.LocationChanged += HandleLocationChanged;
+            _navigationSubscriptionRegistered = true;
         }
     }
+
+    private async Task ToggleDrawerAsync()
+    {
+        await SetDrawerStateAsync(!_isDrawerOpen, focusDrawer: !_isDrawerOpen);
+    }
+
+    private async Task CloseDrawerAsync()
+    {
+        await SetDrawerStateAsync(false);
+    }
+
+    private async Task HandleDrawerNavigationAsync()
+    {
+        await CloseDrawerAsync();
+    }
+
+    private async Task SetDrawerStateAsync(bool isOpen, bool focusDrawer = false)
+    {
+        if (_isDrawerOpen == isOpen)
+        {
+            return;
+        }
+
+        _isDrawerOpen = isOpen;
+        _focusDrawerOnNextRender = isOpen && focusDrawer;
+        await UpdateBodyScrollLockAsync(isOpen);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateBodyScrollLockAsync(bool lockBody)
+    {
+        if (_isBodyScrollLocked == lockBody)
+        {
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.setBodyScrollLock", lockBody);
+            _isBodyScrollLocked = lockBody;
+        }
+        catch (JSException)
+        {
+            // Ignore when interop is not available during prerender.
+        }
+    }
+
+    private Task HandleSidebarKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            return CloseDrawerAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        if (_isDrawerOpen)
+        {
+            _ = InvokeAsync(CloseDrawerAsync);
+        }
+    }
+
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)
     {
         if (!isAuthenticated || _userThemePreference == mode)
@@ -166,11 +273,6 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            return;
-        }
-
         if (!_themeSubscriptionRegistered)
         {
             ThemeService.OnPreferenceChanged += OnThemePreferenceChanged;
@@ -182,15 +284,39 @@
             await ApplyThemePreferenceAsync();
             _hasAppliedThemeOnClient = true;
         }
+
+        if (_focusDrawerOnNextRender)
+        {
+            _focusDrawerOnNextRender = false;
+            try
+            {
+                await _drawerRef.FocusAsync();
+            }
+            catch (InvalidOperationException)
+            {
+                // Ignore if sidebar is not focusable yet.
+            }
+        }
     }
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     void IDisposable.Dispose()
     {
+        if (_navigationSubscriptionRegistered)
+        {
+            Navigation.LocationChanged -= HandleLocationChanged;
+        }
+
         if (_themeSubscriptionRegistered)
         {
             ThemeService.OnPreferenceChanged -= OnThemePreferenceChanged;
+        }
+
+        if (_isBodyScrollLocked)
+        {
+            _ = JSRuntime.InvokeVoidAsync("window.sonosUi.setBodyScrollLock", false);
+            _isBodyScrollLocked = false;
         }
     }
 }
