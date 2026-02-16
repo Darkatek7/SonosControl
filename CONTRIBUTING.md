@@ -32,6 +32,8 @@ Optional but recommended for UI/docs related changes:
 python scripts/check_markdown_links.py README.md docs CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md
 ```
 
+AI-agent workflow guidance lives in `AGENTS.md` and should be updated whenever CI or verification workflows change.
+
 ## README Assets and Screenshot Refresh
 Generate README screenshots in one step:
 
