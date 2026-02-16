@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest an improvement or new capability for SonosControl.
+title: "[Feature]: "
+labels:
+  - enhancement
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve SonosControl.
+        Please focus on user value and concrete implementation impact.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are you trying to solve?
+      placeholder: It is hard to compare playback history between speakers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe your preferred solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What alternatives did you evaluate?
+
+  - type: textarea
+    id: scope_impact
+    attributes:
+      label: Scope and impact
+      description: Which pages/services are affected? Any migration or compatibility concerns?
+      placeholder: |
+        - Affected areas:
+        - Risks:
+        - Backward compatibility:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have searched existing issues and this request has not already been submitted.
+          required: true
