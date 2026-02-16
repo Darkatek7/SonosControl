@@ -1,12 +1,14 @@
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
 using SonosControl.Web.Pages;
+using SonosControl.Web.Services;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -66,6 +68,12 @@ public class IndexPageAccessibilityTests
 
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
+        ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+        ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
         var cut = ctx.RenderComponent<IndexPage>();
@@ -129,6 +137,12 @@ public class IndexPageAccessibilityTests
 
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
+        ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+        ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
         var cut = ctx.RenderComponent<IndexPage>();

@@ -225,6 +225,9 @@ The engine polls settings at most once per minute, reacts instantly to near-term
 ## Logging & Observability
 - **In-app Logs page:** Filter recent events (50–1000+) and export data manually.
 - **Structured entries:** Every log includes action, performer, timestamp, and optional details.
+- **Health endpoint:** `GET /healthz` validates database connectivity and settings-file readability.
+- **Metrics endpoint:** `GET /metricsz` returns lightweight counters/histograms for dashboard refreshes, Sonos command failures, and playback monitor cycles.
+- **Metrics toggle:** set `Observability:EnableMetrics=false` to disable `/metricsz`.
 - **Extensible storage:** Logs are stored in SQLite; plug in your favorite exporter or dashboard for long-term retention.
 
 ---

@@ -7,11 +7,15 @@
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
 @using SonosControl.Web.Pages.Index.Components
+@using SonosControl.Web.Services
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject INotificationService NotificationService
+@inject IConfiguration Configuration
+@inject ILogger<IndexPage> Logger
+@inject IMetricsCollector MetricsCollector
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Sonos Control</PageTitle>
@@ -26,7 +30,21 @@
                         <h3 class="mb-1">🎛️ Sonos Control Panel</h3>
                         <p class="text-muted mb-0">Manage playback, queue, and curated sources for your Sonos system.</p>
                     </div>
+                    <div class="d-flex flex-column align-items-start align-items-lg-end gap-2">
+                        @if (IsRefreshStale)
+                        {
+                            <span class="badge text-bg-warning index-refresh-badge">Live updates delayed</span>
+                        }
+                        <small class="text-muted index-refresh-meta">@RefreshTelemetryLabel</small>
+                    </div>
                 </div>
+
+                @if (!string.IsNullOrWhiteSpace(_commandStatusMessage))
+                {
+                    <div class="alert @(_commandStatusIsError ? "alert-danger" : "alert-success") py-2 mb-3 index-command-status" role="status" aria-live="polite">
+                        @_commandStatusMessage
+                    </div>
+                }
 
                 <div class="dashboard-grid">
                     <div class="playback-column">
@@ -124,6 +142,20 @@
                                 </div>
                             </div>
                         </div>
+
+                        <QueuePanel
+                            Items="_queueItems"
+                            IsLoading="_isQueueLoading"
+                            HasMore="QueueHasMore"
+                            AutoRefreshEnabled="_queueAutoRefreshEnabled"
+                            RefreshIntervalSeconds="_queueRefreshIntervalSeconds"
+                            RefreshIntervals="_queueRefreshOptions"
+                            ErrorMessage="@_queueErrorMessage"
+                            Refresh="HandleQueueRefresh"
+                            LoadMore="LoadMoreQueueItems"
+                            AutoRefreshChanged="HandleQueueAutoRefreshChanged"
+                            RefreshIntervalChanged="HandleQueueRefreshIntervalChanged"
+                            FormatItem="FormatQueueItem" />
                     </div>
                     <div class="info-column">
                         <SectionCard Title="Speaker Status" Icon="📢">
@@ -357,7 +389,7 @@
     Stations="_stations"
     SpotifyTracks="_tracks"
     YouTubeCollections="_youTubeCollections"
-    ErrorMessage="timerErrorMessage" />
+    ErrorMessage="@timerErrorMessage" />
 
 <AddMediaItemModal @ref="_addMediaItemModal" OnSave="SaveNewMediaItem" ErrorMessage="@_addModalError" OnClose="() => _addModalError = null"/>
 
@@ -377,7 +409,38 @@
         public bool IsPlaying { get; set; }
         public string? Media { get; set; }
         public string? MasterUuid { get; set; }
+        public string? RawStationUrl { get; set; }
     }
+
+    private const int FastRefreshIntervalSeconds = 3;
+    private const int DefaultSlowLaneSeconds = 15;
+    private const int QueuePageSize = 30;
+    private static readonly int[] _queueRefreshOptions = new[] { 15, 30, 60 };
+
+    private readonly object _refreshSync = new();
+    private readonly SemaphoreSlim _refreshLoopLock = new(1, 1);
+    private CancellationTokenSource _disposeCts = new();
+    private CancellationTokenSource? _activeRefreshCts;
+    private bool _refreshPending;
+    private bool _refreshPendingSlowLane;
+    private DateTime? _lastSuccessfulRefreshUtc;
+    private DateTime? _lastSlowLaneRefreshUtc;
+    private int _consecutiveRefreshFailures;
+    private bool _isRefreshRunning;
+
+    private readonly SemaphoreSlim _queueRefreshLock = new(1, 1);
+    private CancellationTokenSource? _queueRefreshCts;
+    private Timer? _queueRefreshTimer;
+    private IReadOnlyList<SonosQueueItem> _queueItems = Array.Empty<SonosQueueItem>();
+    private bool _isQueueLoading;
+    private bool _queueAutoRefreshEnabled = true;
+    private int _queueRefreshIntervalSeconds = 30;
+    private int _queueStartIndex;
+    private int _queueTotalMatches;
+    private string? _queueErrorMessage;
+    private string? _commandStatusMessage;
+    private bool _commandStatusIsError;
+    private CancellationTokenSource? _commandStatusCts;
 
     private List<SpeakerStatusViewModel> _speakerStatuses = new();
     private SonosSettings? _settings;
@@ -412,6 +475,11 @@
 
     private async Task UpdateSpeakerRelatedData(string newIpAddress)
     {
+        if (_settings is null)
+        {
+            return;
+        }
+
         _settings.IP_Adress = newIpAddress;
         await SaveSettings();
 
@@ -426,7 +494,8 @@
         }
 
         // Refresh data for the new speaker
-        await UpdatePageDataAsync();
+        await RequestPageRefreshAsync(forceSlowLane: true);
+        await RefreshQueueAsync(reset: true);
     }
 
     // New state for tabs and modal
@@ -475,8 +544,6 @@
         : $"background: linear-gradient(135deg, {NormalizeColor(_settings.NowPlayingGradientStartColor, SonosSettings.DefaultNowPlayingGradientStartColor)} 0%, {NormalizeColor(_settings.NowPlayingGradientMidColor, SonosSettings.DefaultNowPlayingGradientMidColor)} 55%, {NormalizeColor(_settings.NowPlayingGradientEndColor, SonosSettings.DefaultNowPlayingGradientEndColor)} 100%);";
 
     private bool isAuthenticated;
-    private bool isAdmin;
-    private bool isOperator;
 
     private bool isTimerModalOpen;
     private int timerMinutes = 60;
@@ -494,6 +561,33 @@
     private string trackProgress = "";
     private Timer? _stationUpdateTimer;
 
+    private bool QueueHasMore => _queueStartIndex < _queueTotalMatches;
+    private bool IsRefreshStale => _consecutiveRefreshFailures >= 2;
+    private int SlowLaneSeconds => Math.Clamp(Configuration.GetValue<int?>("Dashboard:SlowLaneSeconds") ?? DefaultSlowLaneSeconds, 10, 120);
+    private string RefreshTelemetryLabel
+    {
+        get
+        {
+            if (_isRefreshRunning)
+            {
+                return "Syncing live state...";
+            }
+
+            if (!_lastSuccessfulRefreshUtc.HasValue)
+            {
+                return "Waiting for first successful refresh";
+            }
+
+            var elapsed = DateTime.UtcNow - _lastSuccessfulRefreshUtc.Value;
+            if (elapsed.TotalSeconds < 5)
+            {
+                return "Updated just now";
+            }
+
+            return $"Last update {Math.Round(elapsed.TotalSeconds)}s ago";
+        }
+    }
+
     private List<TuneInStation> _stations =>
         (_settings?.Stations ?? new List<TuneInStation>())
         .OrderBy(s => s.Name)
@@ -509,49 +603,125 @@
         .OrderBy(t => t.Name)
         .ToList();
 
-    private async Task UpdatePageDataAsync()
+    private async Task RequestPageRefreshAsync(bool forceSlowLane = false)
     {
-        // Execute data fetching in parallel to reduce cycle time
-        var loadStationTask = LoadCurrentStation();
-        var updateStatusesTask = UpdateSpeakerStatuses();
-        await Task.WhenAll(loadStationTask, updateStatusesTask);
-
-        // OPTIMIZATION: Populate the Media property for the selected speaker using the data
-        // that was already fetched by LoadCurrentStation, avoiding redundant network calls.
-        var selectedStatus = _speakerStatuses.FirstOrDefault(s => s.IpAddress == SelectedSpeakerIp);
-        if (selectedStatus != null && selectedStatus.IsPlaying && string.IsNullOrEmpty(selectedStatus.Media))
+        lock (_refreshSync)
         {
-            // Note: currentlyPlaying is now already validated in LoadCurrentStation via IsValidMetadata()
-            // However, "No metadata available" is a valid value for UI but shouldn't be the 'Media' if we have a station name.
-            bool isTrackValid = !string.IsNullOrWhiteSpace(currentlyPlaying) && currentlyPlaying != "No metadata available";
-
-            if (isTrackValid)
-            {
-                selectedStatus.Media = currentlyPlaying;
-            }
-            else if (currentStationDisplay.Contains("Spotify", StringComparison.OrdinalIgnoreCase))
-            {
-                selectedStatus.Media = "Spotify";
-            }
-            else if (currentStationDisplay.Contains("YouTube", StringComparison.OrdinalIgnoreCase))
-            {
-                selectedStatus.Media = "YouTube Music";
-            }
-            else
-            {
-                selectedStatus.Media = currentStationDisplay != "Loading..." ? currentStationDisplay : "Playing stream";
-            }
+            _refreshPending = true;
+            _refreshPendingSlowLane |= forceSlowLane;
+            _activeRefreshCts?.Cancel();
         }
 
-        await InvokeAsync(StateHasChanged);
+        if (!await _refreshLoopLock.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            while (true)
+            {
+                bool runSlowLane;
+                CancellationToken token;
+
+                lock (_refreshSync)
+                {
+                    if (!_refreshPending)
+                    {
+                        break;
+                    }
+
+                    _refreshPending = false;
+                    runSlowLane = _refreshPendingSlowLane;
+                    _refreshPendingSlowLane = false;
+
+                    _activeRefreshCts?.Dispose();
+                    _activeRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token);
+                    token = _activeRefreshCts.Token;
+                }
+
+                _isRefreshRunning = true;
+                await UpdatePageDataAsync(runSlowLane, token);
+
+                if (_disposeCts.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            _isRefreshRunning = false;
+
+            lock (_refreshSync)
+            {
+                _activeRefreshCts?.Dispose();
+                _activeRefreshCts = null;
+            }
+
+            _refreshLoopLock.Release();
+        }
+    }
+
+    private async Task UpdatePageDataAsync(bool forceSlowLane = false, CancellationToken cancellationToken = default)
+    {
+        var cycleStartUtc = DateTime.UtcNow;
+        var runSlowLane = forceSlowLane || ShouldRunSlowLane(cycleStartUtc);
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var updateStatusesTask = UpdateSpeakerStatuses(cancellationToken);
+            var selectedSpeakerTask = runSlowLane
+                ? LoadCurrentStation(cancellationToken)
+                : LoadCurrentStationFast(cancellationToken);
+
+            await Task.WhenAll(updateStatusesTask, selectedSpeakerTask);
+            PopulateSelectedSpeakerMedia();
+
+            _lastSuccessfulRefreshUtc = DateTime.UtcNow;
+            if (runSlowLane)
+            {
+                _lastSlowLaneRefreshUtc = _lastSuccessfulRefreshUtc;
+            }
+
+            _consecutiveRefreshFailures = 0;
+            MetricsCollector.RecordDashboardRefreshResult(success: true, runSlowLane, DateTime.UtcNow - cycleStartUtc);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _consecutiveRefreshFailures++;
+            Logger.LogWarning(ex, "Dashboard refresh cycle failed.");
+            MetricsCollector.RecordDashboardRefreshResult(success: false, runSlowLane, DateTime.UtcNow - cycleStartUtc);
+        }
+
+        if (!_disposeCts.IsCancellationRequested)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private bool ShouldRunSlowLane(DateTime cycleStartUtc)
+    {
+        if (!_lastSlowLaneRefreshUtc.HasValue)
+        {
+            return true;
+        }
+
+        return cycleStartUtc - _lastSlowLaneRefreshUtc.Value >= TimeSpan.FromSeconds(SlowLaneSeconds);
     }
 
     private void UpdatePageData(object? _ = null)
     {
-        _ = InvokeAsync(UpdatePageDataAsync);
+        _ = InvokeAsync(() => RequestPageRefreshAsync());
     }
 
-    private async Task UpdateSpeakerStatuses()
+    private async Task UpdateSpeakerStatuses(CancellationToken cancellationToken)
     {
         if (_settings?.Speakers == null)
         {
@@ -559,184 +729,216 @@
             return;
         }
 
-        var tasks = _settings.Speakers.Select(async speaker =>
-        {
-            try
-            {
-                var isPlayingTask = _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
-                var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress);
-
-                await Task.WhenAll(isPlayingTask, rawStationUrlTask);
-
-                var isPlaying = await isPlayingTask;
-                var rawStationUrl = await rawStationUrlTask;
-
-                string? masterUuid = null;
-                if (!string.IsNullOrEmpty(rawStationUrl) && rawStationUrl.StartsWith("x-rincon-group:"))
-                {
-                    var match = Regex.Match(rawStationUrl, @"(uuid:RINCON_[A-F0-9]+)");
-                    if (match.Success)
-                    {
-                        masterUuid = match.Groups[1].Value;
-                    }
-                }
-
-                // OPTIMIZATION: If this is the selected speaker, update main state
-                if (speaker.IpAddress == SelectedSpeakerIp)
-                {
-                    _isPlaying = isPlaying;
-                    return new SpeakerStatusViewModel
-                    {
-                        Name = speaker.Name,
-                        IpAddress = speaker.IpAddress,
-                        Uuid = speaker.Uuid,
-                        IsPlaying = isPlaying,
-                        Media = null, // Will be populated in UpdatePageDataAsync
-                        MasterUuid = masterUuid
-                    };
-                }
-
-                string media = "";
-                if (isPlaying)
-                {
-                    var trackInfo = await _uow.ISonosConnectorRepo.GetTrackInfoAsync(speaker.IpAddress);
-                    var currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
-
-                    if (trackInfo != null && trackInfo.IsValidMetadata())
-                    {
-                        media = trackInfo.GetDisplayString();
-                    }
-                    else if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
-                    {
-                        media = "Spotify";
-                    }
-                    else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-                    {
-                        media = "YouTube Music";
-                    }
-                    else
-                    {
-                        var matched = _stations.FirstOrDefault(s => currentStationUrl != null && s.Url != null && currentStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
-                        if (matched != null)
-                        {
-                            media = matched.Name;
-                        }
-                        else
-                        {
-                            media = "Playing stream";
-                        }
-                    }
-                }
-                else if (masterUuid != null)
-                {
-                     media = "Grouped";
-                }
-
-                return new SpeakerStatusViewModel
-                {
-                    Name = speaker.Name,
-                    IpAddress = speaker.IpAddress,
-                    Uuid = speaker.Uuid,
-                    IsPlaying = isPlaying,
-                    Media = media,
-                    MasterUuid = masterUuid
-                };
-            }
-            catch
-            {
-                return new SpeakerStatusViewModel
-                {
-                    Name = speaker.Name,
-                    IpAddress = speaker.IpAddress,
-                    Uuid = speaker.Uuid,
-                    IsPlaying = false,
-                    Media = "Offline",
-                    MasterUuid = null
-                };
-            }
-        }).ToList();
-
+        var tasks = _settings.Speakers.Select(speaker => BuildSpeakerStatusAsync(speaker, cancellationToken)).ToList();
         _speakerStatuses = (await Task.WhenAll(tasks)).ToList();
     }
 
-
-    private async Task LoadCurrentStation()
+    private async Task<SpeakerStatusViewModel> BuildSpeakerStatusAsync(SonosSpeaker speaker, CancellationToken cancellationToken)
     {
-        if (_settings is not null)
+        try
         {
-            // Execute fetching in parallel
-            var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress);
-            var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(_settings.IP_Adress);
-            var progressTask = _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress);
+            var isPlayingTask = _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
+            var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress, cancellationToken);
+            await Task.WhenAll(isPlayingTask, rawStationUrlTask);
 
-            await Task.WhenAll(stationTask, trackInfoTask, progressTask);
+            var isPlaying = await isPlayingTask;
+            var rawStationUrl = await rawStationUrlTask;
+            var normalizedStationUrl = NormalizeStationUrl(rawStationUrl);
+            var masterUuid = TryExtractMasterUuid(rawStationUrl);
 
-            var rawStationUrl = await stationTask;
-            currentStationUrl = rawStationUrl?.Replace("x-rincon-mp3radio://", "").Trim() ?? "";
-
-            if (currentStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+            if (speaker.IpAddress == SelectedSpeakerIp)
             {
-                currentStationDisplay = "Spotify";
-                _isSpotifyPlaying = true;
-            }
-            else if (currentStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-            {
-                currentStationDisplay = "YouTube Music";
-                _isSpotifyPlaying = false;
-            }
-            else
-            {
-                // Try to match with saved stations first
-                var matched = _stations.FirstOrDefault(s => currentStationUrl?.Contains(s.Url, StringComparison.OrdinalIgnoreCase) == true);
-                if (matched != null)
-                {
-                    currentStationDisplay = matched.Name;
-                }
-                else
-                {
-                    currentStationDisplay = currentStationUrl;
-                }
-
-                _isSpotifyPlaying = false;
+                _isPlaying = isPlaying;
             }
 
-            var trackInfo = await trackInfoTask;
-            if (trackInfo != null && trackInfo.IsValidMetadata())
+            return new SpeakerStatusViewModel
             {
-                 currentlyPlaying = trackInfo.GetDisplayString();
-                 currentTrackArtUrl = trackInfo.AlbumArtUri;
-            }
-            else
-            {
-                // Fallback to station display if track info is invalid/missing
-                currentlyPlaying = "No metadata available";
-                currentTrackArtUrl = null;
-
-                // Attempt to use the Station Name if available and track is invalid
-                if (!string.IsNullOrWhiteSpace(currentStationDisplay) && currentStationDisplay != "Loading...")
-                {
-                    // If we are playing a station, we might want to show the Station Name as "Track"
-                    // or just leave "currentlyPlaying" as "No metadata" and let the "Station:" field show it.
-                    // The previous logic put the Station Name into "Media" in the list.
-                    // Here, "Currently Playing" card has separate Station and Track fields.
-                    // If Track is garbage, we leave it empty or "No metadata".
-                    currentlyPlaying = "No metadata available";
-                }
-            }
-
-            var progress = await progressTask;
-
-            if (progress.Duration == TimeSpan.Zero)
-            {
-                trackProgress = progress.Position == TimeSpan.Zero
-                    ? string.Empty
-                    : $"{progress.Position:mm\\:ss}";
-            }
-            else
-            {
-                trackProgress = $"{progress.Position:mm\\:ss} / {progress.Duration:mm\\:ss}";
-            }
+                Name = speaker.Name,
+                IpAddress = speaker.IpAddress,
+                Uuid = speaker.Uuid,
+                IsPlaying = isPlaying,
+                Media = speaker.IpAddress == SelectedSpeakerIp
+                    ? null
+                    : ResolveSpeakerMedia(isPlaying, normalizedStationUrl, masterUuid),
+                MasterUuid = masterUuid,
+                RawStationUrl = rawStationUrl
+            };
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return new SpeakerStatusViewModel
+            {
+                Name = speaker.Name,
+                IpAddress = speaker.IpAddress,
+                Uuid = speaker.Uuid,
+                IsPlaying = false,
+                Media = "Offline",
+                MasterUuid = null,
+                RawStationUrl = null
+            };
+        }
+    }
+
+    private string ResolveSpeakerMedia(bool isPlaying, string normalizedStationUrl, string? masterUuid)
+    {
+        if (!isPlaying)
+        {
+            return masterUuid is null ? string.Empty : "Grouped";
+        }
+
+        if (masterUuid is not null)
+        {
+            return "Grouped";
+        }
+
+        if (normalizedStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Spotify";
+        }
+
+        if (normalizedStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+        {
+            return "YouTube Music";
+        }
+
+        var matched = _stations.FirstOrDefault(s =>
+            !string.IsNullOrWhiteSpace(s.Url) &&
+            normalizedStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+
+        return matched?.Name ?? "Playing stream";
+    }
+
+    private static string? TryExtractMasterUuid(string? rawStationUrl)
+    {
+        if (string.IsNullOrWhiteSpace(rawStationUrl) || !rawStationUrl.StartsWith("x-rincon-group:", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(rawStationUrl, @"(uuid:RINCON_[A-F0-9]+)");
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private static string NormalizeStationUrl(string? rawStationUrl)
+        => rawStationUrl?.Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase).Trim() ?? string.Empty;
+
+    private async Task LoadCurrentStation(CancellationToken cancellationToken)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress, cancellationToken);
+        var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(_settings.IP_Adress, cancellationToken);
+        var progressTask = _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress, cancellationToken);
+
+        await Task.WhenAll(stationTask, trackInfoTask, progressTask);
+
+        currentStationUrl = NormalizeStationUrl(await stationTask);
+        currentStationDisplay = ResolveStationDisplay(currentStationUrl);
+        _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
+
+        var trackInfo = await trackInfoTask;
+        if (trackInfo != null && trackInfo.IsValidMetadata())
+        {
+            currentlyPlaying = trackInfo.GetDisplayString();
+            currentTrackArtUrl = trackInfo.AlbumArtUri;
+        }
+        else
+        {
+            currentlyPlaying = "No metadata available";
+            currentTrackArtUrl = null;
+        }
+
+        var progress = await progressTask;
+        trackProgress = FormatTrackProgress(progress.Position, progress.Duration);
+    }
+
+    private async Task LoadCurrentStationFast(CancellationToken cancellationToken)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(_settings.IP_Adress, cancellationToken);
+        var progressTask = _uow.ISonosConnectorRepo.GetTrackProgressAsync(_settings.IP_Adress, cancellationToken);
+
+        await Task.WhenAll(stationTask, progressTask);
+
+        currentStationUrl = NormalizeStationUrl(await stationTask);
+        currentStationDisplay = ResolveStationDisplay(currentStationUrl);
+        _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
+
+        var progress = await progressTask;
+        trackProgress = FormatTrackProgress(progress.Position, progress.Duration);
+    }
+
+    private string ResolveStationDisplay(string normalizedStationUrl)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedStationUrl))
+        {
+            return "Unknown";
+        }
+
+        if (normalizedStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Spotify";
+        }
+
+        if (normalizedStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
+        {
+            return "YouTube Music";
+        }
+
+        var matched = _stations.FirstOrDefault(s =>
+            !string.IsNullOrWhiteSpace(s.Url) &&
+            normalizedStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+
+        return matched?.Name ?? normalizedStationUrl;
+    }
+
+    private static string FormatTrackProgress(TimeSpan position, TimeSpan duration)
+    {
+        if (duration == TimeSpan.Zero)
+        {
+            return position == TimeSpan.Zero
+                ? string.Empty
+                : $"{position:mm\\:ss}";
+        }
+
+        return $"{position:mm\\:ss} / {duration:mm\\:ss}";
+    }
+
+    private void PopulateSelectedSpeakerMedia()
+    {
+        var selectedStatus = _speakerStatuses.FirstOrDefault(s => s.IpAddress == SelectedSpeakerIp);
+        if (selectedStatus == null)
+        {
+            return;
+        }
+
+        if (!selectedStatus.IsPlaying)
+        {
+            selectedStatus.Media = selectedStatus.MasterUuid is null ? string.Empty : "Grouped";
+            return;
+        }
+
+        var isTrackValid = !string.IsNullOrWhiteSpace(currentlyPlaying) &&
+                           !currentlyPlaying.Equals("No metadata available", StringComparison.OrdinalIgnoreCase);
+
+        if (isTrackValid)
+        {
+            selectedStatus.Media = currentlyPlaying;
+            return;
+        }
+
+        selectedStatus.Media = ResolveSpeakerMedia(true, NormalizeStationUrl(selectedStatus.RawStationUrl), selectedStatus.MasterUuid);
     }
     
     private bool IsCurrentlyPlaying(string url)
@@ -747,6 +949,160 @@
         }
         // Normalize and compare, this might need to be more robust
         return currentStationUrl.Contains(url, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Task HandleQueueRefresh()
+        => RefreshQueueAsync(reset: true);
+
+    private Task LoadMoreQueueItems()
+        => RefreshQueueAsync(reset: false);
+
+    private Task HandleQueueAutoRefreshChanged(bool enabled)
+    {
+        _queueAutoRefreshEnabled = enabled;
+        ConfigureQueueAutoRefreshTimer();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleQueueRefreshIntervalChanged(int seconds)
+    {
+        if (!_queueRefreshOptions.Contains(seconds))
+        {
+            return;
+        }
+
+        if (_queueRefreshIntervalSeconds == seconds)
+        {
+            return;
+        }
+
+        _queueRefreshIntervalSeconds = seconds;
+        ConfigureQueueAutoRefreshTimer();
+
+        if (_queueAutoRefreshEnabled)
+        {
+            await RefreshQueueAsync(reset: true);
+        }
+    }
+
+    private void ConfigureQueueAutoRefreshTimer()
+    {
+        _queueRefreshTimer?.Dispose();
+        _queueRefreshTimer = null;
+
+        if (!_queueAutoRefreshEnabled || _queueRefreshIntervalSeconds <= 0)
+        {
+            return;
+        }
+
+        _queueRefreshTimer = new Timer(
+            _ => _ = InvokeAsync(() => RefreshQueueAsync(reset: true)),
+            null,
+            TimeSpan.FromSeconds(_queueRefreshIntervalSeconds),
+            TimeSpan.FromSeconds(_queueRefreshIntervalSeconds));
+    }
+
+    private async Task RefreshQueueAsync(bool reset)
+    {
+        if (_settings is null || string.IsNullOrWhiteSpace(SelectedSpeakerIp))
+        {
+            _queueItems = Array.Empty<SonosQueueItem>();
+            _queueStartIndex = 0;
+            _queueTotalMatches = 0;
+            _queueErrorMessage = null;
+            return;
+        }
+
+        if (!await _queueRefreshLock.WaitAsync(0))
+        {
+            return;
+        }
+
+        CancellationTokenSource? previousCts = null;
+        try
+        {
+            previousCts = _queueRefreshCts;
+            _queueRefreshCts = CancellationTokenSource.CreateLinkedTokenSource(_disposeCts.Token);
+            previousCts?.Cancel();
+
+            _queueErrorMessage = null;
+            _isQueueLoading = true;
+            await InvokeAsync(StateHasChanged);
+
+            var token = _queueRefreshCts.Token;
+            var startIndex = reset ? 0 : _queueStartIndex;
+            var queuePage = await _uow.ISonosConnectorRepo.GetQueue(SelectedSpeakerIp, startIndex, QueuePageSize, token);
+
+            if (reset)
+            {
+                _queueItems = queuePage.Items.ToList();
+            }
+            else
+            {
+                _queueItems = _queueItems.Concat(queuePage.Items).ToList();
+            }
+
+            _queueStartIndex = queuePage.StartIndex + queuePage.NumberReturned;
+            _queueTotalMatches = queuePage.TotalMatches;
+        }
+        catch (OperationCanceledException) when (_queueRefreshCts?.IsCancellationRequested == true)
+        {
+        }
+        catch (Exception ex)
+        {
+            _queueErrorMessage = "Queue refresh failed. Please retry.";
+            Logger.LogWarning(ex, "Queue refresh failed for speaker {SpeakerIp}.", SelectedSpeakerIp);
+            MetricsCollector.IncrementSonosCommandError("queue_refresh");
+        }
+        finally
+        {
+            previousCts?.Dispose();
+            _isQueueLoading = false;
+            _queueRefreshLock.Release();
+
+            if (!_disposeCts.IsCancellationRequested)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private static string FormatQueueItem(SonosQueueItem item) => item.DisplayTitle;
+
+    private void ShowCommandStatus(string message, bool isError = false, int autoHideMs = 3500)
+    {
+        _commandStatusMessage = message;
+        _commandStatusIsError = isError;
+
+        _commandStatusCts?.Cancel();
+        _commandStatusCts?.Dispose();
+        _commandStatusCts = new CancellationTokenSource();
+        var token = _commandStatusCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(autoHideMs, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _commandStatusMessage = null;
+                        StateHasChanged();
+                    });
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+            }
+        }, token);
+    }
+
+    private void TrackSonosCommandError(string commandName, Exception ex)
+    {
+        MetricsCollector.IncrementSonosCommandError(commandName);
+        Logger.LogWarning(ex, "Sonos command {CommandName} failed for speaker {SpeakerIp}.", commandName, SelectedSpeakerIp);
     }
 
     private async Task PlayMediaItem(string url, string type)
@@ -777,6 +1133,12 @@
                     break;
             }
             await _uow.ISonosConnectorRepo.StartPlaying(_settings.IP_Adress);
+            ShowCommandStatus("Playback command sent.");
+        }
+        catch (Exception ex)
+        {
+            TrackSonosCommandError($"play_{type}", ex);
+            ShowCommandStatus("Playback command failed. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -816,6 +1178,12 @@
             {
                 await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_settings.IP_Adress, url);
                 await AddLog("Spotify URL Played", url);
+                ShowCommandStatus("Spotify URL sent to Sonos.");
+            }
+            catch (Exception ex)
+            {
+                TrackSonosCommandError("spotify_url_play", ex);
+                ShowCommandStatus("Spotify URL playback failed. Please retry.", isError: true, autoHideMs: 4500);
             }
             finally
             {
@@ -833,6 +1201,12 @@
         {
             await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
             await AddLog("Next Track");
+            ShowCommandStatus("Skipped to next track.");
+        }
+        catch (Exception ex)
+        {
+            TrackSonosCommandError("next_track", ex);
+            ShowCommandStatus("Next-track command failed. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -936,6 +1310,7 @@
             _playbackTimerCts = null;
 
             await AddLog("Timed Playback Started", $"{logSource} ({minutes} minutes)");
+            ShowCommandStatus($"Timed playback started for {minutes} minutes.");
 
             _timerSelectionName = selectionName;
             _timerEndTimeUtc = DateTime.UtcNow.AddMinutes(minutes);
@@ -978,8 +1353,10 @@
         }
         catch (Exception ex)
         {
+            TrackSonosCommandError("timed_playback_start", ex);
             Console.Error.WriteLine(ex);
             timerErrorMessage = "Failed to start timed playback.";
+            ShowCommandStatus("Failed to start timed playback. Please retry.", isError: true, autoHideMs: 4500);
         }
     }
 
@@ -1072,7 +1449,7 @@
             return;
         }
 
-        _settings = await _uow.ISettingsRepo.GetSettings();
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
         if (_settings.Speakers.Any())
@@ -1094,16 +1471,15 @@
             {
                 if (_settings.Speakers.Any() && !(_settings.IP_Adress is "10.0.0.0"))
                 {
-                    // OPTIMIZATION: Run volume initialization and page data update in parallel
-                    // The _isPlaying state is now updated within UpdatePageDataAsync (via UpdateSpeakerStatuses),
-                    // removing the need for a separate sequential IsPlaying() call.
                     await Task.WhenAll(
                         EnsureVolumeAsync(),
                         EnsureSpeakerUuids(),
-                        UpdatePageDataAsync()
+                        RequestPageRefreshAsync(forceSlowLane: true)
                     );
 
-                    _stationUpdateTimer = new Timer(UpdatePageData, null, 3000, 3000);
+                    _stationUpdateTimer = new Timer(UpdatePageData, null, FastRefreshIntervalSeconds * 1000, FastRefreshIntervalSeconds * 1000);
+                    ConfigureQueueAutoRefreshTimer();
+                    await RefreshQueueAsync(reset: true);
                     StateHasChanged();
                 }
             }
@@ -1172,6 +1548,7 @@
                 _isPlaying = true;
                 await AddLog("Playback Started");
                 await NotificationService.SendNotificationAsync($"Playback started on {SelectedSpeakerIp}", await GetCurrentUserAsync());
+                ShowCommandStatus("Playback started.");
             }
             else
             {
@@ -1179,7 +1556,13 @@
                 _isPlaying = false;
                 await AddLog("Playback Paused");
                 await NotificationService.SendNotificationAsync($"Playback paused on {SelectedSpeakerIp}", await GetCurrentUserAsync());
+                ShowCommandStatus("Playback paused.");
             }
+        }
+        catch (Exception ex)
+        {
+            TrackSonosCommandError(play ? "play" : "pause", ex);
+            ShowCommandStatus("Playback command failed. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -1203,6 +1586,12 @@
 
             await AddLog("Sync Play Started (Cloned URI)", "All speakers");
             await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", await GetCurrentUserAsync());
+            ShowCommandStatus("Sync Play started for all speakers.");
+        }
+        catch (Exception ex)
+        {
+            TrackSonosCommandError("sync_play", ex);
+            ShowCommandStatus("Sync Play failed. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -1250,6 +1639,7 @@
             {
                 await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
                 await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", await GetCurrentUserAsync());
+                ShowCommandStatus("Speaker group created.");
             }
             else
             {
@@ -1257,14 +1647,17 @@
                 await AddLog("Group Creation Failed - Fallback", $"Master: {SelectedSpeakerIp}. Attempting legacy sync.");
                 await ApplyLegacySync(SelectedSpeakerIp, slaveIps);
                 await NotificationService.SendNotificationAsync($"Group failed (UPnP error). Fallback Sync started for {SelectedSpeakerIp}", await GetCurrentUserAsync());
+                ShowCommandStatus("Native grouping failed; fallback sync started.", isError: true, autoHideMs: 4500);
             }
 
             isGroupModalOpen = false;
         }
         catch (Exception ex)
         {
+            TrackSonosCommandError("group_create", ex);
             await AddLog("Group Creation Failed", ex.Message);
             await NotificationService.SendNotificationAsync($"Group creation failed for master {SelectedSpeakerIp}: {ex.Message}", await GetCurrentUserAsync());
+            ShowCommandStatus("Group creation failed. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -1282,6 +1675,12 @@
             await _uow.ISonosConnectorRepo.UngroupSpeaker(SelectedSpeakerIp);
             await AddLog("Speaker Ungrouped", SelectedSpeakerIp);
             await NotificationService.SendNotificationAsync($"Speaker {SelectedSpeakerIp} ungrouped", await GetCurrentUserAsync());
+            ShowCommandStatus("Speaker ungrouped.");
+        }
+        catch (Exception ex)
+        {
+            TrackSonosCommandError("ungroup_speaker", ex);
+            ShowCommandStatus("Failed to ungroup speaker. Please retry.", isError: true, autoHideMs: 4500);
         }
         finally
         {
@@ -1294,11 +1693,6 @@
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         return authState.User.Identity?.Name ?? "Unknown";
-    }
-
-    private async Task<bool> IsPlaying()
-    {
-        return await _uow.ISonosConnectorRepo.IsPlaying(SelectedSpeakerIp);
     }
 
     private async Task SaveSettings()
@@ -1420,8 +1814,38 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposeCts.Cancel();
+
         _stationUpdateTimer?.Dispose();
         _stationUpdateTimer = null;
+
+        _queueRefreshTimer?.Dispose();
+        _queueRefreshTimer = null;
+
+        lock (_refreshSync)
+        {
+            _activeRefreshCts?.Cancel();
+            _activeRefreshCts?.Dispose();
+            _activeRefreshCts = null;
+            _refreshPending = false;
+            _refreshPendingSlowLane = false;
+        }
+
+        var queueRefreshCts = _queueRefreshCts;
+        if (queueRefreshCts is not null)
+        {
+            _queueRefreshCts = null;
+            queueRefreshCts.Cancel();
+            queueRefreshCts.Dispose();
+        }
+
+        var commandStatusCts = _commandStatusCts;
+        if (commandStatusCts is not null)
+        {
+            _commandStatusCts = null;
+            commandStatusCts.Cancel();
+            commandStatusCts.Dispose();
+        }
 
         var playbackCts = _playbackTimerCts;
         if (playbackCts is not null)
@@ -1430,5 +1854,11 @@
             playbackCts.Cancel();
             playbackCts.Dispose();
         }
+
+        _disposeCts.Dispose();
+        _refreshLoopLock.Dispose();
+        _queueRefreshLock.Dispose();
+
+        await ValueTask.CompletedTask;
     }
 }

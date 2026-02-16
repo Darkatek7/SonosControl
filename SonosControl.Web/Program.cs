@@ -1,8 +1,10 @@
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
 using SonosControl.Web.Services;
+using SonosControl.Web.Services.HealthChecks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using System.IO;
@@ -23,8 +25,14 @@ builder.Services.AddHttpClient(nameof(SonosConnectorRepo), client =>
 {
     client.Timeout = TimeSpan.FromSeconds(2);
 });
+builder.Services.AddHttpClient("RadioBrowser", client =>
+{
+    client.BaseAddress = new Uri("https://de1.api.radio-browser.info/");
+    client.Timeout = TimeSpan.FromSeconds(8);
+});
 builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
+builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
 
 builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddHostedService<PlaybackMonitorService>();
@@ -44,6 +52,10 @@ builder.Services.AddAntiforgery();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database")
+    .AddCheck<SettingsHealthCheck>("settings");
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
@@ -126,6 +138,15 @@ app.UseEndpoints(endpoints =>
     endpoints.MapControllers();
     endpoints.MapDefaultControllerRoute();
     endpoints.MapBlazorHub();
+    endpoints.MapHealthChecks("/healthz", new HealthCheckOptions
+    {
+        AllowCachingResponses = false
+    });
+    endpoints.MapGet("/metricsz", (IMetricsCollector metricsCollector, IConfiguration configuration) =>
+    {
+        var enabled = configuration.GetValue<bool?>("Observability:EnableMetrics") ?? true;
+        return enabled ? Results.Ok(metricsCollector.GetSnapshot()) : Results.NotFound();
+    });
     endpoints.MapFallbackToPage("/_Host"); // only here once
 });
 
