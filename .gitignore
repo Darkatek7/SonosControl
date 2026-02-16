@@ -347,8 +347,20 @@ healthchecksdb
 
 # Backup folder for Package Reference Convert tool in Visual Studio 2017
 MigrationBackup/
-.Data/
-config.json
-app.db
-app.db-shm
-app.db-wal
+# SonosControl runtime data and local secrets
+SonosControl.Web/Data/config.json
+SonosControl.Web/Data/app.db
+SonosControl.Web/Data/app.db-shm
+SonosControl.Web/Data/app.db-wal
+SonosControl.Web/app.db
+SonosControl.Web/app.db-shm
+SonosControl.Web/app.db-wal
+SonosControl.Web/DataProtectionKeys/
+
+# Local verification artifacts
+mobile_smoke_screenshots/
+
+# VS Code: ignore personal settings, keep shared tasks/launch config
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
