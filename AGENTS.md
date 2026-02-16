@@ -1,12 +1,14 @@
 # AGENTS.md
 
 ## Purpose and Scope
+
 - This file defines mandatory instructions for AI coding agents working in this repository.
 - Audience: AI agents only.
 - Canonical location: repository root `AGENTS.md`.
 - Verification policy: run only the checks required by changed files, but always run those required checks.
 
 ## Repository Map
+
 - `SonosControl.Web`: ASP.NET Core Blazor web application, UI pages, services, EF Core migrations.
 - `SonosControl.DAL`: domain and integration logic for Sonos control and data access.
 - `SonosControl.Tests`: unit and component test suite.
@@ -14,6 +16,7 @@
 - `scripts`: repository automation utilities, including markdown link validation.
 
 ## Task Routing by Changed Files
+
 | Changed file pattern | Required action |
 |---|---|
 | `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `TestApp/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
@@ -22,6 +25,7 @@
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
 
 ## Required Verification Commands
+
 Run only the commands required by the routing matrix for the files you changed.
 
 ```powershell
@@ -47,6 +51,7 @@ python scripts/check_markdown_links.py README.md docs CONTRIBUTING.md CODE_OF_CO
 ```
 
 ## Optional Verification Commands
+
 - Preferred accelerator when available: use the `verify-sonoscontrol-change` skill to select and run scoped checks.
 - Optional visual validation for UI or README visual updates:
 
@@ -55,12 +60,14 @@ python scripts/check_markdown_links.py README.md docs CONTRIBUTING.md CODE_OF_CO
 ```
 
 ## Safety Rules
+
 - Never commit secrets, tokens, or real credentials.
 - Do not edit EF migration designer or snapshot files manually unless they are regenerated consistently.
 - Do not run destructive git commands unless explicitly requested.
 - Keep verification scope minimal but mandatory according to the routing matrix.
 
 ## PR Evidence Format
+
 Use concise evidence in PR descriptions:
 
 ```text
@@ -75,10 +82,12 @@ Validation summary
 ```
 
 ## Done Criteria
+
 - All required checks for changed files have been executed and passed.
 - Optional screenshot refresh completed when visual surfaces changed.
 - Documentation and workflow updates are synchronized when process/verification behavior changed.
 - PR evidence includes commands executed and pass/fail status.
 
 ## Maintenance Rule
+
 - When CI workflows, verification scripts, or required checks change, update `AGENTS.md`, `.github/workflows/docs-quality.yml`, and `.markdownlint-cli2.jsonc` in the same change.
