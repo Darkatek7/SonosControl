@@ -1,0 +1,451 @@
+@page "/schedule-windows"
+@using SonosControl.Web.Services
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize(Roles = "admin,superadmin")]
+
+<PageTitle>Schedule Windows - Sonos Control</PageTitle>
+
+<div class="container dashboard-shell">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+                <div>
+                    <h3 class="mb-1">Schedule Windows</h3>
+                    <p class="text-muted mb-0">Define multiple recurring windows with deterministic priority and optional fade transitions.</p>
+                </div>
+                <button class="btn btn-primary" @onclick="CreateNewWindow">New Window</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") mb-3" role="status">@_statusMessage</div>
+            }
+
+            @if (_settings is null)
+            {
+                <p class="text-muted">Loading schedule windows...</p>
+            }
+            else
+            {
+                var now = DateTimeOffset.Now;
+                var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now);
+
+                <div class="alert schedule-active-alert d-flex justify-content-between align-items-center">
+                    <span>Active window: <strong>@(active?.Name ?? "None")</strong></span>
+                    <span class="small schedule-now-label">Now: @now.LocalDateTime.ToString("f")</span>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Priority</th>
+                                    <th>Scene</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                @if (_settings.ScheduleWindows.Any())
+                                {
+                                    @foreach (var window in _settings.ScheduleWindows
+                                                      .OrderBy(w => w.Priority)
+                                                      .ThenByDescending(w => w.LastModifiedUtc))
+                                    {
+                                        <tr class="@GetRowClass(window)">
+                                            <td>
+                                                <button class="btn btn-link p-0 text-start text-decoration-none fw-semibold schedule-window-select-link" @onclick="() => EditWindow(window)">
+                                                    @window.Name
+                                                </button>
+                                                @if (!window.IsEnabled)
+                                                {
+                                                    <div class="small text-warning">Disabled</div>
+                                                }
+                                            </td>
+                                            <td>@window.Priority</td>
+                                            <td class="small">@GetSceneName(window.SceneId)</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteWindow(window)" disabled="@_isSaving">Delete</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center">No schedule windows configured.</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        @if (_editingWindow is null)
+                        {
+                            <div class="alert schedule-muted-alert mb-0">Select a window or create a new one.</div>
+                        }
+                        else
+                        {
+                            <div class="border rounded-3 p-3 p-md-4 surface-0">
+                                <div class="row g-3">
+                                    <div class="col-md-8">
+                                        <label class="form-label">Name</label>
+                                        <input class="form-control" @bind="_editingWindow.Name" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Enabled</label>
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" @bind="_editingWindow.IsEnabled" />
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label">Priority</label>
+                                        <input class="form-control" type="number" min="0" max="1000" @bind="_editingWindow.Priority" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Start</label>
+                                        <input class="form-control" type="time" value="@_editingWindow.StartTime.ToString("HH\\:mm")" @onchange="e => SetStartTime(e.Value)" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Stop</label>
+                                        <input class="form-control" type="time" value="@_editingWindow.StopTime.ToString("HH\\:mm")" @onchange="e => SetStopTime(e.Value)" />
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Recurrence</label>
+                                        <select class="form-select" @bind="_editingWindow.RecurrenceType">
+                                            <option value="@ScheduleRecurrenceType.Daily">Daily</option>
+                                            <option value="@ScheduleRecurrenceType.Weekdays">Weekdays</option>
+                                            <option value="@ScheduleRecurrenceType.Weekends">Weekends</option>
+                                            <option value="@ScheduleRecurrenceType.CustomDays">Custom Days</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Scene</label>
+                                        <select class="form-select" @bind="_editingWindow.SceneId">
+                                            <option value="">None</option>
+                                            @foreach (var scene in _settings.Scenes.OrderBy(s => s.Name))
+                                            {
+                                                <option value="@scene.Id">@scene.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Start Date (optional)</label>
+                                        <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.StartDate)" @onchange="e => SetStartDate(e.Value)" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">End Date (optional)</label>
+                                        <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.EndDate)" @onchange="e => SetEndDate(e.Value)" />
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">Fade In (sec)</label>
+                                        <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeInSeconds" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Fade Out (sec)</label>
+                                        <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeOutSeconds" />
+                                    </div>
+                                </div>
+
+                                @if (_editingWindow.RecurrenceType == ScheduleRecurrenceType.CustomDays)
+                                {
+                                    <hr />
+                                    <label class="form-label">Custom days</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @foreach (var day in Enum.GetValues<DayOfWeek>())
+                                        {
+                                            <label class="@GetCustomDayButtonClass(day)">
+                                                <input class="form-check-input me-1"
+                                                       type="checkbox"
+                                                       checked="@_editingWindow.DaysOfWeek.Contains(day)"
+                                                       @onchange="e => ToggleCustomDay(day, e.Value)" />
+                                                @day.ToString()[..3]
+                                            </label>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="mt-4 d-flex flex-wrap gap-2">
+                                    <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">Save Window</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private SonosSettings? _settings;
+    private ScheduleWindow? _editingWindow;
+    private string? _selectedWindowId;
+    private string? _statusMessage;
+    private bool _statusIsError;
+    private bool _isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var _ = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.ScheduleWindows ??= new();
+        _settings.Scenes ??= new();
+    }
+
+    private void CreateNewWindow()
+    {
+        _editingWindow = new ScheduleWindow
+        {
+            Name = $"Window {(_settings?.ScheduleWindows.Count ?? 0) + 1}",
+            IsEnabled = true,
+            Priority = 100,
+            StartTime = new TimeOnly(6, 0),
+            StopTime = new TimeOnly(18, 0),
+            RecurrenceType = ScheduleRecurrenceType.Weekdays,
+            DaysOfWeek = new(),
+            FadeInSeconds = 0,
+            FadeOutSeconds = 0
+        };
+
+        _selectedWindowId = null;
+    }
+
+    private void EditWindow(ScheduleWindow window)
+    {
+        _editingWindow = CloneWindow(window);
+        _selectedWindowId = window.Id;
+    }
+
+    private async Task SaveWindow()
+    {
+        if (_settings is null || _editingWindow is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editingWindow.Name))
+        {
+            ShowStatus("Window name is required.", true);
+            return;
+        }
+
+        if (_editingWindow.RecurrenceType == ScheduleRecurrenceType.CustomDays && !_editingWindow.DaysOfWeek.Any())
+        {
+            ShowStatus("Select at least one custom day.", true);
+            return;
+        }
+
+        if (_editingWindow.StartDate.HasValue && _editingWindow.EndDate.HasValue && _editingWindow.EndDate < _editingWindow.StartDate)
+        {
+            ShowStatus("End date must be on or after start date.", true);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            _editingWindow.Priority = Math.Clamp(_editingWindow.Priority, 0, 1000);
+            _editingWindow.FadeInSeconds = Math.Clamp(_editingWindow.FadeInSeconds, 0, 600);
+            _editingWindow.FadeOutSeconds = Math.Clamp(_editingWindow.FadeOutSeconds, 0, 600);
+            _editingWindow.LastModifiedUtc = DateTime.UtcNow;
+
+            var existing = _settings.ScheduleWindows.FirstOrDefault(w => string.Equals(w.Id, _editingWindow.Id, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                _editingWindow.Id = string.IsNullOrWhiteSpace(_editingWindow.Id) ? Guid.NewGuid().ToString("N") : _editingWindow.Id;
+                _settings.ScheduleWindows.Add(CloneWindow(_editingWindow));
+                _selectedWindowId = _editingWindow.Id;
+            }
+            else
+            {
+                var index = _settings.ScheduleWindows.IndexOf(existing);
+                _settings.ScheduleWindows[index] = CloneWindow(_editingWindow);
+                _selectedWindowId = _editingWindow.Id;
+            }
+
+            await _uow.ISettingsRepo.WriteSettings(_settings);
+            ShowStatus("Schedule window saved.");
+            await LoadSettingsAsync();
+
+            if (!string.IsNullOrWhiteSpace(_selectedWindowId))
+            {
+                var refreshed = _settings.ScheduleWindows.FirstOrDefault(w => w.Id == _selectedWindowId);
+                if (refreshed is not null)
+                {
+                    _editingWindow = CloneWindow(refreshed);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to save window: {ex.Message}", true);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteWindow(ScheduleWindow window)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete window '{window.Name}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _settings.ScheduleWindows.RemoveAll(w => string.Equals(w.Id, window.Id, StringComparison.OrdinalIgnoreCase));
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowStatus("Schedule window deleted.");
+
+        if (string.Equals(_selectedWindowId, window.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            _editingWindow = null;
+            _selectedWindowId = null;
+        }
+    }
+
+    private string GetSceneName(string? sceneId)
+    {
+        if (string.IsNullOrWhiteSpace(sceneId) || _settings is null)
+        {
+            return "None";
+        }
+
+        return _settings.Scenes.FirstOrDefault(s => s.Id == sceneId)?.Name ?? "Unknown";
+    }
+
+    private string GetRowClass(ScheduleWindow window)
+    {
+        return string.Equals(window.Id, _selectedWindowId, StringComparison.OrdinalIgnoreCase)
+            ? "window-selected-row"
+            : string.Empty;
+    }
+
+    private string GetCustomDayButtonClass(DayOfWeek day)
+    {
+        var selected = _editingWindow?.DaysOfWeek.Contains(day) == true;
+        return selected
+            ? "btn btn-sm schedule-day-pill is-selected"
+            : "btn btn-sm schedule-day-pill";
+    }
+
+    private void SetStartTime(object? value)
+    {
+        if (_editingWindow is null)
+        {
+            return;
+        }
+
+        if (TimeOnly.TryParse(value?.ToString(), out var parsed))
+        {
+            _editingWindow.StartTime = parsed;
+        }
+    }
+
+    private void SetStopTime(object? value)
+    {
+        if (_editingWindow is null)
+        {
+            return;
+        }
+
+        if (TimeOnly.TryParse(value?.ToString(), out var parsed))
+        {
+            _editingWindow.StopTime = parsed;
+        }
+    }
+
+    private static string DateOnlyToDateInput(DateOnly? date)
+    {
+        return date?.ToString("yyyy-MM-dd") ?? string.Empty;
+    }
+
+    private void SetStartDate(object? value)
+    {
+        if (_editingWindow is null)
+        {
+            return;
+        }
+
+        _editingWindow.StartDate = DateOnly.TryParse(value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void SetEndDate(object? value)
+    {
+        if (_editingWindow is null)
+        {
+            return;
+        }
+
+        _editingWindow.EndDate = DateOnly.TryParse(value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void ToggleCustomDay(DayOfWeek day, object? value)
+    {
+        if (_editingWindow is null)
+        {
+            return;
+        }
+
+        var enabled = value is bool b && b;
+        if (enabled)
+        {
+            if (!_editingWindow.DaysOfWeek.Contains(day))
+            {
+                _editingWindow.DaysOfWeek.Add(day);
+            }
+        }
+        else
+        {
+            _editingWindow.DaysOfWeek.Remove(day);
+        }
+    }
+
+    private static ScheduleWindow CloneWindow(ScheduleWindow source)
+    {
+        return new ScheduleWindow
+        {
+            Id = source.Id,
+            Name = source.Name,
+            IsEnabled = source.IsEnabled,
+            Priority = source.Priority,
+            StartTime = source.StartTime,
+            StopTime = source.StopTime,
+            RecurrenceType = source.RecurrenceType,
+            DaysOfWeek = source.DaysOfWeek?.ToList() ?? new(),
+            StartDate = source.StartDate,
+            EndDate = source.EndDate,
+            SceneId = source.SceneId,
+            FadeInSeconds = source.FadeInSeconds,
+            FadeOutSeconds = source.FadeOutSeconds,
+            LastModifiedUtc = source.LastModifiedUtc
+        };
+    }
+
+    private void ShowStatus(string message, bool isError = false)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+}

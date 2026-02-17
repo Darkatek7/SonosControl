@@ -1,6 +1,7 @@
 @page "/stats"
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
+@using SonosControl.Web.Services
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject ApplicationDbContext Db
@@ -392,6 +393,15 @@
         public double Duration { get; set; }
     }
 
+    class PlaybackAggregateRow
+    {
+        public string TrackName { get; set; } = "";
+        public string Artist { get; set; } = "";
+        public string MediaType { get; set; } = "";
+        public double Duration { get; set; }
+        public int PlayCount { get; set; }
+    }
+
     private List<UserStat>? topDjStats;
     private List<UserStat>? skipperStats;
     private List<UserStat>? grouperStats;
@@ -422,6 +432,11 @@
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
         var logsInWindow = Db.Logs.AsNoTracking().Where(l => l.Timestamp >= thirtyDaysAgo);
         var playbackInWindow = Db.PlaybackStats.AsNoTracking().Where(p => p.StartTime >= thirtyDaysAgo);
+        var settingsRepo = _uow.ISettingsRepo;
+        var settings = settingsRepo is null
+            ? new SonosSettings()
+            : await settingsRepo.GetSettings() ?? new SonosSettings();
+        var resolver = RecommendationMediaResolver.Create(settings);
 
         var djActions = new[]
         {
@@ -474,14 +489,6 @@
             .Where(l => l.Action == "Station Changed")
             .GroupBy(l => l.PerformedBy)
             .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        stationPlayCountStats = await playbackInWindow
-            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
-            .GroupBy(p => p.TrackName)
-            .Select(g => new UserStat { User = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .Take(5)
             .ToListAsync();
@@ -548,27 +555,85 @@
             .OrderByDescending(x => x.Duration)
             .ToListAsync();
 
-        stationStats = await playbackInWindow
-            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream")
-            .GroupBy(p => p.TrackName)
-            .Select(g => new StationStat { Station = g.Key, Duration = g.Sum(x => x.DurationSeconds), PlayCount = g.Count() })
-            .OrderByDescending(x => x.Duration)
-            .Take(10)
+        var stationRows = await playbackInWindow
+            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream" || p.MediaType == "Track")
+            .GroupBy(p => new { p.TrackName, p.Artist, p.MediaType })
+            .Select(g => new PlaybackAggregateRow
+            {
+                TrackName = g.Key.TrackName,
+                Artist = g.Key.Artist,
+                MediaType = g.Key.MediaType,
+                Duration = g.Sum(x => x.DurationSeconds),
+                PlayCount = g.Count()
+            })
             .ToListAsync();
 
-        trackStats = await playbackInWindow
-            .Where(p => p.MediaType != "Station" && p.MediaType != "Stream" && p.MediaType != "Unknown")
-            .GroupBy(p => new { p.TrackName, p.Artist })
+        var normalizedStations = stationRows
+            .Select(row => new
+            {
+                row.Duration,
+                row.PlayCount,
+                Resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType)
+            })
+            .Where(x => string.Equals(x.Resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Resolved.Name))
+            .GroupBy(x => x.Resolved.Name)
+            .Select(g => new StationStat
+            {
+                Station = g.Key,
+                Duration = g.Sum(x => x.Duration),
+                PlayCount = g.Sum(x => x.PlayCount)
+            })
+            .ToList();
+
+        stationPlayCountStats = normalizedStations
+            .OrderByDescending(x => x.PlayCount)
+            .ThenByDescending(x => x.Duration)
+            .ThenBy(x => x.Station)
+            .Take(5)
+            .Select(x => new UserStat { User = x.Station, Count = x.PlayCount })
+            .ToList();
+
+        stationStats = normalizedStations
+            .OrderByDescending(x => x.Duration)
+            .ThenByDescending(x => x.PlayCount)
+            .ThenBy(x => x.Station)
+            .Take(10)
+            .ToList();
+
+        var trackRows = await playbackInWindow
+            .Where(p => p.MediaType != "Unknown")
+            .GroupBy(p => new { p.TrackName, p.Artist, p.MediaType })
+            .Select(g => new PlaybackAggregateRow
+            {
+                TrackName = g.Key.TrackName,
+                Artist = g.Key.Artist,
+                MediaType = g.Key.MediaType,
+                Duration = g.Sum(x => x.DurationSeconds),
+                PlayCount = g.Count()
+            })
+            .ToListAsync();
+
+        trackStats = trackRows
+            .Select(row => new
+            {
+                Row = row,
+                Resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType)
+            })
+            .Where(x => !string.Equals(x.Resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Row.TrackName))
+            .GroupBy(x => new { x.Row.TrackName, x.Row.Artist })
             .Select(g => new TrackStat
             {
                 Track = g.Key.TrackName,
                 Artist = g.Key.Artist,
-                Duration = g.Sum(x => x.DurationSeconds),
-                PlayCount = g.Count()
+                Duration = g.Sum(x => x.Row.Duration),
+                PlayCount = g.Sum(x => x.Row.PlayCount)
             })
             .OrderByDescending(x => x.Duration)
+            .ThenBy(x => x.Track)
             .Take(20)
-            .ToListAsync();
+            .ToList();
         await InvokeAsync(StateHasChanged);
     }
 

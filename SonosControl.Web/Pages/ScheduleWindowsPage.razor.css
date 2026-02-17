@@ -1,0 +1,51 @@
+:deep(.window-selected-row > td) {
+    background-color: color-mix(in srgb, var(--brand-primary) 22%, var(--surface-1));
+    color: var(--text-primary);
+}
+
+:deep(.window-selected-row .schedule-window-select-link),
+:deep(.window-selected-row .btn-link),
+:deep(.window-selected-row .text-muted),
+:deep(.window-selected-row .small) {
+    color: var(--text-primary) !important;
+}
+
+:deep(.schedule-active-alert) {
+    background-color: color-mix(in srgb, var(--brand-info) 14%, var(--surface-1));
+    border-color: color-mix(in srgb, var(--brand-info) 40%, var(--border-subtle));
+    color: var(--text-primary);
+}
+
+:deep(.schedule-now-label) {
+    color: var(--text-secondary);
+}
+
+:deep(.schedule-muted-alert) {
+    background-color: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+:deep(.schedule-day-pill) {
+    border: 1px solid var(--border-strong);
+    background-color: var(--surface-1);
+    color: var(--text-primary);
+}
+
+:deep(.schedule-day-pill.is-selected) {
+    background-color: color-mix(in srgb, var(--brand-primary) 18%, var(--surface-1));
+    border-color: color-mix(in srgb, var(--brand-primary) 50%, var(--border-strong));
+    color: var(--text-primary);
+}
+
+[data-theme='dark'] :deep(.window-selected-row > td) {
+    background-color: color-mix(in srgb, var(--brand-primary) 30%, var(--surface-2));
+}
+
+[data-theme='dark'] :deep(.schedule-day-pill) {
+    background-color: var(--surface-2);
+}
+
+[data-theme='dark'] :deep(.schedule-day-pill.is-selected) {
+    background-color: color-mix(in srgb, var(--brand-primary) 35%, var(--surface-2));
+}
