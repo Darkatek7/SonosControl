@@ -29,6 +29,15 @@ namespace SonosControl.Web.Services
                     var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
                     var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
+                    var currentSettings = await uow.ISettingsRepo.GetSettings();
+                    var scheduleWindowsEnabled = currentSettings?.ScheduleWindows?.Any(w => w.IsEnabled) == true;
+                    if (scheduleWindowsEnabled)
+                    {
+                        // Scheduler 2.0 windows are handled by ScheduleWindowAutomationService.
+                        await _delay(TimeSpan.FromSeconds(30), stoppingToken);
+                        continue;
+                    }
+
                     // Continuously evaluate settings until start time is reached
                     var (settings, schedule, startTime) = await WaitUntilStartTime(uow, stoppingToken);
 

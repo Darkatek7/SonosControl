@@ -30,12 +30,22 @@ builder.Services.AddHttpClient("RadioBrowser", client =>
     client.BaseAddress = new Uri("https://de1.api.radio-browser.info/");
     client.Timeout = TimeSpan.FromSeconds(8);
 });
+builder.Services.AddHttpClient(nameof(SonosDeviceDiscoveryService), client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+builder.Services.AddScoped<ISceneOrchestrationService, SceneOrchestrationService>();
+builder.Services.AddScoped<ICollaborativeJukeboxService, CollaborativeJukeboxService>();
+builder.Services.AddSingleton<ISonosDeviceDiscoveryService, SonosDeviceDiscoveryService>();
+builder.Services.AddSingleton<IDeviceHealthSnapshotStore, DeviceHealthSnapshotStore>();
 
 builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddHostedService<PlaybackMonitorService>();
+builder.Services.AddHostedService<ScheduleWindowAutomationService>();
+builder.Services.AddHostedService<DeviceHealthMonitorService>();
 // builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
 builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();

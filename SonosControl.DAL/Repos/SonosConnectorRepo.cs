@@ -680,6 +680,45 @@ namespace SonosControl.DAL.Repos
             }
         }
 
+        public async Task AddUriToQueue(string ip, string uri, string? metadata = null, bool enqueueAsNext = false, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ip))
+            {
+                throw new ArgumentException("IP address must be provided.", nameof(ip));
+            }
+
+            if (string.IsNullOrWhiteSpace(uri))
+            {
+                throw new ArgumentException("Queue URI must be provided.", nameof(uri));
+            }
+
+            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+            var escapedUri = SecurityElement.Escape(uri.Trim()) ?? string.Empty;
+            var escapedMetadata = SecurityElement.Escape(metadata ?? string.Empty) ?? string.Empty;
+
+            var soapEnvelope = $@"
+                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
+                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
+                    <s:Body>
+                        <u:AddURIToQueue xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
+                            <InstanceID>0</InstanceID>
+                            <EnqueuedURI>{escapedUri}</EnqueuedURI>
+                            <EnqueuedURIMetaData>{escapedMetadata}</EnqueuedURIMetaData>
+                            <DesiredFirstTrackNumberEnqueued>0</DesiredFirstTrackNumberEnqueued>
+                            <EnqueueAsNext>{(enqueueAsNext ? 1 : 0)}</EnqueueAsNext>
+                        </u:AddURIToQueue>
+                    </s:Body>
+                </s:Envelope>";
+
+            using var content = new StringContent(soapEnvelope, Encoding.UTF8, "text/xml");
+            content.Headers.Remove("SOAPACTION");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"");
+
+            var client = CreateClient();
+            var response = await client.PostAsync(url, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
 
         public async Task<SonosQueuePage> GetQueue(string ip, int startIndex = 0, int count = 100, CancellationToken cancellationToken = default)
         {

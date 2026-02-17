@@ -1,0 +1,337 @@
+@page "/settings-backups"
+@using System.Text.Json
+@inject IJSRuntime JS
+@attribute [Authorize(Roles = "admin,superadmin")]
+
+<PageTitle>Settings Backups - Sonos Control</PageTitle>
+
+<div class="container dashboard-shell">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+                <div>
+                    <h3 class="mb-1">Backup And Restore</h3>
+                    <p class="text-muted mb-0">Create versioned config backups, restore safely, and import a JSON config file.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" @onclick="RefreshBackupsAsync" disabled="@_isBusy">Refresh</button>
+                    <button class="btn btn-primary" @onclick="CreateBackupAsync" disabled="@_isBusy">Create Backup</button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status">@_statusMessage</div>
+            }
+
+            <div class="row g-4">
+                <div class="col-xl-7">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <strong>Available Backups</strong>
+                            <span class="small text-muted">@_backups.Count file(s)</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Created (UTC)</th>
+                                        <th>Size</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    @if (_backups.Any())
+                                    {
+                                        @foreach (var backup in _backups)
+                                        {
+                                            <tr>
+                                                <td class="small">@backup.FileName</td>
+                                                <td class="small text-muted">@backup.CreatedUtc.ToString("u")</td>
+                                                <td class="small text-muted">@FormatBytes(backup.Bytes)</td>
+                                                <td class="text-end">
+                                                    <a class="btn btn-outline-secondary btn-sm me-1" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">Download</a>
+                                                    <button class="btn btn-outline-success btn-sm me-1" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">Restore</button>
+                                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">Delete</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <tr>
+                                            <td colspan="4" class="text-muted text-center">No backups found.</td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-5">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header">
+                            <strong>Import Config JSON</strong>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Import overwrites current settings and automatically creates a versioned backup first.</p>
+
+                            <InputFile OnChange="OnImportFileSelected" accept=".json,application/json" class="form-control mb-3" />
+
+                            @if (!string.IsNullOrWhiteSpace(_selectedImportFileName))
+                            {
+                                <div class="small text-muted mb-3">Selected: @_selectedImportFileName</div>
+                            }
+
+                            <button class="btn btn-warning w-100" @onclick="ImportSelectedFileAsync" disabled="@(_isBusy || _selectedImportFile is null)">
+                                Import Selected File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static string DataDirectory => Path.Combine(AppContext.BaseDirectory, "Data");
+    private static string ConfigPath => Path.Combine(DataDirectory, "config.json");
+    private static string BackupDirectory => Path.Combine(DataDirectory, "backups");
+
+    private sealed record BackupFileEntry(string FileName, DateTime CreatedUtc, long Bytes);
+
+    private readonly List<BackupFileEntry> _backups = new();
+    private IBrowserFile? _selectedImportFile;
+    private string? _selectedImportFileName;
+    private bool _isBusy;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshBackupsAsync();
+    }
+
+    private Task RefreshBackupsAsync()
+    {
+        return RefreshBackupsAsyncInternal(manageBusy: true);
+    }
+
+    private async Task RefreshBackupsAsyncInternal(bool manageBusy)
+    {
+        if (manageBusy)
+        {
+            _isBusy = true;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(BackupDirectory);
+            _backups.Clear();
+            _backups.AddRange(
+                Directory.EnumerateFiles(BackupDirectory, "*.json", SearchOption.TopDirectoryOnly)
+                    .Select(path => new System.IO.FileInfo(path))
+                    .OrderByDescending(file => file.CreationTimeUtc)
+                    .Select(file => new BackupFileEntry(file.Name, file.CreationTimeUtc, file.Length)));
+            ShowStatus("Backups refreshed.");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Could not load backups: {ex.Message}", true);
+        }
+        finally
+        {
+            if (manageBusy)
+            {
+                _isBusy = false;
+            }
+        }
+    }
+
+    private async Task CreateBackupAsync()
+    {
+        _isBusy = true;
+        try
+        {
+            var fileName = CreateBackupFileCore();
+            await RefreshBackupsAsyncInternal(manageBusy: false);
+            ShowStatus($"Backup created: {fileName}");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Backup creation failed: {ex.Message}", true);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task RestoreBackupAsync(BackupFileEntry backup)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Restore backup '{backup.FileName}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var path = Path.Combine(BackupDirectory, Path.GetFileName(backup.FileName));
+            if (!File.Exists(path))
+            {
+                ShowStatus("Selected backup file was not found.", true);
+                return;
+            }
+
+            var rawJson = await File.ReadAllTextAsync(path);
+            var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
+            if (importedSettings is null)
+            {
+                ShowStatus("Backup file is not a valid settings JSON.", true);
+                return;
+            }
+
+            await _uow.ISettingsRepo.WriteSettings(importedSettings);
+            ShowStatus($"Restored backup: {backup.FileName}");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Restore failed: {ex.Message}", true);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task DeleteBackupAsync(BackupFileEntry backup)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete backup '{backup.FileName}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var path = Path.Combine(BackupDirectory, Path.GetFileName(backup.FileName));
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            await RefreshBackupsAsyncInternal(manageBusy: false);
+            ShowStatus($"Deleted backup: {backup.FileName}");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Delete failed: {ex.Message}", true);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void OnImportFileSelected(InputFileChangeEventArgs args)
+    {
+        _selectedImportFile = args.GetMultipleFiles(1).FirstOrDefault();
+        _selectedImportFileName = _selectedImportFile?.Name;
+    }
+
+    private async Task ImportSelectedFileAsync()
+    {
+        if (_selectedImportFile is null)
+        {
+            ShowStatus("Please choose a JSON file first.", true);
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var extension = Path.GetExtension(_selectedImportFile.Name);
+            if (!string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowStatus("Only .json files are supported.", true);
+                return;
+            }
+
+            _ = CreateBackupFileCore();
+
+            await using var stream = _selectedImportFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var rawJson = await reader.ReadToEndAsync();
+
+            var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
+            if (importedSettings is null)
+            {
+                ShowStatus("Uploaded file is not a valid settings JSON.", true);
+                return;
+            }
+
+            await _uow.ISettingsRepo.WriteSettings(importedSettings);
+
+            _selectedImportFile = null;
+            _selectedImportFileName = null;
+            await RefreshBackupsAsyncInternal(manageBusy: false);
+            ShowStatus("Settings imported successfully.");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Import failed: {ex.Message}", true);
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:F1} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private void ShowStatus(string message, bool isError = false)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+
+    private static string CreateBackupFileCore()
+    {
+        if (!File.Exists(ConfigPath))
+        {
+            throw new FileNotFoundException("config.json was not found.", ConfigPath);
+        }
+
+        Directory.CreateDirectory(BackupDirectory);
+        var fileName = $"config-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json";
+        var targetPath = Path.Combine(BackupDirectory, fileName);
+        File.Copy(ConfigPath, targetPath, overwrite: false);
+        return fileName;
+    }
+}

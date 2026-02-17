@@ -1,5 +1,5 @@
 {
-  "Volume": 9,
+  "Volume": 14,
   "MaxVolume": 25,
   "StartTime": "06:45:00",
   "StopTime": "17:30:00",
@@ -50,6 +50,10 @@
     {
       "Name": "Rock Antenne",
       "Url": "stream.rockantenne.de/rockantenne/stream/mp3"
+    },
+    {
+      "Name": "Radio Paloma - Partyschlager",
+      "Url": "http://streams.schlagerplanetradio.com/kult/mp3-192"
     }
   ],
   "SpotifyTracks": [
@@ -171,6 +175,36 @@
       "PlayRandomSpotify": false,
       "PlayRandomYouTubeMusic": false,
       "IsSyncedPlayback": true
+    }
+  ],
+  "Scenes": [],
+  "ScheduleWindows": [],
+  "AutomationRules": [],
+  "QueueSnapshots": [],
+  "DeviceHealthStatuses": [],
+  "Jukebox": {
+    "Enabled": true,
+    "MaxSuggestionsPerUserPerHour": 5,
+    "MaxVotesPerUserPerHour": 20,
+    "PlayedSuggestionRetentionDays": 14
+  },
+  "JukeboxSuggestions": [
+    {
+      "Id": "6e50009637e4491babb66c018463d18f",
+      "ResourceUri": "https://open.spotify.com/artist/5HyzoJU8Zeo1AycjZvPuZV",
+      "Title": "Deez nuts",
+      "Artist": null,
+      "SuggestedBy": "darkatek7",
+      "SuggestedUtc": "2026-02-17T05:58:22.1788296Z",
+      "Votes": [
+        {
+          "UserName": "darkatek7",
+          "VotedUtc": "2026-02-17T05:58:24.1920761Z"
+        }
+      ],
+      "IsPlayed": false,
+      "PlayedUtc": null,
+      "PlayedOnSpeakerIp": null
     }
   ],
   "ActiveDays": [

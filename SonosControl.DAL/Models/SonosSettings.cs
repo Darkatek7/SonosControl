@@ -46,6 +46,14 @@ namespace SonosControl.DAL.Models
 
         public List<HolidaySchedule> HolidaySchedules { get; set; } = new();
 
+        public List<Scene> Scenes { get; set; } = new();
+        public List<ScheduleWindow> ScheduleWindows { get; set; } = new();
+        public List<AutomationRule> AutomationRules { get; set; } = new();
+        public List<QueueSnapshot> QueueSnapshots { get; set; } = new();
+        public List<DeviceHealthStatus> DeviceHealthStatuses { get; set; } = new();
+        public JukeboxSettings Jukebox { get; set; } = new();
+        public List<JukeboxSuggestion> JukeboxSuggestions { get; set; } = new();
+
         public List<DayOfWeek> ActiveDays { get; set; } = new();
 
         public bool AllowUserRegistration { get; set; } = true;

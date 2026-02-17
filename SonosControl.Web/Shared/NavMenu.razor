@@ -47,12 +47,36 @@
                             <span>Statistics</span>
                         </NavLink>
                     </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="scenes" @onclick="HandleNavigate">
+                            <span class="nav-icon oi oi-layers" aria-hidden="true"></span>
+                            <span>Scenes</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="recommendations" @onclick="HandleNavigate">
+                            <span class="nav-icon oi oi-star" aria-hidden="true"></span>
+                            <span>Recommendations</span>
+                        </NavLink>
+                    </div>
                 </Authorized>
             </AuthorizeView>
 
             <AuthorizeView Roles="admin,superadmin">
                 <Authorized>
                     <div class="nav-divider" aria-hidden="true"></div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
+                            <span class="nav-icon oi oi-calendar" aria-hidden="true"></span>
+                            <span>Schedule Windows</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="devices" @onclick="HandleNavigate">
+                            <span class="nav-icon oi oi-rss" aria-hidden="true"></span>
+                            <span>Device Ops</span>
+                        </NavLink>
+                    </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-cog" aria-hidden="true"></span>
@@ -69,6 +93,12 @@
                         <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
                             <span class="nav-icon oi oi-file" aria-hidden="true"></span>
                             <span>Logs</span>
+                        </NavLink>
+                    </div>
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="settings-backups" @onclick="HandleNavigate">
+                            <span class="nav-icon oi oi-hard-drive" aria-hidden="true"></span>
+                            <span>Backups</span>
                         </NavLink>
                     </div>
                 </Authorized>

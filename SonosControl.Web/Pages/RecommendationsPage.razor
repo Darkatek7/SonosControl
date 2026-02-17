@@ -1,0 +1,489 @@
+﻿@page "/recommendations"
+@using Microsoft.EntityFrameworkCore
+@using SonosControl.Web.Data
+@using SonosControl.Web.Models
+@using SonosControl.Web.Services
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+
+<PageTitle>Recommendations - Sonos Control</PageTitle>
+
+<div class="container dashboard-shell">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+                <div>
+                    <h3 class="mb-1">Recommendations</h3>
+                    <p class="text-muted mb-0">Personal picks from your actions plus team and time-of-day trends.</p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <label class="small text-muted mb-0">Days</label>
+                    <input class="form-control" style="width: 100px;" type="number" min="7" max="120" @bind="_windowDays" />
+                    <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@_isLoading">Refresh</button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")">@_statusMessage</div>
+            }
+
+            @if (_settings is not null && _settings.Speakers.Any())
+            {
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-6 col-lg-5">
+                        <label class="form-label">Speaker</label>
+                        <select class="form-select" @bind="_selectedSpeakerIp">
+                            @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                            {
+                                <option value="@speaker.IpAddress">@speaker.Name (@speaker.IpAddress)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            }
+
+            @if (_isLoading)
+            {
+                <p class="text-muted mb-0">Loading recommendations...</p>
+            }
+            else
+            {
+                <div class="row g-4">
+                    <div class="col-xl-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <strong>Your Picks</strong>
+                                <span class="small text-muted">@_personal.Count</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Type</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @if (_personal.Any())
+                                        {
+                                            @foreach (var item in _personal)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-semibold">@item.Name</div>
+                                                        <div class="small text-muted">@item.Count signal(s)</div>
+                                                    </td>
+                                                    <td class="small">@item.MediaType</td>
+                                                    <td class="text-end">
+                                                        @if (!string.IsNullOrWhiteSpace(item.SourceUrl) && !string.IsNullOrWhiteSpace(_selectedSpeakerIp))
+                                                        {
+                                                            <button class="btn btn-outline-success btn-sm"
+                                                                    @onclick="() => PlayPersonalItemAsync(item)"
+                                                                    disabled="@_isPlayingFromRecommendation">
+                                                                Play
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="3" class="text-muted text-center">No personal signals in the selected period.</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <strong>Best Right Now</strong>
+                                <span class="small text-muted">@_timeOfDay.Count</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Track</th>
+                                            <th>Type</th>
+                                            <th class="text-end">Plays</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @if (_timeOfDay.Any())
+                                        {
+                                            @foreach (var item in _timeOfDay)
+                                            {
+                                                <tr>
+                                                    <td>@item.Name</td>
+                                                    <td class="small text-muted">@item.MediaType</td>
+                                                    <td class="text-end">@item.Count</td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="3" class="text-muted text-center">No current time-window patterns yet.</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <strong>Team Trending</strong>
+                                <span class="small text-muted">@_teamTrending.Count</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Track</th>
+                                            <th class="text-end">Duration</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @if (_teamTrending.Any())
+                                        {
+                                            @foreach (var item in _teamTrending)
+                                            {
+                                                <tr>
+                                                    <td>
+                                                        <div>@item.Name</div>
+                                                        <div class="small text-muted">@item.MediaType - @item.Count plays</div>
+                                                    </td>
+                                                    <td class="text-end">@FormatDuration(item.Score)</td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="2" class="text-muted text-center">No team history yet.</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private sealed record RecommendationItem(
+        string Name,
+        string MediaType,
+        double Score,
+        int Count,
+        string? SourceUrl);
+
+    private sealed record PlaybackAggregateRow(
+        string TrackName,
+        string Artist,
+        string MediaType,
+        double Score,
+        int Count);
+
+    private SonosSettings? _settings;
+    private string _selectedSpeakerIp = string.Empty;
+    private string _currentUserName = "Unknown";
+    private int _windowDays = 30;
+    private bool _isLoading;
+    private bool _isPlayingFromRecommendation;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    private List<RecommendationItem> _personal = new();
+    private List<RecommendationItem> _timeOfDay = new();
+    private List<RecommendationItem> _teamTrending = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserName = auth.User.Identity?.Name ?? "Unknown";
+
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.Speakers ??= new();
+        if (_settings.Speakers.Any())
+        {
+            _selectedSpeakerIp = _settings.Speakers[0].IpAddress;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _statusMessage = null;
+
+        try
+        {
+            var effectiveDays = Math.Clamp(_windowDays, 7, 120);
+            _windowDays = effectiveDays;
+            var settings = _settings ?? await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+            var resolver = RecommendationMediaResolver.Create(settings);
+
+            var from = DateTime.UtcNow.AddDays(-effectiveDays);
+            var playback = Db.PlaybackStats.AsNoTracking().Where(x => x.StartTime >= from);
+
+            var currentHour = DateTime.UtcNow.Hour;
+            var minHour = (currentHour + 22) % 24;
+            var maxHour = (currentHour + 2) % 24;
+
+            IQueryable<PlaybackHistory> hourFiltered;
+            if (minHour <= maxHour)
+            {
+                hourFiltered = playback.Where(x => x.StartTime.Hour >= minHour && x.StartTime.Hour <= maxHour);
+            }
+            else
+            {
+                hourFiltered = playback.Where(x => x.StartTime.Hour >= minHour || x.StartTime.Hour <= maxHour);
+            }
+
+            var timeOfDayRawRows = await hourFiltered
+                .GroupBy(x => new { x.TrackName, x.Artist, x.MediaType })
+                .Select(g => new
+                {
+                    g.Key.TrackName,
+                    g.Key.Artist,
+                    g.Key.MediaType,
+                    Score = g.Sum(x => x.DurationSeconds),
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            var timeOfDayRows = timeOfDayRawRows
+                .Select(row => new PlaybackAggregateRow(row.TrackName, row.Artist, row.MediaType, row.Score, row.Count))
+                .ToList();
+
+            _timeOfDay = BuildNormalizedPlaybackRecommendations(timeOfDayRows, resolver, 8);
+
+            var teamTrendingRawRows = await playback
+                .GroupBy(x => new { x.TrackName, x.Artist, x.MediaType })
+                .Select(g => new
+                {
+                    g.Key.TrackName,
+                    g.Key.Artist,
+                    g.Key.MediaType,
+                    Score = g.Sum(x => x.DurationSeconds),
+                    Count = g.Count()
+                })
+                .ToListAsync();
+
+            var teamTrendingRows = teamTrendingRawRows
+                .Select(row => new PlaybackAggregateRow(row.TrackName, row.Artist, row.MediaType, row.Score, row.Count))
+                .ToList();
+
+            _teamTrending = BuildNormalizedPlaybackRecommendations(teamTrendingRows, resolver, 12);
+
+            _personal = await BuildPersonalRecommendationsAsync(from, resolver);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to load recommendations: {ex.Message}", true);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task<List<RecommendationItem>> BuildPersonalRecommendationsAsync(
+        DateTime fromUtc,
+        RecommendationMediaResolver resolver)
+    {
+        var trackedActions = new[]
+        {
+            "Station Changed",
+            "Spotify Track Changed",
+            "YouTube Music Changed",
+            "Spotify URL Played"
+        };
+
+        var rows = await Db.Logs
+            .AsNoTracking()
+            .Where(l => l.Timestamp >= fromUtc)
+            .Where(l => l.PerformedBy == _currentUserName)
+            .Where(l => trackedActions.Contains(l.Action))
+            .Select(l => new { l.Action, l.Details })
+            .ToListAsync();
+
+        var grouped = rows
+            .Select(row =>
+            {
+                var url = ExtractUrl(row.Details);
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return null;
+                }
+
+                var resolved = resolver.ResolveFromSourceUrl(url, ResolveMediaType(row.Action));
+                return new RecommendationItem(resolved.Name, resolved.MediaType, 1, 1, resolved.SourceUrl);
+            })
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .GroupBy(item => new { item.SourceUrl, item.Name, item.MediaType })
+            .Select(group => new RecommendationItem(
+                group.Key.Name,
+                group.Key.MediaType,
+                group.Count(),
+                group.Count(),
+                group.Key.SourceUrl))
+            .OrderByDescending(item => item.Count)
+            .ThenBy(item => item.Name)
+            .Take(10)
+            .ToList();
+
+        return grouped;
+    }
+
+    private static List<RecommendationItem> BuildNormalizedPlaybackRecommendations(
+        IEnumerable<PlaybackAggregateRow> rows,
+        RecommendationMediaResolver resolver,
+        int take)
+    {
+        return rows
+            .Select(row =>
+            {
+                var resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType);
+                return new RecommendationItem(
+                    resolved.Name,
+                    resolved.MediaType,
+                    row.Score,
+                    row.Count,
+                    resolved.SourceUrl);
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .GroupBy(item => new { item.Name, item.MediaType })
+            .Select(group => new RecommendationItem(
+                group.Key.Name,
+                group.Key.MediaType,
+                group.Sum(item => item.Score),
+                group.Sum(item => item.Count),
+                group.Select(item => item.SourceUrl).FirstOrDefault(url => !string.IsNullOrWhiteSpace(url))))
+            .OrderByDescending(item => item.Score)
+            .ThenBy(item => item.Name)
+            .Take(take)
+            .ToList();
+    }
+
+    private async Task PlayPersonalItemAsync(RecommendationItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_selectedSpeakerIp) || string.IsNullOrWhiteSpace(item.SourceUrl))
+        {
+            return;
+        }
+
+        _isPlayingFromRecommendation = true;
+        try
+        {
+            switch (item.MediaType.ToLowerInvariant())
+            {
+                case "station":
+                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_selectedSpeakerIp, item.SourceUrl);
+                    break;
+                case "spotify":
+                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
+                    break;
+                case "youtubemusic":
+                case "youtube":
+                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
+                    break;
+                default:
+                    ShowStatus("Unsupported recommendation type.", true);
+                    return;
+            }
+
+            ShowStatus("Recommendation started.");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Could not start recommendation: {ex.Message}", true);
+        }
+        finally
+        {
+            _isPlayingFromRecommendation = false;
+        }
+    }
+
+    private static string ResolveMediaType(string action)
+    {
+        return action switch
+        {
+            "Station Changed" => "Station",
+            "Spotify Track Changed" => "Spotify",
+            "Spotify URL Played" => "Spotify",
+            "YouTube Music Changed" => "YouTubeMusic",
+            _ => "Unknown"
+        };
+    }
+
+    private static string? ExtractUrl(string? details)
+    {
+        if (string.IsNullOrWhiteSpace(details))
+        {
+            return null;
+        }
+
+        var trimmed = details.Trim();
+        const string prefix = "URL:";
+        if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed[prefix.Length..].Trim();
+        }
+
+        var candidate = trimmed;
+        var openParen = trimmed.LastIndexOf('(');
+        var closeParen = trimmed.LastIndexOf(')');
+        if (openParen >= 0 && closeParen > openParen)
+        {
+            candidate = trimmed[(openParen + 1)..closeParen].Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(candidate) ? null : candidate;
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        if (seconds < 0)
+        {
+            seconds = 0;
+        }
+
+        var span = TimeSpan.FromSeconds(seconds);
+        return span.TotalHours >= 1
+            ? $"{(int)span.TotalHours}h {span.Minutes}m"
+            : $"{span.Minutes}m {span.Seconds}s";
+    }
+
+    private void ShowStatus(string message, bool isError = false)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+}
+

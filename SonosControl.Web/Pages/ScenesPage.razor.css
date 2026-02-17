@@ -1,0 +1,21 @@
+:deep(.scene-selected-row > td) {
+    background-color: color-mix(in srgb, var(--brand-primary) 22%, var(--surface-1));
+    color: var(--text-primary);
+}
+
+:deep(.scene-selected-row .scene-select-link),
+:deep(.scene-selected-row .btn-link),
+:deep(.scene-selected-row .text-muted),
+:deep(.scene-selected-row .small) {
+    color: var(--text-primary) !important;
+}
+
+:deep(.scene-muted-alert) {
+    background-color: var(--surface-2);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+[data-theme='dark'] :deep(.scene-selected-row > td) {
+    background-color: color-mix(in srgb, var(--brand-primary) 30%, var(--surface-2));
+}

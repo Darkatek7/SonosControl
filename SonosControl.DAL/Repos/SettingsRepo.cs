@@ -77,9 +77,11 @@ namespace SonosControl.DAL.Repos
                     throw new InvalidOperationException("Failed to serialize settings.", ex);
                 }
 
+                CreateVersionedBackupIfPresent();
+
                 var tempFile = Path.GetTempFileName();
                 await File.WriteAllTextAsync(tempFile, jsonString);
-                File.Move(tempFile, FilePath, true);
+                await ReplaceFileWithRetryAsync(tempFile, FilePath);
 
                 // Update cache only if caching is enabled
                 if (_cachingEnabled)
@@ -91,6 +93,64 @@ namespace SonosControl.DAL.Repos
             {
                 _semaphore.Release();
             }
+        }
+
+        private static void CreateVersionedBackupIfPresent()
+        {
+            if (!File.Exists(FilePath))
+            {
+                return;
+            }
+
+            try
+            {
+                var backupDirectory = Path.Combine(DirectoryPath, "backups");
+                Directory.CreateDirectory(backupDirectory);
+
+                var backupFile = Path.Combine(backupDirectory, $"config-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json");
+                File.Copy(FilePath, backupFile, overwrite: false);
+
+                var existingBackups = Directory.GetFiles(backupDirectory, "config-*.json")
+                    .Select(path => new FileInfo(path))
+                    .OrderByDescending(file => file.CreationTimeUtc)
+                    .ToList();
+
+                foreach (var staleFile in existingBackups.Skip(30))
+                {
+                    try
+                    {
+                        staleFile.Delete();
+                    }
+                    catch
+                    {
+                        // Keep write path resilient; stale backup cleanup is best effort.
+                    }
+                }
+            }
+            catch
+            {
+                // Backup/versioning is best effort and must not block settings writes.
+            }
+        }
+
+        private static async Task ReplaceFileWithRetryAsync(string sourcePath, string destinationPath)
+        {
+            const int maxAttempts = 5;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    File.Move(sourcePath, destinationPath, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when (attempt < maxAttempts && (ex is IOException || ex is UnauthorizedAccessException))
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt));
+                }
+            }
+
+            // Last attempt without swallowing exceptions.
+            File.Move(sourcePath, destinationPath, overwrite: true);
         }
 
         public async Task<SonosSettings?> GetSettings()
@@ -162,6 +222,18 @@ namespace SonosControl.DAL.Repos
                 settings.DailySchedules ??= new();
                 settings.ActiveDays ??= new();
                 settings.HolidaySchedules ??= new();
+                settings.Scenes ??= new();
+                settings.ScheduleWindows ??= new();
+                settings.AutomationRules ??= new();
+                settings.QueueSnapshots ??= new();
+                settings.DeviceHealthStatuses ??= new();
+                settings.Jukebox ??= new();
+                settings.JukeboxSuggestions ??= new();
+
+                foreach (var suggestion in settings.JukeboxSuggestions)
+                {
+                    suggestion.Votes ??= new();
+                }
 
                 foreach (var key in settings.DailySchedules.Keys)
                 {

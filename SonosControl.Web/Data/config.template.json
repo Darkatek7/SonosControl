@@ -42,6 +42,18 @@
   "AutoPlayRandomYouTubeMusic": false,
   "DailySchedules": {},
   "HolidaySchedules": [],
+  "Scenes": [],
+  "ScheduleWindows": [],
+  "AutomationRules": [],
+  "QueueSnapshots": [],
+  "DeviceHealthStatuses": [],
+  "Jukebox": {
+    "Enabled": true,
+    "MaxSuggestionsPerUserPerHour": 5,
+    "MaxVotesPerUserPerHour": 20,
+    "PlayedSuggestionRetentionDays": 14
+  },
+  "JukeboxSuggestions": [],
   "ActiveDays": [
     1,
     2,

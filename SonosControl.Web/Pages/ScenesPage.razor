@@ -1,0 +1,721 @@
+@page "/scenes"
+@using System.Globalization
+@using SonosControl.Web.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISceneOrchestrationService SceneOrchestrationService
+@inject IJSRuntime JS
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+
+<PageTitle>Scenes - Sonos Control</PageTitle>
+
+<div class="container dashboard-shell">
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+                <div>
+                    <h3 class="mb-1">Scenes</h3>
+                    <p class="text-muted mb-0">Create one-tap presets with source, speakers, volume, and timer.</p>
+                </div>
+                @if (_canManage)
+                {
+                    <button class="btn btn-primary" @onclick="CreateNewScene">New Scene</button>
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") mb-3" role="status">@_statusMessage</div>
+            }
+
+            @if (_settings is null)
+            {
+                <p class="text-muted mb-0">Loading scenes...</p>
+            }
+            else
+            {
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Source</th>
+                                    <th>Speakers</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                @if (_settings.Scenes.Any())
+                                {
+                                    @foreach (var scene in _settings.Scenes.OrderBy(s => s.Name))
+                                    {
+                                        <tr class="@GetSceneRowClass(scene)">
+                                            <td>
+                                                <button class="btn btn-link text-start p-0 fw-semibold text-decoration-none scene-select-link" @onclick="() => EditScene(scene)">
+                                                    @scene.Name
+                                                </button>
+                                                @if (!scene.Enabled)
+                                                {
+                                                    <div class="small text-warning">Disabled</div>
+                                                }
+                                            </td>
+                                            <td class="small">@GetSourceLabel(scene.SourceType)</td>
+                                            <td class="small">@GetSpeakerCount(scene)</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-outline-success btn-sm me-1" @onclick="() => ApplyScene(scene)" disabled="@_isApplying">
+                                                    Apply
+                                                </button>
+                                                @if (_canManage)
+                                                {
+                                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteScene(scene)" disabled="@_isSaving">Delete</button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-muted text-center">No scenes configured.</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        @if (_editingScene is null)
+                        {
+                            <div class="alert scene-muted-alert mb-0">Select a scene or create a new one.</div>
+                        }
+                        else
+                        {
+                            <div class="border rounded-3 p-3 p-md-4 surface-0">
+                                <div class="row g-3">
+                                    <div class="col-md-8">
+                                        <label class="form-label">Name</label>
+                                        <input class="form-control" @bind="_editingScene.Name" disabled="@(!_canManage)" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Enabled</label>
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" @bind="_editingScene.Enabled" disabled="@(!_canManage)" />
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label">Description</label>
+                                        <input class="form-control" @bind="_editingScene.Description" disabled="@(!_canManage)" />
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label">Source Type</label>
+                                        <select class="form-select" @bind="SceneSourceTypeValue" disabled="@(!_canManage)">
+                                            <option value="@SceneSourceType.None">None</option>
+                                            <option value="@SceneSourceType.Station">Station</option>
+                                            <option value="@SceneSourceType.Spotify">Spotify</option>
+                                            <option value="@SceneSourceType.YouTubeMusic">YouTube Music</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label">Source Item</label>
+                                        <select class="form-select" @bind="SelectedSourceItemValue" disabled="@(!_canManage || _editingScene.SourceType == SceneSourceType.None)">
+                                            <option value="@CustomSourceItemValue">Custom URL</option>
+                                            @foreach (var option in GetSourceCatalogOptions())
+                                            {
+                                                <option value="@option.Url">@option.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Source URL</label>
+                                        <input class="form-control"
+                                               @bind="_editingScene.SourceUrl"
+                                               @bind:after="HandleSourceUrlChanged"
+                                               disabled="@(!_canManage || _editingScene.SourceType == SceneSourceType.None)" />
+                                    </div>
+
+                                    <div class="col-md-4">
+                                        <label class="form-label">Timer (minutes)</label>
+                                        <input class="form-control" type="number" min="0" @bind="TimerMinutesValue" disabled="@(!_canManage)" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Synced playback</label>
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" @bind="_editingScene.IsSyncedPlayback" disabled="@(!_canManage)" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Master Speaker</label>
+                                        <select class="form-select" @bind="_editingScene.MasterSpeakerIp" disabled="@(!_canManage || !_editingScene.IsSyncedPlayback)">
+                                            <option value="">Auto</option>
+                                            @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                                            {
+                                                <option value="@speaker.IpAddress">@speaker.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <hr />
+
+                                <h6 class="mb-2">Speakers</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Use</th>
+                                            <th>Name</th>
+                                            <th>IP</th>
+                                            <th>Volume</th>
+                                            <th>Master</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                                        {
+                                            var action = GetOrCreateAction(speaker.IpAddress);
+                                            <tr>
+                                                <td>
+                                                    <input class="form-check-input"
+                                                           type="checkbox"
+                                                           checked="@action.IncludeInPlayback"
+                                                           @onchange="e => SetSpeakerIncluded(speaker.IpAddress, e.Value)"
+                                                           disabled="@(!_canManage)" />
+                                                </td>
+                                                <td>@speaker.Name</td>
+                                                <td class="small text-muted">@speaker.IpAddress</td>
+                                                <td style="max-width: 110px;">
+                                                    <input class="form-control form-control-sm"
+                                                           type="number"
+                                                           min="0"
+                                                           max="100"
+                                                           value="@FormatVolume(action.Volume)"
+                                                           @onchange="e => SetSpeakerVolume(speaker.IpAddress, e.Value)"
+                                                           disabled="@(!_canManage || !action.IncludeInPlayback)" />
+                                                </td>
+                                                <td>
+                                                    <input class="form-check-input"
+                                                           type="radio"
+                                                           name="sceneMasterSpeaker"
+                                                           checked="@IsMasterSpeaker(speaker.IpAddress)"
+                                                           @onchange="@(() => SetMasterSpeaker(speaker.IpAddress))"
+                                                           disabled="@(!_canManage || !_editingScene.IsSyncedPlayback || !action.IncludeInPlayback)" />
+                                                </td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="mt-4 d-flex flex-wrap gap-2">
+                                    @if (_canManage)
+                                    {
+                                        <button class="btn btn-primary" @onclick="SaveScene" disabled="@_isSaving">Save Scene</button>
+                                    }
+                                    <button class="btn btn-outline-success" @onclick="() => ApplyScene(_editingScene)" disabled="@_isApplying">Apply Now</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private SonosSettings? _settings;
+    private Scene? _editingScene;
+    private string? _selectedSceneId;
+    private string? _statusMessage;
+    private bool _statusIsError;
+    private bool _isSaving;
+    private bool _isApplying;
+    private bool _canManage;
+    private const string CustomSourceItemValue = "__custom__";
+    private string _selectedSourceItemValue = CustomSourceItemValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canManage = authState.User.IsInRole("admin") || authState.User.IsInRole("superadmin");
+        await LoadSettingsAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.Scenes ??= new();
+        _settings.Speakers ??= new();
+        _settings.Stations ??= new();
+        _settings.SpotifyTracks ??= new();
+        _settings.YouTubeMusicCollections ??= new();
+    }
+
+    private static string GetSourceLabel(SceneSourceType sourceType) => sourceType switch
+    {
+        SceneSourceType.Station => "Station",
+        SceneSourceType.Spotify => "Spotify",
+        SceneSourceType.YouTubeMusic => "YouTube",
+        _ => "None"
+    };
+
+    private int GetSpeakerCount(Scene scene)
+    {
+        if (scene.Actions?.Any() == true)
+        {
+            return scene.Actions.Count(a => a.IncludeInPlayback);
+        }
+
+        return scene.SpeakerIps?.Count ?? 0;
+    }
+
+    private string GetSceneRowClass(Scene scene)
+    {
+        return string.Equals(scene.Id, _selectedSceneId, StringComparison.OrdinalIgnoreCase)
+            ? "scene-selected-row"
+            : string.Empty;
+    }
+
+    private void CreateNewScene()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        _editingScene = new Scene
+        {
+            Name = $"Scene {_settings.Scenes.Count + 1}",
+            Enabled = true,
+            IsSyncedPlayback = true,
+            SourceType = SceneSourceType.None,
+            TimerMinutes = null,
+            Actions = _settings.Speakers
+                .Select(s => new SceneAction
+                {
+                    SpeakerIp = s.IpAddress,
+                    IncludeInPlayback = true,
+                    Volume = s.StartupVolume
+                })
+                .ToList()
+        };
+
+        _selectedSceneId = null;
+        _selectedSourceItemValue = CustomSourceItemValue;
+        EnsureMasterSpeaker();
+    }
+
+    private void EditScene(Scene scene)
+    {
+        _editingScene = CloneScene(scene);
+        _selectedSceneId = scene.Id;
+        EnsureActionCoverage();
+        EnsureMasterSpeaker();
+        SyncSourceSelectionWithScene();
+    }
+
+    private async Task SaveScene()
+    {
+        if (!_canManage || _settings is null || _editingScene is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editingScene.Name))
+        {
+            ShowStatus("Scene name is required.", true);
+            return;
+        }
+
+        if (_editingScene.SourceType != SceneSourceType.None && string.IsNullOrWhiteSpace(_editingScene.SourceUrl))
+        {
+            ShowStatus("Source URL is required for non-empty source type.", true);
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            _editingScene.Actions = _editingScene.Actions
+                .Where(a => !string.IsNullOrWhiteSpace(a.SpeakerIp))
+                .GroupBy(a => a.SpeakerIp, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+            _editingScene.SpeakerIps = _editingScene.Actions
+                .Where(a => a.IncludeInPlayback)
+                .Select(a => a.SpeakerIp)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            _editingScene.LastModifiedUtc = DateTime.UtcNow;
+
+            var existing = _settings.Scenes.FirstOrDefault(s => string.Equals(s.Id, _editingScene.Id, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                _editingScene.Id = string.IsNullOrWhiteSpace(_editingScene.Id) ? Guid.NewGuid().ToString("N") : _editingScene.Id;
+                _settings.Scenes.Add(CloneScene(_editingScene));
+                _selectedSceneId = _editingScene.Id;
+            }
+            else
+            {
+                var index = _settings.Scenes.IndexOf(existing);
+                _settings.Scenes[index] = CloneScene(_editingScene);
+                _selectedSceneId = _editingScene.Id;
+            }
+
+            await _uow.ISettingsRepo.WriteSettings(_settings);
+            ShowStatus("Scene saved.");
+            await LoadSettingsAsync();
+
+            if (!string.IsNullOrWhiteSpace(_selectedSceneId))
+            {
+                var refreshed = _settings.Scenes.FirstOrDefault(s => s.Id == _selectedSceneId);
+                if (refreshed is not null)
+                {
+                    _editingScene = CloneScene(refreshed);
+                    SyncSourceSelectionWithScene();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to save scene: {ex.Message}", true);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task DeleteScene(Scene scene)
+    {
+        if (!_canManage || _settings is null)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete scene '{scene.Name}'?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        _settings.Scenes.RemoveAll(s => string.Equals(s.Id, scene.Id, StringComparison.OrdinalIgnoreCase));
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowStatus("Scene deleted.");
+
+        if (string.Equals(_selectedSceneId, scene.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedSceneId = null;
+            _editingScene = null;
+        }
+    }
+
+    private async Task ApplyScene(Scene scene)
+    {
+        _isApplying = true;
+        try
+        {
+            var result = await SceneOrchestrationService.ApplySceneByIdAsync(scene.Id, await GetUserNameOrUnknownAsync());
+            ShowStatus(result.Success ? result.Message : $"Scene apply failed: {result.Message}", !result.Success);
+        }
+        finally
+        {
+            _isApplying = false;
+        }
+    }
+
+    private SceneSourceType SceneSourceTypeValue
+    {
+        get => _editingScene?.SourceType ?? SceneSourceType.None;
+        set
+        {
+            if (_editingScene is null)
+            {
+                return;
+            }
+
+            _editingScene.SourceType = value;
+            if (value == SceneSourceType.None)
+            {
+                _editingScene.SourceUrl = null;
+            }
+
+            SyncSourceSelectionWithScene();
+        }
+    }
+
+    private string SelectedSourceItemValue
+    {
+        get => _selectedSourceItemValue;
+        set
+        {
+            _selectedSourceItemValue = string.IsNullOrWhiteSpace(value) ? CustomSourceItemValue : value;
+            if (_editingScene is null || _editingScene.SourceType == SceneSourceType.None)
+            {
+                return;
+            }
+
+            if (string.Equals(_selectedSourceItemValue, CustomSourceItemValue, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _editingScene.SourceUrl = _selectedSourceItemValue;
+        }
+    }
+
+    private int TimerMinutesValue
+    {
+        get => _editingScene?.TimerMinutes ?? 0;
+        set
+        {
+            if (_editingScene is null)
+            {
+                return;
+            }
+
+            _editingScene.TimerMinutes = value <= 0 ? null : value;
+        }
+    }
+
+    private IReadOnlyList<(string Url, string Name)> GetSourceCatalogOptions()
+    {
+        if (_settings is null || _editingScene is null)
+        {
+            return Array.Empty<(string Url, string Name)>();
+        }
+
+        return _editingScene.SourceType switch
+        {
+            SceneSourceType.Station => _settings.Stations
+                .Where(s => !string.IsNullOrWhiteSpace(s.Url))
+                .Select(s => (s.Url.Trim(), string.IsNullOrWhiteSpace(s.Name) ? s.Url.Trim() : s.Name.Trim()))
+                .DistinctBy(s => s.Item1, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s.Item2)
+                .ToList(),
+            SceneSourceType.Spotify => _settings.SpotifyTracks
+                .Where(s => !string.IsNullOrWhiteSpace(s.Url))
+                .Select(s => (s.Url.Trim(), string.IsNullOrWhiteSpace(s.Name) ? s.Url.Trim() : s.Name.Trim()))
+                .DistinctBy(s => s.Item1, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s.Item2)
+                .ToList(),
+            SceneSourceType.YouTubeMusic => _settings.YouTubeMusicCollections
+                .Where(s => !string.IsNullOrWhiteSpace(s.Url))
+                .Select(s => (s.Url.Trim(), string.IsNullOrWhiteSpace(s.Name) ? s.Url.Trim() : s.Name.Trim()))
+                .DistinctBy(s => s.Item1, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s.Item2)
+                .ToList(),
+            _ => Array.Empty<(string Url, string Name)>()
+        };
+    }
+
+    private void HandleSourceUrlChanged()
+    {
+        SyncSourceSelectionWithScene();
+    }
+
+    private void SyncSourceSelectionWithScene()
+    {
+        if (_editingScene is null || _editingScene.SourceType == SceneSourceType.None)
+        {
+            _selectedSourceItemValue = CustomSourceItemValue;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editingScene.SourceUrl))
+        {
+            _selectedSourceItemValue = CustomSourceItemValue;
+            return;
+        }
+
+        var matched = FindMatchingCatalogUrl(_editingScene.SourceType, _editingScene.SourceUrl);
+        _selectedSourceItemValue = matched ?? CustomSourceItemValue;
+    }
+
+    private string? FindMatchingCatalogUrl(SceneSourceType sourceType, string? sourceUrl)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUrl))
+        {
+            return null;
+        }
+
+        var normalized = sourceUrl.Trim();
+        var options = sourceType switch
+        {
+            SceneSourceType.Station => _settings?.Stations?.Select(s => s.Url),
+            SceneSourceType.Spotify => _settings?.SpotifyTracks?.Select(s => s.Url),
+            SceneSourceType.YouTubeMusic => _settings?.YouTubeMusicCollections?.Select(s => s.Url),
+            _ => null
+        };
+
+        if (options is null)
+        {
+            return null;
+        }
+
+        return options
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => url!.Trim())
+            .FirstOrDefault(url => string.Equals(url, normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private SceneAction GetOrCreateAction(string speakerIp)
+    {
+        if (_editingScene is null)
+        {
+            return new SceneAction { SpeakerIp = speakerIp };
+        }
+
+        var existing = _editingScene.Actions.FirstOrDefault(a => string.Equals(a.SpeakerIp, speakerIp, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var action = new SceneAction
+        {
+            SpeakerIp = speakerIp,
+            IncludeInPlayback = false
+        };
+        _editingScene.Actions.Add(action);
+        return action;
+    }
+
+    private void SetSpeakerIncluded(string speakerIp, object? value)
+    {
+        if (_editingScene is null)
+        {
+            return;
+        }
+
+        var action = GetOrCreateAction(speakerIp);
+        action.IncludeInPlayback = value is bool b && b;
+        if (!action.IncludeInPlayback && string.Equals(_editingScene.MasterSpeakerIp, speakerIp, StringComparison.OrdinalIgnoreCase))
+        {
+            _editingScene.MasterSpeakerIp = null;
+            EnsureMasterSpeaker();
+        }
+    }
+
+    private void SetSpeakerVolume(string speakerIp, object? value)
+    {
+        if (_editingScene is null)
+        {
+            return;
+        }
+
+        var action = GetOrCreateAction(speakerIp);
+        if (int.TryParse(value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            action.Volume = Math.Clamp(parsed, 0, 100);
+        }
+        else
+        {
+            action.Volume = null;
+        }
+    }
+
+    private static string FormatVolume(int? volume) => volume?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
+    private bool IsMasterSpeaker(string speakerIp)
+    {
+        return _editingScene is not null && string.Equals(_editingScene.MasterSpeakerIp, speakerIp, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SetMasterSpeaker(string speakerIp)
+    {
+        if (_editingScene is null)
+        {
+            return;
+        }
+
+        var action = GetOrCreateAction(speakerIp);
+        if (!action.IncludeInPlayback)
+        {
+            return;
+        }
+
+        _editingScene.MasterSpeakerIp = speakerIp;
+    }
+
+    private void EnsureActionCoverage()
+    {
+        if (_editingScene is null || _settings is null)
+        {
+            return;
+        }
+
+        foreach (var speaker in _settings.Speakers)
+        {
+            GetOrCreateAction(speaker.IpAddress);
+        }
+    }
+
+    private void EnsureMasterSpeaker()
+    {
+        if (_editingScene is null)
+        {
+            return;
+        }
+
+        if (!_editingScene.IsSyncedPlayback)
+        {
+            _editingScene.MasterSpeakerIp = null;
+            return;
+        }
+
+        var included = _editingScene.Actions.Where(a => a.IncludeInPlayback).Select(a => a.SpeakerIp).ToList();
+        if (!included.Any())
+        {
+            _editingScene.MasterSpeakerIp = null;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editingScene.MasterSpeakerIp)
+            || !included.Contains(_editingScene.MasterSpeakerIp, StringComparer.OrdinalIgnoreCase))
+        {
+            _editingScene.MasterSpeakerIp = included[0];
+        }
+    }
+
+    private static Scene CloneScene(Scene source)
+    {
+        return new Scene
+        {
+            Id = source.Id,
+            Name = source.Name,
+            Description = source.Description,
+            Enabled = source.Enabled,
+            SourceType = source.SourceType,
+            SourceUrl = source.SourceUrl,
+            IsSyncedPlayback = source.IsSyncedPlayback,
+            MasterSpeakerIp = source.MasterSpeakerIp,
+            TimerMinutes = source.TimerMinutes,
+            SpeakerIps = source.SpeakerIps?.ToList() ?? new(),
+            Actions = source.Actions?.Select(a => new SceneAction
+            {
+                SpeakerIp = a.SpeakerIp,
+                Volume = a.Volume,
+                IncludeInPlayback = a.IncludeInPlayback,
+                IsMaster = a.IsMaster
+            }).ToList() ?? new(),
+            LastModifiedUtc = source.LastModifiedUtc
+        };
+    }
+
+    private async Task<string> GetUserNameOrUnknownAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        return state.User.Identity?.Name ?? "Unknown";
+    }
+
+    private void ShowStatus(string message, bool isError = false)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+    }
+}
