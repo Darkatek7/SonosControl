@@ -87,7 +87,7 @@
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     @onclick="ToggleSpotifyEditMode"
                     aria-label="Toggle Spotify playlists">
-                <i class="fa @(IsSpotifyEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                <AppIcon Icon="@(IsSpotifyEditMode ? AppIcon.AppIconType.Check : AppIcon.AppIconType.Pencil)" Width="14" Height="14" />
                 <span class="visually-hidden">@(IsSpotifyEditMode ? "Exit edit mode" : "Edit Spotify tracks")</span>
             </button>
         </div>
