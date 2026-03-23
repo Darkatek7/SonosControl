@@ -34,7 +34,7 @@
                     @onclick="Refresh"
                     disabled="@IsLoading"
                     aria-label="Refresh queue now">
-                <i class="fa fa-refresh @(IsLoading ? "fa-spin" : string.Empty)" aria-hidden="true"></i>
+                <AppIcon Icon="AppIcon.AppIconType.Refresh" Width="15" Height="15" class="@(IsLoading ? "icon-spin" : "")" />
                 Refresh
             </button>
         </div>

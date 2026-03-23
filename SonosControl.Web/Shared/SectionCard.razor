@@ -5,7 +5,7 @@
         <div class="section-card__header-main">
             @if (!string.IsNullOrWhiteSpace(Icon))
             {
-                <span class="section-card__icon" aria-hidden="true">@Icon</span>
+                <span class="section-card__icon" aria-hidden="true">@((MarkupString)Icon)</span>
             }
             <div class="section-card__header-text">
                 @if (!string.IsNullOrWhiteSpace(Eyebrow))
@@ -19,7 +19,7 @@
                 }
             </div>
         </div>
-        @if (HeaderExtras is not null)
+        @if (HeaderExtras != null)
         {
             <div class="section-card__actions">
                 @HeaderExtras
