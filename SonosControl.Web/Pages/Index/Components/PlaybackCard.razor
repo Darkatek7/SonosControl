@@ -2,43 +2,55 @@
 
 <div class="card playback-card" style="@GradientStyle">
     <div class="card-body playback-card__body">
-        <div class="d-flex flex-column flex-lg-row align-items-start gap-3">
-            <div class="d-flex align-items-start gap-3 flex-grow-1">
+        <div class="playback-card__status-row">
+            <span class="playback-card__eyebrow">
+                <AppIcon Name="wave" Size="16" Class="playback-card__eyebrow-icon" />
+                Broadcast transport
+            </span>
+            <span class="playback-card__badge @(IsPlaying ? "playback-card__badge--live" : "playback-card__badge--idle")">
+                @PlaybackBadge
+            </span>
+        </div>
+
+        <div class="playback-card__hero">
+            <div class="playback-card__hero-main">
                 <div class="playback-card__icon" aria-hidden="true">
-                    <i class="fa fa-music"></i>
+                    <AppIcon Name="music" Size="24" Class="playback-card__hero-icon" />
                 </div>
                 <div>
                     <h5 class="mb-1 playback-card__title">@StatusTitle</h5>
-                    <p class="mb-0 text-muted playback-card__subtitle">@StatusDescription</p>
+                    <p class="mb-0 playback-card__subtitle">@StatusDescription</p>
                 </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2 playback-card__actions">
+            <div class="playback-card__actions">
                 <button type="button"
-                        class="btn btn-light btn-sm playback-card__toggle"
+                        class="btn btn-light playback-card__toggle"
                         @onclick="TogglePlayback"
                         title="@PlayToggleLabel"
-                aria-label="@PlayToggleLabel"
-                disabled="@IsLoading">
-            @if (IsLoading)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            }
-            else
-            {
-                <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
-            }
+                        aria-label="@PlayToggleLabel"
+                        disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <AppIcon Name="@PlayToggleIcon" Size="18" />
+                    }
+                    <span>@PlayToggleText</span>
                 </button>
                 <button type="button"
-                        class="btn btn-outline-secondary btn-sm playback-card__action"
+                        class="btn btn-outline-light playback-card__action"
                         @onclick="OpenTimer"
                         title="Schedule playback"
                         aria-label="Schedule playback">
-                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <AppIcon Name="clock" Size="18" />
+                    <span>Timer</span>
                 </button>
                 @if (ShowNextTrack)
                 {
                     <button type="button"
-                            class="btn btn-outline-secondary btn-sm playback-card__action"
+                            class="btn btn-outline-light playback-card__action"
                             @onclick="NextTrack"
                             title="Skip track"
                             aria-label="Skip track"
@@ -50,23 +62,30 @@
                         }
                         else
                         {
-                            <i class="fa fa-forward" aria-hidden="true"></i>
+                            <AppIcon Name="skip-next" Size="18" />
                         }
+                        <span>Next</span>
                     </button>
                 }
             </div>
         </div>
 
         <div class="playback-card__volume">
-            <i class="fa fa-volume-up" aria-hidden="true"></i>
+            <div class="playback-card__volume-header">
+                <div class="playback-card__volume-label-group">
+                    <AppIcon Name="volume" Size="18" />
+                    <span>Master volume</span>
+                </div>
+                <span class="playback-card__volume-pill">@VolumeLabel</span>
+            </div>
             <input type="range"
-                   class="form-range"
+                   class="form-range playback-card__slider"
                    min="0"
                    max="@MaxVolumeLimit"
                    @bind-value="VolumeValue"
                    @bind-value:event="oninput"
                    aria-label="Volume" />
-            <span class="badge bg-secondary playback-card__volume-label">@VolumeLabel</span>
+            <p class="playback-card__volume-hint mb-0">Mixer ceiling set to @MaxVolumeLimit%.</p>
         </div>
     </div>
 </div>
@@ -130,12 +149,16 @@
     private string StatusTitle => IsPlaying ? "Now Playing" : "Playback Paused";
 
     private string StatusDescription => IsPlaying
-        ? "Click to pause playback."
-        : "Click to start playing music.";
+        ? "Keep the room on air, trim the volume, or cue the next track."
+        : "Bring the room back on air with one tap when you are ready.";
 
     private string PlayToggleLabel => IsPlaying ? "Pause playback" : "Start playback";
 
-    private string PlayToggleIcon => IsPlaying ? "fa-pause" : "fa-play";
+    private string PlayToggleIcon => IsPlaying ? "pause" : "play";
+
+    private string PlayToggleText => IsPlaying ? "Pause" : "Play";
+
+    private string PlaybackBadge => IsPlaying ? "On air" : "Standby";
 
     private string VolumeLabel => $"{Volume}%";
 
