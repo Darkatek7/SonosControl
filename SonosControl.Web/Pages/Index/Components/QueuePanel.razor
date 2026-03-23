@@ -4,11 +4,18 @@
 
 <div class="card queue-panel" data-qa="queue-card">
     <div class="card-header queue-panel__header">
-        <div>
-            <h5 class="mb-0">Playback Queue</h5>
+        <div class="queue-panel__title-group">
+            <span class="queue-panel__eyebrow">
+                <AppIcon Name="queue" Size="16" />
+                Program stack
+            </span>
+            <div>
+                <h5 class="mb-1">Playback Queue</h5>
+                <p class="queue-panel__subtitle mb-0">@QueueSubtitle</p>
+            </div>
         </div>
         <div class="queue-panel__toolbar">
-            <div class="d-flex align-items-center gap-2">
+            <div class="queue-panel__toolbar-group">
                 <label class="form-label small mb-0 text-muted" for="@RefreshSelectId">Refresh every</label>
                 <select id="@RefreshSelectId"
                         class="form-select form-select-sm queue-panel__select"
@@ -21,7 +28,7 @@
                     }
                 </select>
             </div>
-            <div class="form-check form-switch m-0">
+            <div class="form-check form-switch m-0 queue-panel__switch">
                 <input class="form-check-input"
                        type="checkbox"
                        role="switch"
@@ -30,12 +37,12 @@
                        aria-label="Toggle queue auto refresh" />
                 <label class="form-check-label small" for="queueAutoRefreshSwitch">Auto</label>
             </div>
-            <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1"
+            <button class="btn btn-outline-secondary btn-sm queue-panel__refresh"
                     @onclick="Refresh"
                     disabled="@IsLoading"
                     aria-label="Refresh queue now">
-                <i class="fa fa-refresh @(IsLoading ? "fa-spin" : string.Empty)" aria-hidden="true"></i>
-                Refresh
+                <AppIcon Name="refresh" Size="16" Class="@(IsLoading ? "queue-panel__refresh-icon queue-panel__refresh-icon--spinning" : "queue-panel__refresh-icon")" />
+                <span>Refresh</span>
             </button>
         </div>
     </div>
@@ -43,34 +50,46 @@
     <div class="card-body queue-panel__body">
         @if (!string.IsNullOrWhiteSpace(ErrorMessage))
         {
-            <div class="alert alert-warning" role="alert">@ErrorMessage</div>
+            <div class="alert alert-warning queue-panel__status" role="alert">@ErrorMessage</div>
         }
-        else if (IsLoading && !Items.Any())
+        else if (IsLoading && Items.Count == 0)
         {
-            <div class="text-center py-4 text-muted">
-                <div class="spinner-border text-secondary" role="status">
-                    <span class="visually-hidden">Loading queue…</span>
+            <div class="queue-panel__empty-state" role="status" aria-live="polite">
+                <div class="queue-panel__empty-visual">
+                    <span class="queue-panel__skeleton queue-panel__skeleton--wide"></span>
+                    <span class="queue-panel__skeleton"></span>
+                    <span class="queue-panel__skeleton queue-panel__skeleton--short"></span>
                 </div>
+                <p class="queue-panel__empty-title mb-1">Loading queue telemetry</p>
+                <p class="queue-panel__empty-copy mb-0">Pulling the current stack from @QueueContextLabel.</p>
             </div>
         }
-        else if (!Items.Any())
+        else if (Items.Count == 0)
         {
-            <p class="text-muted text-center mb-0">Queue is empty.</p>
+            <div class="queue-panel__empty-state">
+                <AppIcon Name="music" Size="24" Class="queue-panel__empty-icon" />
+                <p class="queue-panel__empty-title mb-1">Queue is clear</p>
+                <p class="queue-panel__empty-copy mb-0">Send a station, playlist, or collection to @QueueContextLabel to build the next rundown.</p>
+            </div>
         }
         else
         {
             <ul class="list-group queue-panel__list">
                 @foreach (var item in Items)
                 {
-                    <li class="list-group-item queue-panel__item">
-                        <div class="flex-grow-1 text-truncate">
-                            <div class="fw-semibold text-truncate">@FormatItem?.Invoke(item)</div>
+                    <li class="list-group-item queue-panel__item @(item.Index == 0 ? "queue-panel__item--lead" : string.Empty)">
+                        <span class="queue-panel__order">@((item.Index + 1).ToString("D2"))</span>
+                        <div class="queue-panel__item-body">
+                            <div class="queue-panel__item-title">@FormatItem?.Invoke(item)</div>
                             @if (!string.IsNullOrWhiteSpace(item.Album))
                             {
-                                <div class="small text-muted text-truncate">@item.Album</div>
+                                <div class="queue-panel__item-meta">@item.Album</div>
                             }
                         </div>
-                        <span class="badge bg-secondary align-self-center">@((item.Index + 1).ToString("D2"))</span>
+                        @if (item.Index == 0)
+                        {
+                            <span class="queue-panel__flag">Next</span>
+                        }
                     </li>
                 }
             </ul>
@@ -127,7 +146,16 @@
     [Parameter]
     public Func<SonosQueueItem, string>? FormatItem { get; set; }
 
+    [Parameter]
+    public string? SpeakerName { get; set; }
+
     private string RefreshSelectId { get; } = $"queueRefresh_{Guid.NewGuid():N}";
+
+    private string QueueContextLabel => string.IsNullOrWhiteSpace(SpeakerName) ? "the active room" : SpeakerName!;
+
+    private string QueueSubtitle => Items.Count > 0
+        ? $"{Items.Count} item{(Items.Count == 1 ? string.Empty : "s")} ready for {QueueContextLabel}."
+        : $"Live queue view for {QueueContextLabel}.";
 
     private bool AutoRefreshEnabledValue
     {
