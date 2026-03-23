@@ -147,14 +147,14 @@
     <section class="card media-section">
         <div class="card-header d-flex align-items-center justify-content-between gap-3">
             <div class="d-flex align-items-center gap-2">
-                <AppIcon Icon="AppIcon.AppIconType.Spotify" Width="18" Height="18" />
-                <h5 class="mb-0">Spotify Tracks</h5>
+                <AppIcon Icon="AppIcon.AppIconType.Video" Width="18" Height="18" />
+                <h5 class="mb-0">YouTube Music</h5>
             </div>
             <button type="button" class="btn btn-outline-secondary btn-sm"
-                    @onclick="ToggleSpotifyEditMode"
-                    aria-label="Toggle Spotify playlists">
-                <AppIcon Icon="@(IsSpotifyEditMode ? AppIcon.AppIconType.Check : AppIcon.AppIconType.Pencil)" Width="14" Height="14" />
-                <span class="visually-hidden">@(IsSpotifyEditMode ? "Exit edit mode" : "Edit Spotify tracks")</span>
+                    @onclick="ToggleYouTubeEditMode"
+                    aria-label="Toggle YouTube edit mode">
+                <AppIcon Icon="@(IsYouTubeEditMode ? AppIcon.AppIconType.Check : AppIcon.AppIconType.Pencil)" Width="14" Height="14" />
+                <span class="visually-hidden">@(IsYouTubeEditMode ? "Exit edit mode" : "Edit YouTube links")</span>
             </button>
         </div>
         <div class="card-body">
