@@ -32,21 +32,21 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             // Check for empty states for Stations (default tab)
-            Assert.Contains("No stations saved", cut.Markup);
+            Assert.Contains("No saved stations yet.", cut.Markup);
         });
 
         // Switch to Spotify
-        cut.Find("button.nav-link:nth-child(2)").Click();
+        cut.Find("#tab-spotify").Click();
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("No Spotify tracks saved", cut.Markup);
+            Assert.Contains("No Spotify shortcuts saved yet.", cut.Markup);
         });
 
         // Switch to YouTube
-        cut.Find("button.nav-link:nth-child(3)").Click();
+        cut.Find("#tab-youtube").Click();
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("No YouTube collections saved", cut.Markup);
+            Assert.Contains("No YouTube Music collections saved yet.", cut.Markup);
         });
     }
 
@@ -72,7 +72,7 @@ public class IndexPageUXTests
         });
 
         // Switch to Spotify
-        cut.Find("button.nav-link:nth-child(2)").Click();
+        cut.Find("#tab-spotify").Click();
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("Test Track", cut.Markup);
@@ -81,7 +81,7 @@ public class IndexPageUXTests
         });
 
         // Switch to YouTube
-        cut.Find("button.nav-link:nth-child(3)").Click();
+        cut.Find("#tab-youtube").Click();
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("Test Collection", cut.Markup);
@@ -160,7 +160,7 @@ public class IndexPageUXTests
             // Verify Slave is present and has visual indication of grouping
             Assert.Contains("Kitchen", cut.Markup);
             Assert.Contains("Linked to Living Room", cut.Markup);
-            Assert.Contains("↳", cut.Markup); // The arrow indicator
+            Assert.Contains("speaker-roster__item--child", cut.Markup);
         });
     }
 
@@ -191,7 +191,7 @@ public class IndexPageUXTests
 
             // Verify Add buttons have aria-labels
             // Note: The visibility depends on which tab is active. Stations is active by default.
-            var addStationBtn = cut.Find("button[aria-label='Add Station']");
+            var addStationBtn = cut.Find("button[aria-label='Add station']");
             Assert.NotNull(addStationBtn);
         });
 
@@ -199,7 +199,7 @@ public class IndexPageUXTests
         cut.Find("#tab-spotify").Click();
         cut.WaitForAssertion(() =>
         {
-             var addSpotifyBtn = cut.Find("button[aria-label='Add Spotify Track']");
+             var addSpotifyBtn = cut.Find("button[aria-label='Add Spotify track']");
              Assert.NotNull(addSpotifyBtn);
         });
     }

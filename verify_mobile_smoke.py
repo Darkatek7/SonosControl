@@ -19,7 +19,7 @@ AUTO_START_SERVER = os.getenv("MOBILE_SMOKE_AUTOSTART", "1") != "0"
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MOBILE_SMOKE_MAX_LOGIN_ATTEMPTS", "4"))
 
 ROUTES = [
-    ("/", "home", "Sonos Control Panel"),
+    ("/", "home", "Sonos Broadcast Studio"),
     ("/admin/users", "users", "User Management"),
     ("/config", "config", "System Configuration"),
     ("/logs", "logs", "System Logs"),
