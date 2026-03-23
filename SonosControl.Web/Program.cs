@@ -55,7 +55,6 @@ builder.Services.AddScoped<SonosControl.Web.Services.ThemeService>();
 builder.Services.AddScoped<INotifier, DiscordNotificationService>();
 builder.Services.AddScoped<INotifier, TeamsNotificationService>();
 builder.Services.AddScoped<INotificationService, AggregateNotificationService>();
-builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddLocalization();
 builder.Services.AddControllersWithViews();

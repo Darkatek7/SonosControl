@@ -62,8 +62,7 @@ public class IndexQueueTests
             .Add(p => p.RefreshIntervalSeconds, 15)
             .Add(p => p.FormatItem, item => item.DisplayTitle));
 
-        Assert.Contains("Queue is clear", cut.Markup);
-        Assert.Contains("Send a station, playlist, or collection", cut.Markup);
+        Assert.Contains("Queue is empty.", cut.Markup);
         Assert.Single(cut.FindAll("[data-qa='queue-card']"));
     }
 }
