@@ -3,12 +3,12 @@
 /* Design tokens */
 :root {
     color-scheme: light;
-    --brand-primary: #0b5ed7;
-    --brand-primary-strong: #0a58ca;
-    --brand-accent: #16a34a;
-    --brand-info: #0284c7;
-    --brand-warning: #d97706;
-    --brand-danger: #dc2626;
+    --brand-primary: #0d6efd;
+    --brand-primary-strong: #0b5ed7;
+    --brand-accent: #22c55e;
+    --brand-info: #0ea5e9;
+    --brand-warning: #f59e0b;
+    --brand-danger: #ef4444;
 
     --surface-0: #f5f7fb;
     --surface-1: #ffffff;
@@ -17,7 +17,7 @@
 
     --text-primary: #0f172a;
     --text-secondary: #475569;
-    --text-muted: #4b5563;
+    --text-muted: #64748b;
 
     --border-subtle: #d6dde9;
     --border-strong: #c0cadb;
@@ -74,7 +74,7 @@
     --bs-border-radius-2xl: 1.25rem;
 
     --bs-primary: var(--brand-primary);
-    --bs-primary-rgb: 11, 94, 215;
+    --bs-primary-rgb: 13, 110, 253;
     --bs-secondary: #6c757d;
     --bs-success: var(--brand-accent);
     --bs-success-rgb: 34, 197, 94;
@@ -770,11 +770,6 @@ a:focus-visible {
     background: transparent;
     color: var(--text-primary);
     padding: 0;
-    min-width: 44px;
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .nav-scrollable {
@@ -935,30 +930,4 @@ a:focus-visible {
 
 [data-theme='dark'] .config-shell .nav-link:hover:not(.active) {
     background-color: var(--surface-2);
-}
-
-/* Reduced motion preference */
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
-}
-
-/* Focus visible support */
-:focus-visible {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: 2px;
-}
-
-button:focus:not(:focus-visible),
-a:focus:not(:focus-visible),
-input:focus:not(:focus-visible),
-select:focus:not(:focus-visible),
-textarea:focus:not(:focus-visible) {
-    outline: none;
 }

@@ -5,16 +5,15 @@
 <div class="d-grid gap-3">
     <section class="card media-section">
         <div class="card-header d-flex align-items-center justify-content-between gap-3">
-            <div class="d-flex align-items-center gap-2">
-                <AppIcon Icon="AppIcon.AppIconType.Radio" Width="18" Height="18" />
-                <h5 class="mb-0">TuneIn Stations</h5>
+            <div>
+                <h5 class="mb-0">📻 TuneIn Stations</h5>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm"
                         @onclick="ShuffleStation"
                         title="Shuffle stations"
                         aria-label="Shuffle stations">
-                    <AppIcon Icon="AppIcon.AppIconType.Shuffle" Width="15" Height="15" />
+                    🔀
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm"
                         @onclick="ToggleStationEditMode"
@@ -59,7 +58,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveStation.InvokeAsync(station)"
                                     aria-label="Remove station">
-                                <AppIcon Icon="AppIcon.AppIconType.X" Width="14" Height="14" />
+                                <i class="fa fa-times" aria-hidden="true"></i>
                             </button>
                         </li>
                     }
@@ -80,14 +79,11 @@
 
     <section class="card media-section">
         <div class="card-header d-flex align-items-center justify-content-between gap-3">
-            <div class="d-flex align-items-center gap-2">
-                <AppIcon Icon="AppIcon.AppIconType.Spotify" Width="18" Height="18" />
-                <h5 class="mb-0">Spotify Tracks</h5>
-            </div>
+            <h5 class="mb-0">🎧 Spotify Tracks</h5>
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     @onclick="ToggleSpotifyEditMode"
                     aria-label="Toggle Spotify playlists">
-                <AppIcon Icon="@(IsSpotifyEditMode ? AppIcon.AppIconType.Check : AppIcon.AppIconType.Pencil)" Width="14" Height="14" />
+                <i class="fa @(IsSpotifyEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
                 <span class="visually-hidden">@(IsSpotifyEditMode ? "Exit edit mode" : "Edit Spotify tracks")</span>
             </button>
         </div>
@@ -125,7 +121,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveSpotifyTrack.InvokeAsync(track)"
                                     aria-label="Remove track">
-                                <AppIcon Icon="AppIcon.AppIconType.X" Width="14" Height="14" />
+                                <i class="fa fa-times" aria-hidden="true"></i>
                             </button>
                         </li>
                     }
@@ -146,14 +142,11 @@
 
     <section class="card media-section">
         <div class="card-header d-flex align-items-center justify-content-between gap-3">
-            <div class="d-flex align-items-center gap-2">
-                <AppIcon Icon="AppIcon.AppIconType.Video" Width="18" Height="18" />
-                <h5 class="mb-0">YouTube Music</h5>
-            </div>
+            <h5 class="mb-0">▶️ YouTube Music</h5>
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     @onclick="ToggleYouTubeEditMode"
                     aria-label="Toggle YouTube edit mode">
-                <AppIcon Icon="@(IsYouTubeEditMode ? AppIcon.AppIconType.Check : AppIcon.AppIconType.Pencil)" Width="14" Height="14" />
+                <i class="fa @(IsYouTubeEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
                 <span class="visually-hidden">@(IsYouTubeEditMode ? "Exit edit mode" : "Edit YouTube links")</span>
             </button>
         </div>
@@ -191,7 +184,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveYouTubeEntry.InvokeAsync(entry)"
                                     aria-label="Remove YouTube link">
-                                <AppIcon Icon="AppIcon.AppIconType.X" Width="14" Height="14" />
+                                <i class="fa fa-times" aria-hidden="true"></i>
                             </button>
                         </li>
                     }
@@ -211,9 +204,8 @@
     </section>
 
     <section class="card media-section">
-        <div class="card-header d-flex align-items-center gap-2">
-            <AppIcon Icon="AppIcon.AppIconType.Spotify" Width="18" Height="18" />
-            <h5 class="mb-0">Play Spotify URL</h5>
+        <div class="card-header">
+            <h5 class="mb-0">🎧 Play Spotify URL</h5>
         </div>
         <div class="card-body">
             <div class="input-group">

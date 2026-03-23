@@ -1,44 +1,44 @@
 @using Microsoft.AspNetCore.Components
 
 <div class="card playback-card" style="@GradientStyle">
-    <div class="card-body">
+    <div class="card-body playback-card__body">
         <div class="d-flex flex-column flex-lg-row align-items-start gap-3">
             <div class="d-flex align-items-start gap-3 flex-grow-1">
                 <div class="playback-card__icon" aria-hidden="true">
-                    <AppIcon Icon="AppIcon.AppIconType.Music" Width="22" Height="22" />
+                    <i class="fa fa-music"></i>
                 </div>
                 <div>
-                    <h5 class="mb-1">@StatusTitle</h5>
-                    <p class="mb-0 text-muted" style="font-size: 0.875rem;">@StatusDescription</p>
+                    <h5 class="mb-1 playback-card__title">@StatusTitle</h5>
+                    <p class="mb-0 text-muted playback-card__subtitle">@StatusDescription</p>
                 </div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 playback-card__actions">
                 <button type="button"
-                        class="btn btn-light btn-sm"
+                        class="btn btn-light btn-sm playback-card__toggle"
                         @onclick="TogglePlayback"
                         title="@PlayToggleLabel"
-                        aria-label="@PlayToggleLabel"
-                        disabled="@IsLoading">
-                    @if (IsLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    }
-                    else
-                    {
-                        <AppIcon Icon="@PlayToggleIcon" Width="16" Height="16" />
-                    }
+                aria-label="@PlayToggleLabel"
+                disabled="@IsLoading">
+            @if (IsLoading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
+            }
                 </button>
                 <button type="button"
-                        class="btn btn-outline-light btn-sm"
+                        class="btn btn-outline-secondary btn-sm playback-card__action"
                         @onclick="OpenTimer"
                         title="Schedule playback"
                         aria-label="Schedule playback">
-                    <AppIcon Icon="AppIcon.AppIconType.Clock" Width="16" Height="16" />
+                    <i class="fa fa-clock-o" aria-hidden="true"></i>
                 </button>
                 @if (ShowNextTrack)
                 {
                     <button type="button"
-                            class="btn btn-outline-light btn-sm"
+                            class="btn btn-outline-secondary btn-sm playback-card__action"
                             @onclick="NextTrack"
                             title="Skip track"
                             aria-label="Skip track"
@@ -50,15 +50,15 @@
                         }
                         else
                         {
-                            <AppIcon Icon="AppIcon.AppIconType.SkipNext" Width="16" Height="16" />
+                            <i class="fa fa-forward" aria-hidden="true"></i>
                         }
                     </button>
                 }
             </div>
         </div>
 
-        <div class="playback-card__volume mt-3">
-            <AppIcon Icon="AppIcon.AppIconType.Volume" Width="16" Height="16" />
+        <div class="playback-card__volume">
+            <i class="fa fa-volume-up" aria-hidden="true"></i>
             <input type="range"
                    class="form-range"
                    min="0"
@@ -66,7 +66,7 @@
                    @bind-value="VolumeValue"
                    @bind-value:event="oninput"
                    aria-label="Volume" />
-            <span class="badge bg-light text-dark" style="font-size: 0.75rem;">@VolumeLabel</span>
+            <span class="badge bg-secondary playback-card__volume-label">@VolumeLabel</span>
         </div>
     </div>
 </div>
@@ -135,7 +135,7 @@
 
     private string PlayToggleLabel => IsPlaying ? "Pause playback" : "Start playback";
 
-    private AppIcon.AppIconType PlayToggleIcon => IsPlaying ? AppIcon.AppIconType.Pause : AppIcon.AppIconType.Play;
+    private string PlayToggleIcon => IsPlaying ? "fa-pause" : "fa-play";
 
     private string VolumeLabel => $"{Volume}%";
 
