@@ -3,13 +3,13 @@
 <div class="media-tabs-container">
     <div class="nav nav-tabs" role="tablist">
         <button class="@GetTabClass("stations")" @onclick="@(() => SetActiveTab("stations"))" role="tab">
-            📻 Stations
+            <AppIcon Icon="AppIcon.AppIconType.Radio" Width="15" Height="15" /> Stations
         </button>
         <button class="@GetTabClass("spotify")" @onclick="@(() => SetActiveTab("spotify"))" role="tab">
-            🎧 Spotify
+            <AppIcon Icon="AppIcon.AppIconType.Spotify" Width="15" Height="15" /> Spotify
         </button>
         <button class="@GetTabClass("youtube")" @onclick="@(() => SetActiveTab("youtube"))" role="tab">
-            ▶️ YouTube
+            <AppIcon Icon="AppIcon.AppIconType.Video" Width="15" Height="15" /> YouTube
         </button>
     </div>
 

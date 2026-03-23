@@ -6,7 +6,10 @@
     color: var(--text-muted);
     border-radius: var(--bs-border-radius-lg) var(--bs-border-radius-lg) 0 0;
     border-color: transparent;
-    border-bottom-color: transparent; 
+    border-bottom-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
 }
 
 .media-tabs-container .nav-link.active {
