@@ -23,513 +23,358 @@
 @if (_settings is not null)
 {
     <div class="container dashboard-shell">
-        <section class="broadcast-shell">
-            <header class="broadcast-hero">
-                <div class="broadcast-hero__copy">
-                    <span class="broadcast-kicker">
-                        <AppIcon Name="signal" Size="16" />
-                        Live command deck
-                    </span>
-                    <h1 class="broadcast-hero__title">Sonos Broadcast Studio</h1>
-                    <p class="broadcast-hero__summary">Command playback, coordinate linked rooms, and keep curated sources ready for air from one deliberate control surface.</p>
+        <div class="card dashboard-panel surface-0">
+            <div class="card-body">
+                <div class="d-flex flex-column flex-lg-row align-items-start justify-content-between mb-4 gap-3">
+                    <div>
+                        <h3 class="mb-1">🎛️ Sonos Control Panel</h3>
+                        <p class="text-muted mb-0">Manage playback, queue, and curated sources for your Sonos system.</p>
+                    </div>
+                    <div class="d-flex flex-column align-items-start align-items-lg-end gap-2">
+                        @if (IsRefreshStale)
+                        {
+                            <span class="badge text-bg-warning index-refresh-badge">Live updates delayed</span>
+                        }
+                        <small class="text-muted index-refresh-meta">@RefreshTelemetryLabel</small>
+                    </div>
                 </div>
 
-                <div class="broadcast-hero__stats" aria-label="Dashboard telemetry">
-                    <article class="broadcast-stat-card">
-                        <span class="broadcast-stat-card__label">Active room</span>
-                        <strong class="broadcast-stat-card__value">@ActiveSpeakerName</strong>
-                        <span class="broadcast-stat-card__meta">@LiveStateLabel</span>
-                    </article>
-                    <article class="broadcast-stat-card">
-                        <span class="broadcast-stat-card__label">Rooms online</span>
-                        <strong class="broadcast-stat-card__value">@OnlineSpeakerCount/@(_settings.Speakers.Count)</strong>
-                        <span class="broadcast-stat-card__meta">@GroupedSpeakerCount grouped</span>
-                    </article>
-                    <article class="broadcast-stat-card">
-                        <span class="broadcast-stat-card__label">Source</span>
-                        <strong class="broadcast-stat-card__value">@CurrentPlaybackSourceLabel</strong>
-                        <span class="broadcast-stat-card__meta">@RefreshTelemetryLabel</span>
-                    </article>
-                </div>
-            </header>
+                @if (!string.IsNullOrWhiteSpace(_commandStatusMessage))
+                {
+                    <div class="alert @(_commandStatusIsError ? "alert-danger" : "alert-success") py-2 mb-3 index-command-status" role="status" aria-live="polite">
+                        @_commandStatusMessage
+                    </div>
+                }
 
-            <div class="broadcast-pulse-row">
-                <span class="broadcast-pill @( _isPlaying ? "broadcast-pill--live" : "broadcast-pill--idle")">
-                    <span class="broadcast-pill__dot"></span>
-                    @LiveStateLabel
-                </span>
-                <span class="broadcast-pill @(IsRefreshStale ? "broadcast-pill--warn" : string.Empty)">
-                    <AppIcon Name="refresh" Size="14" Class="@(_isRefreshRunning ? "broadcast-pill__icon--spinning" : string.Empty)" />
-                    @RefreshTelemetryLabel
-                </span>
-                <span class="broadcast-pill">
-                    <AppIcon Name="cast" Size="14" />
-                    @GroupedSpeakerCount linked room@(GroupedSpeakerCount == 1 ? string.Empty : "s")
-                </span>
-            </div>
-
-            @if (!string.IsNullOrWhiteSpace(_commandStatusMessage))
-            {
-                <div class="broadcast-status-banner @(_commandStatusIsError ? "broadcast-status-banner--error" : string.Empty)" role="status" aria-live="polite">
-                    <AppIcon Name="@(_commandStatusIsError ? "status" : "signal")" Size="18" />
-                    <span>@_commandStatusMessage</span>
-                </div>
-            }
-
-            <div class="broadcast-grid">
-                <div class="broadcast-main-column">
-                    <section class="dashboard-card command-deck" aria-labelledby="command-deck-heading">
-                        <div class="dashboard-card__header dashboard-card__header--split">
-                            <div>
-                                <span class="dashboard-card__eyebrow">
-                                    <AppIcon Name="dashboard" Size="16" />
-                                    Routing and sync
-                                </span>
-                                <h2 id="command-deck-heading" class="dashboard-card__title">Command deck</h2>
-                                <p class="dashboard-card__copy">Pick the room on air, then handle grouping, breakup, and synchronized playback from one control strip.</p>
-                            </div>
-                            <div class="command-deck__room-badge">
-                                <span>Active room</span>
-                                <strong>@ActiveSpeakerName</strong>
-                            </div>
-                        </div>
-
+                <div class="dashboard-grid">
+                    <div class="playback-column">
                         @if (_settings.Speakers.Any())
                         {
-                            <div class="command-deck__controls">
-                                <label for="activeSpeakerSelect" class="command-deck__label">Choose room</label>
-                                <div class="command-deck__row">
-                                    <select id="activeSpeakerSelect" class="form-select command-deck__select" @bind="SelectedSpeakerIp">
+                            <div class="mb-3">
+                                <label for="activeSpeakerSelect" class="form-label text-muted small">Active Speaker</label>
+                                <div class="d-flex flex-wrap gap-2 align-items-center speaker-controls">
+                                    <select id="activeSpeakerSelect" class="form-select flex-grow-1 speaker-controls__select" @bind="SelectedSpeakerIp">
                                         @foreach (var speaker in _settings.Speakers)
                                         {
                                             <option value="@speaker.IpAddress">@speaker.Name</option>
                                         }
                                     </select>
-
-                                    <div class="command-deck__actions">
-                                        <button class="btn btn-outline-primary command-deck__action" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
+                                    <div class="btn-group speaker-controls__pair">
+                                        <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
                                             @if (_isGrouping)
                                             {
                                                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                             }
                                             else
                                             {
-                                                <AppIcon Name="link" Size="18" />
+                                                <span>🔗 Group</span>
                                             }
-                                            <span>Group</span>
                                         </button>
-                                        <button class="btn btn-outline-secondary command-deck__action" @onclick="UngroupCurrent" disabled="@(_isGrouping || _isUngrouping)" title="Ungroup active speaker" aria-label="Ungroup active speaker">
+                                        <button class="btn btn-outline-secondary" @onclick="UngroupCurrent" disabled="@(_isGrouping || _isUngrouping)" title="Ungroup active speaker" aria-label="Ungroup active speaker">
                                             @if (_isUngrouping)
                                             {
                                                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                             }
                                             else
                                             {
-                                                <AppIcon Name="unlink" Size="18" />
+                                                <span>⛓️‍💥</span>
                                             }
-                                            <span>Ungroup</span>
-                                        </button>
-                                        <button class="btn btn-primary command-deck__action command-deck__action--accent" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
-                                            @if (_isSyncing)
-                                            {
-                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                <span class="visually-hidden">Syncing...</span>
-                                            }
-                                            else
-                                            {
-                                                <AppIcon Name="cast" Size="18" />
-                                            }
-                                            <span>Sync Play</span>
                                         </button>
                                     </div>
+                                    <button class="btn btn-outline-info speaker-controls__sync" @onclick="SyncPlay" disabled="@_isSyncing" title="Play current media on all speakers">
+                                        @if (_isSyncing)
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            <span class="visually-hidden">Syncing...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Sync Play</span>
+                                        }
+                                    </button>
                                 </div>
                             </div>
                         }
-                        else
+
+                        <PlaybackCard
+                            IsPlaying="_isPlaying"
+                            IsLoading="_isMainPlaybackLoading"
+                            ShowNextTrack="_isPlaying && _isSpotifyPlaying"
+                            IsNextTrackLoading="_isNextTrackLoading"
+                            Volume="Volume"
+                            MaxVolumeLimit="MaxVolumeLimit"
+                            GradientStyle="PlaybackCardStyle"
+                            TogglePlay="Play"
+                            VolumeChanged="@(value => Volume = value)"
+                            OnOpenTimer="OpenTimerModal"
+                            OnNextTrack="NextTrack" />
+
+                        @if (_timerEndTimeUtc is not null)
                         {
-                            <div class="dashboard-empty-state">
-                                <AppIcon Name="speaker" Size="22" />
+                            var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
+                            <div class="alert alert-info timed-playback-alert d-flex justify-content-between align-items-center mb-3">
                                 <div>
-                                    <strong>No speakers connected</strong>
-                                    <p class="mb-0">Add a room in configuration to start routing playback from the studio.</p>
+                                    <strong>Timed Playback Active</strong>
+                                    <p class="mb-0 text-muted">@(_timerSelectionName ?? "Playback") will stop at @localStopTime.ToString("t").</p>
                                 </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelTimedPlayback">Cancel</button>
                             </div>
                         }
-                    </section>
 
-                    <PlaybackCard
-                        IsPlaying="_isPlaying"
-                        IsLoading="_isMainPlaybackLoading"
-                        ShowNextTrack="_isPlaying && _isSpotifyPlaying"
-                        IsNextTrackLoading="_isNextTrackLoading"
-                        Volume="Volume"
-                        MaxVolumeLimit="MaxVolumeLimit"
-                        GradientStyle="PlaybackCardStyle"
-                        TogglePlay="Play"
-                        VolumeChanged="@(value => Volume = value)"
-                        OnOpenTimer="OpenTimerModal"
-                        OnNextTrack="NextTrack" />
-
-                    @if (_timerEndTimeUtc is not null)
-                    {
-                        var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
-                        <section class="timer-callout" aria-live="polite">
-                            <div class="timer-callout__icon">
-                                <AppIcon Name="clock" Size="18" />
-                            </div>
-                            <div class="timer-callout__copy">
-                                <strong>Timed playback armed</strong>
-                                <p class="mb-0">@(_timerSelectionName ?? "Playback") stops at @localStopTime.ToString("t") for @ActiveSpeakerName.</p>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary timer-callout__action" @onclick="CancelTimedPlayback">Cancel timer</button>
-                        </section>
-                    }
-
-                    <section class="dashboard-card now-playing-panel" aria-labelledby="now-playing-heading">
-                        <div class="dashboard-card__header dashboard-card__header--split">
-                            <div>
-                                <span class="dashboard-card__eyebrow">
-                                    <AppIcon Name="album" Size="16" />
-                                    Live program
-                                </span>
-                                <h2 id="now-playing-heading" class="dashboard-card__title">Now Playing</h2>
-                                <p class="dashboard-card__copy">Source metadata, artwork, and runtime for the room currently on air.</p>
-                            </div>
-                            <div class="now-playing-panel__badges">
-                                <span class="now-playing-panel__chip">@CurrentPlaybackSourceLabel</span>
-                                @if (!string.IsNullOrWhiteSpace(trackProgress))
-                                {
-                                    <span class="now-playing-panel__chip now-playing-panel__chip--muted">@trackProgress</span>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="now-playing-panel__body">
-                            <div class="now-playing-panel__art">
+                        <div class="card currently-playing-card">
+                            <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
                                 @if (!string.IsNullOrWhiteSpace(currentTrackArtUrl))
                                 {
-                                    <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="now-playing-panel__image" />
+                                    <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="img-fluid rounded" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
                                 }
                                 else
                                 {
-                                    <div class="now-playing-panel__fallback" aria-hidden="true">
-                                        <AppIcon Name="music" Size="30" />
-                                    </div>
+                                    <div class="display-5" aria-hidden="true">🎵</div>
                                 }
-                            </div>
-
-                            <div class="now-playing-panel__content">
-                                <div class="now-playing-panel__headline">
-                                    <span class="now-playing-panel__label">Track</span>
-                                    <h3 class="now-playing-panel__track">@CurrentTrackLabel</h3>
-                                </div>
-
-                                <div class="now-playing-panel__details-grid">
-                                    <div class="now-playing-panel__detail">
-                                        <span class="now-playing-panel__label">Source</span>
-                                        <strong>@CurrentPlaybackSourceLabel</strong>
-                                    </div>
-                                    <div class="now-playing-panel__detail">
-                                        <span class="now-playing-panel__label">Room</span>
-                                        <strong>@ActiveSpeakerName</strong>
-                                    </div>
-                                    <div class="now-playing-panel__detail now-playing-panel__detail--wide">
-                                        <span class="now-playing-panel__label">Feed status</span>
-                                        <strong>@(_isPlaying ? "Program is live." : "Playback is paused.")</strong>
-                                    </div>
-                                    <div class="now-playing-panel__detail">
-                                        <span class="now-playing-panel__label">Refresh</span>
-                                        <strong>@RefreshStatusLabel</strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <QueuePanel
-                        SpeakerName="@ActiveSpeakerName"
-                        Items="_queueItems"
-                        IsLoading="_isQueueLoading"
-                        HasMore="QueueHasMore"
-                        AutoRefreshEnabled="_queueAutoRefreshEnabled"
-                        RefreshIntervalSeconds="_queueRefreshIntervalSeconds"
-                        RefreshIntervals="_queueRefreshOptions"
-                        ErrorMessage="@_queueErrorMessage"
-                        Refresh="HandleQueueRefresh"
-                        LoadMore="LoadMoreQueueItems"
-                        AutoRefreshChanged="HandleQueueAutoRefreshChanged"
-                        RefreshIntervalChanged="HandleQueueRefreshIntervalChanged"
-                        FormatItem="FormatQueueItem" />
-                </div>
-
-                <aside class="broadcast-rail">
-                    <section class="dashboard-card speaker-panel" aria-labelledby="speaker-panel-heading">
-                        <div class="dashboard-card__header">
-                            <span class="dashboard-card__eyebrow">
-                                <AppIcon Name="speakers" Size="16" />
-                                Room telemetry
-                            </span>
-                            <h2 id="speaker-panel-heading" class="dashboard-card__title">Speaker Status</h2>
-                            <p class="dashboard-card__copy">See which rooms are live, linked to another room, or currently waiting off air.</p>
-                        </div>
-
-                        <ul class="speaker-roster">
-                            @if (_speakerStatuses.Any())
-                            {
-                                var roots = _speakerStatuses
-                                    .Where(s => string.IsNullOrEmpty(s.MasterUuid) || !_speakerStatuses.Any(m => m.Uuid == s.MasterUuid))
-                                    .OrderBy(s => s.Name);
-
-                                foreach (var root in roots)
-                                {
-                                    <li class="@GetSpeakerStatusClasses(root)">
-                                        <div class="speaker-roster__content">
-                                            <div class="speaker-roster__name-row">
-                                                <span class="speaker-roster__indicator"></span>
-                                                <div>
-                                                    <strong class="speaker-roster__name">@root.Name</strong>
-                                                    <p class="speaker-roster__meta mb-0">@GetSpeakerStatusDescription(root)</p>
-                                                </div>
-                                            </div>
-                                            <span class="speaker-roster__state">@GetSpeakerStateLabel(root)</span>
-                                        </div>
-                                    </li>
-
-                                    var children = _speakerStatuses.Where(s => s.MasterUuid == root.Uuid).OrderBy(s => s.Name);
-                                    foreach (var child in children)
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-2">Currently Playing</h5>
+                                    <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
+                                    <p class="mb-1 text-muted currently-playing-text"><strong>Track:</strong> @currentlyPlaying</p>
+                                    @if (!string.IsNullOrWhiteSpace(trackProgress))
                                     {
-                                        <li class="@GetSpeakerStatusClasses(child, isChild: true)">
-                                            <div class="speaker-roster__content">
-                                                <div class="speaker-roster__name-row">
-                                                    <span class="speaker-roster__indicator"></span>
-                                                    <div>
-                                                        <strong class="speaker-roster__name">@child.Name</strong>
-                                                        <p class="speaker-roster__meta mb-0">Linked to @root.Name</p>
-                                                    </div>
-                                                </div>
-                                                <span class="speaker-roster__state">@GetSpeakerStateLabel(child)</span>
-                                            </div>
-                                        </li>
+                                        <p class="mb-0 text-muted currently-playing-text"><strong>Time:</strong> @trackProgress</p>
                                     }
-                                }
-                            }
-                            else
-                            {
-                                <li class="speaker-roster__empty">No room telemetry is available yet.</li>
-                            }
-                        </ul>
-                    </section>
-
-                    <section class="dashboard-card library-panel" aria-labelledby="library-panel-heading">
-                        <div class="dashboard-card__header">
-                            <span class="dashboard-card__eyebrow">
-                                <AppIcon Name="radio" Size="16" />
-                                Source library
-                            </span>
-                            <h2 id="library-panel-heading" class="dashboard-card__title">Media Sources</h2>
-                            <p class="dashboard-card__copy">Keep your fastest station, Spotify, and YouTube presets within easy reach for the next handoff.</p>
-                        </div>
-
-                        <MediaTabs @bind-ActiveTab="_activeMediaTab">
-                            <StationsContent>
-                                @{
-                                    var stations = _stations;
-                                    <div class="media-list-header">
-                                        <div>
-                                            <h3 class="media-list-header__title">Saved Stations</h3>
-                                            <p class="media-list-header__copy">Quick-launch radio presets for room handoffs and daily programming.</p>
-                                        </div>
-                                        <div class="media-list-header__actions">
-                                            <button class="btn btn-outline-secondary media-toolbar-btn" @onclick="ShuffleStation" title="Play random station" aria-label="Play random station" disabled="@_isShuffleLoading">
-                                                @if (_isShuffleLoading)
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                }
-                                                else
-                                                {
-                                                    <AppIcon Name="shuffle" Size="16" />
-                                                }
-                                                <span>Shuffle</span>
-                                            </button>
-                                            <button class="btn btn-primary media-toolbar-btn" @onclick="ShowAddStationModal" aria-label="Add station">
-                                                <AppIcon Name="plus" Size="16" />
-                                                <span>Add</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <ul class="list-group media-list">
-                                        @if (stations.Any())
-                                        {
-                                            @foreach (var station in stations)
-                                            {
-                                                <li class="list-group-item media-list__item @(IsCurrentlyPlaying(station.Url) ? "active-media" : string.Empty)">
-                                                    <div class="media-list__body">
-                                                        <span class="media-list__name">@station.Name</span>
-                                                        <span class="media-list__meta">TuneIn preset</span>
-                                                    </div>
-                                                    <div class="media-list__actions">
-                                                        <button class="btn btn-sm btn-success media-list__action-btn" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name" disabled="@(_loadingMediaUrl == station.Url)">
-                                                            @if (_loadingMediaUrl == station.Url)
-                                                            {
-                                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <AppIcon Name="play" Size="16" />
-                                                            }
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-danger media-list__action-btn" @onclick="@(() => RemoveStation(station))" aria-label="Remove @station.Name">
-                                                            <AppIcon Name="trash" Size="16" />
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <li class="list-group-item media-list__empty">No saved stations yet. Add one to keep broadcast handoffs fast.</li>
-                                        }
-                                    </ul>
-                                }
-                            </StationsContent>
-                            <SpotifyContent>
-                                @{
-                                    var tracks = _tracks;
-                                    <div class="media-list-header">
-                                        <div>
-                                            <h3 class="media-list-header__title">Saved Spotify</h3>
-                                            <p class="media-list-header__copy">Playlist and album shortcuts ready to cue into the active room.</p>
-                                        </div>
-                                        <div class="media-list-header__actions">
-                                            <button class="btn btn-primary media-toolbar-btn" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify track">
-                                                <AppIcon Name="plus" Size="16" />
-                                                <span>Add</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <ul class="list-group media-list">
-                                        @if (tracks.Any())
-                                        {
-                                            @foreach (var track in tracks)
-                                            {
-                                                <li class="list-group-item media-list__item @(IsCurrentlyPlaying(track.Url) ? "active-media" : string.Empty)">
-                                                    <div class="media-list__body">
-                                                        <span class="media-list__name">@track.Name</span>
-                                                        <span class="media-list__meta">Spotify shortcut</span>
-                                                    </div>
-                                                    <div class="media-list__actions">
-                                                        <button class="btn btn-sm btn-success media-list__action-btn" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name" disabled="@(_loadingMediaUrl == track.Url)">
-                                                            @if (_loadingMediaUrl == track.Url)
-                                                            {
-                                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <AppIcon Name="play" Size="16" />
-                                                            }
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-danger media-list__action-btn" @onclick="@(() => RemoveSpotifyTrack(track))" aria-label="Remove @track.Name">
-                                                            <AppIcon Name="trash" Size="16" />
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <li class="list-group-item media-list__empty">No Spotify shortcuts saved yet.</li>
-                                        }
-                                    </ul>
-                                }
-                            </SpotifyContent>
-                            <YouTubeContent>
-                                @{
-                                    var collections = _youTubeCollections;
-                                    <div class="media-list-header">
-                                        <div>
-                                            <h3 class="media-list-header__title">Saved YouTube Music</h3>
-                                            <p class="media-list-header__copy">Ready-made YouTube collections for quick swaps between formats.</p>
-                                        </div>
-                                        <div class="media-list-header__actions">
-                                            <button class="btn btn-primary media-toolbar-btn" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Music collection">
-                                                <AppIcon Name="plus" Size="16" />
-                                                <span>Add</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <ul class="list-group media-list">
-                                        @if (collections.Any())
-                                        {
-                                            @foreach (var collection in collections)
-                                            {
-                                                <li class="list-group-item media-list__item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : string.Empty)">
-                                                    <div class="media-list__body">
-                                                        <span class="media-list__name">@collection.Name</span>
-                                                        <span class="media-list__meta">YouTube Music collection</span>
-                                                    </div>
-                                                    <div class="media-list__actions">
-                                                        <button class="btn btn-sm btn-success media-list__action-btn" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name" disabled="@(_loadingMediaUrl == collection.Url)">
-                                                            @if (_loadingMediaUrl == collection.Url)
-                                                            {
-                                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <AppIcon Name="play" Size="16" />
-                                                            }
-                                                        </button>
-                                                        <button class="btn btn-sm btn-outline-danger media-list__action-btn" @onclick="@(() => RemoveYouTubeMusicEntry(collection))" aria-label="Remove @collection.Name">
-                                                            <AppIcon Name="trash" Size="16" />
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <li class="list-group-item media-list__empty">No YouTube Music collections saved yet.</li>
-                                        }
-                                    </ul>
-                                }
-                            </YouTubeContent>
-                        </MediaTabs>
-
-                        <section class="direct-source-panel">
-                            <div class="direct-source-panel__header">
-                                <div>
-                                    <span class="dashboard-card__eyebrow">
-                                        <AppIcon Name="spotify" Size="16" />
-                                        Direct source cue
-                                    </span>
-                                    <h3 class="direct-source-panel__title">Play Spotify URL</h3>
                                 </div>
                             </div>
-                            <div class="input-group direct-source-panel__input-group">
-                                <input type="text"
-                                       class="form-control"
-                                       @bind-value="spotifyUrl"
-                                       @bind-value:event="oninput"
-                                       @onkeyup="HandleKeyPress"
-                                       placeholder="Paste a Spotify URL to send live"
-                                       aria-label="Spotify URL" />
-                                <button class="btn btn-primary direct-source-panel__play" type="button" @onclick="SubmitSpotifyUrl" disabled="@_isSpotifyUrlLoading">
-                                    @if (_isSpotifyUrlLoading)
+                        </div>
+
+                        <QueuePanel
+                            Items="_queueItems"
+                            IsLoading="_isQueueLoading"
+                            HasMore="QueueHasMore"
+                            AutoRefreshEnabled="_queueAutoRefreshEnabled"
+                            RefreshIntervalSeconds="_queueRefreshIntervalSeconds"
+                            RefreshIntervals="_queueRefreshOptions"
+                            ErrorMessage="@_queueErrorMessage"
+                            Refresh="HandleQueueRefresh"
+                            LoadMore="LoadMoreQueueItems"
+                            AutoRefreshChanged="HandleQueueAutoRefreshChanged"
+                            RefreshIntervalChanged="HandleQueueRefreshIntervalChanged"
+                            FormatItem="FormatQueueItem" />
+                    </div>
+                    <div class="info-column">
+                        <SectionCard Title="Speaker Status" Icon="📢">
+                            <ChildContent>
+                                <ul class="list-group list-group-flush media-list">
+                                    @if (_speakerStatuses.Any())
                                     {
-                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                        <span class="visually-hidden">Loading...</span>
+                                        var roots = _speakerStatuses
+                                            .Where(s => string.IsNullOrEmpty(s.MasterUuid) || !_speakerStatuses.Any(m => m.Uuid == s.MasterUuid))
+                                            .OrderBy(s => s.Name);
+
+                                        foreach (var root in roots)
+                                        {
+                                            <li class="list-group-item d-flex justify-content-between align-items-center speaker-status-item">
+                                                <div class="d-flex align-items-center">
+                                                    <span class="me-2 status-indicator @(root.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                                    <div>
+                                                        <span class="fw-bold">@root.Name</span>
+                                                        @if (root.IsPlaying && !string.IsNullOrWhiteSpace(root.Media))
+                                                        {
+                                                            <br/>
+                                                            <small class="text-muted">@root.Media</small>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <span class="badge rounded-pill text-uppercase @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                    @(root.IsPlaying ? "Playing" : "Paused")
+                                                </span>
+                                            </li>
+
+                                            var children = _speakerStatuses.Where(s => s.MasterUuid == root.Uuid).OrderBy(s => s.Name);
+                                            foreach (var child in children)
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center border-start border-3 border-secondary speaker-status-item speaker-status-item--child" style="background-color: var(--surface-2);">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="me-2 text-muted">↳</span>
+                                                        <span class="me-2 status-indicator @(child.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                                        <div>
+                                                            <span class="fw-bold">@child.Name</span>
+                                                            <br/>
+                                                            <small class="text-muted">Linked to @root.Name</small>
+                                                        </div>
+                                                    </div>
+                                                    <span class="badge rounded-pill text-uppercase @(child.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                        @(child.IsPlaying ? "Playing" : "Paused")
+                                                    </span>
+                                                </li>
+                                            }
+                                        }
                                     }
                                     else
                                     {
-                                        <AppIcon Name="play" Size="16" />
+                                        <li class="list-group-item">No speakers to display.</li>
                                     }
-                                    <span>Play</span>
-                                </button>
-                            </div>
-                        </section>
-                    </section>
-                </aside>
+                                </ul>
+                            </ChildContent>
+                        </SectionCard>
+                        <hr/>
+                        <SectionCard Title="Media Sources" Icon="🎶">
+                            <ChildContent>
+                                <MediaTabs @bind-ActiveTab="_activeMediaTab">
+                                    <StationsContent>
+                                        @{
+                                            var stations = _stations;
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
+                                                <h5 class="mb-0">Saved Stations</h5>
+                                                <div class="media-list-header__actions">
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="ShuffleStation" title="Play Random Station" aria-label="Play Random Station" disabled="@_isShuffleLoading">
+                                                        @if (_isShuffleLoading)
+                                                        {
+                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>🔀</span>
+                                                        }
+                                                    </button>
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddStationModal" aria-label="Add Station">➕ Add</button>
+                                                </div>
+                                            </div>
+                                            <ul class="list-group media-list">
+                                                @if (stations.Any())
+                                                {
+                                                    @foreach (var station in stations)
+                                                    {
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(station.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@station.Name</span>
+                                                            <div class="media-actions media-list__actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(station.Url, "station"))" aria-label="Play @station.Name" disabled="@(_loadingMediaUrl == station.Url)">
+                                                                    @if (_loadingMediaUrl == station.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveStation(station))" aria-label="Remove @station.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No stations saved.</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </StationsContent>
+                                    <SpotifyContent>
+                                        @{
+                                            var tracks = _tracks;
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
+                                                <h5 class="mb-0">Saved Spotify</h5>
+                                                <div class="media-list-header__actions">
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify Track">➕ Add</button>
+                                                </div>
+                                            </div>
+                                            <ul class="list-group media-list">
+                                                @if (tracks.Any())
+                                                {
+                                                    @foreach (var track in tracks)
+                                                    {
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(track.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@track.Name</span>
+                                                            <div class="media-actions media-list__actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(track.Url, "spotify"))" aria-label="Play @track.Name" disabled="@(_loadingMediaUrl == track.Url)">
+                                                                    @if (_loadingMediaUrl == track.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveSpotifyTrack(track))" aria-label="Remove @track.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No Spotify tracks saved.</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </SpotifyContent>
+                                    <YouTubeContent>
+                                        @{
+                                            var collections = _youTubeCollections;
+                                            <div class="d-flex justify-content-between align-items-center mb-3 media-list-header">
+                                                <h5 class="mb-0">Saved YouTube</h5>
+                                                <div class="media-list-header__actions">
+                                                    <button class="btn btn-sm btn-primary" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Music Collection">➕ Add</button>
+                                                </div>
+                                            </div>
+                                            <ul class="list-group media-list">
+                                                @if (collections.Any())
+                                                {
+                                                    @foreach (var collection in collections)
+                                                    {
+                                                        <li class="list-group-item media-list__item @(IsCurrentlyPlaying(collection.Url) ? "active-media" : "")">
+                                                            <span class="media-list__name">@collection.Name</span>
+                                                            <div class="media-actions media-list__actions">
+                                                                <button class="btn btn-sm btn-success" @onclick="@(() => PlayMediaItem(collection.Url, "youtube"))" aria-label="Play @collection.Name" disabled="@(_loadingMediaUrl == collection.Url)">
+                                                                    @if (_loadingMediaUrl == collection.Url)
+                                                                    {
+                                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span>▶️</span>
+                                                                    }
+                                                                </button>
+                                                                <button class="btn btn-sm btn-danger" @onclick="@(() => RemoveYouTubeMusicEntry(collection))" aria-label="Remove @collection.Name">🗑️</button>
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <li class="list-group-item text-muted">No YouTube collections saved.</li>
+                                                }
+                                            </ul>
+                                        }
+                                    </YouTubeContent>
+                                </MediaTabs>
+                        
+                                <div class="mt-3">
+                                    <h5 class="mb-2">🎧 Play Spotify URL</h5>
+                                    <div class="input-group">
+                                        <input type="text"
+                                               class="form-control"
+                                               @bind-value="spotifyUrl"
+                                               @bind-value:event="oninput"
+                                               @onkeyup="HandleKeyPress"
+                                               placeholder="Enter Spotify URL"
+                                               aria-label="Spotify URL" />
+                                        <button class="btn btn-primary" type="button" @onclick="SubmitSpotifyUrl" disabled="@_isSpotifyUrlLoading">
+                                            @if (_isSpotifyUrlLoading)
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Loading...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Play</span>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+                            </ChildContent>
+                        </SectionCard>
+                    </div>
+                </div>
             </div>
-        </section>
+        </div>
     </div>
 }
 
@@ -742,20 +587,6 @@
             return $"Last update {Math.Round(elapsed.TotalSeconds)}s ago";
         }
     }
-
-    private string ActiveSpeakerName => _settings?.Speakers.FirstOrDefault(s => s.IpAddress == SelectedSpeakerIp)?.Name ?? "Active room";
-
-    private int OnlineSpeakerCount => _speakerStatuses.Count(status => !string.Equals(status.Media, "Offline", StringComparison.OrdinalIgnoreCase));
-
-    private int GroupedSpeakerCount => _speakerStatuses.Count(status => !string.IsNullOrWhiteSpace(status.MasterUuid));
-
-    private string LiveStateLabel => _isPlaying ? "On air" : "Standby";
-
-    private string RefreshStatusLabel => IsRefreshStale ? "Attention needed" : (_isRefreshRunning ? "Syncing" : "Healthy");
-
-    private string CurrentPlaybackSourceLabel => string.IsNullOrWhiteSpace(currentStationDisplay) ? "Unknown source" : currentStationDisplay;
-
-    private string CurrentTrackLabel => string.IsNullOrWhiteSpace(currentlyPlaying) ? "No metadata available" : currentlyPlaying;
 
     private List<TuneInStation> _stations =>
         (_settings?.Stations ?? new List<TuneInStation>())
@@ -1109,77 +940,7 @@
 
         selectedStatus.Media = ResolveSpeakerMedia(true, NormalizeStationUrl(selectedStatus.RawStationUrl), selectedStatus.MasterUuid);
     }
-
-    private string GetSpeakerStatusClasses(SpeakerStatusViewModel speaker, bool isChild = false)
-    {
-        var classes = new List<string> { "speaker-roster__item" };
-
-        if (speaker.IpAddress == SelectedSpeakerIp)
-        {
-            classes.Add("speaker-roster__item--active");
-        }
-
-        if (isChild)
-        {
-            classes.Add("speaker-roster__item--child");
-        }
-
-        if (string.Equals(speaker.Media, "Offline", StringComparison.OrdinalIgnoreCase))
-        {
-            classes.Add("speaker-roster__item--offline");
-        }
-        else if (speaker.IsPlaying)
-        {
-            classes.Add("speaker-roster__item--playing");
-        }
-        else if (!string.IsNullOrWhiteSpace(speaker.MasterUuid))
-        {
-            classes.Add("speaker-roster__item--grouped");
-        }
-
-        return string.Join(" ", classes);
-    }
-
-    private string GetSpeakerStateLabel(SpeakerStatusViewModel speaker)
-    {
-        if (string.Equals(speaker.Media, "Offline", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Offline";
-        }
-
-        if (speaker.IsPlaying)
-        {
-            return "Live";
-        }
-
-        if (!string.IsNullOrWhiteSpace(speaker.MasterUuid))
-        {
-            return "Linked";
-        }
-
-        return "Idle";
-    }
-
-    private string GetSpeakerStatusDescription(SpeakerStatusViewModel speaker)
-    {
-        if (string.Equals(speaker.Media, "Offline", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Waiting for the room to come back online.";
-        }
-
-        if (speaker.IsPlaying && !string.IsNullOrWhiteSpace(speaker.Media))
-        {
-            return speaker.Media;
-        }
-
-        if (!string.IsNullOrWhiteSpace(speaker.MasterUuid))
-        {
-            return "Following another room in the group.";
-        }
-
-        return "Standing by for the next cue.";
-    }
-
+    
     private bool IsCurrentlyPlaying(string url)
     {
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(currentStationUrl))
