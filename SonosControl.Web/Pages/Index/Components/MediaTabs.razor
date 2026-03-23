@@ -1,14 +1,15 @@
 @namespace SonosControl.Web.Pages.Index.Components
 
 <div class="media-tabs-container">
-    <div class="nav nav-tabs" role="tablist">
+    <div class="media-tabs" role="tablist" aria-label="Media sources">
         <button class="@GetTabClass("stations")"
                 @onclick="@(() => SetActiveTab("stations"))"
                 role="tab"
                 aria-selected="@(ActiveTab == "stations" ? "true" : "false")"
                 aria-controls="panel-stations"
                 id="tab-stations">
-            📻 Stations
+            <AppIcon Name="radio" Size="18" />
+            <span>Stations</span>
         </button>
         <button class="@GetTabClass("spotify")"
                 @onclick="@(() => SetActiveTab("spotify"))"
@@ -16,7 +17,8 @@
                 aria-selected="@(ActiveTab == "spotify" ? "true" : "false")"
                 aria-controls="panel-spotify"
                 id="tab-spotify">
-            🎧 Spotify
+            <AppIcon Name="spotify" Size="18" />
+            <span>Spotify</span>
         </button>
         <button class="@GetTabClass("youtube")"
                 @onclick="@(() => SetActiveTab("youtube"))"
@@ -24,26 +26,27 @@
                 aria-selected="@(ActiveTab == "youtube" ? "true" : "false")"
                 aria-controls="panel-youtube"
                 id="tab-youtube">
-            ▶️ YouTube
+            <AppIcon Name="youtube" Size="18" />
+            <span>YouTube</span>
         </button>
     </div>
 
-    <div class="tab-content">
+    <div class="media-tabs__content">
         @if (ActiveTab == "stations")
         {
-            <div class="tab-pane active" id="panel-stations" role="tabpanel" aria-labelledby="tab-stations">
+            <div class="media-tabs__panel" id="panel-stations" role="tabpanel" aria-labelledby="tab-stations">
                 @StationsContent
             </div>
         }
         else if (ActiveTab == "spotify")
         {
-            <div class="tab-pane active" id="panel-spotify" role="tabpanel" aria-labelledby="tab-spotify">
+            <div class="media-tabs__panel" id="panel-spotify" role="tabpanel" aria-labelledby="tab-spotify">
                 @SpotifyContent
             </div>
         }
         else if (ActiveTab == "youtube")
         {
-            <div class="tab-pane active" id="panel-youtube" role="tabpanel" aria-labelledby="tab-youtube">
+            <div class="media-tabs__panel" id="panel-youtube" role="tabpanel" aria-labelledby="tab-youtube">
                 @YouTubeContent
             </div>
         }
@@ -74,5 +77,5 @@
     }
 
     private string GetTabClass(string tabName) =>
-        $"nav-link { (ActiveTab == tabName ? "active" : "") }";
+        $"media-tabs__tab{(ActiveTab == tabName ? " media-tabs__tab--active" : string.Empty)}";
 }

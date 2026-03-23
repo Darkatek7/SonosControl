@@ -20,7 +20,7 @@
                 title="Close navigation menu"
                 aria-label="Close navigation menu"
                 @onclick="HandleNavigate">
-            <span class="oi oi-x" aria-hidden="true"></span>
+            <AppIcon Name="x" Size="16" />
         </button>
     </div>
 
@@ -28,13 +28,13 @@
         <nav class="nav-links">
             <div class="nav-item">
                 <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
-                    <span class="nav-icon oi oi-home" aria-hidden="true"></span>
+                    <AppIcon Name="home" Size="18" Class="nav-icon" />
                     <span>Home</span>
                 </NavLink>
             </div>
             <div class="nav-item">
                 <NavLink class="nav-link" href="lookup" @onclick="HandleNavigate">
-                    <span class="nav-icon oi oi-magnifying-glass" aria-hidden="true"></span>
+                    <AppIcon Name="search" Size="18" Class="nav-icon" />
                     <span>Station Lookup</span>
                 </NavLink>
             </div>
@@ -43,19 +43,19 @@
                 <Authorized>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-graph" aria-hidden="true"></span>
+                            <AppIcon Name="chart" Size="18" Class="nav-icon" />
                             <span>Statistics</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="scenes" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-layers" aria-hidden="true"></span>
+                            <AppIcon Name="layers" Size="18" Class="nav-icon" />
                             <span>Scenes</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="recommendations" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-star" aria-hidden="true"></span>
+                            <AppIcon Name="star" Size="18" Class="nav-icon" />
                             <span>Recommendations</span>
                         </NavLink>
                     </div>
@@ -67,37 +67,37 @@
                     <div class="nav-divider" aria-hidden="true"></div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-calendar" aria-hidden="true"></span>
+                            <AppIcon Name="calendar" Size="18" Class="nav-icon" />
                             <span>Schedule Windows</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="devices" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-rss" aria-hidden="true"></span>
+                            <AppIcon Name="devices" Size="18" Class="nav-icon" />
                             <span>Device Ops</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-cog" aria-hidden="true"></span>
+                            <AppIcon Name="settings" Size="18" Class="nav-icon" />
                             <span>Sonos Config</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="admin/users" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-person" aria-hidden="true"></span>
+                            <AppIcon Name="user" Size="18" Class="nav-icon" />
                             <span>User Management</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-file" aria-hidden="true"></span>
+                            <AppIcon Name="file" Size="18" Class="nav-icon" />
                             <span>Logs</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="settings-backups" @onclick="HandleNavigate">
-                            <span class="nav-icon oi oi-hard-drive" aria-hidden="true"></span>
+                            <AppIcon Name="backups" Size="18" Class="nav-icon" />
                             <span>Backups</span>
                         </NavLink>
                     </div>
@@ -128,7 +128,7 @@
                 <div class="px-1 d-flex flex-column gap-2">
                     <div class="d-flex align-items-center gap-2 mb-2 px-1">
                             <div class="d-flex align-items-center justify-content-center bg-light rounded-circle nav-user-avatar">
-                            <span class="oi oi-person text-secondary nav-user-icon"></span>
+                                <AppIcon Name="user" Size="16" Class="text-secondary nav-user-icon" />
                             </div>
                             <div class="d-flex flex-column nav-user-meta">
                             <span class="fw-bold small">Signed in as</span>
@@ -139,13 +139,13 @@
                     <a href="/useredit"
                        class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
                        @onclick="HandleNavigate">
-                        <span class="oi oi-cog" aria-hidden="true"></span> <span>Profile Settings</span>
+                        <AppIcon Name="settings" Size="16" /> <span>Profile Settings</span>
                     </a>
 
                     <form method="post" action="/auth/logout" class="w-100 m-0" @onsubmit="HandleNavigate">
                         <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
                         <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
-                                <span class="oi oi-account-logout" aria-hidden="true"></span> <span>Log Out</span>
+                                <AppIcon Name="logout" Size="16" /> <span>Log Out</span>
                         </button>
                     </form>
                 </div>

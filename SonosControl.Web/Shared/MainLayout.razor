@@ -43,7 +43,7 @@
                         aria-controls="app-sidebar"
                         aria-expanded="@(_isDrawerOpen ? "true" : "false")"
                         @onclick="ToggleDrawerAsync">
-                    <span class="oi @(_isDrawerOpen ? "oi-x" : "oi-menu")" aria-hidden="true"></span>
+                    <AppIcon Name="@(_isDrawerOpen ? "x" : "menu")" Size="18" />
                 </button>
 
                 <div class="app-mobile-top-bar__identity">
@@ -55,7 +55,7 @@
                     @if (isAuthenticated)
                     {
                         <a href="@($"/useredit")" class="top-link top-link--icon app-mobile-top-bar__profile-link" aria-label="Open profile settings">
-                            <span class="oi oi-person" aria-hidden="true"></span>
+                            <AppIcon Name="user" Size="18" />
                         </a>
                     }
                     else
@@ -98,7 +98,7 @@
                         </form>
 
                         <a href="@($"/useredit")" class="top-link top-link--icon">
-                            <span class="oi oi-person" aria-hidden="true"></span>
+                            <AppIcon Name="user" Size="18" />
                         </a>
                     }
                     else
@@ -116,6 +116,8 @@
             </article>
         </section>
     </main>
+
+    <ToastContainer />
 </div>
 
 @code {
