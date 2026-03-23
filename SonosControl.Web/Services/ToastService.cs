@@ -1,17 +1,11 @@
-using System.ComponentModel;
-
 namespace SonosControl.Web.Services;
 
 public record ToastItem(
-    string Id,
+    string Id = Guid.NewGuid().ToString("N"),
     string Message = "",
     ToastSeverity Severity = ToastSeverity.Info,
     int DurationMs = 4000
-)
-{
-    public static ToastItem Create(string message, ToastSeverity severity = ToastSeverity.Info, int durationMs = 4000)
-        => new(Guid.NewGuid().ToString("N"), message, severity, durationMs);
-}
+);
 
 public enum ToastSeverity
 {
@@ -33,7 +27,7 @@ public class ToastService : INotifyPropertyChanged
 
     public void Show(string message, ToastSeverity severity = ToastSeverity.Info, int durationMs = 4000)
     {
-        var toast = ToastItem.Create(message, severity, durationMs);
+        var toast = new ToastItem(Message: message, Severity: severity, DurationMs: durationMs);
         _toasts.Add(toast);
 
         if (_toasts.Count > MaxVisibleToasts)
