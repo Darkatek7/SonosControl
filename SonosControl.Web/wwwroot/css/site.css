@@ -600,10 +600,10 @@ a:focus-visible {
 }
 
 .currently-playing-art {
-    width: 140px;
-    height: 140px;
-    max-width: 100%;
-    max-height: 100%;
+    width: clamp(80px, 20vw, 140px);
+    height: clamp(80px, 20vw, 140px);
+    max-width: 35vw;
+    max-height: 35vw;
     border-radius: var(--radius-lg);
     object-fit: cover;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
@@ -616,10 +616,10 @@ a:focus-visible {
 }
 
 .currently-playing-art-placeholder {
-    width: 140px;
-    height: 140px;
-    max-width: 100%;
-    max-height: 100%;
+    width: clamp(80px, 20vw, 140px);
+    height: clamp(80px, 20vw, 140px);
+    max-width: 35vw;
+    max-height: 35vw;
     border-radius: var(--radius-lg);
     background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface-3) 100%);
     display: flex;
@@ -695,8 +695,8 @@ a:focus-visible {
 @media (max-width: 768px) {
     .currently-playing-art,
     .currently-playing-art-placeholder {
-        width: 100px;
-        height: 100px;
+        width: clamp(70px, 18vw, 100px);
+        height: clamp(70px, 18vw, 100px);
         max-width: 35vw;
         max-height: 35vw;
     }
