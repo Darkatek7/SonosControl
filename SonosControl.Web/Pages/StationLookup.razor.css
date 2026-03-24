@@ -86,12 +86,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 3rem;
-    height: 3rem;
-    min-height: 44px;
+    width: clamp(2.5rem, 10vw, 3rem);
+    height: clamp(2.5rem, 10vw, 3rem);
+    min-height: clamp(38px, 8vw, 44px);
     padding: 0;
     border-radius: var(--radius-sm);
-    font-size: 1.25rem;
+    font-size: clamp(1rem, 3vw, 1.25rem);
     box-shadow: var(--shadow-xs);
 }
 
@@ -140,15 +140,15 @@
 }
 
 .lookup-action-button {
-    width: 2.75rem;
-    height: 2.75rem;
-    min-height: 44px;
+    width: clamp(2.25rem, 9vw, 2.75rem);
+    height: clamp(2.25rem, 9vw, 2.75rem);
+    min-height: clamp(38px, 8vw, 44px);
     padding: 0;
     border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.1rem;
+    font-size: clamp(0.9rem, 2.5vw, 1.1rem);
     box-shadow: var(--shadow-xs);
 }
 

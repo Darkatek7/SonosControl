@@ -89,11 +89,11 @@
 }
 
 .user-action-btn {
-    min-width: 110px;
-    min-height: 40px;
+    min-width: clamp(70px, 15vw, 110px);
+    min-height: clamp(36px, 5vw, 40px);
     border-radius: var(--radius-sm);
-    font-size: var(--font-size-sm);
-    padding: 0.4rem 0.85rem;
+    font-size: clamp(0.75rem, 2vw, var(--font-size-sm));
+    padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.5rem, 2vw, 0.85rem);
 }
 
 .user-action-btn:disabled {
