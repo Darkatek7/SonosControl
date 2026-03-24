@@ -295,13 +295,17 @@ a:focus-visible {
     text-transform: uppercase;
     letter-spacing: 0.02em;
     min-width: 0;
-    white-space: nowrap;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: break-word;
 }
 
 .table td {
     min-width: 0;
+    max-width: 100%;
     white-space: normal;
     vertical-align: middle;
+    overflow-wrap: break-word;
 }
 
 .table {
@@ -311,7 +315,9 @@ a:focus-visible {
 
 .table td:first-child,
 .table th:first-child {
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: break-word;
+    max-width: 0;
 }
 
 @media (max-width: 576px) {
