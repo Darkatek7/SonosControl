@@ -36,7 +36,8 @@
 .lookup-search-wrapper {
     position: relative;
     flex: 1;
-    min-width: 220px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .lookup-shell__search-input {
