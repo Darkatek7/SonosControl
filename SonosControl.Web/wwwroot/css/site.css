@@ -1188,6 +1188,8 @@ a:focus-visible {
         display: grid !important;
         grid-template-columns: 1fr;
         gap: var(--spacing-xs);
+        min-width: 0;
+        overflow-x: hidden;
     }
 
     .speaker-controls__select {
@@ -1201,13 +1203,28 @@ a:focus-visible {
         grid-template-columns: 1fr 1fr;
     }
 
+    .speaker-controls .btn-group > * {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .speaker-controls .btn {
         min-height: 44px;
+        min-width: 0;
     }
 
     .speaker-controls__sync {
         width: 100%;
+        min-width: 0;
     }
+}
+
+@media (max-width: 400px) {
+    .speaker-controls .btn-group {
+        grid-template-columns: 1fr;
+    }
+}
 
     .media-list-header {
         display: flex;
