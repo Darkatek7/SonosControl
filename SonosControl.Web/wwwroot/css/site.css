@@ -301,7 +301,7 @@ a:focus-visible {
     font-weight: 600;
     letter-spacing: 0.01em;
     box-shadow: var(--shadow-xs);
-    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .btn:hover {
@@ -309,8 +309,18 @@ a:focus-visible {
     box-shadow: var(--shadow-sm);
 }
 
+.btn:active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--shadow-xs);
+}
+
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus, .form-select:focus {
     box-shadow: var(--focus-ring);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring), 0 0 0 2px var(--surface-1), 0 0 0 4px var(--brand-primary);
 }
 
 .btn-primary {
@@ -1216,4 +1226,202 @@ a:focus-visible {
 /* Dark mode fix for bg-light */
 [data-theme='dark'] .bg-light {
     background-color: var(--surface-2) !important;
+}
+
+/* ============================================
+   SKELETON LOADING STATES
+   ============================================ */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--surface-2) 25%,
+        var(--surface-3) 50%,
+        var(--surface-2) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-loader:not(.animated) .skeleton {
+    animation: none;
+    background: var(--surface-2);
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-circle {
+    border-radius: 50%;
+}
+
+.skeleton-text {
+    height: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-text:last-child {
+    width: 60%;
+}
+
+.skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.skeleton-content {
+    flex-grow: 1;
+}
+
+.skeleton-subtext {
+    height: 0.75rem;
+    margin-top: 0.35rem;
+}
+
+.skeleton-badge {
+    width: 60px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+}
+
+/* ============================================
+   CARD MICRO-INTERACTIONS
+   ============================================ */
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card:active {
+    transform: translateY(0);
+}
+
+/* ============================================
+   LOADING SPINNER ENHANCEMENTS
+   ============================================ */
+.spinner-overlay {
+    position: relative;
+}
+
+.spinner-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(2px);
+    border-radius: inherit;
+    z-index: 1;
+}
+
+[data-theme='dark'] .spinner-overlay::after {
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.spinner-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* ============================================
+   LIVE INDICATOR PULSE
+   ============================================ */
+.live-indicator {
+    position: relative;
+}
+
+.live-indicator::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0.5rem;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background-color: var(--brand-accent);
+    border-radius: 50%;
+    animation: pulse-live 2s ease-in-out infinite;
+}
+
+.live-indicator {
+    padding-left: 1.5rem;
+}
+
+@keyframes pulse-live {
+    0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+    50% { opacity: 0.5; transform: translateY(-50%) scale(1.2); }
+}
+
+/* ============================================
+   INPUT ENHANCEMENTS
+   ============================================ */
+.form-control:focus, .form-select:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 20%, transparent);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ============================================
+   MODAL ANIMATIONS
+   ============================================ */
+.modal.fade .modal-dialog {
+    transform: scale(0.95) translateY(-10px);
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.modal.show .modal-dialog {
+    transform: scale(1) translateY(0);
+}
+
+/* ============================================
+   STATUS INDICATOR DOTS
+   ============================================ */
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.status-playing {
+    background-color: var(--brand-accent);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--brand-accent) 60%, transparent);
+}
+
+.status-paused {
+    background-color: var(--text-muted);
+}
+
+/* ============================================
+   LIST ITEM HOVER EFFECTS
+   ============================================ */
+.list-group-item {
+    transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.list-group-item:hover {
+    transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn, .card, .list-group-item, .form-control, .modal-dialog {
+        transition: none;
+        animation: none;
+    }
 }

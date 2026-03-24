@@ -1,11 +1,19 @@
 @using System
+@using SonosControl.Web.Shared
 
 <section class="section-card" aria-labelledby="@HeadingId">
     <header class="section-card__header">
         <div class="section-card__header-main">
             @if (!string.IsNullOrWhiteSpace(Icon))
             {
-                <span class="section-card__icon" aria-hidden="true">@Icon</span>
+                if (IsIconName(Icon))
+                {
+                    <span class="section-card__icon" aria-hidden="true"><Icon Name="@Icon" Size="20" /></span>
+                }
+                else
+                {
+                    <span class="section-card__icon" aria-hidden="true">@Icon</span>
+                }
             }
             <div class="section-card__header-text">
                 @if (!string.IsNullOrWhiteSpace(Eyebrow))
@@ -43,6 +51,18 @@
     [Parameter] public string? Id { get; set; }
 
     private string HeadingId => _headingId!;
+
+    private static readonly HashSet<string> KnownIconNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "home", "magnify", "search", "graph", "stats", "layers", "scenes", "star", "recommendations",
+        "calendar", "schedule", "rss", "device", "devices", "cog", "settings", "person", "user",
+        "file", "logs", "hard-drive", "backup", "backups", "play", "pause", "shuffle", "plus", "add",
+        "trash", "delete", "remove", "link", "group", "unlink", "ungroup", "sync", "menu", "x", "close",
+        "music", "track", "volume", "speaker", "timer", "clock", "check", "alert", "speaker", "rss"
+    };
+
+    private static bool IsIconName(string? icon) =>
+        !string.IsNullOrWhiteSpace(icon) && KnownIconNames.Contains(icon);
 
     protected override void OnParametersSet()
     {
