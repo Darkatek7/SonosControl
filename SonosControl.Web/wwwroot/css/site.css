@@ -228,6 +228,8 @@ a:focus-visible {
     color: var(--text-primary);
     font-weight: 600;
     padding: var(--spacing-md) var(--spacing-lg);
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .card-body, .panel-body {
@@ -754,6 +756,13 @@ a:focus-visible {
     }
 
     .toolbar-actions .btn {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .speaker-controls .btn-group > * {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
