@@ -206,6 +206,8 @@ a:focus-visible {
 .content {
     padding-top: var(--spacing-lg);
     padding-bottom: var(--spacing-xl);
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .card, .panel {
@@ -213,6 +215,8 @@ a:focus-visible {
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius-lg);
     box-shadow: var(--shadow-sm);
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .card-header, .panel-header {
@@ -572,6 +576,12 @@ a:focus-visible {
     position: relative;
     overflow: hidden;
     background: linear-gradient(135deg, var(--surface-1) 0%, color-mix(in srgb, var(--brand-primary) 8%, var(--surface-1)) 100%);
+    min-width: 0;
+}
+
+.currently-playing-card .card-body {
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .currently-playing-card::before {
@@ -614,6 +624,7 @@ a:focus-visible {
 
 .currently-playing-info {
     min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .currently-playing-info h5 {
@@ -933,6 +944,8 @@ a:focus-visible {
 .app-content-wrapper {
     flex: 1;
     background: var(--surface-0);
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .nav-shell {

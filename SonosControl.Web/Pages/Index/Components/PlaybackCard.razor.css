@@ -6,12 +6,15 @@
     position: relative;
     overflow: hidden;
     min-height: 220px;
+    min-width: 0;
 }
 
 .playback-card__body {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-lg);
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .playback-card__icon {
@@ -46,7 +49,8 @@
 
 .playback-card__volume input[type="range"] {
     flex: 1;
-    min-width: 160px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .playback-card__volume-label {
