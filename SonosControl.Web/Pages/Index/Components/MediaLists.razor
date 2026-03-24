@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Web
 @using SonosControl.DAL.Models
+@using SonosControl.Web.Shared
 
 <div class="d-grid gap-3">
     <section class="card media-section">
@@ -18,7 +19,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm"
                         @onclick="ToggleStationEditMode"
                         aria-label="Toggle station edit mode">
-                    <i class="fa @(IsStationEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                    <Icon Name="@(IsStationEditMode ? "check" : "pencil")" Size="16" />
                     <span class="visually-hidden">@(IsStationEditMode ? "Exit edit mode" : "Edit stations")</span>
                 </button>
             </div>
@@ -58,7 +59,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveStation.InvokeAsync(station)"
                                     aria-label="Remove station">
-                                <i class="fa fa-times" aria-hidden="true"></i>
+                                <Icon Name="x" Size="16" />
                             </button>
                         </li>
                     }
@@ -83,7 +84,7 @@
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     @onclick="ToggleSpotifyEditMode"
                     aria-label="Toggle Spotify playlists">
-                <i class="fa @(IsSpotifyEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                <Icon Name="@(IsSpotifyEditMode ? "check" : "pencil")" Size="16" />
                 <span class="visually-hidden">@(IsSpotifyEditMode ? "Exit edit mode" : "Edit Spotify tracks")</span>
             </button>
         </div>
@@ -121,7 +122,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveSpotifyTrack.InvokeAsync(track)"
                                     aria-label="Remove track">
-                                <i class="fa fa-times" aria-hidden="true"></i>
+                                <Icon Name="x" Size="16" />
                             </button>
                         </li>
                     }
@@ -146,7 +147,7 @@
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     @onclick="ToggleYouTubeEditMode"
                     aria-label="Toggle YouTube edit mode">
-                <i class="fa @(IsYouTubeEditMode ? "fa-check" : "fa-pencil")" aria-hidden="true"></i>
+                <Icon Name="@(IsYouTubeEditMode ? "check" : "pencil")" Size="16" />
                 <span class="visually-hidden">@(IsYouTubeEditMode ? "Exit edit mode" : "Edit YouTube links")</span>
             </button>
         </div>
@@ -184,7 +185,7 @@
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     @onclick="() => RemoveYouTubeEntry.InvokeAsync(entry)"
                                     aria-label="Remove YouTube link">
-                                <i class="fa fa-times" aria-hidden="true"></i>
+                                <Icon Name="x" Size="16" />
                             </button>
                         </li>
                     }
