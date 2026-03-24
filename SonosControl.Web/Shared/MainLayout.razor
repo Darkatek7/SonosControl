@@ -8,6 +8,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @using SonosControl.Web.Models
+@using SonosControl.Web.Shared
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject SonosControl.Web.Services.ThemeService ThemeService
@@ -43,7 +44,7 @@
                         aria-controls="app-sidebar"
                         aria-expanded="@(_isDrawerOpen ? "true" : "false")"
                         @onclick="ToggleDrawerAsync">
-                    <span class="oi @(_isDrawerOpen ? "oi-x" : "oi-menu")" aria-hidden="true"></span>
+                    <Icon Name="@(_isDrawerOpen ? "x" : "menu")" Size="16" />
                 </button>
 
                 <div class="app-mobile-top-bar__identity">
@@ -55,7 +56,7 @@
                     @if (isAuthenticated)
                     {
                         <a href="@($"/useredit")" class="top-link top-link--icon app-mobile-top-bar__profile-link" aria-label="Open profile settings">
-                            <span class="oi oi-person" aria-hidden="true"></span>
+                            <Icon Name="person" Size="16" />
                         </a>
                     }
                     else
@@ -98,7 +99,7 @@
                         </form>
 
                         <a href="@($"/useredit")" class="top-link top-link--icon">
-                            <span class="oi oi-person" aria-hidden="true"></span>
+                            <Icon Name="person" Size="16" />
                         </a>
                     }
                     else

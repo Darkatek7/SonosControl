@@ -1,32 +1,148 @@
+/* MediaTabs Component Styles */
+
+/* Tab Container */
+.media-tabs-container {
+    --mt-tab-spacing: var(--spacing-xs);
+    --mt-content-padding: var(--spacing-lg);
+}
+
 .media-tabs-container .nav-tabs {
-    border-bottom: 1px solid var(--bs-border-color);
+    display: flex;
+    gap: var(--mt-tab-spacing);
+    padding: var(--spacing-xs);
+    background-color: var(--surface-2);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-subtle);
+    margin-bottom: var(--mt-content-padding);
+    flex-wrap: wrap;
 }
 
+@media (max-width: 576px) {
+    .media-tabs-container .nav-tabs {
+        gap: calc(var(--mt-tab-spacing) * 0.5);
+        padding: calc(var(--spacing-xs) * 0.75);
+    }
+}
+
+/* Tab Buttons - Pill Style */
 .media-tabs-container .nav-link {
-    color: var(--text-muted);
-    border-radius: var(--bs-border-radius-lg) var(--bs-border-radius-lg) 0 0;
-    border-color: transparent;
-    border-bottom-color: transparent; 
-}
-
-.media-tabs-container .nav-link.active {
-    color: var(--bs-body-color);
-    background-color: var(--surface-2);
-    border-color: var(--bs-border-color);
-    border-bottom-color: transparent;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-lg) !important;
+    border: 1px solid transparent !important;
+    background-color: transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    letter-spacing: 0.01em;
+    transition: all var(--transition-base);
     position: relative;
-    top: 1px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    white-space: nowrap;
 }
 
+.media-tabs-container .nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 60%;
+    height: 3px;
+    background: var(--gradient-primary);
+    border-radius: 3px 3px 0 0;
+    transition: transform var(--transition-base);
+}
+
+@media (max-width: 576px) {
+    .media-tabs-container .nav-link {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-xs);
+    }
+
+    .media-tabs-container .nav-link::before {
+        height: 2px;
+        width: 50%;
+    }
+}
+
+/* Hover State */
 .media-tabs-container .nav-link:hover:not(.active) {
+    background-color: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+    color: var(--text-primary);
     border-color: transparent;
-    background-color: var(--surface-1);
 }
 
+/* Active State with Gradient Underline */
+.media-tabs-container .nav-link.active {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+    color: var(--brand-primary);
+    border-color: rgba(99, 102, 241, 0.2) !important;
+    box-shadow: var(--shadow-sm), inset 0 0 20px rgba(99, 102, 241, 0.08);
+}
+
+.media-tabs-container .nav-link.active::before {
+    transform: translateX(-50%) scaleX(1);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+}
+
+/* Focus State */
+.media-tabs-container .nav-link:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* Tab Content Area */
 .media-tabs-container .tab-content {
-    background-color: var(--surface-2);
-    border: 1px solid var(--bs-border-color);
-    border-top: none;
-    padding: var(--spacing-md);
-    border-radius: 0 0 var(--bs-border-radius-lg) var(--bs-border-radius-lg);
+    background-color: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--mt-content-padding);
+    box-shadow: var(--shadow-sm);
+    min-height: 200px;
+}
+
+@media (max-width: 576px) {
+    .media-tabs-container .tab-content {
+        padding: var(--spacing-md);
+        border-radius: var(--radius-lg);
+    }
+}
+
+/* Tab Pane */
+.media-tabs-container .tab-pane {
+    animation: tab-fade-in 0.3s ease-out;
+}
+
+@keyframes tab-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Active Tab Pane */
+.media-tabs-container .tab-pane.active {
+    animation: tab-fade-in 0.3s ease-out;
+}
+
+/* Icon Styling in Tabs */
+.media-tabs-container .nav-link .tab-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 576px) {
+    .media-tabs-container .nav-link .tab-icon {
+        font-size: 0.875rem;
+    }
 }
