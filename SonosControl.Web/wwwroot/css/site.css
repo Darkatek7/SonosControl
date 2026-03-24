@@ -207,7 +207,7 @@ a:focus-visible {
     padding-top: var(--spacing-lg);
     padding-bottom: var(--spacing-xl);
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
 }
 
 .card, .panel {
@@ -216,7 +216,8 @@ a:focus-visible {
     border-radius: var(--bs-border-radius-lg);
     box-shadow: var(--shadow-sm);
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
+    word-break: break-word;
 }
 
 .card-header, .panel-header {
@@ -582,6 +583,7 @@ a:focus-visible {
 .currently-playing-card .card-body {
     min-width: 0;
     overflow-wrap: break-word;
+    overflow-x: hidden;
 }
 
 .currently-playing-card::before {
@@ -661,6 +663,14 @@ a:focus-visible {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+}
+
+@media (max-width: 576px) {
+    .currently-playing-meta-value {
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
 }
 
 .currently-playing-progress {
@@ -945,7 +955,7 @@ a:focus-visible {
     flex: 1;
     background: var(--surface-0);
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
 }
 
 .nav-shell {
