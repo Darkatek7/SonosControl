@@ -62,7 +62,7 @@ public class IndexQueueTests
             .Add(p => p.RefreshIntervalSeconds, 15)
             .Add(p => p.FormatItem, item => item.DisplayTitle));
 
-        Assert.Contains("Queue is empty.", cut.Markup);
+        Assert.Contains("Queue is empty", cut.Markup);
         Assert.Single(cut.FindAll("[data-qa='queue-card']"));
     }
 }
