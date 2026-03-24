@@ -364,3 +364,17 @@ mobile_smoke_screenshots/
 .vscode/*
 !.vscode/tasks.json
 !.vscode/launch.json
+
+# Claude Flow and agent swarm files
+.claude/
+.claude-flow/
+.swarm/
+.hive-mind/
+.mcp.json
+
+# Agent and skill backup/generated files
+AGENTS.md.*
+*.bak
+
+# System packages
+packages-microsoft-prod.deb
