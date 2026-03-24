@@ -48,10 +48,18 @@
         }
         else if (IsLoading && !Items.Any())
         {
-            <div class="text-center py-4 text-muted">
-                <div class="spinner-border text-secondary" role="status">
-                    <span class="visually-hidden">Loading queue…</span>
-                </div>
+            <div class="queue-panel__skeleton">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="queue-panel__skeleton-item">
+                        <div class="skeleton skeleton-icon"></div>
+                        <div class="queue-panel__skeleton-content">
+                            <div class="skeleton skeleton-text" style="width: 75%"></div>
+                            <div class="skeleton skeleton-subtext" style="width: 50%"></div>
+                        </div>
+                        <div class="skeleton skeleton-badge"></div>
+                    </div>
+                }
             </div>
         }
         else if (!Items.Any())
@@ -66,6 +74,13 @@
                 @foreach (var item in Items)
                 {
                     <li class="list-group-item queue-panel__item">
+                        <div class="queue-panel__item-art">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18V5l12-2v13"/>
+                                <circle cx="6" cy="18" r="3"/>
+                                <circle cx="18" cy="16" r="3"/>
+                            </svg>
+                        </div>
                         <div class="flex-grow-1 text-truncate">
                             <div class="fw-semibold text-truncate">@FormatItem?.Invoke(item)</div>
                             @if (!string.IsNullOrWhiteSpace(item.Album))
@@ -73,7 +88,7 @@
                                 <div class="small text-muted text-truncate">@item.Album</div>
                             }
                         </div>
-                        <span class="badge bg-secondary align-self-center">@((item.Index + 1).ToString("D2"))</span>
+                        <span class="badge queue-panel__badge align-self-center">@((item.Index + 1).ToString("D2"))</span>
                     </li>
                 }
             </ul>
