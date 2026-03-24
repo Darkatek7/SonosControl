@@ -719,6 +719,21 @@ a:focus-visible {
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
+    min-width: 0;
+    overflow-x: visible;
+}
+
+@media (max-width: 576px) {
+    .toolbar-actions {
+        overflow-x: auto;
+    }
+
+    .toolbar-actions .btn {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 .app-shell {
@@ -1226,6 +1241,7 @@ a:focus-visible {
     }
 }
 
+@media (max-width: 767.98px) {
     .media-list-header {
         display: flex;
         flex-direction: column;
@@ -1266,6 +1282,8 @@ a:focus-visible {
     .media-actions .btn,
     .media-list__actions .btn {
         min-height: 42px;
+        min-width: 0;
+        overflow: hidden;
     }
 
     .speaker-status-item--child {
@@ -1296,6 +1314,7 @@ a:focus-visible {
 
 .media-list .list-group-item span {
     flex-grow: 1;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1436,6 +1455,7 @@ a:focus-visible {
 
 .skeleton-content {
     flex-grow: 1;
+    min-width: 0;
 }
 
 .skeleton-subtext {
