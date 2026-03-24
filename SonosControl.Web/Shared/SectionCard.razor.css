@@ -8,7 +8,8 @@
     background-color: var(--surface-1);
     box-shadow: var(--shadow-xs);
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
+    word-break: break-word;
 }
 
 .section-card__header {
@@ -16,6 +17,8 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--spacing-md);
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 .section-card__header-main {
@@ -29,10 +32,16 @@
     line-height: 1;
 }
 
+.section-card__header-text {
+    min-width: 0;
+    overflow-x: hidden;
+}
+
 .section-card__header-text h3 {
     margin: 0;
     font-size: var(--font-size-xl);
     color: var(--text-primary);
+    overflow-wrap: break-word;
 }
 
 .section-card__eyebrow {
@@ -59,6 +68,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 @media (max-width: 768px) {
