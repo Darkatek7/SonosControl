@@ -44,10 +44,12 @@
 .playback-card__volume {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-    padding: 0.65rem 0.75rem;
+    gap: clamp(0.5rem, 2vw, var(--spacing-md));
+    padding: clamp(0.4rem, 1.5vw, 0.65rem) clamp(0.5rem, 2vw, 0.75rem);
     border-radius: 0.75rem;
     background: rgba(255, 255, 255, 0.08);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .playback-card__volume input[type="range"] {
