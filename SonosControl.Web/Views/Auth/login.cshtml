@@ -4,9 +4,22 @@
 }
 
 <div class="auth-shell">
-    <form id="loginForm" method="post" action="/auth/login" class="auth-card panel stack-sm">
+    <div class="auth-background-effects">
+        <div class="auth-glow auth-glow-1"></div>
+        <div class="auth-glow auth-glow-2"></div>
+    </div>
+    <form id="loginForm" method="post" action="/auth/login" class="auth-card panel stack-md">
         @Html.AntiForgeryToken()
-        <h2 class="fw-semibold text-center mb-3">🔒 Login</h2>
+        <div class="auth-card-header">
+            <div class="auth-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+            <h2 class="fw-semibold text-center">Welcome Back</h2>
+            <p class="text-muted text-center mb-0">Sign in to your account</p>
+        </div>
 
         @if (ViewBag.Error != null)
         {
@@ -19,32 +32,34 @@
             </div>
         }
 
-        <div class="mb-3">
-            <label for="username" class="form-label">Username</label>
-            <input id="username" name="username" type="text" class="form-control" required autofocus />
-        </div>
+        <div class="form-floating-group">
+            <div class="form-floating">
+                <input id="username" name="username" type="text" class="form-control auth-input" placeholder=" " required autofocus />
+                <label for="username" class="form-label-float">Username</label>
+            </div>
 
-        <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
-            <input id="password" name="password" type="password" class="form-control" required />
+            <div class="form-floating">
+                <input id="password" name="password" type="password" class="form-control auth-input" placeholder=" " required />
+                <label for="password" class="form-label-float">Password</label>
+            </div>
         </div>
 
         <div class="form-check mb-3">
-            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" checked class="form-check-input" />
+            <input id="rememberMe" name="rememberMe" type="checkbox" value="true" checked class="form-check-input auth-checkbox" />
             <input type="hidden" name="rememberMe" value="false" />
             <label for="rememberMe" class="form-check-label">Remember Me</label>
         </div>
 
-        <button id="loginBtn" type="submit" class="btn btn-primary w-100">
-            <span id="loginBtnText">Log In</span>
+        <button id="loginBtn" type="submit" class="btn btn-primary w-100 auth-submit">
+            <span id="loginBtnText">Sign In</span>
             <span id="loginSpinner" class="d-none">
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Logging in...
+                Signing in...
             </span>
         </button>
 
         <div class="text-center mt-3">
-            <a href="/register" class="auth-link text-decoration-none">Don’t have an account? Register</a>
+            <a href="/register" class="auth-link text-decoration-none">Don’t have an account? <span class="auth-link-highlight">Register</span></a>
         </div>
     </form>
 </div>
