@@ -1,12 +1,28 @@
 .playback-card {
-    border: 1px solid transparent;
-    border-radius: var(--bs-border-radius-xl);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius-2xl);
     color: var(--text-primary);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 0 40px rgba(99, 102, 241, 0.06);
     position: relative;
     overflow: hidden;
     min-height: 220px;
     min-width: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.playback-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 50px rgba(99, 102, 241, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme='dark'] .playback-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(20, 28, 45, 0.9) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 40px rgba(129, 140, 248, 0.05);
 }
 
 .playback-card__body {
@@ -23,18 +39,19 @@
     height: clamp(36px, 8vw, 48px);
     min-width: 0;
     max-width: 100%;
-    border-radius: 0.75rem;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 100%);
-    backdrop-filter: blur(10px);
+    border-radius: var(--radius-xl);
+    background: var(--gradient-primary);
+    backdrop-filter: blur(12px);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .playback-card__icon-svg {
-    color: var(--brand-primary);
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+    color: #fff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .playback-card__actions {
@@ -45,11 +62,23 @@
     display: flex;
     align-items: center;
     gap: clamp(0.5rem, 2vw, var(--spacing-md));
-    padding: clamp(0.4rem, 1.5vw, 0.65rem) clamp(0.5rem, 2vw, 0.75rem);
-    border-radius: 0.75rem;
-    background: rgba(255, 255, 255, 0.08);
+    padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(0.5rem, 2vw, 0.85rem);
+    border-radius: var(--radius-xl);
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.15);
     min-width: 0;
     overflow: hidden;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.playback-card__volume:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+[data-theme='dark'] .playback-card__volume {
+    background: rgba(129, 140, 248, 0.12);
+    border-color: rgba(129, 140, 248, 0.2);
 }
 
 .playback-card__volume input[type="range"] {
@@ -61,22 +90,25 @@
 .playback-card__volume-label {
     min-width: clamp(2rem, 6vw, 3rem);
     text-align: center;
-    font-size: clamp(0.7rem, 2vw, 0.9rem);
+    font-size: clamp(0.75rem, 2vw, 0.9rem);
+    font-weight: 600;
 }
 
 .playback-card__volume-icon {
-    color: var(--text-secondary);
+    color: var(--brand-primary);
     flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4));
 }
 
 .playback-card__title {
     color: var(--text-primary);
-    font-size: clamp(0.9rem, 3vw, 1.125rem);
+    font-size: clamp(1rem, 3vw, 1.2rem);
+    font-weight: 700;
 }
 
 .playback-card__subtitle {
     color: var(--text-muted);
-    font-size: clamp(0.75rem, 2.5vw, 0.875rem);
+    font-size: clamp(0.8rem, 2.5vw, 0.95rem);
 }
 
 @media (max-width: 992px) {

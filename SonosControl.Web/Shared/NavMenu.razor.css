@@ -1,1 +1,63 @@
-/* Navigation styling is consolidated in wwwroot/css/site.css. */
+/* Navigation styling - complementary styles to wwwroot/css/site.css */
+
+.nav-menu-container {
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, transparent 100%);
+    border-radius: var(--radius-2xl);
+    padding: var(--spacing-md);
+    transition: background 0.3s ease;
+}
+
+[data-theme='dark'] .nav-menu-container {
+    background: linear-gradient(180deg, rgba(129, 140, 248, 0.1) 0%, transparent 100%);
+}
+
+.nav-menu-item {
+    border-radius: var(--radius-lg);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.nav-menu-item::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-primary);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.nav-menu-item:hover::before {
+    opacity: 0.08;
+}
+
+.nav-menu-item.active::before {
+    opacity: 0.15;
+}
+
+.nav-menu-item.active {
+    box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.1);
+}
+
+.nav-menu-icon {
+    transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.nav-menu-item:hover .nav-menu-icon {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
+}
+
+/* Animated underline for active nav items */
+.nav-menu-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    height: 2px;
+    background: var(--gradient-primary);
+    border-radius: 1px;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
