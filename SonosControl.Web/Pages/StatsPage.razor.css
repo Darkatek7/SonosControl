@@ -8,7 +8,8 @@
 }
 
 .stats-table-wrap table {
-    min-width: 560px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 @media (max-width: 767.98px) {

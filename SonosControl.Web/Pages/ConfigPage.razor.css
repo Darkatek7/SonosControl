@@ -26,13 +26,14 @@
 }
 
 .config-tabs-scroll {
-    overflow-x: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
 }
 
 .config-tabs {
-    min-width: max-content;
-    flex-wrap: nowrap;
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow-x: hidden;
 }
 
 .config-field-stack {
@@ -49,6 +50,8 @@
 
 .speaker-volume-group {
     width: 130px;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .device-action-row {
@@ -145,8 +148,10 @@
 
 .daily-schedule-table td,
 .holiday-schedule-table td {
-    white-space: nowrap;
-    min-width: 120px;
+    white-space: normal;
+    overflow-wrap: break-word;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .holiday-import-panel {

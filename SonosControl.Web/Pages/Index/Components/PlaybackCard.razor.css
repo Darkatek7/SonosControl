@@ -14,12 +14,15 @@
     flex-direction: column;
     gap: var(--spacing-lg);
     min-width: 0;
-    overflow-x: auto;
+    overflow-x: hidden;
+    word-break: break-word;
 }
 
 .playback-card__icon {
     width: 48px;
     height: 48px;
+    min-width: 0;
+    max-width: 100%;
     border-radius: 0.75rem;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 100%);
     backdrop-filter: blur(10px);

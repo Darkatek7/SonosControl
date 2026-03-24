@@ -94,7 +94,8 @@
 }
 
 .logs-table {
-    min-width: 640px;
+    min-width: 0;
+    max-width: 100%;
     border-collapse: collapse;
 }
 
