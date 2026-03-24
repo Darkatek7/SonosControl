@@ -1,6 +1,7 @@
 @using System
 @using Microsoft.AspNetCore.Components
 @using SonosControl.DAL.Models
+@using SonosControl.Web.Shared
 
 <div class="card queue-panel" data-qa="queue-card">
     <div class="card-header queue-panel__header">
@@ -34,7 +35,7 @@
                     @onclick="Refresh"
                     disabled="@IsLoading"
                     aria-label="Refresh queue now">
-                <i class="fa fa-refresh @(IsLoading ? "fa-spin" : string.Empty)" aria-hidden="true"></i>
+                <Icon Name="refresh" Size="16" Class="@(IsLoading ? "icon-spin" : "")" />
                 Refresh
             </button>
         </div>
@@ -55,7 +56,9 @@
         }
         else if (!Items.Any())
         {
-            <p class="text-muted text-center mb-0">Queue is empty.</p>
+            <EmptyState Title="Queue is empty"
+                       Description="Add some music to your queue to see it here."
+                       IconName="queue" />
         }
         else
         {

@@ -1,11 +1,12 @@
 @using Microsoft.AspNetCore.Components
+@using SonosControl.Web.Shared
 
 <div class="card playback-card" style="@GradientStyle">
     <div class="card-body playback-card__body">
         <div class="d-flex flex-column flex-lg-row align-items-start gap-3">
             <div class="d-flex align-items-start gap-3 flex-grow-1">
                 <div class="playback-card__icon" aria-hidden="true">
-                    <i class="fa fa-music"></i>
+                    <Icon Name="music" Size="32" Class="playback-card__icon-svg" />
                 </div>
                 <div>
                     <h5 class="mb-1 playback-card__title">@StatusTitle</h5>
@@ -17,23 +18,23 @@
                         class="btn btn-light btn-sm playback-card__toggle"
                         @onclick="TogglePlayback"
                         title="@PlayToggleLabel"
-                aria-label="@PlayToggleLabel"
-                disabled="@IsLoading">
-            @if (IsLoading)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            }
-            else
-            {
-                <i class="fa @PlayToggleIcon" aria-hidden="true"></i>
-            }
+                        aria-label="@PlayToggleLabel"
+                        disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="@PlayToggleIconName" Size="16" />
+                    }
                 </button>
                 <button type="button"
                         class="btn btn-outline-secondary btn-sm playback-card__action"
                         @onclick="OpenTimer"
                         title="Schedule playback"
                         aria-label="Schedule playback">
-                    <i class="fa fa-clock-o" aria-hidden="true"></i>
+                    <Icon Name="timer" Size="16" />
                 </button>
                 @if (ShowNextTrack)
                 {
@@ -50,7 +51,7 @@
                         }
                         else
                         {
-                            <i class="fa fa-forward" aria-hidden="true"></i>
+                            <Icon Name="forward" Size="16" />
                         }
                     </button>
                 }
@@ -58,7 +59,7 @@
         </div>
 
         <div class="playback-card__volume">
-            <i class="fa fa-volume-up" aria-hidden="true"></i>
+            <Icon Name="volume" Size="16" Class="playback-card__volume-icon" />
             <input type="range"
                    class="form-range"
                    min="0"
@@ -135,7 +136,7 @@
 
     private string PlayToggleLabel => IsPlaying ? "Pause playback" : "Start playback";
 
-    private string PlayToggleIcon => IsPlaying ? "fa-pause" : "fa-play";
+    private string PlayToggleIconName => IsPlaying ? "pause" : "play";
 
     private string VolumeLabel => $"{Volume}%";
 
