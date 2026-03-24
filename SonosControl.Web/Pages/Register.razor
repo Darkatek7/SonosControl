@@ -6,8 +6,20 @@
 @inject IUnitOfWork _uow
 
 <div class="auth-shell">
-    <section class="auth-card panel stack-sm" aria-labelledby="register-heading">
-        <h3 id="register-heading" class="page-title text-center mb-3">🔐 Register New Account</h3>
+    <div class="auth-background-effects">
+        <div class="auth-glow auth-glow-1"></div>
+        <div class="auth-glow auth-glow-2"></div>
+    </div>
+    <section class="auth-card panel stack-md" aria-labelledby="register-heading">
+        <div class="auth-card-header">
+            <div class="auth-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path>
+                </svg>
+            </div>
+            <h3 id="register-heading" class="page-title text-center mb-1">Create Account</h3>
+            <p class="text-muted text-center mb-0">Join SonosControl today</p>
+        </div>
 
         @if (!allowRegistration)
         {
@@ -22,34 +34,44 @@
                 <DataAnnotationsValidator />
                 <FormStatus StatusMessage="@registerModel.statusMessage" Severity="FormStatus.AlertSeverity.Danger" />
 
-                <FormField Label="Username" Id="username">
-                    <InputText id="username" class="form-control" @bind-Value="registerModel.UserName" autofocus />
-                </FormField>
+                <div class="form-floating-group">
+                    <div class="form-floating">
+                        <InputText id="username" class="form-control auth-input" @bind-Value="registerModel.UserName" placeholder=" " autofocus />
+                        <label for="username" class="form-label-float">Username</label>
+                    </div>
 
-                <FormField Label="Email (optional)" Id="email" HelperText="Used only for account recovery.">
-                    <InputText id="email" type="email" class="form-control" @bind-Value="registerModel.Email" />
-                </FormField>
+                    <div class="form-floating">
+                        <InputText id="email" type="email" class="form-control auth-input" @bind-Value="registerModel.Email" placeholder=" " />
+                        <label for="email" class="form-label-float">Email (optional)</label>
+                    </div>
 
-                <FormField Label="Firstname" Id="firstname">
-                    <InputText id="firstname" class="form-control" @bind-Value="registerModel.Firstname" />
-                </FormField>
+                    <div class="form-row">
+                        <div class="form-floating">
+                            <InputText id="firstname" class="form-control auth-input" @bind-Value="registerModel.Firstname" placeholder=" " />
+                            <label for="firstname" class="form-label-float">First Name</label>
+                        </div>
 
-                <FormField Label="Lastname" Id="lastname">
-                    <InputText id="lastname" class="form-control" @bind-Value="registerModel.Lastname" />
-                </FormField>
+                        <div class="form-floating">
+                            <InputText id="lastname" class="form-control auth-input" @bind-Value="registerModel.Lastname" placeholder=" " />
+                            <label for="lastname" class="form-label-float">Last Name</label>
+                        </div>
+                    </div>
 
-                <FormField Label="Password" Id="password">
-                    <InputText id="password" type="password" class="form-control" @bind-Value="registerModel.Password" />
-                </FormField>
+                    <div class="form-floating">
+                        <InputText id="password" type="password" class="form-control auth-input" @bind-Value="registerModel.Password" placeholder=" " />
+                        <label for="password" class="form-label-float">Password</label>
+                    </div>
 
-                <FormField Label="Confirm Password" Id="confirmPassword">
-                    <InputText id="confirmPassword" type="password" class="form-control" @bind-Value="registerModel.ConfirmPassword" />
-                </FormField>
+                    <div class="form-floating">
+                        <InputText id="confirmPassword" type="password" class="form-control auth-input" @bind-Value="registerModel.ConfirmPassword" placeholder=" " />
+                        <label for="confirmPassword" class="form-label-float">Confirm Password</label>
+                    </div>
+                </div>
 
-                <button type="submit" class="btn btn-primary w-100 mt-2">Register</button>
+                <button type="submit" class="btn btn-primary w-100 auth-submit mt-2">Create Account</button>
 
                 <div class="text-center mt-3">
-                    <a href="/auth/login?" class="auth-link text-decoration-none">Already have an account? Login</a>
+                    <a href="/auth/login?" class="auth-link text-decoration-none">Already have an account? <span class="auth-link-highlight">Sign in</span></a>
                 </div>
             </EditForm>
         }
