@@ -48,7 +48,7 @@
                                         @foreach (var backup in _backups)
                                         {
                                             <tr>
-                                                <td class="small">@backup.FileName</td>
+                                                <td class="small text-truncate">@backup.FileName</td>
                                                 <td class="small text-muted">@backup.CreatedUtc.ToString("u")</td>
                                                 <td class="small text-muted">@FormatBytes(backup.Bytes)</td>
                                                 <td class="text-end">

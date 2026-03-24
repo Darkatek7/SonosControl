@@ -73,8 +73,8 @@
                                             @foreach (var item in _personal)
                                             {
                                                 <tr>
-                                                    <td>
-                                                        <div class="fw-semibold">@item.Name</div>
+                                                    <td class="text-truncate">
+                                                        <div class="fw-semibold text-truncate">@item.Name</div>
                                                         <div class="small text-muted">@item.Count signal(s)</div>
                                                     </td>
                                                     <td class="small">@item.MediaType</td>
@@ -126,7 +126,7 @@
                                             @foreach (var item in _timeOfDay)
                                             {
                                                 <tr>
-                                                    <td>@item.Name</td>
+                                                    <td class="text-truncate">@item.Name</td>
                                                     <td class="small text-muted">@item.MediaType</td>
                                                     <td class="text-end">@item.Count</td>
                                                 </tr>
@@ -167,7 +167,7 @@
                                             {
                                                 <tr>
                                                     <td>
-                                                        <div>@item.Name</div>
+                                                        <div class="text-truncate">@item.Name</div>
                                                         <div class="small text-muted">@item.MediaType - @item.Count plays</div>
                                                     </td>
                                                     <td class="text-end">@FormatDuration(item.Score)</td>

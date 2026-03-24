@@ -1,5 +1,21 @@
 @import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
 
+/* Text utilities */
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Design tokens */
 :root {
     color-scheme: light;
