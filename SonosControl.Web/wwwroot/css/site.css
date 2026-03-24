@@ -293,12 +293,37 @@ a:focus-visible {
     text-transform: uppercase;
     letter-spacing: 0.02em;
     min-width: 0;
-    overflow-wrap: break-word;
+    white-space: nowrap;
 }
 
 .table td {
     min-width: 0;
-    overflow-wrap: break-word;
+    white-space: normal;
+    vertical-align: middle;
+}
+
+.table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.table td:first-child,
+.table th:first-child {
+    white-space: nowrap;
+}
+
+@media (max-width: 576px) {
+    .table-responsive-md .table,
+    .table-responsive-md {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table td,
+    .table th {
+        white-space: normal;
+    }
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
