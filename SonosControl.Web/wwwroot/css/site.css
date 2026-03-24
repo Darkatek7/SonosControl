@@ -227,6 +227,8 @@ a:focus-visible {
 
 .card-body, .panel-body {
     padding: var(--spacing-lg);
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .card-footer, .panel-footer {
@@ -285,6 +287,13 @@ a:focus-visible {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.02em;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+
+.table td {
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .table-striped > tbody > tr:nth-of-type(odd) > * {
