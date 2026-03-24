@@ -8,7 +8,7 @@
                 aria-selected="@(ActiveTab == "stations" ? "true" : "false")"
                 aria-controls="panel-stations"
                 id="tab-stations">
-            📻 Stations
+            <span class="tab-icon">📻</span> Stations
         </button>
         <button class="@GetTabClass("spotify")"
                 @onclick="@(() => SetActiveTab("spotify"))"
@@ -16,7 +16,7 @@
                 aria-selected="@(ActiveTab == "spotify" ? "true" : "false")"
                 aria-controls="panel-spotify"
                 id="tab-spotify">
-            🎧 Spotify
+            <span class="tab-icon">🎧</span> Spotify
         </button>
         <button class="@GetTabClass("youtube")"
                 @onclick="@(() => SetActiveTab("youtube"))"
@@ -24,7 +24,7 @@
                 aria-selected="@(ActiveTab == "youtube" ? "true" : "false")"
                 aria-controls="panel-youtube"
                 id="tab-youtube">
-            ▶️ YouTube
+            <span class="tab-icon">▶️</span> YouTube
         </button>
     </div>
 
