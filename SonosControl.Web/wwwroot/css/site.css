@@ -557,14 +557,113 @@ a:focus-visible {
 }
 
 .currently-playing-card {
-    border-radius: var(--bs-border-radius-lg);
+    border-radius: var(--bs-border-radius-xl);
     border: 1px solid var(--bs-border-color);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--surface-1) 0%, color-mix(in srgb, var(--brand-primary) 8%, var(--surface-1)) 100%);
+}
+
+.currently-playing-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 50%);
+    pointer-events: none;
+}
+
+.currently-playing-card .card-body {
+    position: relative;
+    z-index: 1;
+}
+
+.currently-playing-art {
+    width: 140px;
+    height: 140px;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.currently-playing-art:hover {
+    transform: scale(1.02);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.currently-playing-art-placeholder {
+    width: 140px;
+    height: 140px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface-3) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.currently-playing-info {
+    min-width: 0;
+}
+
+.currently-playing-info h5 {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.currently-playing-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.currently-playing-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.currently-playing-meta-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    min-width: 50px;
+}
+
+.currently-playing-meta-value {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.currently-playing-progress {
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-family: var(--font-family-mono);
+    color: var(--text-secondary);
 }
 
 .currently-playing-text {
     word-break: break-word;
     overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+    .currently-playing-art,
+    .currently-playing-art-placeholder {
+        width: 100px;
+        height: 100px;
+    }
 }
 
 .index-refresh-badge {
@@ -1423,5 +1522,80 @@ a:focus-visible {
     .btn, .card, .list-group-item, .form-control, .modal-dialog {
         transition: none;
         animation: none;
+    }
+}
+
+/* ============================================
+   ICON ANIMATIONS
+   ============================================ */
+.icon-spin {
+    animation: icon-spin 1s linear infinite;
+}
+
+@keyframes icon-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .icon-spin {
+        animation: none;
+    }
+}
+
+/* ============================================
+   GLASSMORPHISM CARDS
+   ============================================ */
+.glass-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--bs-border-radius-xl);
+}
+
+[data-theme='dark'] .glass-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-strong {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* ============================================
+   PAGE TRANSITIONS
+   ============================================ */
+.page-enter {
+    animation: page-enter 0.4s ease-out;
+}
+
+@keyframes page-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   PLAYING PULSE ANIMATION
+   ============================================ */
+.playing-pulse {
+    animation: playing-pulse 2s ease-in-out infinite;
+}
+
+@keyframes playing-pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
     }
 }

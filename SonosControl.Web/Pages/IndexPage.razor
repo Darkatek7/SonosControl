@@ -125,25 +125,35 @@
                         }
 
                         <div class="card currently-playing-card">
-                            <div class="card-body d-flex flex-column flex-md-row align-items-start gap-3">
+                            <div class="card-body d-flex flex-column flex-md-row align-items-start gap-4">
                                 @if (!string.IsNullOrWhiteSpace(currentTrackArtUrl))
                                 {
-                                    <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="img-fluid rounded" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
+                                    <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="currently-playing-art" />
                                 }
                                 else
                                 {
-                                    <div class="d-flex align-items-center justify-content-center bg-surface-2 rounded" style="width: 120px; height: 120px;">
-                                        <Icon Name="music" Size="48" Class="text-muted" />
+                                    <div class="currently-playing-art-placeholder">
+                                        <Icon Name="music" Size="56" Class="text-muted" />
                                     </div>
                                 }
-                                <div class="flex-grow-1">
-                                    <h5 class="mb-2">Currently Playing</h5>
-                                    <p class="mb-1 text-muted currently-playing-text"><strong>Station:</strong> @currentStationDisplay</p>
-                                    <p class="mb-1 text-muted currently-playing-text"><strong>Track:</strong> @currentlyPlaying</p>
-                                    @if (!string.IsNullOrWhiteSpace(trackProgress))
-                                    {
-                                        <p class="mb-0 text-muted currently-playing-text"><strong>Time:</strong> @trackProgress</p>
-                                    }
+                                <div class="currently-playing-info flex-grow-1">
+                                    <h5 class="mb-3">Currently Playing</h5>
+                                    <div class="currently-playing-meta">
+                                        <div class="currently-playing-meta-item">
+                                            <span class="currently-playing-meta-label">Station</span>
+                                            <span class="currently-playing-meta-value">@currentStationDisplay</span>
+                                        </div>
+                                        <div class="currently-playing-meta-item">
+                                            <span class="currently-playing-meta-label">Track</span>
+                                            <span class="currently-playing-meta-value">@currentlyPlaying</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(trackProgress))
+                                        {
+                                            <div class="currently-playing-progress">
+                                                @trackProgress
+                                            </div>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         </div>
