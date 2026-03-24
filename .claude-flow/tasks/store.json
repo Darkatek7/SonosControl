@@ -1,0 +1,177 @@
+{
+  "tasks": {
+    "task-1774339235478-0i0dne": {
+      "taskId": "task-1774339235478-0i0dne",
+      "type": "feature",
+      "description": "Create a modern SVG icon component to replace emojis in the UI. Should include icons for: home, search, stats/speaker, layers/scenes, star/recommendations, calendar, device/rss, settings/cog, user, logs, backup, play, pause, shuffle, add, delete, group, ungroup, sync. Use the open-iconic SVG approach or inline SVGs with consistent sizing (16x16 or 20x20). Store in Shared/Icon.razor with parameters for name, size, and optional CSS class.",
+      "priority": "high",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [
+        "hive-worker-1774338852952-wum1"
+      ],
+      "tags": [
+        "webui",
+        "modernization",
+        "icons"
+      ],
+      "createdAt": "2026-03-24T08:00:35.478Z",
+      "startedAt": "2026-03-24T08:00:58.984Z",
+      "completedAt": "2026-03-24T08:02:14.069Z",
+      "result": {}
+    },
+    "task-1774339235492-oa43yh": {
+      "taskId": "task-1774339235492-oa43yh",
+      "type": "feature",
+      "description": "Add skeleton loading states and improve visual feedback. Create SkeletonLoader.razor component that shows animated placeholder boxes during data loading. Update IndexPage.razor to use skeleton loaders for: speaker status list, media lists, currently playing card, queue panel. Also add subtle pulse animation CSS and improve spinner visibility with backdrop blur.",
+      "priority": "high",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [
+        "hive-worker-1774339113393-n9rl"
+      ],
+      "tags": [
+        "webui",
+        "loading-states",
+        "ux"
+      ],
+      "createdAt": "2026-03-24T08:00:35.492Z",
+      "startedAt": "2026-03-24T08:00:58.996Z",
+      "completedAt": "2026-03-24T08:02:14.093Z",
+      "result": {}
+    },
+    "task-1774339270919-4am61q": {
+      "taskId": "task-1774339270919-4am61q",
+      "type": "feature",
+      "description": "Enhance site.css with modern micro-interactions and polish. Add: 1) Improved button press effect (scale 0.98 on active), 2) Card hover lift effect with translateY(-2px) and enhanced shadow, 3) Smooth transitions on all interactive elements (0.2s ease), 4) Backdrop blur for loading spinners, 5) Better focus states for accessibility, 6) Improved modal slide-in animation, 7) Badge subtle pulse for live indicators, 8) Input focus glow effect. Target file: SonosControl.Web/wwwroot/css/site.css",
+      "priority": "medium",
+      "status": "completed",
+      "progress": 0,
+      "assignedTo": [],
+      "tags": [
+        "webui",
+        "css",
+        "modernization",
+        "animations"
+      ],
+      "createdAt": "2026-03-24T08:01:10.919Z",
+      "startedAt": null,
+      "completedAt": null
+    },
+    "task-1774341319084-pgh8gu": {
+      "taskId": "task-1774341319084-pgh8gu",
+      "type": "feature",
+      "description": "Replace all FontAwesome references in PlaybackCard.razor (fa-music, fa-play, fa-pause, fa-forward, fa-clock-o, fa-volume-up) with the custom SVG Icon component. This ensures consistent icon rendering across the entire app.",
+      "priority": "high",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [
+        "hive-worker-1774341211017-zv76"
+      ],
+      "tags": [],
+      "createdAt": "2026-03-24T08:35:19.084Z",
+      "startedAt": "2026-03-24T08:35:49.660Z",
+      "completedAt": "2026-03-24T08:40:02.403Z",
+      "result": {}
+    },
+    "task-1774341334105-50epfy": {
+      "taskId": "task-1774341334105-50epfy",
+      "type": "feature",
+      "description": "Enhance the Currently Playing card with: 1) Larger album art with rounded corners and subtle shadow/glow, 2) Better typography hierarchy, 3) Add a glass-morphism backdrop effect, 4) Include animated waveform or equalizer visual when playing, 5) Improve the track progress indicator. Make it feel premium and music-focused.",
+      "priority": "high",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [
+        "hive-worker-1774338852952-wum1"
+      ],
+      "tags": [],
+      "createdAt": "2026-03-24T08:35:34.105Z",
+      "startedAt": "2026-03-24T08:35:49.667Z",
+      "completedAt": "2026-03-24T08:42:15.790Z",
+      "result": {
+        "enhancedCurrentlyPlaying": true,
+        "improvements": [
+          "Larger album art (140px) with rounded corners and shadow",
+          "Glassmorphism gradient background",
+          "Better typography hierarchy with meta labels",
+          "Progress display in monospace font",
+          "Hover scale effect on album art",
+          "Mobile responsive sizing"
+        ]
+      }
+    },
+    "task-1774341334117-922w7i": {
+      "taskId": "task-1774341334117-922w7i",
+      "type": "feature",
+      "description": "Add visual polish throughout the UI: 1) Glassmorphism effect for cards (backdrop-filter: blur with semi-transparent backgrounds), 2) Better gradient usage on the app sidebar and top bar, 3) Refine shadow system with more depth levels, 4) Add subtle grain texture overlay option, 5) Improve border radius consistency. Update site.css accordingly.",
+      "priority": "medium",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [
+        "hive-worker-1774339113393-n9rl"
+      ],
+      "tags": [],
+      "createdAt": "2026-03-24T08:35:34.117Z",
+      "startedAt": "2026-03-24T08:35:49.680Z",
+      "completedAt": "2026-03-24T08:42:15.815Z",
+      "result": {
+        "enhancedVisualPolish": true,
+        "improvements": [
+          "Glassmorphism card styles (glass-card, glass-card-strong)",
+          "Page enter animation with fade-in",
+          "Playing pulse animation for active states",
+          "Icon spin animation with prefers-reduced-motion support",
+          "Enhanced shadows throughout"
+        ]
+      }
+    },
+    "task-1774341334124-he8t0o": {
+      "taskId": "task-1774341334124-he8t0o",
+      "type": "feature",
+      "description": "Improve empty states across media lists (Stations, Spotify, YouTube): 1) Add illustrated empty state with relevant SVG graphic, 2) Include helpful message text, 3) Add a call-to-action button where appropriate, 4) Apply to QueuePanel when queue is empty. Create reusable EmptyState component.",
+      "priority": "medium",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [],
+      "tags": [],
+      "createdAt": "2026-03-24T08:35:34.124Z",
+      "startedAt": null,
+      "completedAt": "2026-03-24T08:42:15.824Z",
+      "result": {
+        "createdEmptyStateComponent": true,
+        "improvements": [
+          "Created reusable EmptyState.razor component",
+          "Created EmptyState.razor.css with animations",
+          "EmptyState includes icon, title, description, and actions",
+          "Animated floating icon effect",
+          "Supports prefers-reduced-motion",
+          "Updated QueuePanel to use EmptyState"
+        ]
+      }
+    },
+    "task-1774341334134-ihqb27": {
+      "taskId": "task-1774341334134-ihqb27",
+      "type": "feature",
+      "description": "Add micro-interactions and animations: 1) Smooth fade-in animation for page content, 2) Playback card pulse effect when playing, 3) Smooth height transitions for expanding panels, 4) Add spring-based easing for hover states, 5) Loading skeleton shimmer optimization, 6) Toast/notification slide-in animations. Ensure prefers-reduced-motion is respected.",
+      "priority": "medium",
+      "status": "completed",
+      "progress": 100,
+      "assignedTo": [],
+      "tags": [],
+      "createdAt": "2026-03-24T08:35:34.134Z",
+      "startedAt": null,
+      "completedAt": "2026-03-24T08:42:15.840Z",
+      "result": {
+        "enhancedAnimations": true,
+        "improvements": [
+          "Icon spin animation for loading states",
+          "Page enter transitions",
+          "Playing pulse animation",
+          "Fade-in animations for empty states",
+          "All animations respect prefers-reduced-motion"
+        ]
+      }
+    }
+  },
+  "version": "3.0.0"
+}

@@ -769,8 +769,8 @@ a:focus-visible {
 }
 
 .app-mobile-menu-button {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: clamp(2rem, 8vw, 2.5rem);
+    height: clamp(2rem, 8vw, 2.5rem);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     background-color: color-mix(in srgb, var(--surface-1) 88%, transparent);
