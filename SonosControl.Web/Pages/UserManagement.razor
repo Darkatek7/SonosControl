@@ -1,6 +1,7 @@
 ﻿@page "/admin/users"
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
+@using SonosControl.Web.Shared
 @inject UserManager<ApplicationUser> UserManager
 @inject RoleManager<IdentityRole> RoleManager
 @inject NavigationManager NavigationManager
@@ -179,7 +180,7 @@
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="rounded-circle bg-light d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px;">
-                                            <span class="oi oi-person text-secondary"></span>
+                                            <Icon Name="person" Size="16" Class="text-secondary" />
                                         </div>
                                         <div style="min-width: 0;">
                                             <h6 class="mb-0 fw-bold text-truncate">@user.UserName</h6>
@@ -226,7 +227,7 @@
                                                         }
                                                         else
                                                         {
-                                                            <span class="oi @(userRoles[user.Id].Contains("admin") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> <span>Admin</span>
+                                                            <Icon Name="@(userRoles[user.Id].Contains("admin") ? "minus" : "plus")" Size="16" /> <span>Admin</span>
                                                         }
                                                     </button>
                                                 </div>
@@ -241,7 +242,7 @@
                                                         }
                                                         else
                                                         {
-                                                            <span class="oi @(userRoles[user.Id].Contains("operator") ? "oi-minus" : "oi-plus")" aria-hidden="true"></span> <span>Operator</span>
+                                                            <Icon Name="@(userRoles[user.Id].Contains("operator") ? "minus" : "plus")" Size="16" /> <span>Operator</span>
                                                         }
                                                     </button>
                                                 </div>
@@ -260,7 +261,7 @@
                                                     }
                                                     else
                                                     {
-                                                        <span class="oi oi-trash" aria-hidden="true"></span> <span>Delete</span>
+                                                        <Icon Name="trash" Size="16" /> <span>Delete</span>
                                                     }
                                                 </button>
                                             </div>
@@ -275,7 +276,7 @@
                                                     }
                                                     else
                                                     {
-                                                        <span class="oi @(IsUserActive(user) ? "oi-ban" : "oi-check")" aria-hidden="true"></span> @(IsUserActive(user) ? "Block" : "Activate")
+                                                        <Icon Name="@(IsUserActive(user) ? "ban" : "check")" Size="16" /> @(IsUserActive(user) ? "Block" : "Activate")
                                                     }
                                                 </button>
                                             </div>
