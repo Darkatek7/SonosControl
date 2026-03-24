@@ -2159,41 +2159,53 @@ input[type="range"]::-moz-range-thumb {
     border-color: var(--brand-primary);
 }
 
-/* Enhanced checkbox */
-.auth-checkbox {
+/* Enhanced checkbox - override Bootstrap */
+input[type="checkbox"].auth-checkbox,
+.form-check-input.auth-checkbox {
     position: relative;
-    width: 18px;
-    height: 18px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-strong);
-    background-color: var(--surface-1);
+    width: 20px !important;
+    height: 20px !important;
+    border-radius: 4px !important;
+    border: 2px solid var(--border-strong) !important;
+    background-color: var(--surface-1) !important;
     cursor: pointer;
     transition: all var(--transition-fast);
-    -webkit-appearance: none;
-    appearance: none;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 0 0 0 !important;
+    flex-shrink: 0;
 }
 
-.auth-checkbox:checked {
-    background: var(--gradient-primary);
-    border-color: var(--brand-primary-strong);
-    box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+input[type="checkbox"].auth-checkbox:checked,
+.form-check-input.auth-checkbox:checked {
+    background: var(--gradient-primary) !important;
+    border-color: var(--brand-primary-strong) !important;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4) !important;
 }
 
-.auth-checkbox:checked::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 6px;
-    width: 5px;
-    height: 9px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
+input[type="checkbox"].auth-checkbox:checked::after,
+.form-check-input.auth-checkbox:checked::after {
+    content: '' !important;
+    position: absolute !important;
+    top: 2px !important;
+    left: 6px !important;
+    width: 6px !important;
+    height: 11px !important;
+    border: solid white !important;
+    border-width: 0 2.5px 2.5px 0 !important;
+    transform: rotate(45deg) !important;
+    background: none !important;
+    box-shadow: none !important;
 }
 
-.auth-checkbox:focus {
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-    border-color: var(--brand-primary);
+input[type="checkbox"].auth-checkbox:focus,
+.form-check-input.auth-checkbox:focus {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+    border-color: var(--brand-primary) !important;
+    outline: none !important;
 }
 
 /* Enhanced submit button */
