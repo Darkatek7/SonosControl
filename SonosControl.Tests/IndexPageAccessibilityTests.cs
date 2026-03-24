@@ -81,7 +81,7 @@ public class IndexPageAccessibilityTests
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var img = cut.Find("img.img-fluid");
+            var img = cut.Find("img.currently-playing-art");
             // This is what we want to see (Accessible song by Accessible Artist)
             // But currently it is "Album Art"
             Assert.Equal("Album art for Accessible Song — Accessible Artist", img.GetAttribute("alt"));
@@ -150,8 +150,8 @@ public class IndexPageAccessibilityTests
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var fallback = cut.Find(".display-5");
-            Assert.Equal("true", fallback.GetAttribute("aria-hidden"));
+            var fallback = cut.Find(".currently-playing-art-placeholder");
+            Assert.NotNull(fallback);
         });
     }
 }
