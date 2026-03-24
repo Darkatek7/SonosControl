@@ -146,11 +146,15 @@
 
 .logs-card__action {
     color: var(--text-primary);
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .logs-card__details {
     color: var(--text-secondary);
     min-height: 2rem;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 @media (max-width: 768px) {

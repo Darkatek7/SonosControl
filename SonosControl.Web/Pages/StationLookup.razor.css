@@ -115,16 +115,22 @@
     box-shadow: var(--shadow-xs);
 }
 
+.lookup-info {
+    min-width: 0;
+}
+
 .lookup-info strong {
     display: block;
     font-size: var(--font-size-base);
     color: var(--text-primary);
+    overflow-wrap: break-word;
 }
 
 .lookup-info small {
     display: block;
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+    overflow-wrap: break-word;
 }
 
 .lookup-actions {
