@@ -7,6 +7,8 @@
     border-radius: var(--bs-border-radius-lg);
     background-color: var(--surface-1);
     box-shadow: var(--shadow-xs);
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .section-card__header {
