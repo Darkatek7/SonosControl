@@ -220,6 +220,24 @@
             </div>
         </div>
     </section>
+
+    <section class="card media-section">
+        <div class="card-header">
+            <h5 class="mb-0">📻 Play TuneIn URL</h5>
+        </div>
+        <div class="card-body">
+            <div class="input-group">
+                <input type="text"
+                       class="form-control"
+                       @bind-value="TuneInFreeUrlValue"
+                       @bind-value:event="oninput"
+                       @onkeyup="TuneInUrlKeyPress"
+                       placeholder="Enter TuneIn URL"
+                       aria-label="TuneIn URL" />
+                <button class="btn btn-primary" type="button" @onclick="PlayTuneInUrl">Play</button>
+            </div>
+        </div>
+    </section>
 </div>
 
 @code {
@@ -318,6 +336,15 @@
 
     [Parameter]
     public EventCallback PlaySpotifyUrl { get; set; }
+
+    [Parameter]
+    public EventCallback PlayTuneInUrl { get; set; }
+
+    [Parameter]
+    public EventCallback<string> TuneInUrlChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<KeyboardEventArgs> TuneInUrlKeyPress { get; set; }
 
     [Parameter]
     public EventCallback<string> SelectedStationChanged { get; set; }
@@ -461,6 +488,20 @@
             _ = SpotifyUrlChanged.InvokeAsync(value);
         }
     }
+
+    private string TuneInFreeUrlValue
+    {
+        get => TuneInUrl ?? string.Empty;
+        set
+        {
+            if (value == TuneInUrl)
+                return;
+            _ = TuneInUrlChanged.InvokeAsync(value);
+        }
+    }
+
+    [Parameter]
+    public string? TuneInUrl { get; set; }
 
     private static string Truncate(string value)
     {

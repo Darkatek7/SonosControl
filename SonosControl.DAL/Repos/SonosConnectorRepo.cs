@@ -620,6 +620,47 @@ namespace SonosControl.DAL.Repos
             await StartPlaying(ip);
         }
 
+        public async Task PlayTuneInUrlAsync(string ip, string tuneInUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!string.IsNullOrWhiteSpace(fallbackStationUri))
+            {
+                await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            }
+
+            string trimmedUrl = tuneInUrl.Trim();
+
+            // Extract station ID from TuneIn URL patterns like:
+            // https://tunein.com/radio/Station-Name-s331690/
+            // http://tunein.com/radio/Station-Name-s331690/
+            // tunein.com/radio/Station-Name-s331690/
+            var stationMatch = Regex.Match(trimmedUrl, @"tunein\.com/radio/.*?-s(\d+)", RegexOptions.IgnoreCase);
+            string streamUri;
+
+            if (stationMatch.Success)
+            {
+                string stationId = stationMatch.Groups[1].Value;
+                // Use TuneIn stream format: x-rincon-mp3radio://stream.radioparadise.com/...
+                // Or direct TuneIn: tunein.com/stream/<stationId>
+                streamUri = $"x-rincon-mp3radio://tunein.com/stream/{stationId}";
+            }
+            else if (trimmedUrl.Contains("://"))
+            {
+                // Already has a protocol, use as-is
+                streamUri = trimmedUrl
+                    .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                // Plain stream URL
+                streamUri = trimmedUrl;
+            }
+
+            await SetTuneInStationAsync(ip, streamUri, cancellationToken);
+        }
+
 
         protected virtual async Task<string?> GetRinconIdAsync(string ip, CancellationToken cancellationToken = default)
         {

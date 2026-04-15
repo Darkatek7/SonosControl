@@ -20,6 +20,7 @@ namespace SonosControl.DAL.Interfaces
         Task<string?> SearchSpotifyTrackAsync(string query, string accessToken, CancellationToken cancellationToken = default);
         Task PlaySpotifyTrackAsync(string ip, string spotifyUri, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
         Task PlayYouTubeMusicTrackAsync(string ip, string youtubeMusicUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
+        Task PlayTuneInUrlAsync(string ip, string tuneInUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
         Task ClearQueue(string ip, CancellationToken cancellationToken = default);
         Task<SonosQueuePage> GetQueue(string ip, int startIndex = 0, int count = 100, CancellationToken cancellationToken = default);
         Task PreviousTrack(string ip, CancellationToken cancellationToken = default);
