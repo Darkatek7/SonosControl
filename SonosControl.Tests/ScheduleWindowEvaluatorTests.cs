@@ -7,7 +7,11 @@ namespace SonosControl.Tests;
 public class ScheduleWindowEvaluatorTests
 {
     private static DateTimeOffset LocalTime(int year, int month, int day, int hour, int minute)
-        => new(year, month, day, hour, minute, 0, DateTimeOffset.Now.Offset);
+    {
+        var localDateTime = new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified);
+        var offset = TimeZoneInfo.Local.GetUtcOffset(localDateTime);
+        return new DateTimeOffset(localDateTime, offset);
+    }
 
     private static ScheduleWindow AlwaysActiveWindow(string id, int priority, DateTime lastModifiedUtc)
     {
