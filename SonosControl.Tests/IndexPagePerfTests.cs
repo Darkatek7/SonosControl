@@ -87,6 +87,8 @@ namespace SonosControl.Tests
                 .ReturnsAsync("x-rincon-mp3radio://example.com/stream");
             _mockSonosRepo.Setup(s => s.IsPlaying("192.168.1.101")).ReturnsAsync(true);
             _mockSonosRepo.Setup(s => s.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
+            _mockSonosRepo.Setup(s => s.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
 
             // Simulate delay for SetTuneInStationAsync and StartPlaying to prove parallelism
             var delayTime = 100; // ms

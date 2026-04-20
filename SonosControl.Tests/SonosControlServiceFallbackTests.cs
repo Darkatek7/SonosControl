@@ -36,6 +36,8 @@ public class SonosControlServiceFallbackTests
     public async Task StartSpeaker_WhenGroupingFails_PlaysOnAllSpeakers()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
