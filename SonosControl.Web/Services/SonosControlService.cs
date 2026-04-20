@@ -95,13 +95,27 @@ namespace SonosControl.Web.Services
                 return;
             }
 
-            string masterIp = speakers.First().IpAddress;
+            var configuredSpeakers = speakers.ToList();
+            var reachableSpeakers = await GetReachableSpeakersAsync(configuredSpeakers, uow, cancellationToken);
+            if (reachableSpeakers.Count == 0)
+            {
+                Console.WriteLine($"{now:g}: No reachable speakers available for playback.");
+                return;
+            }
+
+            var skippedCount = configuredSpeakers.Count - reachableSpeakers.Count;
+            if (skippedCount > 0)
+            {
+                Console.WriteLine($"{now:g}: Skipping {skippedCount} unreachable speaker(s).");
+            }
+
+            string masterIp = ResolveMasterIp(reachableSpeakers, settings);
             bool isSynced = schedule?.IsSyncedPlayback ?? true;
 
             var targetSpeakers = new List<string>();
 
             // Ungroup all speakers first to ensure a clean slate
-            await Task.WhenAll(speakers.Select(async speaker =>
+            await Task.WhenAll(reachableSpeakers.Select(async speaker =>
             {
                 await uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken);
                 // Set volume for each speaker
@@ -114,7 +128,11 @@ namespace SonosControl.Web.Services
                 // In synced mode, we group everyone to the master, and only command the master
                 targetSpeakers.Add(masterIp);
 
-                var slaveIps = speakers.Skip(1).Select(s => s.IpAddress);
+                var slaveIps = reachableSpeakers
+                    .Where(s => !string.Equals(s.IpAddress, masterIp, StringComparison.OrdinalIgnoreCase))
+                    .Select(s => s.IpAddress)
+                    .ToList();
+
                 if (slaveIps.Any())
                 {
                     bool groupSuccess = await uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
@@ -216,6 +234,37 @@ namespace SonosControl.Web.Services
             }
 
             Console.WriteLine($"{now:g}: Started Playing");
+        }
+
+        private async Task<List<SonosSpeaker>> GetReachableSpeakersAsync(IEnumerable<SonosSpeaker> speakers, IUnitOfWork uow, CancellationToken cancellationToken)
+        {
+            var reachable = new List<SonosSpeaker>();
+
+            foreach (var speaker in speakers)
+            {
+                var uuid = await uow.ISonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(uuid))
+                {
+                    reachable.Add(speaker);
+                }
+            }
+
+            return reachable;
+        }
+
+        private static string ResolveMasterIp(IReadOnlyList<SonosSpeaker> reachableSpeakers, SonosSettings settings)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.IP_Adress))
+            {
+                var configuredMaster = reachableSpeakers.FirstOrDefault(s =>
+                    string.Equals(s.IpAddress, settings.IP_Adress, StringComparison.OrdinalIgnoreCase));
+                if (configuredMaster is not null)
+                {
+                    return configuredMaster.IpAddress;
+                }
+            }
+
+            return reachableSpeakers[0].IpAddress;
         }
 
 
