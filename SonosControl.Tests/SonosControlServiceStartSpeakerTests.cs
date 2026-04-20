@@ -64,6 +64,8 @@ public class SonosControlServiceStartSpeakerTests
     public async Task StartSpeaker_WithRandomStationSchedule_UsesSetTuneInStation()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
@@ -96,6 +98,8 @@ public class SonosControlServiceStartSpeakerTests
     public async Task StartSpeaker_WhenSynced_GroupsAndPlaysOnMaster()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
         sonosRepo.Setup(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
                  .ReturnsAsync(true);
 
@@ -142,6 +146,8 @@ public class SonosControlServiceStartSpeakerTests
     public async Task StartSpeaker_WhenNotSynced_PlaysOnAllSpeakersIndependently()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
 
@@ -179,5 +185,47 @@ public class SonosControlServiceStartSpeakerTests
         // Verify Ungrouping is called for all
         sonosRepo.Verify(r => r.UngroupSpeaker(speaker1.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
         sonosRepo.Verify(r => r.UngroupSpeaker(speaker2.IpAddress, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSpeaker_WhenConfiguredMasterIsOffline_UsesFirstReachableSpeaker()
+    {
+        var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID("192.168.1.101", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+        sonosRepo.Setup(r => r.GetSpeakerUUID("192.168.1.102", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("uuid:192.168.1.102");
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
+
+        var offlineSpeaker = new SonosSpeaker { IpAddress = "192.168.1.101" };
+        var onlineSpeaker = new SonosSpeaker { IpAddress = "192.168.1.102" };
+        var speakers = new List<SonosSpeaker> { offlineSpeaker, onlineSpeaker };
+
+        var settings = new SonosSettings
+        {
+            Stations = new List<TuneInStation>
+            {
+                new() { Name = "Rock Antenne", Url = "https://stream.rockantenne.de/rockantenne/stream/mp3" }
+            },
+            IP_Adress = offlineSpeaker.IpAddress
+        };
+
+        var schedule = new DaySchedule
+        {
+            PlayRandomStation = true,
+            IsSyncedPlayback = true
+        };
+
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
+
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(onlineSpeaker.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.SetTuneInStationAsync(offlineSpeaker.IpAddress, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+        sonosRepo.Verify(r => r.UngroupSpeaker(offlineSpeaker.IpAddress, It.IsAny<CancellationToken>()), Times.Never);
     }
 }

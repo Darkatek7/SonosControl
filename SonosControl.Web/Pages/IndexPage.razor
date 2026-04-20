@@ -1120,6 +1120,32 @@
         Logger.LogWarning(ex, "Sonos command {CommandName} failed for speaker {SpeakerIp}.", commandName, SelectedSpeakerIp);
     }
 
+    private async Task<bool> IsSpeakerReachableAsync(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return false;
+        }
+
+        var uuid = await _uow.ISonosConnectorRepo.GetSpeakerUUID(ip);
+        return !string.IsNullOrWhiteSpace(uuid);
+    }
+
+    private async Task<List<string>> FilterReachableSpeakerIpsAsync(IEnumerable<string> speakerIps)
+    {
+        var reachable = new List<string>();
+
+        foreach (var ip in speakerIps.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (await IsSpeakerReachableAsync(ip))
+            {
+                reachable.Add(ip);
+            }
+        }
+
+        return reachable;
+    }
+
     private async Task PlayMediaItem(string url, string type)
     {
         if (string.IsNullOrEmpty(url) || _settings is null) return;
@@ -1596,12 +1622,26 @@
 
         try
         {
-            var slaveIps = _settings.Speakers.Where(s => s.IpAddress != SelectedSpeakerIp).Select(s => s.IpAddress).ToList();
-            await ApplyLegacySync(SelectedSpeakerIp, slaveIps);
+            if (!await IsSpeakerReachableAsync(SelectedSpeakerIp))
+            {
+                ShowCommandStatus("Selected master speaker is offline.", isError: true, autoHideMs: 4500);
+                return;
+            }
 
-            await AddLog("Sync Play Started (Cloned URI)", "All speakers");
+            var allSlaveIps = _settings.Speakers.Where(s => s.IpAddress != SelectedSpeakerIp).Select(s => s.IpAddress).ToList();
+            var reachableSlaveIps = await FilterReachableSpeakerIpsAsync(allSlaveIps);
+            await ApplyLegacySync(SelectedSpeakerIp, reachableSlaveIps);
+
+            var skippedCount = allSlaveIps.Count - reachableSlaveIps.Count;
+            var details = skippedCount > 0
+                ? $"Reachable slaves: {string.Join(", ", reachableSlaveIps)}. Skipped offline: {skippedCount}."
+                : "All reachable speakers";
+
+            await AddLog("Sync Play Started (Cloned URI)", details);
             await NotificationService.SendNotificationAsync($"Sync Play triggered for all speakers (Legacy sync)", await GetCurrentUserAsync());
-            ShowCommandStatus("Sync Play started for all speakers.");
+            ShowCommandStatus(skippedCount > 0
+                ? $"Sync Play started. Skipped {skippedCount} offline speaker(s)."
+                : "Sync Play started for all speakers.");
         }
         catch (Exception ex)
         {
@@ -1618,6 +1658,10 @@
     private async Task ApplyLegacySync(string masterIp, IEnumerable<string> slaveIps)
     {
         var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(masterIp);
+        if (string.IsNullOrWhiteSpace(currentUri) || currentUri.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Could not read current media from master speaker {masterIp}.");
+        }
 
         var tasks = slaveIps.Select(async slaveIp =>
         {
@@ -1644,23 +1688,39 @@
 
         try
         {
+            if (!await IsSpeakerReachableAsync(SelectedSpeakerIp))
+            {
+                ShowCommandStatus("Selected master speaker is offline.", isError: true, autoHideMs: 4500);
+                return;
+            }
+
+            var reachableSlaveIps = await FilterReachableSpeakerIpsAsync(slaveIps);
+            if (!reachableSlaveIps.Any())
+            {
+                ShowCommandStatus("No reachable slave speakers available for grouping.", isError: true, autoHideMs: 4500);
+                return;
+            }
+
             // Stop slave speakers first to ensure clean grouping
-            await Task.WhenAll(slaveIps.Select(ip => _uow.ISonosConnectorRepo.StopPlaying(ip)));
+            await Task.WhenAll(reachableSlaveIps.Select(ip => _uow.ISonosConnectorRepo.StopPlaying(ip)));
 
             // Try to create the group via UPnP
-            bool success = await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, slaveIps);
+            bool success = await _uow.ISonosConnectorRepo.CreateGroup(SelectedSpeakerIp, reachableSlaveIps);
 
             if (success)
             {
-                await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", slaveIps)}");
+                await AddLog("Group Created", $"Master: {SelectedSpeakerIp}, Slaves: {string.Join(", ", reachableSlaveIps)}");
                 await NotificationService.SendNotificationAsync($"Group created with master {SelectedSpeakerIp}", await GetCurrentUserAsync());
-                ShowCommandStatus("Speaker group created.");
+                var skippedCount = slaveIps.Count - reachableSlaveIps.Count;
+                ShowCommandStatus(skippedCount > 0
+                    ? $"Speaker group created. Skipped {skippedCount} offline speaker(s)."
+                    : "Speaker group created.");
             }
             else
             {
                 Console.WriteLine("Native grouping failed. Falling back to legacy sync.");
                 await AddLog("Group Creation Failed - Fallback", $"Master: {SelectedSpeakerIp}. Attempting legacy sync.");
-                await ApplyLegacySync(SelectedSpeakerIp, slaveIps);
+                await ApplyLegacySync(SelectedSpeakerIp, reachableSlaveIps);
                 await NotificationService.SendNotificationAsync($"Group failed (UPnP error). Fallback Sync started for {SelectedSpeakerIp}", await GetCurrentUserAsync());
                 ShowCommandStatus("Native grouping failed; fallback sync started.", isError: true, autoHideMs: 4500);
             }
