@@ -116,6 +116,11 @@
                 @Body
             </article>
         </section>
+
+        @if (isAuthenticated)
+        {
+            <GlobalPlayerBar />
+        }
     </main>
 </div>
 

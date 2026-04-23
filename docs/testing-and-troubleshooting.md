@@ -17,6 +17,25 @@ dotnet test SonosControl.Tests/SonosControl.Tests.csproj --no-build --filter "Fu
 ## UI Smoke Checks
 
 ### Mobile smoke
+macOS/Linux:
+```bash
+python3 verify_mobile_smoke.py
+```
+
+Optional:
+```bash
+MOBILE_SMOKE_BASE_URL="http://localhost:5107" \
+MOBILE_SMOKE_USERNAME="admin" \
+MOBILE_SMOKE_PASSWORD="Test1234." \
+MOBILE_SMOKE_AUTOSTART=0 \
+python3 verify_mobile_smoke.py
+```
+
+On macOS, the runner auto-detects Google Chrome at
+`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If Chrome is
+installed elsewhere, set `PLAYWRIGHT_CHROME_PATH`.
+
+Windows:
 ```powershell
 .\run-mobile-smoke.ps1
 ```
@@ -43,6 +62,7 @@ Optional:
 | App runs but no playback starts | Wrong speaker IP or inactive day | Check Config page speaker IP, active days, and schedule window |
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
+| Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |
 | README screenshot script cannot log in | Missing credentials in env/args | Pass `-Username/-Password` explicitly |
 
 ## Debugging Tips

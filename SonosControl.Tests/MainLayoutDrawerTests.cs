@@ -2,10 +2,13 @@ using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Models;
+using SonosControl.Web.Data;
 using SonosControl.Web.Models;
 using SonosControl.Web.Services;
 using SonosControl.Web.Shared;
@@ -75,7 +78,23 @@ public class MainLayoutDrawerTests
 
     private static void ConfigureAuthAndTheme(TestContext ctx)
     {
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo
+            .Setup(repo => repo.GetSettings())
+            .ReturnsAsync(new SonosSettings());
+
+        var sonosRepo = new Mock<ISonosConnectorRepo>();
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(uow => uow.ISettingsRepo).Returns(settingsRepo.Object);
+        unitOfWork.SetupGet(uow => uow.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        ctx.Services.AddDbContext<ApplicationDbContext>(options =>
+            options.UseInMemoryDatabase($"main-layout-tests-{Guid.NewGuid()}"));
+        ctx.Services.AddSingleton(unitOfWork.Object);
+        ctx.Services.AddSingleton(Mock.Of<INotificationService>());
+        ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var userStore = new Mock<IUserStore<ApplicationUser>>();
         var userManager = new Mock<UserManager<ApplicationUser>>(

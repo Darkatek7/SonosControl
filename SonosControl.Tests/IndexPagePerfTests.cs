@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Bunit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -51,6 +52,8 @@ namespace SonosControl.Tests
             Services.AddSingleton(_mockAuthProvider.Object);
             Services.AddSingleton(_mockNotificationService.Object);
             Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+            Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+            Services.AddScoped<PlaybackUiStateService>();
 
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>())
@@ -103,11 +106,9 @@ namespace SonosControl.Tests
             // Wait for OnInitializedAsync
             cut.WaitForState(() => cut.Instance != null);
 
-            // Find the Sync Play button
-            var buttons = cut.FindAll("button");
-            var syncButton = buttons.FirstOrDefault(b => b.TextContent.Contains("Sync Play"));
-
-            Assert.NotNull(syncButton);
+            // Find the Home-page Sync Play button, not the global player control.
+            var syncButton = cut.Find("button.speaker-controls__sync");
+            cut.WaitForAssertion(() => Assert.False(syncButton.HasAttribute("disabled")));
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -121,6 +122,7 @@ namespace SonosControl.Tests
             // Assert
             // With 3 speakers total and 1 master (S1), we expect calls for S2 and S3.
             _mockSonosRepo.Verify(s => s.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+            _mockSonosRepo.Verify(s => s.StartPlaying(It.IsAny<string>()), Times.AtLeast(2));
         }
     }
 }

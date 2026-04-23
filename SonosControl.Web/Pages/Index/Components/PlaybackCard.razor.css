@@ -126,3 +126,13 @@
         width: 100%;
     }
 }
+
+@media (min-width: 1200px) {
+    .playback-card {
+        min-height: 180px;
+    }
+
+    .playback-card__body {
+        justify-content: space-between;
+    }
+}

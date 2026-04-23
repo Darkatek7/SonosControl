@@ -1,4 +1,5 @@
 import os
+import platform
 import sqlite3
 import subprocess
 import time
@@ -17,9 +18,16 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 SERVER_START_TIMEOUT_SECONDS = int(os.getenv("MOBILE_SMOKE_SERVER_TIMEOUT", "180"))
 AUTO_START_SERVER = os.getenv("MOBILE_SMOKE_AUTOSTART", "1") != "0"
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MOBILE_SMOKE_MAX_LOGIN_ATTEMPTS", "4"))
+CHROME_PATH = os.getenv("PLAYWRIGHT_CHROME_PATH")
+VIEWPORTS = [
+    ("mobile", 390, 844),
+    ("tablet", 992, 900),
+    ("laptop", 1366, 900),
+    ("desktop", 1920, 1080),
+]
 
 ROUTES = [
-    ("/", "home", "Sonos Control Panel"),
+    ("/", "home", "Media Sources"),
     ("/admin/users", "users", "User Management"),
     ("/config", "config", "System Configuration"),
     ("/logs", "logs", "System Logs"),
@@ -57,6 +65,13 @@ def start_local_server():
         stderr=subprocess.STDOUT,
         cwd=Path(__file__).resolve().parent,
         shell=False,
+        env={
+            **os.environ,
+            "DataProtection__KeysDirectory": os.getenv(
+                "DataProtection__KeysDirectory",
+                str((Path(__file__).resolve().parent / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
+            ),
+        },
     )
     return process, log_stream, log_path
 
@@ -80,11 +95,81 @@ def assert_no_horizontal_overflow(page):
     assert not has_overflow, "Page has horizontal overflow on mobile viewport."
 
 
+def resolve_chrome_path():
+    if CHROME_PATH:
+        path = Path(CHROME_PATH)
+        if path.exists():
+            return str(path)
+        raise RuntimeError(f"PLAYWRIGHT_CHROME_PATH does not exist: {CHROME_PATH}")
+
+    if platform.system() == "Darwin":
+        mac_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        if mac_chrome.exists():
+            return str(mac_chrome)
+
+    return None
+
+
+def launch_chromium(playwright):
+    executable_path = resolve_chrome_path()
+    if executable_path:
+        return playwright.chromium.launch(headless=True, executable_path=executable_path)
+
+    return playwright.chromium.launch(headless=True)
+
+
+def assert_global_player_visible(page):
+    player = page.locator("[data-qa='global-player-bar']")
+    expect(player).to_be_visible(timeout=10000)
+
+
+def assert_bottom_player_does_not_cover_content(page):
+    spacing = page.evaluate(
+        """
+        () => {
+            const player = document.querySelector('[data-qa="global-player-bar"]');
+            const content = document.querySelector('article.content');
+            if (!player || !content) return null;
+            const playerRect = player.getBoundingClientRect();
+            const paddingBottom = Number.parseFloat(window.getComputedStyle(content).paddingBottom) || 0;
+            return { paddingBottom, playerHeight: playerRect.height };
+        }
+        """
+    )
+    assert spacing is not None, "Global bottom player or content region missing."
+    assert (
+        spacing["paddingBottom"] + 4 >= spacing["playerHeight"]
+    ), "Main content does not reserve enough space for the global bottom player."
+
+
+def assert_spotify_home_layout(page):
+    expect(page.locator(".spotify-home-shell")).to_be_visible(timeout=10000)
+    expect(page.locator(".spotify-library")).to_be_visible(timeout=10000)
+    expect(page.locator(".spotify-home-context .playback-card")).to_be_visible(timeout=10000)
+    expect(page.locator(".spotify-home-context .spotify-now-card")).to_be_visible(timeout=10000)
+    expect(page.locator(".media-list__item").first).to_be_visible(timeout=10000)
+    expect(page.locator(".queue-panel")).to_be_visible(timeout=10000)
+    expect(page.locator("[data-qa='global-player-sync']")).to_be_visible(timeout=10000)
+
+
+def verify_responsive_home(page, output_dir):
+    for slug, width, height in VIEWPORTS:
+        page.set_viewport_size({"width": width, "height": height})
+        page.goto(f"{BASE_URL}/", wait_until="networkidle")
+        assert_global_player_visible(page)
+        assert_spotify_home_layout(page)
+        assert_no_horizontal_overflow(page)
+        assert_bottom_player_does_not_cover_content(page)
+        page.screenshot(path=str(output_dir / f"home_{slug}.png"), full_page=True)
+
+
 def verify_drawer(page):
+    page.set_viewport_size({"width": 390, "height": 844})
     menu_button = page.locator("button.app-mobile-menu-button")
     if menu_button.count() == 0:
         return
 
+    expect(menu_button.first).to_be_visible(timeout=5000)
     menu_button.first.click()
     expect(page.locator("aside.app-sidebar.is-open")).to_be_visible(timeout=5000)
 
@@ -201,7 +286,7 @@ def run():
 
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True)
+            browser = launch_chromium(p)
             context = browser.new_context(viewport={"width": 390, "height": 844})
             page = context.new_page()
 
@@ -227,11 +312,14 @@ def run():
                     f"Attempt results: {attempts_description}"
                 )
 
+            verify_responsive_home(page, output_dir)
+
             for route, slug, expected_text in ROUTES:
                 page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
                 main_content = page.locator("article.content")
                 expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
 
+                assert_global_player_visible(page)
                 verify_drawer(page)
                 assert_no_horizontal_overflow(page)
 

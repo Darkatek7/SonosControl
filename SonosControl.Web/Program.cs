@@ -52,6 +52,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
 builder.Services.AddScoped<SonosControl.Web.Services.ThemeService>();
+builder.Services.AddScoped<PlaybackUiStateService>();
 builder.Services.AddScoped<INotifier, DiscordNotificationService>();
 builder.Services.AddScoped<INotifier, TeamsNotificationService>();
 builder.Services.AddScoped<INotificationService, AggregateNotificationService>();
