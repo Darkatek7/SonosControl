@@ -8,6 +8,7 @@ using Bunit.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -144,6 +145,8 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())
@@ -265,6 +268,8 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())

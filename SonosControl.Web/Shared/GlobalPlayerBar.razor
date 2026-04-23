@@ -1,0 +1,154 @@
+@implements IDisposable
+@using SonosControl.Web.Services
+@inject PlaybackUiStateService PlaybackState
+
+<aside class="global-player-bar" data-qa="global-player-bar" aria-label="Global playback controls">
+    <div class="global-player-bar__now">
+        <div class="global-player-bar__art" aria-hidden="true">
+            @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
+            {
+                <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
+            }
+            else
+            {
+                <Icon Name="music" Size="22" />
+            }
+        </div>
+        <div class="global-player-bar__meta">
+            <strong title="@PlaybackState.CurrentTrack">@PlaybackState.CurrentTrack</strong>
+            <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay</span>
+        </div>
+    </div>
+
+    <div class="global-player-bar__center">
+        <button type="button"
+                class="global-player-bar__control"
+                @onclick="RefreshAsync"
+                title="Refresh playback state"
+                aria-label="Refresh playback state"
+                disabled="@PlaybackState.IsLoading">
+            <Icon Name="refresh" Size="16" Class="@(PlaybackState.IsLoading ? "icon-spin" : "")" />
+        </button>
+        <button type="button"
+                class="global-player-bar__play"
+                @onclick="TogglePlaybackAsync"
+                title="@PlayToggleLabel"
+                aria-label="@PlayToggleLabel"
+                disabled="@PlaybackState.IsLoading">
+            @if (PlaybackState.IsLoading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <Icon Name="@PlayToggleIcon" Size="18" />
+            }
+        </button>
+        <a href="/"
+           class="global-player-bar__control"
+           title="Open player"
+           aria-label="Open player">
+            <Icon Name="home" Size="16" />
+        </a>
+    </div>
+
+    <div class="global-player-bar__room">
+        <button type="button"
+                class="global-player-bar__sync"
+                @onclick="SyncPlayAsync"
+                title="Sync current playback to all speakers"
+                aria-label="Sync current playback to all speakers"
+                data-qa="global-player-sync"
+                disabled="@PlaybackState.IsLoading || PlaybackState.IsSyncing">
+            @if (PlaybackState.IsSyncing)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <Icon Name="refresh" Size="14" />
+                <span>Sync Play</span>
+            }
+        </button>
+
+        <label class="visually-hidden" for="global-player-speaker">Active speaker</label>
+        <select id="global-player-speaker"
+                class="form-select form-select-sm global-player-bar__speaker"
+                value="@PlaybackState.ActiveSpeakerIp"
+                @onchange="HandleSpeakerChanged"
+                aria-label="Active speaker">
+            @foreach (var speaker in PlaybackState.Speakers)
+            {
+                <option value="@speaker.IpAddress">@speaker.Name</option>
+            }
+        </select>
+
+        <div class="global-player-bar__volume">
+            <Icon Name="volume" Size="16" />
+            <input type="range"
+                   min="0"
+                   max="@PlaybackState.MaxVolume"
+                   value="@PlaybackState.Volume"
+                   @oninput="HandleVolumeChanged"
+                   aria-label="Volume" />
+            <span>@PlaybackState.Volume%</span>
+        </div>
+
+        @if (PlaybackState.IsStale)
+        {
+            <span class="global-player-bar__stale" title="Playback state may be stale">Stale</span>
+        }
+    </div>
+</aside>
+
+@code {
+    private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
+    private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
+
+    protected override async Task OnInitializedAsync()
+    {
+        PlaybackState.StateChanged += HandlePlaybackStateChanged;
+        await PlaybackState.InitializeAsync();
+    }
+
+    private Task TogglePlaybackAsync()
+    {
+        return PlaybackState.TogglePlaybackAsync();
+    }
+
+    private Task RefreshAsync()
+    {
+        return PlaybackState.RefreshAsync();
+    }
+
+    private async Task SyncPlayAsync()
+    {
+        await PlaybackState.SyncPlayAsync();
+    }
+
+    private async Task HandleSpeakerChanged(ChangeEventArgs args)
+    {
+        if (args.Value is string speakerIp)
+        {
+            await PlaybackState.SetActiveSpeakerAsync(speakerIp);
+        }
+    }
+
+    private async Task HandleVolumeChanged(ChangeEventArgs args)
+    {
+        if (args.Value is string raw && int.TryParse(raw, out var volume))
+        {
+            await PlaybackState.SetVolumeAsync(volume);
+        }
+    }
+
+    private void HandlePlaybackStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        PlaybackState.StateChanged -= HandlePlaybackStateChanged;
+    }
+}
