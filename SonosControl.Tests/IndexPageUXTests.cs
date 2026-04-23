@@ -157,13 +157,81 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            // Verify Master is present
             Assert.Contains("Living Room", cut.Markup);
+            Assert.Contains("Stereo/group: Kitchen", cut.Markup);
+            Assert.DoesNotContain("Linked to Living Room", cut.Markup);
+            Assert.DoesNotContain("↳", cut.Markup);
+            Assert.Single(cut.FindAll(".speaker-status-item"));
+            Assert.Contains("speaker-status-badge", cut.Find(".speaker-status-badge").ClassList);
+        });
+    }
 
-            // Verify Slave is present and has visual indication of grouping
-            Assert.Contains("Kitchen", cut.Markup);
-            Assert.Contains("Linked to Living Room", cut.Markup);
-            Assert.Contains("↳", cut.Markup); // The arrow indicator
+    [Fact]
+    public void IndexPage_CollapsesGroupedSpeaker_WhenChildReportsPlaying()
+    {
+        using var ctx = new TestContext();
+
+        var master = new SonosSpeaker { Name = "Office Pair", IpAddress = "192.168.1.20", Uuid = "uuid:RINCON_ABCDEF1234567890" };
+        var slave = new SonosSpeaker { Name = "Office Right", IpAddress = "192.168.1.21", Uuid = "uuid:RINCON_0000000000000001" };
+        var settings = new SonosSettings
+        {
+            IP_Adress = master.IpAddress,
+            Speakers = new List<SonosSpeaker> { master, slave }
+        };
+
+        var auth = ctx.AddTestAuthorization();
+        auth.SetAuthorized("tester");
+        auth.SetRoles("admin");
+
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        var dbContext = new ApplicationDbContext(options);
+        ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+
+        var connectorRepo = new Mock<ISonosConnectorRepo>();
+        connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
+        connectorRepo.Setup(r => r.IsPlaying(master.IpAddress)).ReturnsAsync(false);
+        connectorRepo.Setup(r => r.IsPlaying(slave.IpAddress)).ReturnsAsync(true);
+        connectorRepo.Setup(r => r.GetTrackInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosTrackInfo());
+        connectorRepo.Setup(r => r.GetTrackProgressAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
+        connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.GetCurrentStationAsync(master.IpAddress, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("");
+        connectorRepo.Setup(r => r.GetCurrentStationAsync(slave.IpAddress, It.IsAny<CancellationToken>()))
+            .ReturnsAsync($"x-rincon-group:{master.Uuid}");
+
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
+        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
+        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
+
+        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
+        ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddScoped<PlaybackUiStateService>();
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+        ctx.Services.AddSingleton<IConfiguration>(configuration);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".speaker-status-item"));
+            Assert.Contains("Office Pair", cut.Markup);
+            Assert.Contains("Stereo/group: Office Right", cut.Markup);
+            Assert.Contains("Paused", cut.Find(".speaker-status-badge").TextContent);
+            Assert.DoesNotContain("Office Right</span>", cut.Markup);
         });
     }
 
