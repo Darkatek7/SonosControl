@@ -20,7 +20,7 @@
 | Changed file pattern | Required action |
 |---|---|
 | `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `TestApp/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
-| `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `.\run-mobile-smoke.ps1` |
+| `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `python3 verify_mobile_smoke.py` on macOS/Linux or `.\run-mobile-smoke.ps1` on Windows |
 | `README.md`, `docs/**`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
 
@@ -32,9 +32,17 @@ Run only the commands required by the routing matrix for the files you changed.
 dotnet test SonosControl.sln --verbosity minimal
 ```
 
+```bash
+python3 verify_mobile_smoke.py
+```
+
+On Windows, the PowerShell wrapper is also supported:
+
 ```powershell
 .\run-mobile-smoke.ps1
 ```
+
+On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. The runner uses a writable `artifacts/mobile_smoke_dataprotection_keys` directory for local Data Protection keys unless `DataProtection__KeysDirectory` is already set.
 
 ```powershell
 markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md

@@ -18,10 +18,31 @@
     align-items: center;
     gap: var(--spacing-sm);
     flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
 }
 
 .queue-panel__select {
     min-width: 70px;
+}
+
+.queue-panel__toolbar .btn {
+    min-width: 0;
+}
+
+@media (max-width: 575.98px) {
+    .queue-panel__header {
+        align-items: stretch;
+    }
+
+    .queue-panel__toolbar {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .queue-panel__toolbar > * {
+        flex: 1 1 auto;
+    }
 }
 
 .queue-panel__body {
