@@ -80,15 +80,15 @@
 
 /* Active State with Gradient Underline */
 .media-tabs-container .nav-link.active {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+    background: color-mix(in srgb, var(--brand-primary) 14%, var(--surface-2));
     color: var(--brand-primary);
-    border-color: rgba(99, 102, 241, 0.2) !important;
-    box-shadow: var(--shadow-sm), inset 0 0 20px rgba(99, 102, 241, 0.08);
+    border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent) !important;
+    box-shadow: var(--shadow-sm), inset 0 0 20px color-mix(in srgb, var(--brand-primary) 8%, transparent);
 }
 
 .media-tabs-container .nav-link.active::before {
     transform: translateX(-50%) scaleX(1);
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary) 45%, transparent);
 }
 
 /* Focus State */
