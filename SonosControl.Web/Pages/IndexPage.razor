@@ -331,47 +331,29 @@
                         <ul class="list-group list-group-flush media-list">
                             @if (_speakerStatuses.Any())
                             {
-                                var roots = _speakerStatuses
-                                    .Where(s => string.IsNullOrEmpty(s.MasterUuid) || !_speakerStatuses.Any(m => m.Uuid == s.MasterUuid))
-                                    .OrderBy(s => s.Name);
-
-                                foreach (var root in roots)
+                                foreach (var root in _speakerStatuses.OrderBy(s => s.Name))
                                 {
-                                    <li class="list-group-item d-flex justify-content-between align-items-center speaker-status-item">
-                                        <div class="d-flex align-items-center">
-                                            <span class="me-2 status-indicator @(root.IsPlaying ? "status-playing" : "status-paused")"></span>
-                                            <div>
+                                    <li class="list-group-item speaker-status-item">
+                                        <div class="speaker-status-item__state">
+                                            <span class="status-indicator @(root.IsPlaying ? "status-playing" : "status-paused")"></span>
+                                        </div>
+                                        <div class="speaker-status-item__content">
+                                            <div class="speaker-status-item__copy">
                                                 <span class="fw-bold">@root.Name</span>
                                                 @if (root.IsPlaying && !string.IsNullOrWhiteSpace(root.Media))
                                                 {
-                                                    <br/>
                                                     <small class="text-muted">@root.Media</small>
                                                 }
+                                                @if (root.GroupMembers.Any())
+                                                {
+                                                    <small class="text-muted speaker-status-item__members">@($"Stereo/group: {string.Join(", ", root.GroupMembers)}")</small>
+                                                }
                                             </div>
-                                        </div>
-                                        <span class="badge rounded-pill text-uppercase @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
-                                            @(root.IsPlaying ? "Playing" : "Paused")
-                                        </span>
-                                    </li>
-
-                                    var children = _speakerStatuses.Where(s => s.MasterUuid == root.Uuid).OrderBy(s => s.Name);
-                                    foreach (var child in children)
-                                    {
-                                        <li class="list-group-item d-flex justify-content-between align-items-center border-start border-3 border-secondary speaker-status-item speaker-status-item--child" style="background-color: var(--surface-2);">
-                                            <div class="d-flex align-items-center">
-                                                <span class="me-2 text-muted">↳</span>
-                                                <span class="me-2 status-indicator @(child.IsPlaying ? "status-playing" : "status-paused")"></span>
-                                                <div>
-                                                    <span class="fw-bold">@child.Name</span>
-                                                    <br/>
-                                                    <small class="text-muted">Linked to @root.Name</small>
-                                                </div>
-                                            </div>
-                                            <span class="badge rounded-pill text-uppercase @(child.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
-                                                @(child.IsPlaying ? "Playing" : "Paused")
+                                            <span class="badge rounded-pill text-uppercase speaker-status-badge @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                                @(root.IsPlaying ? "Playing" : "Paused")
                                             </span>
-                                        </li>
-                                    }
+                                        </div>
+                                    </li>
                                 }
                             }
                             else
@@ -432,6 +414,7 @@
         public string? Media { get; set; }
         public string? MasterUuid { get; set; }
         public string? RawStationUrl { get; set; }
+        public List<string> GroupMembers { get; set; } = new();
     }
 
     private const int FastRefreshIntervalSeconds = 3;
@@ -758,7 +741,24 @@
         }
 
         var tasks = _settings.Speakers.Select(speaker => BuildSpeakerStatusAsync(speaker, cancellationToken)).ToList();
-        _speakerStatuses = (await Task.WhenAll(tasks)).ToList();
+        _speakerStatuses = CollapseGroupedSpeakerStatuses((await Task.WhenAll(tasks)).ToList());
+    }
+
+    private static List<SpeakerStatusViewModel> CollapseGroupedSpeakerStatuses(List<SpeakerStatusViewModel> statuses)
+    {
+        foreach (var root in statuses.Where(s => string.IsNullOrWhiteSpace(s.MasterUuid)))
+        {
+            root.GroupMembers = statuses
+                .Where(child => !string.IsNullOrWhiteSpace(child.MasterUuid) && string.Equals(child.MasterUuid, root.Uuid, StringComparison.OrdinalIgnoreCase))
+                .Select(child => child.Name ?? child.IpAddress ?? "Linked speaker")
+                .OrderBy(name => name)
+                .ToList();
+        }
+
+        return statuses
+            .Where(status => string.IsNullOrWhiteSpace(status.MasterUuid)
+                || !statuses.Any(root => string.Equals(root.Uuid, status.MasterUuid, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
     }
 
     private async Task<SpeakerStatusViewModel> BuildSpeakerStatusAsync(SonosSpeaker speaker, CancellationToken cancellationToken)

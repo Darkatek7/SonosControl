@@ -110,7 +110,7 @@
 .queue-panel__item:hover {
     background-color: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-1));
     transform: translateX(2px);
-    box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.04);
+    box-shadow: inset 0 0 20px color-mix(in srgb, var(--brand-primary) 4%, transparent);
 }
 
 .queue-panel__item:hover::before {
@@ -183,7 +183,7 @@
 
 .queue-panel__toolbar .form-switch .form-check-input:checked {
     background-color: var(--brand-primary);
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary) 40%, transparent);
 }
 
 .queue-panel__toolbar .form-switch .form-check-input:focus {
@@ -207,7 +207,7 @@
 }
 
 [data-theme='dark'] .queue-panel__item-art {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.15) 100%);
+    background: color-mix(in srgb, var(--brand-primary) 16%, var(--surface-2));
 }
 
 [data-theme='dark'] .queue-panel__skeleton-item {

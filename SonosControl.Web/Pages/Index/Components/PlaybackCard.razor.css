@@ -2,7 +2,7 @@
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: var(--radius-2xl);
     color: var(--text-primary);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 0 40px rgba(99, 102, 241, 0.06);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 40px color-mix(in srgb, var(--brand-primary) 6%, transparent);
     position: relative;
     overflow: hidden;
     min-height: 220px;
@@ -15,14 +15,14 @@
 
 .playback-card:hover {
     transform: translateY(-4px);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 50px rgba(99, 102, 241, 0.1);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 50px color-mix(in srgb, var(--brand-primary) 10%, transparent);
     border-color: rgba(255, 255, 255, 0.25);
 }
 
 [data-theme='dark'] .playback-card {
     background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(20, 28, 45, 0.9) 100%);
     border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 40px rgba(129, 140, 248, 0.05);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 40px color-mix(in srgb, var(--brand-primary) 5%, transparent);
 }
 
 .playback-card__body {
@@ -64,21 +64,21 @@
     gap: clamp(0.5rem, 2vw, var(--spacing-md));
     padding: clamp(0.5rem, 1.5vw, 0.75rem) clamp(0.5rem, 2vw, 0.85rem);
     border-radius: var(--radius-xl);
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.15);
+    background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 15%, transparent);
     min-width: 0;
     overflow: hidden;
     transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .playback-card__volume:hover {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.25);
+    background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 25%, transparent);
 }
 
 [data-theme='dark'] .playback-card__volume {
-    background: rgba(129, 140, 248, 0.12);
-    border-color: rgba(129, 140, 248, 0.2);
+    background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 20%, transparent);
 }
 
 .playback-card__volume input[type="range"] {
@@ -97,7 +97,7 @@
 .playback-card__volume-icon {
     color: var(--brand-primary);
     flex-shrink: 0;
-    filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--brand-primary) 40%, transparent));
 }
 
 .playback-card__title {
