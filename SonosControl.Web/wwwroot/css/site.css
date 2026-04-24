@@ -2096,6 +2096,9 @@ a:focus-visible {
 
 .speaker-status-item__copy {
     min-width: 0;
+    width: 100%;
+    justify-self: start;
+    text-align: left;
 }
 
 .speaker-status-item .fw-bold,
@@ -2106,6 +2109,7 @@ a:focus-visible {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: left;
 }
 
 .speaker-status-badge {
