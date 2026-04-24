@@ -22,6 +22,16 @@
     min-width: 0;
 }
 
+.queue-panel__interval {
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+.queue-panel__interval-label {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .queue-panel__select {
     min-width: 70px;
 }

@@ -9,8 +9,8 @@
             <h5 class="mb-0">Playback Queue</h5>
         </div>
         <div class="queue-panel__toolbar">
-            <div class="d-flex align-items-center gap-2">
-                <label class="form-label small mb-0 text-muted" for="@RefreshSelectId">Refresh every</label>
+            <div class="d-flex align-items-center gap-2 queue-panel__interval">
+                <label class="form-label small mb-0 text-muted queue-panel__interval-label" for="@RefreshSelectId">Refresh every</label>
                 <select id="@RefreshSelectId"
                         class="form-select form-select-sm queue-panel__select"
                         value="@RefreshIntervalSeconds"
