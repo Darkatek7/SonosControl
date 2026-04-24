@@ -1,149 +1,391 @@
-.config-shell {
-    max-width: min(100%, 1100px);
-    margin: 0 auto;
-    padding: var(--spacing-lg);
-    border-radius: var(--bs-border-radius-xl);
-    border: 1px solid var(--border-strong);
-    background-color: var(--surface-0);
-    box-shadow: var(--shadow-md);
+.config-console-shell {
+    width: 100%;
+    max-width: 1800px;
+    margin-inline: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: clamp(1rem, 1.5vw, 1.5rem);
+    min-width: 0;
 }
 
-.config-shell__header {
+.config-console-hero,
+.config-rail,
+.config-panel,
+.config-subpanel,
+.daily-schedule-table-wrapper,
+.holiday-table-wrapper,
+.holiday-import-panel,
+.schedule-card,
+.holiday-card {
+    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+    border-radius: 1rem;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.config-console-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    padding: clamp(1rem, 2vw, 1.4rem);
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 16%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #04070d 6%) 0%, color-mix(in srgb, #101423 80%, var(--surface-1)) 100%);
+    min-width: 0;
+}
+
+.config-console-hero__copy {
+    min-width: 0;
+}
+
+.config-console-hero h1 {
+    margin: 0.25rem 0 0;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 0.98;
+    max-width: 13ch;
+}
+
+.config-console-hero p {
+    margin: 0.75rem 0 0;
+    max-width: 42rem;
+    color: color-mix(in srgb, var(--text-secondary) 88%, #fff 12%);
+}
+
+.config-console-hero__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex: 0 0 auto;
+    padding: 0.65rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--brand-success) 35%, transparent);
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--brand-success) 62%, white 38%);
+    background: color-mix(in srgb, var(--brand-success) 12%, transparent);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.config-console-layout {
+    display: grid;
+    grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+    gap: clamp(1rem, 1.5vw, 1.5rem);
+    align-items: start;
+    min-width: 0;
+}
+
+.config-rail {
+    position: sticky;
+    top: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    min-width: 0;
+}
+
+.config-rail__button {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    gap: var(--spacing-sm);
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    padding: 0.75rem;
+    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), transform var(--transition-fast);
+}
+
+.config-rail__button:hover,
+.config-rail__button:focus-visible {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--brand-primary) 18%, transparent);
+}
+
+.config-rail__button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.config-rail__button.active {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--brand-primary) 18%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--brand-primary) 35%, transparent);
+    box-shadow: inset 0 0 20px color-mix(in srgb, var(--brand-primary) 8%, transparent);
+}
+
+.config-rail__button.active .config-rail__icon {
+    background: var(--gradient-primary);
+    color: #fff;
+    box-shadow: var(--shadow-glow-accent);
+}
+
+.config-rail__button strong,
+.config-rail__button small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.config-rail__button strong {
+    font-size: var(--font-size-sm);
+    line-height: 1.1;
+}
+
+.config-rail__button small {
+    margin-top: 0.15rem;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+}
+
+.config-rail__icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--surface-2) 85%, transparent);
+    color: var(--brand-primary);
+    transition: background var(--transition-base), color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.config-workspace {
+    min-width: 0;
+}
+
+.config-panel {
+    padding: clamp(1rem, 1.5vw, 1.25rem);
+    min-width: 0;
+}
+
+.config-panel__header {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: var(--spacing-lg);
-    color: var(--text-secondary);
-}
-
-.config-shell__title {
-    margin: 0;
-    font-size: var(--font-size-2xl);
-    color: var(--text-primary);
-}
-
-.config-tabs-scroll {
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-}
-
-.config-tabs {
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
     min-width: 0;
-    flex-wrap: wrap;
-    overflow-x: hidden;
+}
+
+.config-panel__header h2 {
+    margin: 0.15rem 0 0;
+    font-size: clamp(1.25rem, 1.1vw + 1rem, 1.7rem);
+}
+
+.config-panel__meta {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 60%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-2) 74%, transparent);
 }
 
 .config-field-stack {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-md);
+    align-items: start;
+}
+
+.config-field-stack--device {
+    grid-template-columns: minmax(20rem, 1.15fr) minmax(16rem, 0.85fr);
 }
 
 .config-field {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-2xs);
+    min-width: 0;
+}
+
+.config-field--wide {
+    grid-row: span 4;
+}
+
+.config-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.config-speaker-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-md);
+}
+
+.config-speaker-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+    border-radius: 0.8rem !important;
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    min-width: 0;
+}
+
+.config-speaker-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex: 0 0 auto;
 }
 
 .speaker-volume-group {
-    width: clamp(80px, 20vw, 130px);
+    width: clamp(6.5rem, 12vw, 8.25rem);
     min-width: 0;
     max-width: 100%;
 }
 
-.device-action-row {
+.config-subpanel {
+    padding: var(--spacing-md);
+    border-radius: 0.85rem;
+    box-shadow: var(--shadow-xs);
+}
+
+.config-subpanel__header {
     display: flex;
-    gap: var(--spacing-sm);
     align-items: center;
-    flex-wrap: wrap;
-}
-
-.gradient-inputs {
-    display: flex;
+    justify-content: space-between;
     gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    color: var(--brand-primary);
+}
+
+.config-subpanel__header h3 {
+    margin: 0;
+    font-size: var(--font-size-base);
+}
+
+.config-action-button,
+.config-icon-button,
+.holiday-import-actions .btn,
+.input-group .btn {
+    display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-xs);
 }
 
-.gradient-input__label {
-    letter-spacing: 0.1em;
-    font-size: var(--font-size-xs);
-    display: block;
-    color: var(--text-muted);
+.config-icon-button {
+    min-width: 2.35rem;
 }
 
-.gradient-input__color {
-    width: clamp(2.5rem, 8vw, 3rem);
-    height: clamp(2.5rem, 8vw, 3rem);
-    border: none;
-    padding: 0;
-    background: transparent;
+.config-panel .form-control:disabled,
+.config-panel .form-select:disabled {
+    color: color-mix(in srgb, var(--text-secondary) 86%, white 14%);
+    background-color: color-mix(in srgb, var(--surface-2) 72%, transparent);
+    border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+    opacity: 1;
+    -webkit-text-fill-color: color-mix(in srgb, var(--text-secondary) 86%, white 14%);
 }
 
-.gradient-preview {
-    height: 2.5rem;
-    border-radius: var(--radius-sm);
-    border: 1px solid color-mix(in srgb, var(--text-secondary) 40%, transparent);
-    box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.35);
+.config-empty-state {
+    border: 1px dashed var(--border-strong);
+    border-radius: 0.8rem;
+    padding: var(--spacing-md);
+    background: color-mix(in srgb, var(--surface-2) 52%, transparent);
+    margin-bottom: var(--spacing-md);
 }
 
 .schedule-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
 }
 
 .schedule-field {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-2xs);
+    min-width: 0;
 }
 
 .schedule-days {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-2xs);
+    margin-bottom: var(--spacing-md);
 }
 
 .active-days-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-    gap: var(--spacing-2xs);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--spacing-xs);
 }
 
-.daily-schedule-table-wrapper,
-.holiday-table-wrapper {
-    border: 1px solid var(--border-strong);
-    border-radius: var(--bs-border-radius-md);
-    background-color: var(--surface-1);
-    overflow: hidden;
-    box-shadow: var(--shadow-xs);
+.active-days-grid .btn {
+    color: var(--text-secondary);
+    border-color: color-mix(in srgb, var(--border-strong) 70%, transparent);
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    font-weight: 800;
+}
+
+.active-days-grid .btn-check:checked + .btn {
+    color: #fff;
+    background: var(--gradient-primary);
+    border-color: color-mix(in srgb, var(--brand-primary) 80%, white 20%);
+    box-shadow: var(--shadow-glow-accent);
 }
 
 .daily-schedule-table-scroll,
 .holiday-table-scroll {
     overflow: auto;
-    max-height: 28rem;
+    max-height: 30rem;
 }
 
 .daily-schedule-table,
 .holiday-schedule-table {
     min-width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--text-primary);
+}
+
+.daily-schedule-table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: color-mix(in srgb, var(--surface-2) 52%, transparent);
+    --bs-table-color: var(--text-primary);
+    --bs-table-striped-color: var(--text-primary);
+    --bs-table-border-color: var(--border-subtle);
+}
+
+.holiday-schedule-table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: color-mix(in srgb, var(--surface-2) 48%, transparent);
+    --bs-table-color: var(--text-primary);
+    --bs-table-striped-color: var(--text-primary);
+    --bs-table-border-color: var(--border-subtle);
 }
 
 .daily-schedule-table thead th,
 .holiday-schedule-table thead th {
     position: sticky;
     top: 0;
-    background-color: var(--surface-2);
     z-index: 2;
-    font-size: 0.75rem;
+    background: color-mix(in srgb, var(--surface-2) 88%, #020617 12%);
+    color: var(--text-muted);
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    border-bottom-color: color-mix(in srgb, var(--border-strong) 70%, transparent);
 }
 
 .daily-schedule-table td,
@@ -152,6 +394,14 @@
     overflow-wrap: break-word;
     min-width: 0;
     max-width: 100%;
+    vertical-align: middle;
+}
+
+.daily-schedule-table .form-control,
+.daily-schedule-table .form-select,
+.holiday-schedule-table .form-control,
+.holiday-schedule-table .form-select {
+    min-width: 7rem;
 }
 
 .holiday-import-panel {
@@ -159,9 +409,7 @@
     flex-direction: column;
     gap: var(--spacing-2xs);
     padding: var(--spacing-md);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--bs-border-radius-md);
-    background-color: var(--surface-1);
+    margin-bottom: var(--spacing-md);
 }
 
 .holiday-import-actions {
@@ -173,6 +421,67 @@
 
 .holiday-import-message {
     color: var(--brand-info);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+}
+
+.config-file-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    min-width: 0;
+    max-width: 100%;
+}
+
+.config-file-picker ::deep .config-file-input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.config-file-picker__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    min-height: 2.1rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 64%, var(--border-strong));
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--brand-primary) 20%, var(--surface-2));
+    color: color-mix(in srgb, var(--brand-primary) 58%, white 42%);
+    font-size: var(--font-size-sm);
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.config-file-picker__button:hover,
+.config-file-picker ::deep .config-file-input:focus-visible + .config-file-picker__button {
+    background: var(--gradient-primary);
+    border-color: color-mix(in srgb, var(--brand-primary) 82%, white 18%);
+    color: #fff;
+    box-shadow: var(--shadow-glow-accent);
+}
+
+.config-file-picker__button.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+    box-shadow: none;
+}
+
+.config-file-picker__name {
+    min-width: 0;
+    max-width: min(48vw, 24rem);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .holiday-editor {
@@ -201,17 +510,14 @@
 
 .schedule-card,
 .holiday-card {
-    border: 1px solid var(--border-strong);
-    border-radius: var(--bs-border-radius-md);
-    background-color: var(--surface-1);
-    box-shadow: var(--shadow-xs);
+    overflow: hidden;
 }
 
 .schedule-card__header,
 .holiday-card__header {
     padding: var(--spacing-sm) var(--spacing-md);
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--surface-2);
+    background: color-mix(in srgb, var(--surface-2) 75%, transparent);
     min-width: 0;
     overflow-wrap: break-word;
 }
@@ -227,31 +533,103 @@
     margin-top: var(--spacing-lg);
 }
 
-@media (max-width: 768px) {
-    .config-shell {
+@media (max-width: 1199.98px) {
+    .config-console-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .config-rail {
+        position: static;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .config-rail__button {
+        grid-template-columns: 1.9rem minmax(0, 1fr);
+        padding: 0.65rem;
+    }
+
+    .config-rail__icon {
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: 0.55rem;
+    }
+
+    .config-field-stack--device {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .config-field--wide {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .config-console-hero {
+        align-items: flex-start;
+        flex-direction: column;
         padding: var(--spacing-md);
     }
 
-    .config-shell__header {
+    .config-console-hero h1 {
+        font-size: 2.1rem;
+    }
+
+    .config-console-hero__status {
+        width: 100%;
+        justify-content: center;
+        white-space: normal;
+    }
+
+    .config-rail {
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+    }
+
+    .config-rail__button {
+        flex: 0 0 min(72vw, 15rem);
+        scroll-snap-align: start;
+    }
+
+    .config-panel {
+        padding: var(--spacing-md);
+    }
+
+    .config-panel__header {
         flex-direction: column;
     }
 
-    .device-action-row button {
+    .config-panel__meta,
+    .config-panel__header .btn {
         width: 100%;
+        justify-content: center;
     }
 
     .config-field-stack,
+    .config-field-stack--device,
     .schedule-grid {
         grid-template-columns: 1fr;
     }
 
-    .config-tabs {
-        padding-left: var(--spacing-md) !important;
-        padding-right: var(--spacing-md) !important;
+    .config-speaker-item {
+        align-items: stretch;
+        flex-direction: column;
     }
 
-    .config-tabs .nav-link {
-        white-space: nowrap;
+    .config-speaker-actions {
+        width: 100%;
+    }
+
+    .speaker-volume-group {
+        flex: 1 1 auto;
+        width: auto;
+    }
+
+    .active-days-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
     .daily-schedule-table-scroll,
@@ -261,6 +639,10 @@
 }
 
 @media (max-width: 576px) {
+    .config-rail__button small {
+        display: none;
+    }
+
     .active-days-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -279,4 +661,3 @@
         padding: var(--spacing-sm);
     }
 }
-
