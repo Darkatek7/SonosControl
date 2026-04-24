@@ -17,40 +17,76 @@
 }
 else
 {
-    <div class="config-shell surface-1 rounded-4 shadow-sm border border-secondary">
-        <header class="config-shell__header">
-            <div>
-                <h2 class="config-shell__title">🔧 System Configuration</h2>
-                <p class="text-muted mb-0">Fine-tune playback behavior, schedules, and overrides for the Sonos speaker.</p>
+    <div class="config-console-shell">
+        <header class="config-console-hero">
+            <div class="config-console-hero__copy">
+                <span class="spotify-eyebrow mb-0">SonosControl</span>
+                <h1>System Configuration.</h1>
+                <p>Fine-tune playback behavior, schedule automation, and one-off overrides from a compact admin console.</p>
             </div>
-            <p class="text-muted small mb-0">Changes save automatically.</p>
+            <div class="config-console-hero__status" aria-label="Configuration save status">
+                <Icon Name="check" Size="18" />
+                <span>Changes save automatically</span>
+            </div>
         </header>
 
-        <div class="config-tabs-scroll">
-        <nav class="nav nav-tabs px-4 config-tabs">
-            <button class="nav-link @(_activeTab == "device" ? "active" : "")" @onclick="@(() => _activeTab = "device")">🎛️ Device</button>
-            <button class="nav-link @(_activeTab == "schedules" ? "active" : "")" @onclick="@(() => _activeTab = "schedules")">📅 Schedules</button>
-            <button class="nav-link @(_activeTab == "holidays" ? "active" : "")" @onclick="@(() => _activeTab = "holidays")">🎯 Holidays</button>
-        </nav>
-        </div>
+        <div class="config-console-layout">
+            <aside class="config-rail" aria-label="Configuration sections">
+                <button type="button"
+                        class="config-rail__button @(_activeTab == "device" ? "active" : "")"
+                        @onclick="@(() => _activeTab = "device")">
+                    <span class="config-rail__icon"><Icon Name="settings" Size="18" /></span>
+                    <span>
+                        <strong>Device</strong>
+                        <small>Speakers and defaults</small>
+                    </span>
+                </button>
+                <button type="button"
+                        class="config-rail__button @(_activeTab == "schedules" ? "active" : "")"
+                        @onclick="@(() => _activeTab = "schedules")">
+                    <span class="config-rail__icon"><Icon Name="calendar" Size="18" /></span>
+                    <span>
+                        <strong>Schedules</strong>
+                        <small>Daily automation</small>
+                    </span>
+                </button>
+                <button type="button"
+                        class="config-rail__button @(_activeTab == "holidays" ? "active" : "")"
+                        @onclick="@(() => _activeTab = "holidays")">
+                    <span class="config-rail__icon"><Icon Name="star" Size="18" /></span>
+                    <span>
+                        <strong>Holidays</strong>
+                        <small>Date overrides</small>
+                    </span>
+                </button>
+            </aside>
 
-        <div class="tab-content p-4">
+            <main class="config-workspace">
             @if (_activeTab == "device")
             {
-                <div class="config-field-stack">
-                    <div class="config-field">
-                        <label class="form-label">🔈 Speakers</label>
+                <section class="config-panel" aria-labelledby="config-device-heading">
+                    <div class="config-panel__header">
+                        <div>
+                            <span class="spotify-eyebrow">Device</span>
+                            <h2 id="config-device-heading">Speakers and playback defaults</h2>
+                        </div>
+                        <span class="config-panel__meta">@_settings.Speakers.Count speaker@(_settings.Speakers.Count == 1 ? "" : "s") configured</span>
+                    </div>
+
+                    <div class="config-field-stack config-field-stack--device">
+                        <div class="config-field config-field--wide">
+                            <label class="form-label config-label"><Icon Name="speaker" Size="16" /> Speakers</label>
                         @if (_settings.Speakers.Any())
                         {
-                            <div class="list-group mb-3">
+                            <div class="list-group config-speaker-list">
                                 @foreach (var speaker in _settings.Speakers)
                                 {
-                                    <div class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <div class="list-group-item config-speaker-item">
                                         <div class="flex-grow-1">
                                             <strong class="d-block text-truncate">@speaker.Name</strong>
                                             <div class="text-muted small">@speaker.IpAddress</div>
                                         </div>
-                                        <div class="d-flex align-items-center gap-2">
+                                        <div class="config-speaker-actions">
                                             <div class="input-group input-group-sm speaker-volume-group">
                                                 <span class="input-group-text">Vol</span>
                                                 <input type="number" class="form-control"
@@ -61,7 +97,9 @@ else
                                                        placeholder="@_settings.Volume"
                                                        aria-label="@($"Startup Volume for {speaker.Name}")" />
                                             </div>
-                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="@($"Remove speaker {speaker.Name}")">Remove</button>
+                                            <button class="btn btn-sm btn-outline-danger config-icon-button" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="@($"Remove speaker {speaker.Name}")" title="Remove speaker">
+                                                <Icon Name="trash" Size="15" />
+                                            </button>
                                         </div>
                                     </div>
                                 }
@@ -69,11 +107,14 @@ else
                         }
                         else
                         {
-                            <p class="text-muted">No speakers configured.</p>
+                            <div class="config-empty-state text-muted">No speakers configured.</div>
                         }
 
-                        <div class="card p-3">
-                            <h6>Add New Speaker</h6>
+                        <div class="config-subpanel">
+                            <div class="config-subpanel__header">
+                                <h3>Add new speaker</h3>
+                                <Icon Name="plus" Size="16" />
+                            </div>
                             @if (!string.IsNullOrEmpty(_speakerValidationMessage))
                             {
                                 <div class="alert alert-danger mb-2 p-2 small">@_speakerValidationMessage</div>
@@ -86,7 +127,7 @@ else
                                 <label class="form-label" for="newSpeakerIp">IP Address</label>
                                 <input id="newSpeakerIp" type="text" class="form-control" @bind="_newSpeakerIp" placeholder="e.g. 192.168.1.50" disabled="@(!canEditIp)" />
                             </div>
-                            <button class="btn btn-primary btn-sm" @onclick="AddSpeaker" disabled="@(!canEditIp || string.IsNullOrWhiteSpace(_newSpeakerIp) || _isAddingSpeaker)">
+                            <button class="btn btn-primary btn-sm config-action-button" @onclick="AddSpeaker" disabled="@(!canEditIp || string.IsNullOrWhiteSpace(_newSpeakerIp) || _isAddingSpeaker)">
                                 @if (_isAddingSpeaker)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -94,6 +135,7 @@ else
                                 }
                                 else
                                 {
+                                    <Icon Name="plus" Size="15" />
                                     <span>Add Speaker</span>
                                 }
                             </button>
@@ -101,7 +143,7 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label" for="discordWebhook">📢 Discord Webhook</label>
+                        <label class="form-label config-label" for="discordWebhook"><Icon Name="link" Size="16" /> Discord Webhook</label>
                         @if (_editingDiscordWebhook)
                         {
                             <div class="input-group">
@@ -112,7 +154,7 @@ else
                                        placeholder="https://discord.com/api/webhooks/..."
                                        aria-label="Discord Webhook URL"
                                        autofocus />
-                                <button class="btn btn-outline-secondary" @onclick="() => _editingDiscordWebhook = false" aria-label="Save Discord Webhook">Done</button>
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingDiscordWebhook = false" aria-label="Save Discord Webhook"><Icon Name="check" Size="15" /> Done</button>
                             </div>
                         }
                         else
@@ -121,7 +163,7 @@ else
                                 <div class="form-control text-muted text-truncate surface-2">
                                     @GetTruncatedUrl(_settings.DiscordWebhookUrl)
                                 </div>
-                                <button class="btn btn-outline-primary" @onclick="() => _editingDiscordWebhook = true" aria-label="Edit Discord Webhook">Edit</button>
+                                <button class="btn btn-outline-primary config-icon-button" @onclick="() => _editingDiscordWebhook = true" aria-label="Edit Discord Webhook" title="Edit Discord Webhook"><Icon Name="edit" Size="15" /></button>
                             </div>
                         }
                         <div class="form-text text-muted text-opacity-75">
@@ -130,7 +172,7 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label" for="teamsWebhook">💬 Teams Webhook</label>
+                        <label class="form-label config-label" for="teamsWebhook"><Icon Name="link" Size="16" /> Teams Webhook</label>
                         @if (_editingTeamsWebhook)
                         {
                             <div class="input-group">
@@ -141,7 +183,7 @@ else
                                        placeholder="https://outlook.office.com/webhook/..."
                                        aria-label="Teams Webhook URL"
                                        autofocus />
-                                <button class="btn btn-outline-secondary" @onclick="() => _editingTeamsWebhook = false" aria-label="Save Teams Webhook">Done</button>
+                                <button class="btn btn-outline-secondary" @onclick="() => _editingTeamsWebhook = false" aria-label="Save Teams Webhook"><Icon Name="check" Size="15" /> Done</button>
                             </div>
                         }
                         else
@@ -150,7 +192,7 @@ else
                                 <div class="form-control text-muted text-truncate surface-2">
                                     @GetTruncatedUrl(_settings.TeamsWebhookUrl)
                                 </div>
-                                <button class="btn btn-outline-primary" @onclick="() => _editingTeamsWebhook = true" aria-label="Edit Teams Webhook">Edit</button>
+                                <button class="btn btn-outline-primary config-icon-button" @onclick="() => _editingTeamsWebhook = true" aria-label="Edit Teams Webhook" title="Edit Teams Webhook"><Icon Name="edit" Size="15" /></button>
                             </div>
                         }
                         <div class="form-text text-muted text-opacity-75">
@@ -159,7 +201,7 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label" for="autoPlay">🎵 Auto Play</label>
+                        <label class="form-label config-label" for="autoPlay"><Icon Name="music" Size="16" /> Auto Play</label>
                         <select id="autoPlay" class="form-select"
                                 @bind="AutoPlaySelection" @bind:event="onchange">
                             <option value="">-- None --</option>
@@ -188,7 +230,7 @@ else
                     </div>
 
                     <div class="config-field">
-                        <label class="form-label" for="maxVolume">🔊 Max Volume</label>
+                        <label class="form-label config-label" for="maxVolume"><Icon Name="volume" Size="16" /> Max Volume</label>
                         <input id="maxVolume" type="number" class="form-control"
                                min="0" max="100"
                                @bind-value="MaxVolume"
@@ -198,24 +240,34 @@ else
                         </div>
                     </div>
                 </div>
+                </section>
             }
             @if (_activeTab == "schedules")
             {
+                <section class="config-panel" aria-labelledby="config-schedules-heading">
+                    <div class="config-panel__header">
+                        <div>
+                            <span class="spotify-eyebrow">Schedules</span>
+                            <h2 id="config-schedules-heading">Daily automation</h2>
+                        </div>
+                        <span class="config-panel__meta">Server time @TimeRightNow.ToString("HH:mm")</span>
+                    </div>
+
                 <div class="schedule-grid">
                     <div class="schedule-field">
-                        <label class="form-label" for="startTime">⏰ Start Time</label>
+                        <label class="form-label config-label" for="startTime"><Icon Name="clock" Size="16" /> Start Time</label>
                         <input id="startTime" type="time" class="form-control"
                                @bind-value="StartTime"
                                @bind-value:event="oninput"/>
                     </div>
                     <div class="schedule-field">
-                        <label class="form-label" for="stopTime">🛑 Stop Time</label>
+                        <label class="form-label config-label" for="stopTime"><Icon Name="timer" Size="16" /> Stop Time</label>
                         <input id="stopTime" type="time" class="form-control"
                                @bind-value="StopTime"
                                @bind-value:event="oninput"/>
                     </div>
                     <div class="schedule-field">
-                        <label class="form-label" for="serverTime">📅 Server Time</label>
+                        <label class="form-label config-label" for="serverTime"><Icon Name="calendar" Size="16" /> Server Time</label>
                         <input id="serverTime" type="time" class="form-control"
                                disabled
                                @bind-value="TimeRightNow"/>
@@ -223,7 +275,7 @@ else
                 </div>
 
                 <div class="schedule-days">
-                    <label class="form-label d-block">📆 Active Days</label>
+                    <label class="form-label config-label d-flex"><Icon Name="calendar" Size="16" /> Active Days</label>
                     <div class="active-days-grid">
                         @foreach (var day in Enum.GetValues<DayOfWeek>().OrderBy(d => ((int) d + 6) % 7))
                         {
@@ -386,17 +438,41 @@ else
                         </article>
                     }
                 </div>
+                </section>
             }
             @if (_activeTab == "holidays")
             {
+                <section class="config-panel" aria-labelledby="config-holidays-heading">
+                    <div class="config-panel__header">
+                        <div>
+                            <span class="spotify-eyebrow">Holidays</span>
+                            <h2 id="config-holidays-heading">Date-specific overrides</h2>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm config-action-button" @onclick="AddHolidayOverride">
+                            <Icon Name="plus" Size="15" />
+                            <span>Add Holiday</span>
+                        </button>
+                    </div>
+
                 <p class="form-text text-muted">
                     Import calendar dates or define one-off playback rules for specific days. Overrides replace the standard daily plan when an exact date matches.
                 </p>
 
                 <div class="holiday-import-panel">
                     <div class="holiday-import-actions">
-                        <InputFile OnChange="ImportHolidayCalendarAsync" accept=".ics,text/calendar" disabled="@_importingCalendar"/>
-                        <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))">Clear Message</button>
+                        <div class="config-file-picker">
+                            <InputFile id="holidayCalendarImport"
+                                       class="config-file-input"
+                                       OnChange="ImportHolidayCalendarAsync"
+                                       accept=".ics,text/calendar"
+                                       disabled="@_importingCalendar"/>
+                            <label class="config-file-picker__button @(_importingCalendar ? "is-disabled" : "")" for="holidayCalendarImport">
+                                <Icon Name="file" Size="15" />
+                                <span>Choose file</span>
+                            </label>
+                            <span class="config-file-picker__name">@_holidayCalendarFileName</span>
+                        </div>
+                        <button type="button" class="btn btn-outline-info btn-sm" @onclick="ClearHolidayImportMessage" disabled="@(_importingCalendar || string.IsNullOrEmpty(_holidayImportMessage))"><Icon Name="x" Size="15" /> Clear Message</button>
                     </div>
                     <small class="text-muted">.ics files containing DTSTART entries are supported. New dates inherit the default start and stop times until edited.</small>
                     @if (!string.IsNullOrEmpty(_holidayImportMessage))
@@ -478,7 +554,9 @@ else
                                         <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @bind-Value:after="SaveSettings" aria-label="@($"Synced Playback for {holiday.Name}")" />
                                     </td>
                                     <td class="text-end">
-                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")">Remove</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
+                                            <Icon Name="trash" Size="15" />
+                                        </button>
                                     </td>
                                 </tr>
                             }
@@ -578,18 +656,18 @@ else
                                                    aria-label="@($"Synced Playback for {holiday.Name}")" />
                                             <label class="form-check-label">Synced playback</label>
                                         </div>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")">Remove</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
+                                            <Icon Name="trash" Size="15" />
+                                        </button>
                                     </div>
                                 </div>
                             </article>
                         }
                     }
                 </div>
-
-                <div class="mt-3 text-end">
-                    <button type="button" class="btn btn-outline-primary" @onclick="AddHolidayOverride">Add Holiday</button>
-                </div>
+                </section>
             }
+            </main>
         </div>
     </div>
     
@@ -636,6 +714,8 @@ else
     private string? _holidayImportMessage;
 
     private bool _importingCalendar;
+
+    private string _holidayCalendarFileName = "No file chosen";
 
     private bool _showCalendar = false;
     private HolidaySchedule? _editingHoliday;
@@ -1353,6 +1433,7 @@ else
         {
 
             _holidayImportMessage = "Choose a calendar file to import.";
+            _holidayCalendarFileName = "No file chosen";
 
             return;
 
@@ -1371,6 +1452,7 @@ else
         {
 
             var file = args.File;
+            _holidayCalendarFileName = file.Name;
 
             await using var stream = file.OpenReadStream(5 * 1024 * 1024);
 
@@ -1706,7 +1788,3 @@ else
     }
 
 }
-
-
-
-
