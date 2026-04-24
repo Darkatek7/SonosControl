@@ -132,16 +132,16 @@
     --gradient-playing: linear-gradient(135deg, #5a3895 0%, #8459bb 100%);
 
     --surface-0: #101220;
-    --surface-1: #231d40;
-    --surface-2: #2c2350;
-    --surface-3: #3d296a;
+    --surface-1: #171827;
+    --surface-2: #1f2133;
+    --surface-3: #2a2442;
 
     --text-primary: #f4effc;
     --text-secondary: #c0b1d7;
     --text-muted: #9686b0;
 
-    --border-subtle: #3a315c;
-    --border-strong: #514076;
+    --border-subtle: #332f4c;
+    --border-strong: #4a4168;
 
     --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
@@ -150,7 +150,7 @@
     --shadow-glow: 0 0 40px rgba(132, 89, 187, 0.24);
     --shadow-glow-accent: 0 0 24px rgba(180, 133, 217, 0.22);
 
-    --gradient-card: linear-gradient(145deg, rgba(180, 133, 217, 0.06) 0%, rgba(255,255,255,0.015) 100%);
+    --gradient-card: linear-gradient(145deg, rgba(180, 133, 217, 0.04) 0%, rgba(255,255,255,0.012) 100%);
 
     --bs-body-bg: var(--surface-0);
     --bs-body-color: var(--text-primary);
@@ -1273,7 +1273,7 @@ a:focus-visible {
 }
 
 [data-theme='dark'] .app-sidebar {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, black 4%) 0%, color-mix(in srgb, var(--surface-1) 88%, var(--surface-0)) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 92%, black 8%) 0%, color-mix(in srgb, var(--surface-0) 88%, var(--surface-1)) 100%);
     border-color: color-mix(in srgb, var(--border-strong) 85%, transparent);
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), inset -1px 0 0 rgba(255, 255, 255, 0.04);
 }
@@ -1376,7 +1376,7 @@ a:focus-visible {
 
 [data-theme='dark'] .app-top-bar,
 [data-theme='dark'] .app-mobile-top-bar {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--surface-1) 95%, black 5%) 0%, color-mix(in srgb, var(--surface-1) 82%, var(--surface-0)) 100%);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--surface-1) 88%, black 12%) 0%, color-mix(in srgb, var(--surface-0) 84%, var(--surface-1)) 100%);
     border-color: color-mix(in srgb, var(--border-strong) 75%, transparent);
     box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.03), 0 10px 26px rgba(0, 0, 0, 0.26);
 }
@@ -1534,9 +1534,110 @@ a:focus-visible {
 }
 
 [data-theme='dark'] .global-player-bar {
-    background: color-mix(in srgb, var(--surface-1) 94%, black 6%);
+    background: color-mix(in srgb, var(--surface-1) 84%, black 16%);
     border-top-color: color-mix(in srgb, var(--border-strong) 80%, transparent);
     box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+[data-theme='dark'] .spotify-hero,
+[data-theme='dark'] .spotify-room-picker,
+[data-theme='dark'] .spotify-library,
+[data-theme='dark'] .spotify-home-context .playback-card,
+[data-theme='dark'] .spotify-now-card,
+[data-theme='dark'] .spotify-home-context .section-card,
+[data-theme='dark'] .spotify-home-context .queue-panel {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 88%, black 12%) 0%, color-mix(in srgb, var(--surface-0) 78%, var(--surface-1)) 100%);
+    border-color: color-mix(in srgb, var(--border-strong) 72%, black 28%);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='dark'] .spotify-hero {
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 10%, transparent) 0%, transparent 36%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 88%, black 12%) 0%, color-mix(in srgb, var(--surface-0) 82%, var(--surface-1)) 100%);
+}
+
+[data-theme='dark'] .spotify-track-list .list-group-item:hover,
+[data-theme='dark'] .media-list .list-group-item:hover {
+    background: color-mix(in srgb, var(--brand-primary) 5%, var(--surface-2));
+}
+
+[data-theme='dark'] .spotify-home-context .section-card__header,
+[data-theme='dark'] .spotify-home-context .queue-panel__header {
+    background-color: color-mix(in srgb, var(--surface-2) 82%, black 18%);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+}
+
+[data-theme='dark'] .spotify-home-context .section-card__body,
+[data-theme='dark'] .spotify-home-context .queue-panel__body,
+[data-theme='dark'] .spotify-now-card .card-body {
+    background-color: transparent;
+}
+
+[data-theme='dark'] .spotify-home-context .text-bg-success {
+    background: color-mix(in srgb, var(--brand-success) 18%, var(--surface-2)) !important;
+    color: color-mix(in srgb, var(--brand-accent) 42%, white 58%) !important;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 34%, transparent);
+}
+
+[data-theme='dark'] .currently-playing-card {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 90%, black 10%) 0%, color-mix(in srgb, var(--surface-0) 80%, var(--surface-1)) 100%);
+    border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='dark'] .currently-playing-card::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.005) 100%);
+}
+
+[data-theme='dark'] .currently-playing-art-placeholder,
+[data-theme='dark'] .spotify-now-card .currently-playing-art-placeholder {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 88%, black 12%) 0%, color-mix(in srgb, var(--surface-3) 58%, var(--surface-2)) 100%);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme='dark'] .currently-playing-progress,
+[data-theme='dark'] .spotify-now-card .currently-playing-progress {
+    background: color-mix(in srgb, var(--surface-2) 88%, black 12%);
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 75%, transparent);
+}
+
+[data-theme='dark'] .playback-card {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 90%, black 10%) 0%, color-mix(in srgb, var(--surface-0) 80%, var(--surface-1)) 100%);
+    border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme='dark'] .playback-card__volume {
+    background: color-mix(in srgb, var(--surface-2) 86%, black 14%);
+    border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+[data-theme='dark'] .playback-card__volume:hover {
+    background: color-mix(in srgb, var(--surface-2) 82%, var(--brand-primary));
+    border-color: color-mix(in srgb, var(--brand-primary) 26%, var(--border-strong));
+}
+
+[data-theme='dark'] .speaker-status-item {
+    background-color: transparent;
+}
+
+[data-theme='dark'] .queue-panel__header {
+    background-color: color-mix(in srgb, var(--surface-2) 82%, black 18%);
+}
+
+[data-theme='dark'] .queue-panel__body,
+[data-theme='dark'] .queue-panel__list {
+    background-color: color-mix(in srgb, var(--surface-0) 78%, var(--surface-1));
+}
+
+[data-theme='dark'] .queue-panel__item,
+[data-theme='dark'] .media-list .list-group-item {
+    background-color: transparent;
+}
+
+[data-theme='dark'] .queue-panel__toolbar .form-switch .form-check-input {
+    background-color: color-mix(in srgb, var(--border-strong) 86%, black 14%);
 }
 
 .global-player-bar__now,
@@ -2106,12 +2207,16 @@ a:focus-visible {
     gap: var(--spacing-sm);
     align-items: center;
     min-width: 0;
+    width: 100%;
+    justify-self: stretch;
+    justify-items: stretch;
 }
 
 .speaker-status-item__copy {
     min-width: 0;
     width: 100%;
     justify-self: start;
+    align-self: start;
     text-align: left;
 }
 
