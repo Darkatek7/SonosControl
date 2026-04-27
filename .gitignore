@@ -360,18 +360,28 @@ SonosControl.Web/DataProtectionKeys/
 
 # Local verification artifacts
 mobile_smoke_screenshots/
+debug_*.png
+error_state.png
+verification_*.png
+test_output.txt
+verify_*.py
+verify_*.cs
 
 # VS Code: ignore personal settings, keep shared tasks/launch config
 .vscode/*
 !.vscode/tasks.json
 !.vscode/launch.json
 
-# Claude Flow and agent swarm files
+# Local AI assistant and agent tool state
+.Jules/
+.jules/
 .claude/
 .claude-flow/
+.superpowers/
 .swarm/
 .hive-mind/
 .mcp.json
+.tmp/
 
 # Agent and skill backup/generated files
 AGENTS.md.*
