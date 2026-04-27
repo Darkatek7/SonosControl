@@ -3,7 +3,7 @@
 
 SonosControl is a deployer-friendly Blazor control center for automating Sonos playback, scheduling start/stop windows, and managing stations and users from one self-hosted app.
 
-![SonosControl dashboard hero](docs/assets/readme/desktop-home.png)
+![SonosControl dashboard hero](docs/assets/readme/images/desktop-home.png)
 
 ## Quick Start
 
@@ -57,12 +57,12 @@ Then open `http://localhost:5107`.
 ### Desktop
 | Home | Config | Statistics | User Management | Logs |
 |---|---|---|---|---|
-| ![Desktop home](docs/assets/readme/desktop-home.png) | ![Desktop config](docs/assets/readme/desktop-config.png) | ![Desktop statistics](docs/assets/readme/desktop-stats.png) | ![Desktop users](docs/assets/readme/desktop-users.png) | ![Desktop logs](docs/assets/readme/desktop-logs.png) |
+| ![Desktop home](docs/assets/readme/images/desktop-home.png) | ![Desktop config](docs/assets/readme/images/desktop-config.png) | ![Desktop statistics](docs/assets/readme/images/desktop-stats.png) | ![Desktop users](docs/assets/readme/images/desktop-users.png) | ![Desktop logs](docs/assets/readme/images/desktop-logs.png) |
 
 ### Mobile
 | Home | Config | Statistics | User Management | Logs |
 |---|---|---|---|---|
-| ![Mobile home](docs/assets/readme/mobile-home.png) | ![Mobile config](docs/assets/readme/mobile-config.png) | ![Mobile statistics](docs/assets/readme/mobile-stats.png) | ![Mobile users](docs/assets/readme/mobile-users.png) | ![Mobile logs](docs/assets/readme/mobile-logs.png) |
+| ![Mobile home](docs/assets/readme/images/mobile-home.png) | ![Mobile config](docs/assets/readme/images/mobile-config.png) | ![Mobile statistics](docs/assets/readme/images/mobile-stats.png) | ![Mobile users](docs/assets/readme/images/mobile-users.png) | ![Mobile logs](docs/assets/readme/images/mobile-logs.png) |
 
 ## Feature Highlights
 - Real-time Sonos dashboard with playback, queue, group, and volume controls.
