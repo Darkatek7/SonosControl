@@ -55,14 +55,14 @@ Then open `http://localhost:5107`.
 ## Screenshot Gallery
 
 ### Desktop
-| Home | Config | User Management | Logs |
-|---|---|---|---|
-| ![Desktop home](docs/assets/readme/desktop-home.png) | ![Desktop config](docs/assets/readme/desktop-config.png) | ![Desktop users](docs/assets/readme/desktop-users.png) | ![Desktop logs](docs/assets/readme/desktop-logs.png) |
+| Home | Config | Statistics | User Management | Logs |
+|---|---|---|---|---|
+| ![Desktop home](docs/assets/readme/desktop-home.png) | ![Desktop config](docs/assets/readme/desktop-config.png) | ![Desktop statistics](docs/assets/readme/desktop-stats.png) | ![Desktop users](docs/assets/readme/desktop-users.png) | ![Desktop logs](docs/assets/readme/desktop-logs.png) |
 
 ### Mobile
-| Home | Config | User Management | Logs |
-|---|---|---|---|
-| ![Mobile home](docs/assets/readme/mobile-home.png) | ![Mobile config](docs/assets/readme/mobile-config.png) | ![Mobile users](docs/assets/readme/mobile-users.png) | ![Mobile logs](docs/assets/readme/mobile-logs.png) |
+| Home | Config | Statistics | User Management | Logs |
+|---|---|---|---|---|
+| ![Mobile home](docs/assets/readme/mobile-home.png) | ![Mobile config](docs/assets/readme/mobile-config.png) | ![Mobile statistics](docs/assets/readme/mobile-stats.png) | ![Mobile users](docs/assets/readme/mobile-users.png) | ![Mobile logs](docs/assets/readme/mobile-logs.png) |
 
 ## Feature Highlights
 - Real-time Sonos dashboard with playback, queue, group, and volume controls.
