@@ -1,18 +1,23 @@
 import argparse
 import os
+import platform
 import sqlite3
 import subprocess
 import time
 from pathlib import Path
+from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from playwright.sync_api import expect, sync_playwright
 
 
+CHROME_PATH = os.getenv("PLAYWRIGHT_CHROME_PATH")
+
 ROUTES = [
-    ("/", "home", "Sonos Control Panel"),
+    ("/", "home", "Media Sources"),
     ("/config", "config", "System Configuration"),
+    ("/stats", "stats", "Statistics"),
     ("/admin/users", "users", "User Management"),
     ("/logs", "logs", "System Logs"),
 ]
@@ -53,6 +58,29 @@ def wait_for_server_ready(base_url: str, timeout_seconds: int, process=None) -> 
     return False
 
 
+def resolve_chrome_path() -> Optional[str]:
+    if CHROME_PATH:
+        path = Path(CHROME_PATH)
+        if path.exists():
+            return str(path)
+        raise RuntimeError(f"PLAYWRIGHT_CHROME_PATH does not exist: {CHROME_PATH}")
+
+    if platform.system() == "Darwin":
+        mac_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        if mac_chrome.exists():
+            return str(mac_chrome)
+
+    return None
+
+
+def launch_chromium(playwright):
+    executable_path = resolve_chrome_path()
+    if executable_path:
+        return playwright.chromium.launch(headless=True, executable_path=executable_path)
+
+    return playwright.chromium.launch(headless=True)
+
+
 def start_local_server(base_url: str, project_root: Path):
     artifacts_dir = project_root / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -82,7 +110,7 @@ def stop_local_server(process, log_stream):
         log_stream.close()
 
 
-def find_db_path(project_root: Path) -> Path | None:
+def find_db_path(project_root: Path) -> Optional[Path]:
     candidates = [
         project_root / "SonosControl.Web" / "app.db",
         project_root / "SonosControl.Web" / "Data" / "app.db",
@@ -117,7 +145,7 @@ def get_unlocked_admin_usernames(project_root: Path) -> list[str]:
         return []
 
 
-def get_login_attempts(project_root: Path, username_arg: str | None, password_arg: str | None) -> list[tuple[str, str]]:
+def get_login_attempts(project_root: Path, username_arg: Optional[str], password_arg: Optional[str]) -> list[tuple[str, str]]:
     seen = set()
     attempts: list[tuple[str, str]] = []
 
@@ -177,14 +205,14 @@ def ensure_expected_heading(page, expected_text: str):
     expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
 
 
-def force_light_theme(page):
+def force_dark_theme(page):
     page.evaluate(
         """
         () => {
             if (window.sonosTheme && typeof window.sonosTheme.apply === "function") {
-                window.sonosTheme.apply("light");
+                window.sonosTheme.apply("dark");
             }
-            document.documentElement.removeAttribute("data-theme");
+            document.documentElement.setAttribute("data-theme", "dark");
         }
         """
     )
@@ -194,7 +222,7 @@ def force_light_theme(page):
 def capture_route(page, base_url: str, route: str, slug: str, expected_text: str, output_path: Path):
     page.goto(f"{base_url.rstrip('/')}{route}", wait_until="networkidle")
     ensure_expected_heading(page, expected_text)
-    force_light_theme(page)
+    force_dark_theme(page)
     page.keyboard.press("Escape")
     page.wait_for_timeout(150)
     page.screenshot(path=str(output_path), full_page=False)
@@ -264,7 +292,7 @@ def run():
         )
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = launch_chromium(playwright)
         context = browser.new_context(viewport=desktop_viewport)
         page = context.new_page()
 
