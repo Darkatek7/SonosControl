@@ -34,7 +34,7 @@ docker compose up -d
 
 Open `http://localhost:8080` and sign in with the seeded admin account.
 
-### 2. Run locally with .NET 9
+### 2. Run locally with .NET 10
 
 PowerShell:
 ```powershell
