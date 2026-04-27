@@ -93,6 +93,13 @@ def start_local_server(base_url: str, project_root: Path):
         stderr=subprocess.STDOUT,
         cwd=project_root,
         shell=False,
+        env={
+            **os.environ,
+            "DataProtection__KeysDirectory": os.getenv(
+                "DataProtection__KeysDirectory",
+                str((project_root / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
+            ),
+        },
     )
     return process, log_stream, log_path
 
@@ -246,7 +253,7 @@ def parse_args():
     parser.add_argument("--base-url", default=os.getenv("README_SCREENSHOT_BASE_URL", "http://localhost:5107"))
     parser.add_argument("--username", default=None)
     parser.add_argument("--password", default=None)
-    parser.add_argument("--out", default="docs/assets/readme")
+    parser.add_argument("--out", default="docs/assets/readme/images")
     parser.add_argument("--desktop-viewport", default="1366x768")
     parser.add_argument("--mobile-viewport", default="390x844")
     parser.add_argument("--server-timeout", type=int, default=180)

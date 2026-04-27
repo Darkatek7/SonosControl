@@ -2,7 +2,7 @@ param(
     [string]$BaseUrl = "",
     [string]$Username = "",
     [string]$Password = "",
-    [string]$Out = "docs/assets/readme",
+    [string]$Out = "docs/assets/readme/images",
     [string]$DesktopViewport = "1366x768",
     [string]$MobileViewport = "390x844",
     [switch]$NoAutoStart
