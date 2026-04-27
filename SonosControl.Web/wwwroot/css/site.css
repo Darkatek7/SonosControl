@@ -253,6 +253,12 @@ a:focus-visible {
     box-shadow: var(--focus-ring);
 }
 
+h1[tabindex="-1"]:focus,
+h2[tabindex="-1"]:focus,
+h3[tabindex="-1"]:focus {
+    outline: none;
+}
+
 .content {
     padding-top: var(--spacing-lg);
     padding-bottom: calc(var(--spacing-xl) + 6rem);
