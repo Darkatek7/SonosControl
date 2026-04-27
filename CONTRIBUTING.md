@@ -4,7 +4,7 @@ Thanks for helping improve SonosControl.
 
 ## Prerequisites
 
-- .NET 9 SDK
+- .NET 10 SDK
 - Python 3.10+ and Playwright (for UI smoke and screenshot workflows)
 
 ## Development Workflow

@@ -3,7 +3,7 @@
 This guide covers production and local deployment for SonosControl, plus the settings you should persist and back up.
 
 ## Prerequisites
-- Docker (for container deployment) or .NET 9 SDK (for local run)
+- Docker (for container deployment) or .NET 10 SDK (for local run)
 - A reachable Sonos speaker IP
 - Admin seed credentials (`ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`)
 
