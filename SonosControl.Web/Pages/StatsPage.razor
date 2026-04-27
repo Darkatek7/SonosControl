@@ -8,322 +8,282 @@
 
 <PageTitle>Statistics - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell stats-shell">
-    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
-        <div>
-            <h3 class="mb-1">📊 Statistics</h3>
-            <p class="text-muted mb-0">Usage insights and playback history.</p>
+<div class="stats-dashboard-shell">
+    <section class="stats-hero" aria-labelledby="stats-heading">
+        <div class="stats-hero__copy">
+            <span class="spotify-eyebrow">SonosControl</span>
+            <h1 id="stats-heading">Statistics</h1>
+            <p>Listening intelligence from the last 30 days, including playback volume, operator activity, and media trends.</p>
         </div>
-    </div>
+        <div class="stats-hero__window">
+            <Icon Name="calendar" Size="18" />
+            <span>Last 30 days</span>
+        </div>
+    </section>
 
-    <!-- Quick Stats -->
-    <div class="row g-4 mb-4">
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0 bg-primary text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title mb-0">Total Listening Time</h5>
-                    <h2 class="display-6 fw-bold my-2">@FormatDuration(totalDuration)</h2>
-                    <p class="mb-0 small opacity-75">Last 30 Days</p>
-                </div>
+    <section class="stats-kpi-grid" aria-label="Listening overview">
+        <article class="stats-kpi-card stats-kpi-card--primary">
+            <div class="stats-kpi-card__icon"><Icon Name="clock" Size="20" /></div>
+            <div>
+                <h2>Total Listening Time</h2>
+                <strong>@FormatDuration(totalDuration)</strong>
+                <span>Last 30 Days</span>
             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0 bg-success text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title mb-0">Longest Session</h5>
-                    <h2 class="display-6 fw-bold my-2">@(longestSession != null ? FormatDuration(longestSession.DurationSeconds) : "-")</h2>
-                    <p class="mb-0 small opacity-75">@(longestSession?.TrackName ?? "None")</p>
-                </div>
+        </article>
+        <article class="stats-kpi-card">
+            <div class="stats-kpi-card__icon"><Icon Name="music" Size="20" /></div>
+            <div>
+                <h2>Longest Session</h2>
+                <strong>@(longestSession != null ? FormatDuration(longestSession.DurationSeconds) : "-")</strong>
+                <span class="text-truncate">@(longestSession?.TrackName ?? "None")</span>
             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card h-100 shadow-sm border-0 bg-info text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title mb-0">Most Active Day</h5>
-                    <h2 class="display-6 fw-bold my-2">@mostActiveDay</h2>
-                    <p class="mb-0 small opacity-75">Based on activity</p>
-                </div>
+        </article>
+        <article class="stats-kpi-card">
+            <div class="stats-kpi-card__icon"><Icon Name="graph" Size="20" /></div>
+            <div>
+                <h2>Most Active Day</h2>
+                <strong>@mostActiveDay</strong>
+                <span>Based on activity</span>
             </div>
-        </div>
+        </article>
+    </section>
 
-    </div>
-
-    <!-- Hall of Fame & Leaderboards -->
-    <div class="row g-4 mb-4">
-        <!-- Station Master -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">📻 Station Master</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most station changes</p>
-                     @RenderLeaderboard(stationMasterStats, "changes")
+    <section class="stats-analytics-grid" aria-label="Activity analytics">
+        <article class="stats-panel stats-panel--wide">
+            <header class="stats-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Trends</span>
+                    <h2><Icon Name="graph" Size="18" /> Activity Trends (Last 30 Days)</h2>
                 </div>
-            </div>
-        </div>
-
-        <!-- Top Stations (Plays) -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">📻 Top Stations</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most total plays</p>
-                     @RenderLeaderboard(stationPlayCountStats, "plays")
+            </header>
+            @if (activityOverTime == null)
+            {
+                <p class="stats-empty">Loading...</p>
+            }
+            else if (!activityOverTime.Any())
+            {
+                <p class="stats-empty">No activity data available.</p>
+            }
+            else
+            {
+                <div class="stats-chart">
+                    <RadzenChart>
+                        <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
+                            <RadzenMarkers MarkerType="MarkerType.Circle" />
+                        </RadzenLineSeries>
+                        <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
+                        <RadzenValueAxis>
+                            <RadzenGridLines Visible="true" />
+                        </RadzenValueAxis>
+                    </RadzenChart>
                 </div>
-            </div>
-        </div>
+            }
+        </article>
 
-        <!-- The Silencer -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">🤫 The Silencer</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most playback pauses</p>
-                     @RenderLeaderboard(silencerStats, "pauses")
+        <article class="stats-panel">
+            <header class="stats-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Usage</span>
+                    <h2><Icon Name="clock" Size="18" /> Peak Usage Times</h2>
                 </div>
-            </div>
-        </div>
-
-        <!-- The Loner -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">💔 The Loner</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most groups disbanded</p>
-                     @RenderLeaderboard(lonerStats, "ungroups")
+            </header>
+            @if (activityByHour == null)
+            {
+                <p class="stats-empty">Loading...</p>
+            }
+            else if (!activityByHour.Any())
+            {
+                <p class="stats-empty">No data available.</p>
+            }
+            else
+            {
+                <div class="stats-chart">
+                    <RadzenChart>
+                        <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
+                        <RadzenCategoryAxis Step="1" />
+                    </RadzenChart>
                 </div>
-            </div>
-        </div>
-    </div>
+            }
+        </article>
 
-    <!-- User Hall of Fame (Continued) -->
-    <div class="row g-4 mb-4">
-        <!-- Top DJ -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">🎧 Top DJ</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most selections & playback starts</p>
-                     @RenderLeaderboard(topDjStats, "actions")
+        <article class="stats-panel">
+            <header class="stats-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Media</span>
+                    <h2><Icon Name="music" Size="18" /> Media Consumption</h2>
                 </div>
-            </div>
-        </div>
-
-        <!-- The Skipper -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">⏭️ The Skipper</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most tracks skipped</p>
-                     @RenderLeaderboard(skipperStats, "skips")
+            </header>
+            @if (mediaTypeStats == null)
+            {
+                <p class="stats-empty">Loading...</p>
+            }
+            else if (!mediaTypeStats.Any())
+            {
+                <p class="stats-empty">No data available.</p>
+            }
+            else
+            {
+                var mediaTotalDuration = mediaTypeStats.Sum(item => item.Duration);
+                <div class="stats-media-layout">
+                    <div class="stats-chart stats-chart--donut">
+                        <RadzenChart>
+                            <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Listening time">
+                                <RadzenSeriesDataLabels Visible="false" />
+                            </RadzenDonutSeries>
+                        </RadzenChart>
+                    </div>
+                    <div class="stats-media-breakdown" aria-label="Media consumption breakdown">
+                        @foreach (var item in mediaTypeStats)
+                        {
+                            <div class="stats-media-row">
+                                <span class="stats-media-row__label">
+                                    <span class="stats-media-row__swatch" aria-hidden="true"></span>
+                                    <span>@item.MediaType</span>
+                                </span>
+                                <span class="stats-media-row__value">@FormatDuration(item.Duration)</span>
+                                <span class="stats-media-row__share">@FormatPercent(item.Duration, mediaTotalDuration)</span>
+                            </div>
+                        }
+                    </div>
                 </div>
-            </div>
-        </div>
+            }
+        </article>
 
-        <!-- The Grouper -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">🔗 The Grouper</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most groups & syncs created</p>
-                     @RenderLeaderboard(grouperStats, "groups")
+        <article class="stats-panel stats-panel--wide">
+            <header class="stats-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Stations</span>
+                    <h2><Icon Name="rss" Size="18" /> Top Stations (by Time)</h2>
                 </div>
-            </div>
-        </div>
-
-        <!-- Night Owl -->
-        <div class="col-md-6 col-lg-3">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                     <h5 class="card-title mb-3">🦉 Night Owl</h5>
-                     <p class="card-subtitle mb-3 text-muted small">Most active 10PM - 4AM</p>
-                     @RenderLeaderboard(nightOwlStats, "actions")
+            </header>
+            @if (stationStats == null)
+            {
+                <p class="stats-empty">Loading...</p>
+            }
+            else if (!stationStats.Any())
+            {
+                <p class="stats-empty">No data available.</p>
+            }
+            else
+            {
+                <div class="stats-chart">
+                    <RadzenChart>
+                        <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
+                        <RadzenColumnOptions Radius="5" />
+                        <RadzenValueAxis Formatter="@FormatTimeAxis" />
+                    </RadzenChart>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Activity Trends -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">📈 Activity Trends (Last 30 Days)</h5>
-                    @if (activityOverTime == null)
-                    {
-                        <p>Loading...</p>
-                    }
-                    else if (!activityOverTime.Any())
-                    {
-                        <p class="text-muted">No activity data available.</p>
-                    }
-                    else
-                    {
-                        <div class="stats-chart">
-                            <RadzenChart>
-                                <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
-                                    <RadzenMarkers MarkerType="MarkerType.Circle" />
-                                </RadzenLineSeries>
-                                <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
-                                <RadzenValueAxis>
-                                    <RadzenGridLines Visible="true" />
-                                </RadzenValueAxis>
-                            </RadzenChart>
-                        </div>
-                    }
+                <div class="table-responsive stats-table-wrap stats-table-wrap--compact">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Station</th>
+                                <th>Time</th>
+                                <th>Plays</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var station in stationStats)
+                            {
+                                <tr>
+                                    <td class="small fw-bold">@station.Station</td>
+                                    <td class="small">@FormatDuration(station.Duration)</td>
+                                    <td class="small">@station.PlayCount</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-        </div>
-    </div>
+            }
+        </article>
+    </section>
 
-    <!-- Usage & Media -->
-    <div class="row g-4 mb-4">
-        <!-- Peak Usage -->
-        <div class="col-lg-6">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">⏰ Peak Usage Times</h5>
-                    @if (activityByHour == null)
-                    {
-                        <p>Loading...</p>
-                    }
-                    else if (!activityByHour.Any())
-                    {
-                        <p class="text-muted">No data available.</p>
-                    }
-                    else
-                    {
-                        <div class="stats-chart">
-                            <RadzenChart>
-                                <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
-                                 <RadzenCategoryAxis Step="1" />
-                            </RadzenChart>
-                        </div>
-                    }
-                </div>
-            </div>
-        </div>
+    <section class="stats-leaderboard-grid" aria-label="Leaderboards">
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="rss" Size="17" /> Station Master</h2>
+            <p>Most station changes</p>
+            @RenderLeaderboard(stationMasterStats, "changes")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="rss" Size="17" /> Top Stations</h2>
+            <p>Most total plays</p>
+            @RenderLeaderboard(stationPlayCountStats, "plays")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="pause" Size="17" /> The Silencer</h2>
+            <p>Most playback pauses</p>
+            @RenderLeaderboard(silencerStats, "pauses")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="unlink" Size="17" /> The Loner</h2>
+            <p>Most groups disbanded</p>
+            @RenderLeaderboard(lonerStats, "ungroups")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="music" Size="17" /> Top DJ</h2>
+            <p>Most selections and playback starts</p>
+            @RenderLeaderboard(topDjStats, "actions")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="forward" Size="17" /> The Skipper</h2>
+            <p>Most tracks skipped</p>
+            @RenderLeaderboard(skipperStats, "skips")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="link" Size="17" /> The Grouper</h2>
+            <p>Most groups and syncs created</p>
+            @RenderLeaderboard(grouperStats, "groups")
+        </article>
+        <article class="stats-leaderboard-card">
+            <h2><Icon Name="clock" Size="17" /> Night Owl</h2>
+            <p>Most active 10PM - 4AM</p>
+            @RenderLeaderboard(nightOwlStats, "actions")
+        </article>
+    </section>
 
-        <!-- Media Consumption -->
-        <div class="col-lg-6">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">🥧 Media Consumption</h5>
-                    @if (mediaTypeStats == null)
-                    {
-                        <p>Loading...</p>
-                    }
-                    else if (!mediaTypeStats.Any())
-                    {
-                        <p class="text-muted">No data available.</p>
-                    }
-                    else
-                    {
-                        <div class="stats-chart">
-                            <RadzenChart>
-                                <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Duration">
-                                    <RadzenSeriesDataLabels Visible="true" />
-                                </RadzenDonutSeries>
-                            </RadzenChart>
-                        </div>
-                    }
-                </div>
+    <section class="stats-panel stats-panel--tracks" aria-labelledby="top-tracks-heading">
+        <header class="stats-panel__header">
+            <div>
+                <span class="spotify-eyebrow">Tracks</span>
+                <h2 id="top-tracks-heading"><Icon Name="track" Size="18" /> Top Tracks</h2>
             </div>
-        </div>
-    </div>
-
-    <div class="row g-4">
-         <!-- Top Stations -->
-        <div class="col-lg-6">
-            <div class="card h-100 shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">📻 Top Stations (by Time)</h5>
-                     @if (stationStats == null)
-                     {
-                         <p>Loading...</p>
-                     }
-                     else if (!stationStats.Any())
-                     {
-                         <p class="text-muted">No data available.</p>
-                     }
-                     else
-                     {
-                         <div class="stats-chart">
-                             <RadzenChart>
-                                 <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
-                                 <RadzenColumnOptions Radius="5" />
-                                 <RadzenValueAxis Formatter="@FormatTimeAxis" />
-                             </RadzenChart>
-                         </div>
-
-                         <div class="table-responsive mt-3 stats-table-wrap">
-                             <table class="table table-sm table-hover align-middle">
-                                 <thead>
-                                     <tr>
-                                         <th>Station</th>
-                                         <th>Time</th>
-                                         <th>Plays</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody>
-                                     @foreach (var station in stationStats)
-                                     {
-                                         <tr>
-                                             <td class="small fw-bold">@station.Station</td>
-                                             <td class="small">@FormatDuration(station.Duration)</td>
-                                             <td class="small">@station.PlayCount</td>
-                                         </tr>
-                                     }
-                                 </tbody>
-                             </table>
-                         </div>
-                     }
-                </div>
+        </header>
+        @if (trackStats == null)
+        {
+            <p class="stats-empty">Loading...</p>
+        }
+        else if (!trackStats.Any())
+        {
+            <p class="stats-empty">No data available.</p>
+        }
+        else
+        {
+            <div class="table-responsive stats-table-wrap">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Track</th>
+                            <th>Artist</th>
+                            <th>Total Time</th>
+                            <th>Play Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var track in trackStats)
+                        {
+                            <tr>
+                                <td class="fw-bold">@track.Track</td>
+                                <td>@track.Artist</td>
+                                <td>@FormatDuration(track.Duration)</td>
+                                <td>@track.PlayCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-        </div>
-
-        <!-- Top Tracks -->
-        <div class="col-lg-6">
-            <div class="card shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="card-title mb-3">🎵 Top Tracks</h5>
-                     @if (trackStats == null)
-                     {
-                         <p>Loading...</p>
-                     }
-                     else if (!trackStats.Any())
-                     {
-                         <p class="text-muted">No data available.</p>
-                     }
-                     else
-                     {
-                         <div class="table-responsive stats-table-wrap">
-                             <table class="table table-hover align-middle">
-                                 <thead>
-                                     <tr>
-                                         <th>Track</th>
-                                         <th>Artist</th>
-                                         <th>Total Time</th>
-                                         <th>Play Count</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody>
-                                     @foreach (var track in trackStats)
-                                     {
-                                         <tr>
-                                             <td class="fw-bold">@track.Track</td>
-                                             <td>@track.Artist</td>
-                                             <td>@FormatDuration(track.Duration)</td>
-                                             <td>@track.PlayCount</td>
-                                         </tr>
-                                     }
-                                 </tbody>
-                             </table>
-                         </div>
-                     }
-                </div>
-            </div>
-        </div>
-    </div>
+        }
+    </section>
 </div>
 
 @code {
@@ -339,7 +299,7 @@
         }
         else
         {
-            <ul class="list-group list-group-flush">
+            <ul class="list-group list-group-flush stats-leaderboard">
                 @foreach (var user in stats)
                 {
                     <li class="list-group-item d-flex justify-content-between align-items-center px-0">
@@ -643,6 +603,14 @@
         if (ts.TotalHours >= 1)
             return $"{(int)ts.TotalHours}h {ts.Minutes}m";
         return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+
+    private static string FormatPercent(double value, double total)
+    {
+        if (total <= 0)
+            return "0%";
+
+        return $"{Math.Round(value / total * 100, 0, MidpointRounding.AwayFromZero):0}%";
     }
 
     string FormatTimeAxis(object value)
