@@ -19,7 +19,7 @@
 
 | Changed file pattern | Required action |
 |---|---|
-| `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `TestApp/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
+| `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
 | `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `python3 verify_mobile_smoke.py` on macOS/Linux or `.\run-mobile-smoke.ps1` on Windows |
 | `README.md`, `docs/**`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
