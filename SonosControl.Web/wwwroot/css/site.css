@@ -717,17 +717,17 @@ h3[tabindex="-1"]:focus {
 .spotify-room-picker,
 .spotify-home-context .section-card,
 .spotify-home-context .queue-panel {
-    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+    border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 82%, var(--surface-2) 18%) 100%);
     border-radius: 1rem;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
 }
 
 .spotify-hero {
     padding: clamp(1.1rem, 2vw, 1.5rem);
     background:
-        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 18%, transparent) 0%, transparent 42%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #04070d 6%) 0%, color-mix(in srgb, #0b1220 82%, var(--surface-1)) 100%);
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
 }
 
 .spotify-eyebrow {
@@ -1091,10 +1091,10 @@ h3[tabindex="-1"]:focus {
 .currently-playing-card {
     border-radius: 1rem;
     border: 1px solid color-mix(in srgb, var(--border-strong) 70%, transparent);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 86%, #08101a 14%) 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
     min-width: 0;
 }
 
@@ -1108,7 +1108,7 @@ h3[tabindex="-1"]:focus {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.16) 100%);
     pointer-events: none;
 }
 
@@ -1534,8 +1534,8 @@ h3[tabindex="-1"]:focus {
     min-height: 88px;
     padding: 0.75rem clamp(1rem, 2vw, 1.75rem);
     border-top: 1px solid color-mix(in srgb, var(--border-strong) 70%, transparent);
-    background: color-mix(in srgb, var(--surface-1) 92%, #020617 8%);
-    box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.36);
+    background: color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%);
+    box-shadow: 0 -16px 36px rgba(15, 23, 42, 0.12), 0 -2px 10px rgba(15, 118, 110, 0.06);
     min-width: 0;
 }
 
