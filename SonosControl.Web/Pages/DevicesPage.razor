@@ -6,142 +6,174 @@
 
 <PageTitle>Devices - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell">
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-                <div>
-                    <h3 class="mb-1">Device Discovery & Health</h3>
-                    <p class="text-muted mb-0">Scan Sonos devices, import missing speakers, and monitor online/offline states.</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" @onclick="RefreshHealth">Refresh Health</button>
-                    <button class="btn btn-primary" @onclick="RunDiscovery" disabled="@_isDiscovering">
-                        @(_isDiscovering ? "Scanning..." : "Discover Devices")
-                    </button>
-                </div>
-            </div>
-
-            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-            {
-                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status">@_statusMessage</div>
-            }
-
-            @if (_settings is null)
-            {
-                <p class="text-muted mb-0">Loading devices...</p>
-            }
-            else
-            {
-                <div class="row g-4">
-                    <div class="col-lg-6">
-                        <h5>Configured Speakers</h5>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>IP</th>
-                                    <th>Status</th>
-                                    <th>Last Seen</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                @if (_settings.Speakers.Any())
-                                {
-                                    @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
-                                    {
-                                        var health = _healthByIp.TryGetValue(speaker.IpAddress, out var status) ? status : null;
-                                        <tr>
-                                            <td>@speaker.Name</td>
-                                            <td class="small text-muted">@speaker.IpAddress</td>
-                                            <td>
-                                                @if (health is null)
-                                                {
-                                                    <span class="badge bg-secondary">Unknown</span>
-                                                }
-                                                else if (health.IsOnline)
-                                                {
-                                                    <span class="badge bg-success">Online</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-danger">Offline</span>
-                                                }
-                                            </td>
-                                            <td class="small">
-                                                @(health?.LastSeenUtc.ToLocalTime().ToString("g") ?? "-")
-                                                @if (!string.IsNullOrWhiteSpace(health?.LastError))
-                                                {
-                                                    <div class="text-danger">@health.LastError</div>
-                                                }
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="4" class="text-muted text-center">No speakers configured.</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-6">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="mb-0">Discovery Results</h5>
-                            @if (_discoveredSpeakers.Any())
-                            {
-                                <button class="btn btn-outline-success btn-sm" @onclick="ImportAllDiscovered">Import All</button>
-                            }
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>IP</th>
-                                    <th>UUID</th>
-                                    <th class="text-end">Import</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                @if (_discoveredSpeakers.Any())
-                                {
-                                    @foreach (var speaker in _discoveredSpeakers.OrderBy(s => s.Name))
-                                    {
-                                        var exists = _settings.Speakers.Any(s => string.Equals(s.IpAddress, speaker.IpAddress, StringComparison.OrdinalIgnoreCase));
-                                        <tr>
-                                            <td>@speaker.Name</td>
-                                            <td class="small text-muted">@speaker.IpAddress</td>
-                                            <td class="small text-muted">@(!string.IsNullOrWhiteSpace(speaker.Uuid) ? speaker.Uuid : "-")</td>
-                                            <td class="text-end">
-                                                <button class="btn btn-outline-primary btn-sm"
-                                                        @onclick="() => ImportSpeaker(speaker)"
-                                                        disabled="@exists">
-                                                    @(exists ? "Imported" : "Import")
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="4" class="text-muted text-center">No discovery results yet.</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
+<div class="devices-console-shell">
+    <section class="devices-hero" aria-labelledby="devices-heading">
+        <div class="devices-hero__copy">
+            <span class="spotify-eyebrow">Operations</span>
+            <h1 id="devices-heading">Device Ops</h1>
+            <p>Scan Sonos devices, import missing speakers, and keep health states visible from one control-room surface.</p>
         </div>
-    </div>
+        <div class="devices-hero__actions">
+            <div class="devices-stat">
+                <span><Icon Name="speaker" Size="16" /> Configured</span>
+                <strong>@(_settings?.Speakers?.Count ?? 0)</strong>
+            </div>
+            <div class="devices-stat">
+                <span><Icon Name="check" Size="16" /> Online</span>
+                <strong>@GetOnlineSpeakerCount()</strong>
+            </div>
+            <button class="btn btn-outline-primary" @onclick="RefreshHealth"><Icon Name="refresh" Size="16" /> Health</button>
+            <button class="btn btn-primary" @onclick="RunDiscovery" disabled="@_isDiscovering">
+                @if (_isDiscovering)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span>Scanning...</span>
+                }
+                else
+                {
+                    <Icon Name="search" Size="16" />
+                    <span>Discover</span>
+                }
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") devices-alert" role="status">@_statusMessage</div>
+    }
+
+    @if (_settings is null)
+    {
+        <section class="devices-panel devices-empty-state">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <strong>Loading devices...</strong>
+        </section>
+    }
+    else
+    {
+        <section class="devices-health-strip" aria-label="Device health summary">
+            <div class="devices-health-tile is-online">
+                <span>Online</span>
+                <strong>@GetOnlineSpeakerCount()</strong>
+            </div>
+            <div class="devices-health-tile is-offline">
+                <span>Offline</span>
+                <strong>@GetOfflineSpeakerCount()</strong>
+            </div>
+            <div class="devices-health-tile is-unknown">
+                <span>Unknown</span>
+                <strong>@GetUnknownSpeakerCount()</strong>
+            </div>
+            <div class="devices-health-tile">
+                <span>Discovered</span>
+                <strong>@_discoveredSpeakers.Count</strong>
+            </div>
+        </section>
+
+        <section class="devices-workspace">
+            <article class="devices-panel">
+                <div class="devices-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Inventory</span>
+                        <h2><Icon Name="speaker" Size="18" /> Configured Speakers</h2>
+                    </div>
+                </div>
+
+                @if (_settings.Speakers.Any())
+                {
+                    <div class="devices-list">
+                        @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                        {
+                            var health = _healthByIp.TryGetValue(speaker.IpAddress, out var status) ? status : null;
+                            <article class="device-card">
+                                <div class="device-card__icon @GetHealthClass(health)">
+                                    <Icon Name="speaker" Size="18" />
+                                </div>
+                                <div class="device-card__body">
+                                    <strong>@speaker.Name</strong>
+                                    <span>@speaker.IpAddress</span>
+                                    @if (!string.IsNullOrWhiteSpace(health?.LastError))
+                                    {
+                                        <small>@health.LastError</small>
+                                    }
+                                </div>
+                                <div class="device-card__status">
+                                    <span class="device-status-pill @GetHealthClass(health)">@GetHealthLabel(health)</span>
+                                    <small>@FormatLastSeen(health)</small>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="devices-empty-state">
+                        <Icon Name="speaker" Size="24" />
+                        <strong>No speakers configured.</strong>
+                        <span>Run discovery to find Sonos devices and import them into config.</span>
+                    </div>
+                }
+            </article>
+
+            <article class="devices-panel">
+                <div class="devices-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Discovery</span>
+                        <h2><Icon Name="search" Size="18" /> Discovery Results</h2>
+                    </div>
+                    @if (_discoveredSpeakers.Any())
+                    {
+                        <button class="btn btn-outline-success btn-sm devices-import-all" @onclick="ImportAllDiscovered">
+                            <Icon Name="plus" Size="15" /> Import All
+                        </button>
+                    }
+                </div>
+
+                @if (_discoveredSpeakers.Any())
+                {
+                    <div class="devices-table-wrapper">
+                        <table class="table table-sm align-middle devices-table">
+                            <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>IP</th>
+                                <th>UUID</th>
+                                <th class="text-end">Import</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var speaker in _discoveredSpeakers.OrderBy(s => s.Name))
+                            {
+                                var exists = _settings.Speakers.Any(s => string.Equals(s.IpAddress, speaker.IpAddress, StringComparison.OrdinalIgnoreCase));
+                                <tr>
+                                    <td>@speaker.Name</td>
+                                    <td>@speaker.IpAddress</td>
+                                    <td>@(!string.IsNullOrWhiteSpace(speaker.Uuid) ? speaker.Uuid : "-")</td>
+                                    <td class="text-end">
+                                        <button class="btn btn-outline-primary btn-sm"
+                                                @onclick="() => ImportSpeaker(speaker)"
+                                                disabled="@exists">
+                                            @(exists ? "Imported" : "Import")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="devices-empty-state">
+                        <Icon Name="search" Size="24" />
+                        <strong>No discovery results yet.</strong>
+                        <span>Start a scan to discover speakers on the local network.</span>
+                    </div>
+                }
+            </article>
+        </section>
+    }
 </div>
 
 @code {
@@ -151,6 +183,37 @@
     private string? _statusMessage;
     private bool _statusIsError;
     private bool _isDiscovering;
+
+    private int GetOnlineSpeakerCount() => _settings?.Speakers?.Count(s => _healthByIp.TryGetValue(s.IpAddress, out var health) && health.IsOnline) ?? 0;
+
+    private int GetOfflineSpeakerCount() => _settings?.Speakers?.Count(s => _healthByIp.TryGetValue(s.IpAddress, out var health) && !health.IsOnline) ?? 0;
+
+    private int GetUnknownSpeakerCount() => _settings?.Speakers?.Count(s => !_healthByIp.ContainsKey(s.IpAddress)) ?? 0;
+
+    private static string GetHealthLabel(DeviceHealthStatus? health)
+    {
+        if (health is null)
+        {
+            return "Unknown";
+        }
+
+        return health.IsOnline ? "Online" : "Offline";
+    }
+
+    private static string GetHealthClass(DeviceHealthStatus? health)
+    {
+        if (health is null)
+        {
+            return "is-unknown";
+        }
+
+        return health.IsOnline ? "is-online" : "is-offline";
+    }
+
+    private static string FormatLastSeen(DeviceHealthStatus? health)
+    {
+        return health?.LastSeenUtc.ToLocalTime().ToString("g") ?? "No snapshot";
+    }
 
     protected override async Task OnInitializedAsync()
     {
