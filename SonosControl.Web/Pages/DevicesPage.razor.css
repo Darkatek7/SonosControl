@@ -1,0 +1,353 @@
+.devices-console-shell {
+    width: 100%;
+    max-width: 1800px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1rem, 1.5vw, 1.5rem);
+    padding-bottom: calc(var(--spacing-xl) + 7rem);
+    min-width: 0;
+}
+
+.devices-hero,
+.devices-health-strip,
+.devices-panel {
+    border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent);
+    border-radius: 1rem;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+    min-width: 0;
+}
+
+.devices-hero {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    padding: clamp(1rem, 2vw, 1.4rem);
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+}
+
+.devices-hero h1 {
+    margin: 0.25rem 0 0;
+    color: var(--text-primary);
+    font-size: clamp(2.25rem, 3.4vw, 3.5rem);
+    line-height: 0.95;
+}
+
+.devices-hero p {
+    max-width: 52rem;
+    margin: 0.75rem 0 0;
+    color: color-mix(in srgb, var(--text-secondary) 88%, #fff 12%);
+}
+
+.devices-hero__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(8rem, 1fr)) repeat(2, auto);
+    gap: var(--spacing-sm);
+    align-items: stretch;
+    flex: 0 0 min(50rem, 60%);
+}
+
+.devices-stat,
+.devices-health-tile {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+    border-radius: 0.9rem;
+    color: color-mix(in srgb, var(--brand-primary) 56%, white 44%);
+    background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+}
+
+.devices-stat span,
+.devices-health-tile span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: 800;
+}
+
+.devices-stat strong,
+.devices-health-tile strong {
+    color: var(--text-primary);
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.devices-hero__actions .btn,
+.devices-import-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    border-radius: 0.85rem;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.devices-alert {
+    margin: 0;
+    border-radius: 0.85rem;
+}
+
+.devices-health-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+    padding: clamp(1rem, 1.4vw, 1.2rem);
+}
+
+.devices-health-tile.is-online {
+    border-color: color-mix(in srgb, var(--brand-success) 42%, transparent);
+    background: color-mix(in srgb, var(--brand-success) 10%, var(--surface-1));
+}
+
+.devices-health-tile.is-offline {
+    border-color: color-mix(in srgb, var(--brand-danger) 42%, transparent);
+    background: color-mix(in srgb, var(--brand-danger) 9%, var(--surface-1));
+}
+
+.devices-health-tile.is-unknown {
+    border-color: color-mix(in srgb, var(--brand-warning) 42%, transparent);
+    background: color-mix(in srgb, var(--brand-warning) 9%, var(--surface-1));
+}
+
+.devices-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1rem, 1.5vw, 1.5rem);
+    align-items: start;
+    min-width: 0;
+}
+
+.devices-panel {
+    padding: clamp(1rem, 1.4vw, 1.2rem);
+}
+
+.devices-panel__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.devices-panel__header h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: 0.15rem 0 0;
+    color: var(--text-primary);
+    font-size: clamp(1rem, 0.7vw + 0.9rem, 1.28rem);
+}
+
+.devices-panel__header h2 svg {
+    color: var(--brand-primary);
+}
+
+.devices-list {
+    display: grid;
+    gap: var(--spacing-xs);
+}
+
+.device-card {
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+    gap: var(--spacing-sm);
+    align-items: center;
+    padding: 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+    min-width: 0;
+}
+
+.device-card__icon {
+    display: inline-flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.8rem;
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--brand-primary) 16%, var(--surface-2));
+}
+
+.device-card__icon.is-online {
+    color: color-mix(in srgb, var(--brand-success) 70%, var(--text-primary));
+}
+
+.device-card__icon.is-offline {
+    color: var(--brand-danger);
+}
+
+.device-card__icon.is-unknown {
+    color: var(--brand-warning);
+}
+
+.device-card__body {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.device-card__body strong,
+.device-card__body span,
+.device-card__body small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.device-card__body strong {
+    color: var(--text-primary);
+    font-weight: 900;
+}
+
+.device-card__body span,
+.device-card__status small {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.device-card__body small {
+    color: var(--brand-danger);
+}
+
+.device-card__status {
+    display: grid;
+    justify-items: end;
+    gap: 0.2rem;
+}
+
+.device-status-pill {
+    padding: 0.28rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--surface-2) 44%, transparent);
+    font-size: 0.75rem;
+    font-weight: 900;
+}
+
+.device-status-pill.is-online {
+    border-color: color-mix(in srgb, var(--brand-success) 42%, transparent);
+    color: color-mix(in srgb, var(--brand-success) 68%, var(--text-primary));
+    background: color-mix(in srgb, var(--brand-success) 12%, transparent);
+}
+
+.device-status-pill.is-offline {
+    border-color: color-mix(in srgb, var(--brand-danger) 42%, transparent);
+    color: var(--brand-danger);
+    background: color-mix(in srgb, var(--brand-danger) 12%, transparent);
+}
+
+.devices-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+}
+
+.devices-table {
+    min-width: 42rem;
+    margin: 0;
+}
+
+.devices-table th {
+    padding: 0.75rem 0.9rem;
+    border-bottom-color: color-mix(in srgb, var(--border-strong) 70%, transparent);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.devices-table td {
+    padding: 0.75rem 0.9rem;
+    border-bottom-color: color-mix(in srgb, var(--border-subtle) 70%, transparent);
+    color: var(--text-secondary);
+}
+
+.devices-empty-state {
+    display: grid;
+    place-items: center;
+    gap: var(--spacing-xs);
+    min-height: 13rem;
+    padding: var(--spacing-lg);
+    border: 1px dashed color-mix(in srgb, var(--border-strong) 70%, transparent);
+    border-radius: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+    background: color-mix(in srgb, var(--surface-2) 30%, transparent);
+}
+
+.devices-empty-state strong {
+    color: var(--text-primary);
+}
+
+[data-theme='dark'] .devices-hero,
+[data-theme='dark'] .devices-health-strip,
+[data-theme='dark'] .devices-panel {
+    border-color: color-mix(in srgb, var(--border-strong) 70%, #000 30%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme='dark'] .devices-hero {
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 16%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #04070d 6%) 0%, color-mix(in srgb, #101423 80%, var(--surface-1)) 100%);
+}
+
+@media (max-width: 1199.98px) {
+    .devices-hero {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .devices-hero__actions {
+        width: 100%;
+        flex-basis: auto;
+    }
+
+    .devices-workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .devices-hero,
+    .devices-health-strip,
+    .devices-panel {
+        padding: var(--spacing-md);
+    }
+
+    .devices-hero h1 {
+        font-size: 2.25rem;
+    }
+
+    .devices-hero__actions,
+    .devices-health-strip {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .devices-hero__actions .btn {
+        min-height: 2.75rem;
+    }
+
+    .device-card {
+        grid-template-columns: 2.75rem minmax(0, 1fr);
+    }
+
+    .device-card__status {
+        grid-column: 1 / -1;
+        justify-items: start;
+    }
+}
