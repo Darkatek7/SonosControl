@@ -6,165 +6,187 @@
 
 <PageTitle>Schedule Windows - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell">
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-                <div>
-                    <h3 class="mb-1">Schedule Windows</h3>
-                    <p class="text-muted mb-0">Define multiple recurring windows with deterministic priority and optional fade transitions.</p>
-                </div>
-                <button class="btn btn-primary" @onclick="CreateNewWindow">New Window</button>
+<div class="schedule-console-shell">
+    <section class="schedule-hero" aria-labelledby="schedule-windows-heading">
+        <div class="schedule-hero__copy">
+            <span class="spotify-eyebrow">Automation</span>
+            <h1 id="schedule-windows-heading">Schedule Windows</h1>
+            <p>Define recurring playback windows with deterministic priority, scene handoffs, and optional fades.</p>
+        </div>
+        <div class="schedule-hero__actions">
+            <div class="schedule-hero__stat">
+                <span><Icon Name="schedule" Size="16" /> Windows</span>
+                <strong>@(_settings?.ScheduleWindows?.Count ?? 0)</strong>
             </div>
+            <div class="schedule-hero__stat">
+                <span><Icon Name="check" Size="16" /> Enabled</span>
+                <strong>@GetEnabledWindowCount()</strong>
+            </div>
+            <button class="btn btn-primary schedule-new-button" @onclick="CreateNewWindow"><Icon Name="plus" Size="16" /> New Window</button>
+        </div>
+    </section>
 
-            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-            {
-                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") mb-3" role="status">@_statusMessage</div>
-            }
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") schedule-alert" role="status">@_statusMessage</div>
+    }
 
-            @if (_settings is null)
-            {
-                <p class="text-muted">Loading schedule windows...</p>
-            }
-            else
-            {
-                var now = DateTimeOffset.Now;
-                var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now);
+    @if (_settings is null)
+    {
+        <section class="schedule-panel schedule-empty-state">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <strong>Loading schedule windows...</strong>
+        </section>
+    }
+    else
+    {
+        var now = DateTimeOffset.Now;
+        var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now);
 
-                <div class="alert schedule-active-alert d-flex justify-content-between align-items-center">
-                    <span>Active window: <strong>@(active?.Name ?? "None")</strong></span>
-                    <span class="small schedule-now-label">Now: @now.LocalDateTime.ToString("f")</span>
+        <section class="schedule-active-strip schedule-active-alert" aria-label="Active schedule window">
+            <div>
+                <span class="spotify-eyebrow">Live state</span>
+                <strong>Active window: @(active?.Name ?? "None")</strong>
+            </div>
+            <div class="schedule-active-strip__meta">
+                <span class="schedule-now-label"><Icon Name="clock" Size="15" /> @now.LocalDateTime.ToString("f")</span>
+                <span><Icon Name="scenes" Size="15" /> Scene: @(active is null ? "None" : GetSceneName(active.SceneId))</span>
+            </div>
+        </section>
+
+        <section class="schedule-workspace">
+            <aside class="schedule-panel schedule-list-panel" aria-label="Configured schedule windows">
+                <div class="schedule-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Priority queue</span>
+                        <h2><Icon Name="schedule" Size="18" /> Window library</h2>
+                    </div>
                 </div>
 
-                <div class="row g-4">
-                    <div class="col-lg-5">
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                                <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Priority</th>
-                                    <th>Scene</th>
-                                    <th class="text-end">Actions</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                @if (_settings.ScheduleWindows.Any())
-                                {
-                                    @foreach (var window in _settings.ScheduleWindows
-                                                      .OrderBy(w => w.Priority)
-                                                      .ThenByDescending(w => w.LastModifiedUtc))
-                                    {
-                                        <tr class="@GetRowClass(window)">
-                                            <td>
-                                                <button class="btn btn-link p-0 text-start text-decoration-none fw-semibold schedule-window-select-link" @onclick="() => EditWindow(window)">
-                                                    @window.Name
-                                                </button>
-                                                @if (!window.IsEnabled)
-                                                {
-                                                    <div class="small text-warning">Disabled</div>
-                                                }
-                                            </td>
-                                            <td>@window.Priority</td>
-                                            <td class="small">@GetSceneName(window.SceneId)</td>
-                                            <td class="text-end">
-                                                <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteWindow(window)" disabled="@_isSaving">Delete</button>
-                                            </td>
-                                        </tr>
-                                    }
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="4" class="text-muted text-center">No schedule windows configured.</td>
-                                    </tr>
-                                }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-7">
-                        @if (_editingWindow is null)
+                @if (_settings.ScheduleWindows.Any())
+                {
+                    <div class="schedule-window-list">
+                        @foreach (var window in _settings.ScheduleWindows
+                                          .OrderBy(w => w.Priority)
+                                          .ThenByDescending(w => w.LastModifiedUtc))
                         {
-                            <div class="alert schedule-muted-alert mb-0">Select a window or create a new one.</div>
+                            <article class="schedule-window-card @GetRowClass(window)">
+                                <button type="button" class="schedule-window-card__main schedule-window-select-link" @onclick="() => EditWindow(window)">
+                                    <span class="schedule-window-card__icon"><Icon Name="clock" Size="18" /></span>
+                                    <span class="schedule-window-card__copy">
+                                        <span class="schedule-window-card__title">@window.Name</span>
+                                        <span class="schedule-window-card__meta">@FormatWindowTimeRange(window) · @window.RecurrenceType</span>
+                                        <span class="schedule-window-card__scene">@GetSceneName(window.SceneId)</span>
+                                    </span>
+                                </button>
+                                <div class="schedule-window-card__side">
+                                    <span class="schedule-priority-pill">P@window.Priority</span>
+                                    <span class="schedule-state-pill @(window.IsEnabled ? "is-enabled" : "is-disabled")">@(window.IsEnabled ? "On" : "Off")</span>
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteWindow(window)" disabled="@_isSaving" aria-label="@($"Delete {window.Name}")" title="@($"Delete {window.Name}")">
+                                        <Icon Name="trash" Size="15" />
+                                    </button>
+                                </div>
+                            </article>
                         }
-                        else
-                        {
-                            <div class="border rounded-3 p-3 p-md-4 surface-0">
-                                <div class="row g-3">
-                                    <div class="col-md-8">
-                                        <label class="form-label">Name</label>
-                                        <input class="form-control" @bind="_editingWindow.Name" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Enabled</label>
-                                        <div class="form-check form-switch mt-2">
-                                            <input class="form-check-input" type="checkbox" @bind="_editingWindow.IsEnabled" />
-                                        </div>
-                                    </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="schedule-empty-state">
+                        <Icon Name="schedule" Size="24" />
+                        <strong>No schedule windows configured.</strong>
+                        <span>Create a window to automate scene changes by time and recurrence.</span>
+                    </div>
+                }
+            </aside>
 
-                                    <div class="col-md-4">
-                                        <label class="form-label">Priority</label>
-                                        <input class="form-control" type="number" min="0" max="1000" @bind="_editingWindow.Priority" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Start</label>
-                                        <input class="form-control" type="time" value="@_editingWindow.StartTime.ToString("HH\\:mm")" @onchange="e => SetStartTime(e.Value)" />
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Stop</label>
-                                        <input class="form-control" type="time" value="@_editingWindow.StopTime.ToString("HH\\:mm")" @onchange="e => SetStopTime(e.Value)" />
-                                    </div>
+            <main class="schedule-panel schedule-editor-panel" aria-label="Schedule window editor">
+                <div class="schedule-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Editor</span>
+                        <h2><Icon Name="settings" Size="18" /> Window command center</h2>
+                    </div>
+                    @if (_editingWindow is not null)
+                    {
+                        <span class="schedule-editor-state">@(_editingWindow.IsEnabled ? "Enabled" : "Disabled")</span>
+                    }
+                </div>
 
-                                    <div class="col-md-6">
-                                        <label class="form-label">Recurrence</label>
-                                        <select class="form-select" @bind="_editingWindow.RecurrenceType">
-                                            <option value="@ScheduleRecurrenceType.Daily">Daily</option>
-                                            <option value="@ScheduleRecurrenceType.Weekdays">Weekdays</option>
-                                            <option value="@ScheduleRecurrenceType.Weekends">Weekends</option>
-                                            <option value="@ScheduleRecurrenceType.CustomDays">Custom Days</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Scene</label>
-                                        <select class="form-select" @bind="_editingWindow.SceneId">
-                                            <option value="">None</option>
-                                            @foreach (var scene in _settings.Scenes.OrderBy(s => s.Name))
-                                            {
-                                                <option value="@scene.Id">@scene.Name</option>
-                                            }
-                                        </select>
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label">Start Date (optional)</label>
-                                        <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.StartDate)" @onchange="e => SetStartDate(e.Value)" />
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">End Date (optional)</label>
-                                        <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.EndDate)" @onchange="e => SetEndDate(e.Value)" />
-                                    </div>
-
-                                    <div class="col-md-6">
-                                        <label class="form-label">Fade In (sec)</label>
-                                        <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeInSeconds" />
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Fade Out (sec)</label>
-                                        <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeOutSeconds" />
+                @if (_editingWindow is null)
+                {
+                    <div class="schedule-empty-state schedule-muted-alert">
+                        <Icon Name="edit" Size="24" />
+                        <strong>Select a window or create a new one.</strong>
+                        <span>The editor keeps timing, recurrence, scene routing, and fades in one workspace.</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="schedule-editor-grid">
+                        <section class="schedule-editor-card">
+                            <div class="schedule-editor-card__header">
+                                <h3><Icon Name="edit" Size="16" /> Identity</h3>
+                            </div>
+                            <div class="schedule-form-grid">
+                                <div class="schedule-field schedule-field--wide">
+                                    <label class="form-label">Name</label>
+                                    <input class="form-control" @bind="_editingWindow.Name" />
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Enabled</label>
+                                    <div class="form-check form-switch schedule-switch">
+                                        <input class="form-check-input" type="checkbox" @bind="_editingWindow.IsEnabled" />
                                     </div>
                                 </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Priority</label>
+                                    <input class="form-control" type="number" min="0" max="1000" @bind="_editingWindow.Priority" />
+                                </div>
+                            </div>
+                        </section>
 
-                                @if (_editingWindow.RecurrenceType == ScheduleRecurrenceType.CustomDays)
-                                {
-                                    <hr />
+                        <section class="schedule-editor-card">
+                            <div class="schedule-editor-card__header">
+                                <h3><Icon Name="clock" Size="16" /> Timing</h3>
+                                <span>@FormatWindowTimeRange(_editingWindow)</span>
+                            </div>
+                            <div class="schedule-form-grid">
+                                <div class="schedule-field">
+                                    <label class="form-label">Start</label>
+                                    <input class="form-control" type="time" value="@_editingWindow.StartTime.ToString("HH\\:mm")" @onchange="e => SetStartTime(e.Value)" />
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Stop</label>
+                                    <input class="form-control" type="time" value="@_editingWindow.StopTime.ToString("HH\\:mm")" @onchange="e => SetStopTime(e.Value)" />
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Recurrence</label>
+                                    <select class="form-select" @bind="_editingWindow.RecurrenceType">
+                                        <option value="@ScheduleRecurrenceType.Daily">Daily</option>
+                                        <option value="@ScheduleRecurrenceType.Weekdays">Weekdays</option>
+                                        <option value="@ScheduleRecurrenceType.Weekends">Weekends</option>
+                                        <option value="@ScheduleRecurrenceType.CustomDays">Custom Days</option>
+                                    </select>
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Start Date (optional)</label>
+                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.StartDate)" @onchange="e => SetStartDate(e.Value)" />
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">End Date (optional)</label>
+                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.EndDate)" @onchange="e => SetEndDate(e.Value)" />
+                                </div>
+                            </div>
+
+                            @if (_editingWindow.RecurrenceType == ScheduleRecurrenceType.CustomDays)
+                            {
+                                <div class="schedule-custom-days">
                                     <label class="form-label">Custom days</label>
-                                    <div class="d-flex flex-wrap gap-2">
+                                    <div class="schedule-day-grid">
                                         @foreach (var day in Enum.GetValues<DayOfWeek>())
                                         {
                                             <label class="@GetCustomDayButtonClass(day)">
-                                                <input class="form-check-input me-1"
+                                                <input class="form-check-input"
                                                        type="checkbox"
                                                        checked="@_editingWindow.DaysOfWeek.Contains(day)"
                                                        @onchange="e => ToggleCustomDay(day, e.Value)" />
@@ -172,18 +194,46 @@
                                             </label>
                                         }
                                     </div>
-                                }
+                                </div>
+                            }
+                        </section>
 
-                                <div class="mt-4 d-flex flex-wrap gap-2">
-                                    <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">Save Window</button>
+                        <section class="schedule-editor-card">
+                            <div class="schedule-editor-card__header">
+                                <h3><Icon Name="scenes" Size="16" /> Scene and transition</h3>
+                            </div>
+                            <div class="schedule-form-grid">
+                                <div class="schedule-field schedule-field--wide">
+                                    <label class="form-label">Scene</label>
+                                    <select class="form-select" @bind="_editingWindow.SceneId">
+                                        <option value="">None</option>
+                                        @foreach (var scene in _settings.Scenes.OrderBy(s => s.Name))
+                                        {
+                                            <option value="@scene.Id">@scene.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Fade In (sec)</label>
+                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeInSeconds" />
+                                </div>
+                                <div class="schedule-field">
+                                    <label class="form-label">Fade Out (sec)</label>
+                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeOutSeconds" />
                                 </div>
                             </div>
-                        }
+                        </section>
+
+                        <div class="schedule-editor-actions">
+                            <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">
+                                <Icon Name="check" Size="16" /> Save Window
+                            </button>
+                        </div>
                     </div>
-                </div>
-            }
-        </div>
-    </div>
+                }
+            </main>
+        </section>
+    }
 </div>
 
 @code {
@@ -193,6 +243,13 @@
     private string? _statusMessage;
     private bool _statusIsError;
     private bool _isSaving;
+
+    private int GetEnabledWindowCount() => _settings?.ScheduleWindows?.Count(window => window.IsEnabled) ?? 0;
+
+    private static string FormatWindowTimeRange(ScheduleWindow window)
+    {
+        return $"{window.StartTime:HH\\:mm}-{window.StopTime:HH\\:mm}";
+    }
 
     protected override async Task OnInitializedAsync()
     {

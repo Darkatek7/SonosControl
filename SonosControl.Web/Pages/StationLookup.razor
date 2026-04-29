@@ -13,141 +13,208 @@
 @implements IDisposable
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
+<PageTitle>Station Lookup - Sonos Control</PageTitle>
 
-<div class="lookup-shell surface-1 rounded-4 shadow-sm border border-secondary">
-    <header class="lookup-shell__header">
-        <div>
-            <h2 class="lookup-shell__title">📻 Station Lookup</h2>
-            <p class="text-muted mb-0">Search and persist radio stations for the Sonos system.</p>
+<div class="lookup-console-shell">
+    <section class="lookup-hero" aria-labelledby="lookup-heading">
+        <div class="lookup-hero__copy">
+            <span class="spotify-eyebrow">Radio Browser</span>
+            <h1 id="lookup-heading">Station Lookup</h1>
+            <p>Search live radio directories, preview streams on the active speaker, and save stations into your Sonos library.</p>
         </div>
-        <p class="text-muted small mb-0">Live data powered by Radio Browser.</p>
-    </header>
+        <div class="lookup-hero__meta" aria-label="Station lookup summary">
+            <span><Icon Name="rss" Size="18" /> Live directory</span>
+            <strong>@GetSavedStationCount()</strong>
+            <small>saved stations</small>
+        </div>
+    </section>
 
     @if (!string.IsNullOrEmpty(saveSuccessMessage))
     {
-        <div class="alert alert-success mb-0">@saveSuccessMessage</div>
+        <div class="alert alert-success lookup-alert" role="status">@saveSuccessMessage</div>
     }
 
     @if (!string.IsNullOrEmpty(addStationErrorMessage))
     {
-        <div class="alert alert-danger mb-0">@addStationErrorMessage</div>
+        <div class="alert alert-danger lookup-alert" role="alert">@addStationErrorMessage</div>
     }
 
     @if (!string.IsNullOrEmpty(searchErrorMessage))
     {
-        <div class="alert alert-warning mb-0">@searchErrorMessage</div>
+        <div class="alert alert-warning lookup-alert" role="alert">@searchErrorMessage</div>
     }
 
-    <div class="lookup-shell__search">
-        <label for="stationSearch" class="visually-hidden">Search for a radio station</label>
-        <div class="lookup-search-wrapper">
-            <input id="stationSearch"
-                   @ref="searchInput"
-                   class="lookup-shell__search-input form-control"
-                   @bind-value="searchTerm"
-                   @bind-value:event="oninput"
-                   placeholder="Search for a radio station..."
-                   @onkeydown="HandleKeyDown"/>
-            @if (!string.IsNullOrEmpty(searchTerm))
-            {
-                <button type="button" class="lookup-clear-button" @onclick="ClearSearch" aria-label="Clear search" title="Clear search">
-                    ✖
-                </button>
-            }
+    <section class="lookup-search-panel" aria-label="Station search">
+        <div class="lookup-search-panel__heading">
+            <div>
+                <span class="spotify-eyebrow">Discovery</span>
+                <h2><Icon Name="search" Size="18" /> Find a station fast</h2>
+            </div>
+            <span class="lookup-result-count">@GetResultCountLabel()</span>
         </div>
-        <button class="lookup-shell__search-button btn btn-primary"
-                @onclick="SearchStations"
-                disabled="@(string.IsNullOrWhiteSpace(searchTerm) || isLoading)"
-                aria-label="Search stations"
-                title="Search stations">
-            @if (isLoading)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                <span class="visually-hidden">Searching...</span>
-            }
-            else
-            {
-                <span>🔍</span>
-            }
-        </button>
-    </div>
 
-    @if (results?.Any() == true)
-    {
-        <ul class="list-group list-group-flush lookup-results">
-            @foreach (var station in results)
-            {
-                <li class="list-group-item lookup-result">
-                    <div class="lookup-info">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="display-6">@GetFlagEmoji(station.CountryCode)</span>
-                            <div class="flex-grow-1">
-                                <strong>@station.Name</strong>
-                                <small class="text-muted d-block">@GetCleanUrl(station.Url)</small>
-                            </div>
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(station.Tags))
-                        {
-                            <div class="d-flex gap-1 flex-wrap mt-2">
-                                @foreach(var tag in station.Tags.Split(',').Take(3))
+        <div class="lookup-shell__search">
+            <label for="stationSearch" class="visually-hidden">Search for a radio station</label>
+            <div class="lookup-search-wrapper">
+                <Icon Name="search" Size="18" Class="lookup-search-wrapper__icon" />
+                <input id="stationSearch"
+                       @ref="searchInput"
+                       class="lookup-shell__search-input form-control"
+                       @bind-value="searchTerm"
+                       @bind-value:event="oninput"
+                       placeholder="Try jazz, news, BBC, Vienna..."
+                       @onkeydown="HandleKeyDown"/>
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button type="button" class="lookup-clear-button" @onclick="ClearSearch" aria-label="Clear search" title="Clear search">
+                        <Icon Name="x" Size="16" />
+                    </button>
+                }
+            </div>
+            <button class="lookup-shell__search-button btn btn-primary"
+                    @onclick="SearchStations"
+                    disabled="@(string.IsNullOrWhiteSpace(searchTerm) || isLoading)"
+                    aria-label="Search stations"
+                    title="Search stations">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span>Searching</span>
+                }
+                else
+                {
+                    <Icon Name="search" Size="17" />
+                    <span>Search</span>
+                }
+            </button>
+        </div>
+
+        <div class="lookup-hints" aria-label="Search capabilities">
+            <span><Icon Name="play" Size="15" /> preview on active speaker</span>
+            <span><Icon Name="check" Size="15" /> saved-state aware</span>
+            <span><Icon Name="rss" Size="15" /> country and tag metadata</span>
+        </div>
+    </section>
+
+    <section class="lookup-results-panel" aria-label="Station search results">
+        @if (isLoading)
+        {
+            <div class="lookup-empty">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <strong>Searching Radio Browser...</strong>
+            </div>
+        }
+        else if (results?.Any() == true)
+        {
+            <ul class="list-group list-group-flush lookup-results">
+                @foreach (var station in results)
+                {
+                    var isSaved = IsStationSaved(station);
+                    <li class="list-group-item lookup-result">
+                        <div class="lookup-info">
+                            <div class="lookup-station-badge" aria-hidden="true">@GetFlagEmoji(station.CountryCode)</div>
+                            <div class="lookup-station-copy">
+                                <div class="lookup-station-title-row">
+                                    <strong>@station.Name</strong>
+                                    @if (isSaved)
+                                    {
+                                        <span class="lookup-saved-pill"><Icon Name="check" Size="13" /> Saved</span>
+                                    }
+                                </div>
+                                <small>@GetCleanUrl(station.Url)</small>
+                                @if (!string.IsNullOrWhiteSpace(station.Tags))
                                 {
-                                    <span class="badge bg-secondary bg-opacity-25 text-dark-emphasis">@tag</span>
+                                    <div class="lookup-tags">
+                                        @foreach(var tag in station.Tags.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t)).Take(3))
+                                        {
+                                            <span>@tag</span>
+                                        }
+                                    </div>
                                 }
                             </div>
-                        }
-                    </div>
-                    <div class="lookup-actions">
-                        <button type="button"
-                                class="lookup-action-button btn btn-outline-success"
-                                @onclick="() => PlayStation(station.Url)"
-                                aria-label="@($"Play {station.Name}")"
-                                title="@($"Play {station.Name}")"
-                                disabled="@IsLoading($"play-{station.Url}")">
-                            @if (IsLoading($"play-{station.Url}"))
-                            {
-                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            }
-                            else
-                            {
-                                <span>🔊</span>
-                            }
-                        </button>
-                        @if (IsStationSaved(station))
-                        {
-                            <button type="button" class="lookup-action-button btn btn-outline-primary" disabled>
-                                ✅
-                            </button>
-                        }
-                        else
-                        {
+                        </div>
+                        <div class="lookup-actions">
                             <button type="button"
-                                    class="lookup-action-button btn btn-outline-primary"
-                                    @onclick="() => SaveStation(station)"
-                                    aria-label="@($"Save {station.Name}")"
-                                    title="@($"Save {station.Name}")"
-                                    disabled="@IsLoading($"save-{station.Url}")">
-                                @if (IsLoading($"save-{station.Url}"))
+                                    class="lookup-action-button btn btn-outline-success"
+                                    @onclick="() => PlayStation(station.Url)"
+                                    aria-label="@($"Play {station.Name}")"
+                                    title="@($"Play {station.Name}")"
+                                    disabled="@IsLoading($"play-{station.Url}")">
+                                @if (IsLoading($"play-{station.Url}"))
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                 }
                                 else
                                 {
-                                    <span>💾</span>
+                                    <Icon Name="play" Size="16" />
                                 }
                             </button>
-                        }
-                    </div>
-                </li>
-            }
-        </ul>
-    }
-    else if (results is not null)
-    {
-        <p class="text-center text-muted mb-0">No stations found.</p>
-    }
+                            @if (isSaved)
+                            {
+                                <button type="button" class="lookup-action-button btn btn-outline-primary" disabled aria-label="@($"{station.Name} is already saved")" title="Already saved">
+                                    <Icon Name="check" Size="16" />
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="lookup-action-button btn btn-outline-primary"
+                                        @onclick="() => SaveStation(station)"
+                                        aria-label="@($"Save {station.Name}")"
+                                        title="@($"Save {station.Name}")"
+                                        disabled="@IsLoading($"save-{station.Url}")">
+                                    @if (IsLoading($"save-{station.Url}"))
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    }
+                                    else
+                                    {
+                                        <Icon Name="plus" Size="16" />
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+        else if (results is not null)
+        {
+            <div class="lookup-empty">
+                <Icon Name="search" Size="24" />
+                <strong>No stations found.</strong>
+                <span>Try a broader station name, city, or genre.</span>
+            </div>
+        }
+        else
+        {
+            <div class="lookup-empty">
+                <Icon Name="rss" Size="24" />
+                <strong>Ready when you are.</strong>
+                <span>Search by station name, genre, city, or network.</span>
+            </div>
+        }
+    </section>
 </div>
 
 @code {
+    private int GetSavedStationCount() => _settings?.Stations?.Count ?? 0;
+
+    private string GetResultCountLabel()
+    {
+        if (results is null)
+        {
+            return "No search yet";
+        }
+
+        return results.Count switch
+        {
+            0 => "No matches",
+            1 => "1 result",
+            _ => $"{results.Count} results"
+        };
+    }
+
     private SonosSettings? _settings;
     private string? searchTerm;
     private ElementReference searchInput;
@@ -442,5 +509,4 @@
         _saveMessageCts?.Dispose();
     }
 }
-
 
