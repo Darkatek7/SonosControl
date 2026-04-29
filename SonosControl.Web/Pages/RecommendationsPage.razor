@@ -9,187 +9,190 @@
 
 <PageTitle>Recommendations - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell">
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-                <div>
-                    <h3 class="mb-1">Recommendations</h3>
-                    <p class="text-muted mb-0">Personal picks from your actions plus team and time-of-day trends.</p>
-                </div>
-                <div class="d-flex gap-2 align-items-center">
-                    <label class="small text-muted mb-0">Days</label>
-                    <input class="form-control" style="width: 100px;" type="number" min="7" max="120" @bind="_windowDays" />
-                    <button class="btn btn-outline-primary" @onclick="LoadAsync" disabled="@_isLoading">Refresh</button>
-                </div>
-            </div>
-
-            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-            {
-                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")">@_statusMessage</div>
-            }
-
-            @if (_settings is not null && _settings.Speakers.Any())
-            {
-                <div class="row g-2 align-items-end mb-3">
-                    <div class="col-md-6 col-lg-5">
-                        <label class="form-label">Speaker</label>
-                        <select class="form-select" @bind="_selectedSpeakerIp">
-                            @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
-                            {
-                                <option value="@speaker.IpAddress">@speaker.Name (@speaker.IpAddress)</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-            }
-
-            @if (_isLoading)
-            {
-                <p class="text-muted mb-0">Loading recommendations...</p>
-            }
-            else
-            {
-                <div class="row g-4">
-                    <div class="col-xl-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <strong>Your Picks</strong>
-                                <span class="small text-muted">@_personal.Count</span>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-sm align-middle mb-0">
-                                        <thead>
-                                        <tr>
-                                            <th>Item</th>
-                                            <th>Type</th>
-                                            <th class="text-end">Actions</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        @if (_personal.Any())
-                                        {
-                                            @foreach (var item in _personal)
-                                            {
-                                                <tr>
-                                                    <td class="text-truncate">
-                                                        <div class="fw-semibold text-truncate">@item.Name</div>
-                                                        <div class="small text-muted">@item.Count signal(s)</div>
-                                                    </td>
-                                                    <td class="small">@item.MediaType</td>
-                                                    <td class="text-end">
-                                                        @if (!string.IsNullOrWhiteSpace(item.SourceUrl) && !string.IsNullOrWhiteSpace(_selectedSpeakerIp))
-                                                        {
-                                                            <button class="btn btn-outline-success btn-sm"
-                                                                    @onclick="() => PlayPersonalItemAsync(item)"
-                                                                    disabled="@_isPlayingFromRecommendation">
-                                                                Play
-                                                            </button>
-                                                        }
-                                                    </td>
-                                                </tr>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <tr>
-                                                <td colspan="3" class="text-muted text-center">No personal signals in the selected period.</td>
-                                            </tr>
-                                        }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-xl-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <strong>Best Right Now</strong>
-                                <span class="small text-muted">@_timeOfDay.Count</span>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-sm align-middle mb-0">
-                                        <thead>
-                                        <tr>
-                                            <th>Track</th>
-                                            <th>Type</th>
-                                            <th class="text-end">Plays</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        @if (_timeOfDay.Any())
-                                        {
-                                            @foreach (var item in _timeOfDay)
-                                            {
-                                                <tr>
-                                                    <td class="text-truncate">@item.Name</td>
-                                                    <td class="small text-muted">@item.MediaType</td>
-                                                    <td class="text-end">@item.Count</td>
-                                                </tr>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <tr>
-                                                <td colspan="3" class="text-muted text-center">No current time-window patterns yet.</td>
-                                            </tr>
-                                        }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-xl-4">
-                        <div class="card border-0 shadow-sm h-100">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <strong>Team Trending</strong>
-                                <span class="small text-muted">@_teamTrending.Count</span>
-                            </div>
-                            <div class="card-body p-0">
-                                <div class="table-responsive">
-                                    <table class="table table-sm align-middle mb-0">
-                                        <thead>
-                                        <tr>
-                                            <th>Track</th>
-                                            <th class="text-end">Duration</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        @if (_teamTrending.Any())
-                                        {
-                                            @foreach (var item in _teamTrending)
-                                            {
-                                                <tr>
-                                                    <td>
-                                                        <div class="text-truncate">@item.Name</div>
-                                                        <div class="small text-muted">@item.MediaType - @item.Count plays</div>
-                                                    </td>
-                                                    <td class="text-end">@FormatDuration(item.Score)</td>
-                                                </tr>
-                                            }
-                                        }
-                                        else
-                                        {
-                                            <tr>
-                                                <td colspan="2" class="text-muted text-center">No team history yet.</td>
-                                            </tr>
-                                        }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
+<div class="recommendations-shell">
+    <section class="recommendations-hero" aria-labelledby="recommendations-heading">
+        <div class="recommendations-hero__copy">
+            <span class="spotify-eyebrow">Discovery</span>
+            <h1 id="recommendations-heading">Recommendations</h1>
+            <p>Personal picks from your actions, current time-of-day patterns, and team listening momentum.</p>
         </div>
-    </div>
+        <div class="recommendations-hero__stats" aria-label="Recommendation summary">
+            <div class="recommendations-stat">
+                <span><Icon Name="user" Size="16" /> Your picks</span>
+                <strong>@_personal.Count</strong>
+            </div>
+            <div class="recommendations-stat">
+                <span><Icon Name="clock" Size="16" /> Right now</span>
+                <strong>@_timeOfDay.Count</strong>
+            </div>
+            <div class="recommendations-stat">
+                <span><Icon Name="stats" Size="16" /> Trending</span>
+                <strong>@_teamTrending.Count</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="recommendations-control-panel" aria-label="Recommendation controls">
+        <div class="recommendations-field">
+            <label class="form-label" for="recommendationDays">Days</label>
+            <input id="recommendationDays" class="form-control" type="number" min="7" max="120" @bind="_windowDays" />
+        </div>
+        @if (_settings is not null && _settings.Speakers.Any())
+        {
+            <div class="recommendations-field recommendations-field--speaker">
+                <label class="form-label" for="recommendationSpeaker">Speaker</label>
+                <select id="recommendationSpeaker" class="form-select" @bind="_selectedSpeakerIp">
+                    @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                    {
+                        <option value="@speaker.IpAddress">@speaker.Name (@speaker.IpAddress)</option>
+                    }
+                </select>
+            </div>
+        }
+        <button class="btn btn-outline-primary recommendations-refresh-button" @onclick="LoadAsync" disabled="@_isLoading">
+            <Icon Name="refresh" Size="16" /> Refresh
+        </button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") recommendations-alert" role="status">@_statusMessage</div>
+    }
+
+    @if (_isLoading)
+    {
+        <section class="recommendations-panel recommendations-loading">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <strong>Loading recommendations...</strong>
+        </section>
+    }
+    else
+    {
+        <section class="recommendations-grid">
+            <article class="recommendations-panel recommendations-panel--primary">
+                <div class="recommendations-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Personal</span>
+                        <h2><Icon Name="recommendations" Size="18" /> Your Picks</h2>
+                    </div>
+                    <span class="recommendations-count">@_personal.Count</span>
+                </div>
+                <div class="recommendations-list">
+                    @if (_personal.Any())
+                    {
+                        @foreach (var item in _personal)
+                        {
+                            <div class="recommendation-card recommendation-card--actionable">
+                                <div class="recommendation-card__icon">
+                                    <Icon Name="@GetMediaIcon(item.MediaType)" Size="18" />
+                                </div>
+                                <div class="recommendation-card__body">
+                                    <strong>@item.Name</strong>
+                                    <span>@item.Count signal(s) · @FormatMediaType(item.MediaType)</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.SourceUrl) && !string.IsNullOrWhiteSpace(_selectedSpeakerIp))
+                                {
+                                    <button class="btn btn-outline-success btn-sm recommendation-play-button"
+                                            @onclick="() => PlayPersonalItemAsync(item)"
+                                            disabled="@_isPlayingFromRecommendation"
+                                            aria-label="@($"Play {item.Name}")"
+                                            title="@($"Play {item.Name}")">
+                                        <Icon Name="play" Size="15" />
+                                    </button>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="recommendations-empty">
+                            <Icon Name="user" Size="24" />
+                            <strong>No personal signals in the selected period.</strong>
+                            <span>Play or save more sources and this panel will sharpen up.</span>
+                        </div>
+                    }
+                </div>
+            </article>
+
+            <article class="recommendations-panel">
+                <div class="recommendations-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Timing</span>
+                        <h2><Icon Name="clock" Size="18" /> Best Right Now</h2>
+                    </div>
+                    <span class="recommendations-count">@_timeOfDay.Count</span>
+                </div>
+                <div class="recommendations-table-wrap">
+                    <table class="table table-sm align-middle recommendations-table">
+                        <thead>
+                        <tr>
+                            <th>Track</th>
+                            <th>Type</th>
+                            <th class="text-end">Plays</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @if (_timeOfDay.Any())
+                        {
+                            @foreach (var item in _timeOfDay)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="recommendations-table__title">@item.Name</div>
+                                    </td>
+                                    <td>@FormatMediaType(item.MediaType)</td>
+                                    <td class="text-end">@item.Count</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="3" class="recommendations-empty-cell">No current time-window patterns yet.</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="recommendations-panel">
+                <div class="recommendations-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Momentum</span>
+                        <h2><Icon Name="stats" Size="18" /> Team Trending</h2>
+                    </div>
+                    <span class="recommendations-count">@_teamTrending.Count</span>
+                </div>
+                <div class="recommendations-list recommendations-list--compact">
+                    @if (_teamTrending.Any())
+                    {
+                        @foreach (var item in _teamTrending)
+                        {
+                            <div class="recommendation-row">
+                                <div class="recommendation-row__rank">
+                                    <Icon Name="@GetMediaIcon(item.MediaType)" Size="16" />
+                                </div>
+                                <div class="recommendation-row__body">
+                                    <strong>@item.Name</strong>
+                                    <span>@FormatMediaType(item.MediaType) · @item.Count plays</span>
+                                </div>
+                                <div class="recommendation-row__metric">@FormatDuration(item.Score)</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="recommendations-empty">
+                            <Icon Name="stats" Size="24" />
+                            <strong>No team history yet.</strong>
+                            <span>Shared playback history will appear here once the room has more activity.</span>
+                        </div>
+                    }
+                </div>
+            </article>
+        </section>
+    }
 </div>
 
 @code {
@@ -219,6 +222,26 @@
     private List<RecommendationItem> _personal = new();
     private List<RecommendationItem> _timeOfDay = new();
     private List<RecommendationItem> _teamTrending = new();
+
+    private static string GetMediaIcon(string mediaType)
+    {
+        return mediaType.ToLowerInvariant() switch
+        {
+            "station" => "rss",
+            "spotify" => "music",
+            "youtubemusic" or "youtube" => "play",
+            _ => "music"
+        };
+    }
+
+    private static string FormatMediaType(string mediaType)
+    {
+        return mediaType switch
+        {
+            "YouTubeMusic" => "YouTube Music",
+            _ => mediaType
+        };
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -486,4 +509,3 @@
         _statusIsError = isError;
     }
 }
-

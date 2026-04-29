@@ -75,6 +75,46 @@
     min-width: 0;
 }
 
+[data-theme='light'] .config-console-hero,
+[data-theme='light'] .config-rail,
+[data-theme='light'] .config-panel,
+[data-theme='light'] .config-subpanel,
+[data-theme='light'] .daily-schedule-table-wrapper,
+[data-theme='light'] .holiday-table-wrapper,
+[data-theme='light'] .holiday-import-panel,
+[data-theme='light'] .schedule-card,
+[data-theme='light'] .holiday-card {
+    border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+}
+
+[data-theme='light'] .config-console-hero {
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+}
+
+html:not([data-theme='dark']) .config-console-hero,
+html:not([data-theme='dark']) .config-rail,
+html:not([data-theme='dark']) .config-panel,
+html:not([data-theme='dark']) .config-subpanel,
+html:not([data-theme='dark']) .daily-schedule-table-wrapper,
+html:not([data-theme='dark']) .holiday-table-wrapper,
+html:not([data-theme='dark']) .holiday-import-panel,
+html:not([data-theme='dark']) .schedule-card,
+html:not([data-theme='dark']) .holiday-card {
+    border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+}
+
+html:not([data-theme='dark']) .config-console-hero {
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+}
+
 .config-rail {
     position: sticky;
     top: var(--spacing-lg);
