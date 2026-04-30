@@ -167,17 +167,25 @@
                 <div class="recommendations-list recommendations-list--compact">
                     @if (_teamTrending.Any())
                     {
+                        var maxTrendingScore = _teamTrending.Max(item => item.Score);
                         @foreach (var item in _teamTrending)
                         {
-                            <div class="recommendation-row">
+                            var trendPercent = maxTrendingScore > 0 ? Math.Max(3, item.Score / maxTrendingScore * 100) : 0;
+                            <div class="recommendation-row recommendation-row--trending">
                                 <div class="recommendation-row__rank">
                                     <Icon Name="@GetMediaIcon(item.MediaType)" Size="16" />
                                 </div>
                                 <div class="recommendation-row__body">
-                                    <strong>@item.Name</strong>
+                                    <strong title="@item.Name">@item.Name</strong>
                                     <span>@FormatMediaType(item.MediaType) · @item.Count plays</span>
+                                    <div class="recommendation-row__track" aria-hidden="true">
+                                        <span style="@($"width: {trendPercent:F1}%")"></span>
+                                    </div>
                                 </div>
-                                <div class="recommendation-row__metric">@FormatDuration(item.Score)</div>
+                                <div class="recommendation-row__metric">
+                                    <strong>@FormatDuration(item.Score)</strong>
+                                    <span>Time</span>
+                                </div>
                             </div>
                         }
                     }
