@@ -1,0 +1,435 @@
+.backups-console-shell {
+    width: 100%;
+    max-width: 1800px;
+    margin-inline: auto;
+    display: grid;
+    gap: clamp(1rem, 1.5vw, 1.5rem);
+    min-width: 0;
+}
+
+.backups-hero,
+.backups-actions-panel,
+.backups-panel {
+    border: 1px solid rgba(13, 148, 136, 0.22);
+    border-radius: 14px;
+    background:
+        radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 34rem),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.backups-hero {
+    padding: clamp(1rem, 2vw, 1.4rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(24rem, 0.8fr);
+    gap: 1rem;
+    align-items: end;
+}
+
+.backups-hero h1 {
+    margin: 0.25rem 0 0;
+    color: #0f172a;
+    font-size: clamp(2rem, 3vw, 3rem);
+    line-height: 0.98;
+    letter-spacing: 0;
+}
+
+.backups-hero p,
+.backups-panel__copy {
+    margin: 0.8rem 0 0;
+    max-width: 40rem;
+    color: #64748b;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.backups-hero__metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.backups-stat {
+    min-height: 4.35rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(13, 148, 136, 0.35);
+    border-radius: 12px;
+    background: rgba(13, 148, 136, 0.09);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    color: #0f172a;
+}
+
+.backups-stat span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 850;
+}
+
+.backups-stat strong {
+    font-size: clamp(1.2rem, 1.8vw, 1.6rem);
+    line-height: 1;
+}
+
+.backups-alert {
+    margin: 0;
+}
+
+.backups-actions-panel {
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.backups-actions-panel .btn,
+.backup-action-btn,
+.backup-file-button,
+.backups-import-btn {
+    min-height: 2.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    font-weight: 850;
+}
+
+.backups-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(19rem, 0.65fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.backups-panel {
+    padding: clamp(1rem, 1.5vw, 1.25rem);
+}
+
+.backups-panel__header {
+    margin-bottom: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.backups-panel__header h2 {
+    margin: 0.15rem 0 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #0f172a;
+    font-size: 1.05rem;
+    line-height: 1.2;
+}
+
+.backups-panel__count,
+.backups-table__muted,
+.backup-card__meta,
+.backup-card__header > span,
+.backup-selected-file {
+    color: #64748b;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.backups-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.backups-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.backups-table th:nth-child(2),
+.backups-table td:nth-child(2) {
+    width: 8rem;
+}
+
+.backups-table th:nth-child(3),
+.backups-table td:nth-child(3) {
+    width: 4.6rem;
+}
+
+.backups-table th:nth-child(4),
+.backups-table td:nth-child(4) {
+    width: 20rem;
+}
+
+.backups-table th {
+    padding: 0.7rem 0.85rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+    background: rgba(241, 245, 249, 0.78);
+}
+
+.backups-table td {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+    vertical-align: middle;
+}
+
+.backups-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.backup-file-name {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.backup-file-name span {
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #087f7c;
+    background: rgba(13, 148, 136, 0.14);
+}
+
+.backup-file-name strong {
+    min-width: 0;
+    display: block;
+    overflow: hidden;
+    color: #0f172a;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.backup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.backups-table .backup-actions {
+    flex-wrap: nowrap;
+}
+
+.backup-import-control {
+    margin: 0.95rem 0;
+    min-height: 3.75rem;
+    padding: 0.65rem;
+    border: 1px dashed rgba(13, 148, 136, 0.34);
+    border-radius: 12px;
+    background: rgba(13, 148, 136, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+::deep .backup-native-file {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.backup-file-button {
+    padding: 0.48rem 0.8rem;
+    color: #087f7c;
+    border: 1px solid rgba(13, 148, 136, 0.42);
+    background: rgba(13, 148, 136, 0.1);
+    cursor: pointer;
+}
+
+.backup-selected-file {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.backups-import-btn {
+    width: 100%;
+}
+
+.backups-empty-state {
+    min-height: 12rem;
+    padding: 2rem;
+    border: 1px dashed rgba(148, 163, 184, 0.35);
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 0.65rem;
+    color: #64748b;
+    text-align: center;
+}
+
+.backups-empty-state strong {
+    color: #0f172a;
+}
+
+.backups-card-list {
+    display: none;
+}
+
+.backup-card {
+    padding: 0.9rem;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.68);
+}
+
+.backup-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.backup-card__meta {
+    margin: 0.75rem 0 1rem;
+}
+
+[data-theme='dark'] .backups-hero,
+[data-theme='dark'] .backups-actions-panel,
+[data-theme='dark'] .backups-panel {
+    border-color: rgba(139, 92, 246, 0.34);
+    background:
+        radial-gradient(circle at top left, rgba(139, 92, 246, 0.16), transparent 34rem),
+        linear-gradient(145deg, rgba(26, 23, 42, 0.96), rgba(16, 18, 31, 0.98));
+    box-shadow: none;
+}
+
+[data-theme='dark'] .backups-hero h1,
+[data-theme='dark'] .backups-panel__header h2,
+[data-theme='dark'] .backup-file-name strong,
+[data-theme='dark'] .backups-empty-state strong {
+    color: #f8f5ff;
+}
+
+[data-theme='dark'] .backups-hero p,
+[data-theme='dark'] .backups-panel__copy,
+[data-theme='dark'] .backups-stat span,
+[data-theme='dark'] .backups-panel__count,
+[data-theme='dark'] .backups-table__muted,
+[data-theme='dark'] .backup-card__meta,
+[data-theme='dark'] .backup-card__header > span,
+[data-theme='dark'] .backup-selected-file,
+[data-theme='dark'] .backups-empty-state {
+    color: #b9a8d8;
+}
+
+[data-theme='dark'] .backups-stat {
+    color: #f8f5ff;
+    border-color: rgba(139, 92, 246, 0.44);
+    background: rgba(139, 92, 246, 0.12);
+}
+
+[data-theme='dark'] .backups-table-wrapper,
+[data-theme='dark'] .backup-card {
+    border-color: rgba(139, 92, 246, 0.26);
+    background: rgba(22, 20, 35, 0.74);
+}
+
+[data-theme='dark'] .backups-table th {
+    color: #a994ca;
+    border-bottom-color: rgba(139, 92, 246, 0.3);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+[data-theme='dark'] .backups-table td {
+    border-bottom-color: rgba(139, 92, 246, 0.18);
+}
+
+[data-theme='dark'] .backup-file-name span {
+    color: #c6a7ff;
+    background: rgba(139, 92, 246, 0.18);
+}
+
+[data-theme='dark'] .backup-import-control {
+    border-color: rgba(139, 92, 246, 0.34);
+    background: rgba(139, 92, 246, 0.08);
+}
+
+[data-theme='dark'] .backup-file-button {
+    color: #d7c6ff;
+    border-color: rgba(139, 92, 246, 0.44);
+    background: rgba(139, 92, 246, 0.14);
+}
+
+[data-theme='dark'] .backups-empty-state {
+    border-color: rgba(139, 92, 246, 0.28);
+}
+
+@media (max-width: 1120px) {
+    .backups-hero,
+    .backups-workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    .backups-console-shell {
+        padding: 1rem;
+    }
+
+    .backups-hero__metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .backups-actions-panel {
+        justify-content: stretch;
+        flex-direction: column;
+    }
+
+    .backups-actions-panel .btn {
+        width: 100%;
+    }
+
+    .backups-table-wrapper {
+        display: none;
+    }
+
+    .backups-card-list {
+        display: grid;
+        gap: 0.8rem;
+    }
+
+    .backup-card__header,
+    .backup-import-control {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .backup-card .backup-actions {
+        justify-content: stretch;
+    }
+
+    .backup-card .backup-action-btn {
+        flex: 1 1 calc(50% - 0.45rem);
+    }
+}
+
+@media (max-width: 430px) {
+    .backups-hero h1 {
+        font-size: 2.35rem;
+    }
+
+    .backup-card .backup-action-btn {
+        flex-basis: 100%;
+    }
+}
