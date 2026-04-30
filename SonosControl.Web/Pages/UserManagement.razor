@@ -14,288 +14,256 @@
 
 <PageTitle>User Management</PageTitle>
 
-<div class="user-management-shell">
-    <section class="panel user-management-panel stack-lg" aria-labelledby="user-management-heading">
-        <header class="user-management__header">
-            <div>
-                <h3 id="user-management-heading" class="page-title mb-1">👥 User Management</h3>
-                <p class="text-muted small mb-0">Manage accounts, roles, and activation states securely.</p>
+<div class="users-console-shell">
+    <section class="users-hero" aria-labelledby="user-management-heading">
+        <div class="users-hero__copy">
+            <span class="spotify-eyebrow">Access Control</span>
+            <h1 id="user-management-heading">User Management</h1>
+            <p>Manage accounts, roles, and activation states from a compact administration console.</p>
+        </div>
+        <div class="users-hero__metrics" aria-label="User account summary">
+            <div class="users-stat">
+                <span><Icon Name="person" Size="16" /> Users</span>
+                <strong>@users.Count</strong>
             </div>
-            @if (isAdmin)
-            {
-                <div class="user-management__header-control">
-                    <FormField Label="Allow user registration"
-                               Id="@RegistrationSwitchId"
-                               HelperText="@RegistrationSwitchHelperText">
-                        <div class="form-check form-switch m-0">
-                            <input class="form-check-input user-management__switch"
-                                   type="checkbox"
-                                   role="switch"
-                                   id="@RegistrationSwitchId"
-                                   checked="@allowUserRegistration"
-                                   @onchange="ToggleRegistration"
-                                   aria-label="Allow user registration toggle" />
-                        </div>
-                    </FormField>
+            <div class="users-stat">
+                <span><Icon Name="check" Size="16" /> Active</span>
+                <strong>@users.Count(IsUserActive)</strong>
+            </div>
+            <div class="users-stat">
+                <span><Icon Name="settings" Size="16" /> Signups</span>
+                <strong>@(allowUserRegistration ? "Open" : "Closed")</strong>
+            </div>
+        </div>
+    </section>
+
+    @if (isAdmin)
+    {
+        <section class="users-registration-panel" aria-labelledby="registration-heading">
+            <div>
+                <span class="spotify-eyebrow">Registration</span>
+                <h2 id="registration-heading">New account access</h2>
+                <p>@RegistrationSwitchHelperText</p>
+            </div>
+            <label class="users-toggle" for="@RegistrationSwitchId">
+                <input class="users-toggle__input"
+                       type="checkbox"
+                       role="switch"
+                       id="@RegistrationSwitchId"
+                       checked="@allowUserRegistration"
+                       @onchange="ToggleRegistration"
+                       aria-label="Allow user registration toggle" />
+                <span class="users-toggle__track">
+                    <span class="users-toggle__thumb"></span>
+                </span>
+                <span>@(allowUserRegistration ? "Enabled" : "Disabled")</span>
+            </label>
+        </section>
+    }
+
+    @if (isLoading)
+    {
+        <section class="users-panel users-empty-state">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <strong>Loading users...</strong>
+        </section>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <FormStatus StatusMessage="@errorMessage" Severity="FormStatus.AlertSeverity.Danger" />
+        }
+
+        <section class="users-panel">
+            <div class="users-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Directory</span>
+                    <h2><Icon Name="person" Size="18" /> Accounts</h2>
                 </div>
-            }
-        </header>
+                <span class="users-panel__count">@users.Count record(s)</span>
+            </div>
 
-        <div class="user-management__body stack-md">
-            @if (isLoading)
-            {
-                <p class="text-muted mb-0">Loading users...</p>
-            }
-            else
-            {
-                @if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    <FormStatus StatusMessage="@errorMessage" Severity="FormStatus.AlertSeverity.Danger" />
-                }
-
-                <!-- Desktop Table View -->
-                <div class="d-none d-md-block table-responsive user-management__table-wrapper">
-                    <table class="table user-management-table mb-0">
-                        <thead>
-                        <tr>
-                            <th scope="col">User</th>
-                            <th scope="col" class="d-none d-xl-table-cell">First</th>
-                            <th scope="col" class="d-none d-xl-table-cell">Last</th>
-                            <th scope="col" class="d-none d-md-table-cell">Email</th>
-                            <th scope="col" class="d-none d-lg-table-cell">Roles</th>
-                            <th scope="col" class="text-center">Actions</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        @foreach (var user in users)
-                        {
-                            <tr>
-                                <td>@user.UserName</td>
-
-                                <td class="d-none d-xl-table-cell">@user.FirstName</td>
-                                <td class="d-none d-xl-table-cell">@user.LastName</td>
-
-                                <td class="d-none d-md-table-cell">@user.Email</td>
-
-                                <td class="d-none d-lg-table-cell user-management__roles">
-                                    @foreach (var role in userRoles[user.Id])
-                                    {
-                                        <span class="badge user-role-badge">@role</span>
-                                    }
-                                </td>
-
-                                <td class="text-center">
-                                    <div class="user-actions">
-                                        <button type="button"
-                                                class="btn btn-outline-danger user-action-btn"
-                                                @onclick="() => DeleteUser(user)"
-                                                disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
-                                                aria-label="@($"Delete user {user.UserName}")">
-                                            @if (IsLoading($"delete-{user.Id}"))
-                                            {
-                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                            }
-                                            else
-                                            {
-                                                <span>Delete</span>
-                                            }
-                                        </button>
-
-                                        @if (isSuperAdmin)
-                                        {
-                                            <button type="button"
-                                                    class="btn btn-outline-primary user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "admin")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-admin"))"
-                                                    aria-label="@($"{(userRoles[user.Id].Contains("admin") ? "Remove" : "Add")} Admin role for {user.UserName}")">
-                                                @if (IsLoading($"role-{user.Id}-admin"))
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                }
-                                                else
-                                                {
-                                                    @(userRoles[user.Id].Contains("admin") ? "−Admin" : "+Admin")
-                                                }
-                                            </button>
-
-                                            <button type="button"
-                                                    class="btn btn-outline-secondary user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "operator")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-operator"))"
-                                                    aria-label="@($"{(userRoles[user.Id].Contains("operator") ? "Remove" : "Add")} Operator role for {user.UserName}")">
-                                                @if (IsLoading($"role-{user.Id}-operator"))
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                }
-                                                else
-                                                {
-                                                    @(userRoles[user.Id].Contains("operator") ? "−Operator" : "+Operator")
-                                                }
-                                            </button>
-
-                                            <button type="button"
-                                                    class="btn btn-outline-warning user-action-btn"
-                                                    @onclick='() => ToggleRole(user, "superadmin")'
-                                                    disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-superadmin"))"
-                                                    aria-label="@($"{(userRoles[user.Id].Contains("superadmin") ? "Remove" : "Add")} Superuser role for {user.UserName}")">
-                                                @if (IsLoading($"role-{user.Id}-superadmin"))
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                }
-                                                else
-                                                {
-                                                    @(userRoles[user.Id].Contains("superadmin") ? "−Superuser" : "+Superuser")
-                                                }
-                                            </button>
-                                        }
-
-                                        <button type="button"
-                                                class="btn user-action-btn @GetActivationButtonClass(user)"
-                                                @onclick='() => ToggleUserActivation(user)'
-                                                disabled="@(IsCurrentUser(user) || IsLoading($"activation-{user.Id}"))"
-                                                aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
-                                            @if (IsLoading($"activation-{user.Id}"))
-                                            {
-                                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                            }
-                                            else
-                                            {
-                                                @(IsUserActive(user) ? "✔" : "⛔")
-                                            }
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Mobile Card View -->
-                <div class="d-md-none stack-md">
+            <div class="users-table-wrapper">
+                <table class="users-table">
+                    <thead>
+                    <tr>
+                        <th scope="col">User</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Roles</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
                     @foreach (var user in users)
                     {
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body p-3">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <div class="d-flex align-items-center gap-3">
-                                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center border" style="width: 40px; height: 40px;">
-                                            <Icon Name="person" Size="16" Class="text-secondary" />
-                                        </div>
-                                        <div style="min-width: 0;">
-                                            <h6 class="mb-0 fw-bold text-truncate">@user.UserName</h6>
-                                            <div class="small text-muted text-truncate">@user.Email</div>
-                                        </div>
+                        <tr>
+                            <td>
+                                <div class="user-identity">
+                                    <span class="user-avatar"><Icon Name="person" Size="17" /></span>
+                                    <div>
+                                        <strong>@user.UserName</strong>
+                                        <span>@GetDisplayName(user)</span>
                                     </div>
-                                    <span class="badge rounded-pill @(IsUserActive(user) ? "bg-success" : "bg-danger")">
-                                        @(IsUserActive(user) ? "Active" : "Inactive")
-                                    </span>
                                 </div>
-
-                                <div class="mb-3">
-                                    <span class="text-uppercase text-muted small fw-bold d-block mb-1" style="font-size: 0.7rem;">Roles</span>
+                            </td>
+                            <td class="users-table__muted">@user.Email</td>
+                            <td>
+                                <div class="user-role-list">
                                     @if (userRoles[user.Id].Any())
                                     {
-                                        <div class="d-flex flex-wrap gap-1">
-                                            @foreach (var role in userRoles[user.Id])
-                                            {
-                                                <span class="badge bg-light text-dark border">@role</span>
-                                            }
-                                        </div>
+                                        @foreach (var role in userRoles[user.Id])
+                                        {
+                                            <span class="user-role-badge">@role</span>
+                                        }
                                     }
                                     else
                                     {
-                                        <span class="text-muted small fst-italic">No roles assigned</span>
+                                        <span class="users-empty-label">No roles</span>
                                     }
                                 </div>
+                            </td>
+                            <td>
+                                <span class="user-status-pill @(IsUserActive(user) ? "is-active" : "is-inactive")">
+                                    @(IsUserActive(user) ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td>
+                                <div class="user-actions">
+                                    @if (isSuperAdmin)
+                                    {
+                                        @RenderRoleButton(user, "admin", "Admin")
+                                        @RenderRoleButton(user, "operator", "Operator")
+                                        @RenderRoleButton(user, "superadmin", "Superuser")
+                                    }
 
-                                @if (!IsCurrentUser(user))
-                                {
-                                    <hr class="my-3 text-muted opacity-25" />
-                                    <div class="d-grid gap-2">
-                                        @if (isSuperAdmin)
+                                    <button type="button"
+                                            class="btn user-action-btn @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
+                                            @onclick='() => ToggleUserActivation(user)'
+                                            disabled="@(IsCurrentUser(user) || IsLoading($"activation-{user.Id}"))"
+                                            aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
+                                        @if (IsLoading($"activation-{user.Id}"))
                                         {
-                                            <div class="row g-2">
-                                                <div class="col-6">
-                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("admin") ? "btn-outline-danger" : "btn-outline-primary")"
-                                                            @onclick='() => ToggleRole(user, "admin")'
-                                                            disabled="@IsLoading($"role-{user.Id}-admin")"
-                                                            aria-label="@($"{(userRoles[user.Id].Contains("admin") ? "Remove" : "Add")} Admin role for {user.UserName}")">
-                                                        @if (IsLoading($"role-{user.Id}-admin"))
-                                                        {
-                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <Icon Name="@(userRoles[user.Id].Contains("admin") ? "minus" : "plus")" Size="16" /> <span>Admin</span>
-                                                        }
-                                                    </button>
-                                                </div>
-                                                <div class="col-6">
-                                                    <button class="btn btn-sm w-100 @(userRoles[user.Id].Contains("operator") ? "btn-outline-danger" : "btn-outline-secondary")"
-                                                            @onclick='() => ToggleRole(user, "operator")'
-                                                            disabled="@IsLoading($"role-{user.Id}-operator")"
-                                                            aria-label="@($"{(userRoles[user.Id].Contains("operator") ? "Remove" : "Add")} Operator role for {user.UserName}")">
-                                                        @if (IsLoading($"role-{user.Id}-operator"))
-                                                        {
-                                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <Icon Name="@(userRoles[user.Id].Contains("operator") ? "minus" : "plus")" Size="16" /> <span>Operator</span>
-                                                        }
-                                                    </button>
-                                                </div>
-                                            </div>
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                         }
+                                        else
+                                        {
+                                            <Icon Name="@(IsUserActive(user) ? "x" : "check")" Size="15" />
+                                            <span>@(IsUserActive(user) ? "Block" : "Activate")</span>
+                                        }
+                                    </button>
 
-                                        <div class="row g-2">
-                                            <div class="col-6">
-                                                <button class="btn btn-sm btn-outline-danger w-100"
-                                                        @onclick="() => DeleteUser(user)"
-                                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
-                                                        aria-label="@($"Delete user {user.UserName}")">
-                                                    @if (IsLoading($"delete-{user.Id}"))
-                                                    {
-                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <Icon Name="trash" Size="16" /> <span>Delete</span>
-                                                    }
-                                                </button>
-                                            </div>
-                                            <div class="col-6">
-                                                <button class="btn btn-sm w-100 @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
-                                                        @onclick='() => ToggleUserActivation(user)'
-                                                        disabled="@IsLoading($"activation-{user.Id}")"
-                                                        aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
-                                                    @if (IsLoading($"activation-{user.Id}"))
-                                                    {
-                                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <Icon Name="@(IsUserActive(user) ? "ban" : "check")" Size="16" /> @(IsUserActive(user) ? "Block" : "Activate")
-                                                    }
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <button type="button"
+                                            class="btn btn-outline-danger user-action-btn"
+                                            @onclick="() => DeleteUser(user)"
+                                            disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
+                                            aria-label="@($"Delete user {user.UserName}")">
+                                        @if (IsLoading($"delete-{user.Id}"))
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        }
+                                        else
+                                        {
+                                            <Icon Name="trash" Size="15" />
+                                            <span>Delete</span>
+                                        }
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="users-card-list">
+                @foreach (var user in users)
+                {
+                    <article class="user-card">
+                        <div class="user-card__header">
+                            <div class="user-identity">
+                                <span class="user-avatar"><Icon Name="person" Size="17" /></span>
+                                <div>
+                                    <strong>@user.UserName</strong>
+                                    <span>@user.Email</span>
+                                </div>
+                            </div>
+                            <span class="user-status-pill @(IsUserActive(user) ? "is-active" : "is-inactive")">
+                                @(IsUserActive(user) ? "Active" : "Inactive")
+                            </span>
+                        </div>
+
+                        <div class="user-card__meta">
+                            <span>Name</span>
+                            <strong>@GetDisplayName(user)</strong>
+                        </div>
+
+                        <div class="user-card__roles">
+                            <span>Roles</span>
+                            <div class="user-role-list">
+                                @if (userRoles[user.Id].Any())
+                                {
+                                    @foreach (var role in userRoles[user.Id])
+                                    {
+                                        <span class="user-role-badge">@role</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="users-empty-label">No roles assigned</span>
                                 }
                             </div>
                         </div>
-                    }
-                </div>
 
-                <div class="user-management__legend d-none d-md-block">
-                    <strong>Legend:</strong>
-                    <span class="ms-3">✔ = Active</span>
-                    <span class="ms-3">⛔ = Deactivated</span>
-                </div>
-            }
-        </div>
-    </section>
+                        @if (!IsCurrentUser(user))
+                        {
+                            <div class="user-card__actions">
+                                @if (isSuperAdmin)
+                                {
+                                    @RenderRoleButton(user, "admin", "Admin")
+                                    @RenderRoleButton(user, "operator", "Operator")
+                                    @RenderRoleButton(user, "superadmin", "Superuser")
+                                }
+
+                                <button type="button"
+                                        class="btn user-action-btn @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
+                                        @onclick='() => ToggleUserActivation(user)'
+                                        disabled="@IsLoading($"activation-{user.Id}")"
+                                        aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
+                                    @if (IsLoading($"activation-{user.Id}"))
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    }
+                                    else
+                                    {
+                                        <Icon Name="@(IsUserActive(user) ? "x" : "check")" Size="15" />
+                                        <span>@(IsUserActive(user) ? "Block" : "Activate")</span>
+                                    }
+                                </button>
+
+                                <button type="button"
+                                        class="btn btn-outline-danger user-action-btn"
+                                        @onclick="() => DeleteUser(user)"
+                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
+                                        aria-label="@($"Delete user {user.UserName}")">
+                                    @if (IsLoading($"delete-{user.Id}"))
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    }
+                                    else
+                                    {
+                                        <Icon Name="trash" Size="15" />
+                                        <span>Delete</span>
+                                    }
+                                </button>
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+        </section>
+    }
 </div>
 
 @code {
@@ -314,6 +282,28 @@
     private bool IsLoading(string key) => _loadingStates.Contains(key);
 
     private string RegistrationSwitchHelperText => allowUserRegistration ? "Open to new users." : "Closed to new signups.";
+
+    private static string GetDisplayName(ApplicationUser user)
+    {
+        var displayName = string.Join(" ", new[] { user.FirstName, user.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return string.IsNullOrWhiteSpace(displayName) ? "No profile name" : displayName;
+    }
+
+    private RenderFragment RenderRoleButton(ApplicationUser user, string role, string label) => @<button type="button"
+            class="btn user-action-btn @(userRoles[user.Id].Contains(role) ? "btn-outline-danger" : "btn-outline-primary")"
+            @onclick='() => ToggleRole(user, role)'
+            disabled="@(IsCurrentUser(user) || IsLoading($"role-{user.Id}-{role}"))"
+            aria-label="@($"{(userRoles[user.Id].Contains(role) ? "Remove" : "Add")} {label} role for {user.UserName}")">
+        @if (IsLoading($"role-{user.Id}-{role}"))
+        {
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        }
+        else
+        {
+            <Icon Name="@(userRoles[user.Id].Contains(role) ? "x" : "plus")" Size="15" />
+            <span>@label</span>
+        }
+    </button>;
 
     protected override async Task OnInitializedAsync()
     {
@@ -555,5 +545,3 @@
     }
 
 }
-
-

@@ -5,97 +5,169 @@
 
 <PageTitle>Settings Backups - Sonos Control</PageTitle>
 
-<div class="container dashboard-shell">
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
-                <div>
-                    <h3 class="mb-1">Backup And Restore</h3>
-                    <p class="text-muted mb-0">Create versioned config backups, restore safely, and import a JSON config file.</p>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" @onclick="RefreshBackupsAsync" disabled="@_isBusy">Refresh</button>
-                    <button class="btn btn-primary" @onclick="CreateBackupAsync" disabled="@_isBusy">Create Backup</button>
-                </div>
+<div class="backups-console-shell">
+    <section class="backups-hero" aria-labelledby="backups-heading">
+        <div class="backups-hero__copy">
+            <span class="spotify-eyebrow">Recovery Point</span>
+            <h1 id="backups-heading">Backups</h1>
+            <p>Create versioned config snapshots, restore safely, and import JSON settings without leaving the admin console.</p>
+        </div>
+        <div class="backups-hero__metrics" aria-label="Backup summary">
+            <div class="backups-stat">
+                <span><Icon Name="backup" Size="16" /> Files</span>
+                <strong>@_backups.Count</strong>
             </div>
-
-            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-            {
-                <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status">@_statusMessage</div>
-            }
-
-            <div class="row g-4">
-                <div class="col-xl-7">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <strong>Available Backups</strong>
-                            <span class="small text-muted">@_backups.Count file(s)</span>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle mb-0">
-                                    <thead>
-                                    <tr>
-                                        <th>File</th>
-                                        <th>Created (UTC)</th>
-                                        <th>Size</th>
-                                        <th class="text-end">Actions</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    @if (_backups.Any())
-                                    {
-                                        @foreach (var backup in _backups)
-                                        {
-                                            <tr>
-                                                <td class="small text-truncate">@backup.FileName</td>
-                                                <td class="small text-muted">@backup.CreatedUtc.ToString("u")</td>
-                                                <td class="small text-muted">@FormatBytes(backup.Bytes)</td>
-                                                <td class="text-end">
-                                                    <a class="btn btn-outline-secondary btn-sm me-1" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">Download</a>
-                                                    <button class="btn btn-outline-success btn-sm me-1" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">Restore</button>
-                                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">Delete</button>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <tr>
-                                            <td colspan="4" class="text-muted text-center">No backups found.</td>
-                                        </tr>
-                                    }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-5">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header">
-                            <strong>Import Config JSON</strong>
-                        </div>
-                        <div class="card-body">
-                            <p class="small text-muted">Import overwrites current settings and automatically creates a versioned backup first.</p>
-
-                            <InputFile OnChange="OnImportFileSelected" accept=".json,application/json" class="form-control mb-3" />
-
-                            @if (!string.IsNullOrWhiteSpace(_selectedImportFileName))
-                            {
-                                <div class="small text-muted mb-3">Selected: @_selectedImportFileName</div>
-                            }
-
-                            <button class="btn btn-warning w-100" @onclick="ImportSelectedFileAsync" disabled="@(_isBusy || _selectedImportFile is null)">
-                                Import Selected File
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            <div class="backups-stat">
+                <span><Icon Name="clock" Size="16" /> Latest</span>
+                <strong>@GetLatestBackupLabel()</strong>
+            </div>
+            <div class="backups-stat">
+                <span><Icon Name="hard-drive" Size="16" /> Storage</span>
+                <strong>@FormatBytes(_backups.Sum(backup => backup.Bytes))</strong>
             </div>
         </div>
-    </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") backups-alert" role="status">@_statusMessage</div>
+    }
+
+    <section class="backups-actions-panel">
+        <button class="btn btn-outline-primary" @onclick="RefreshBackupsAsync" disabled="@_isBusy">
+            <Icon Name="refresh" Size="16" /> Refresh
+        </button>
+        <button class="btn btn-primary" @onclick="CreateBackupAsync" disabled="@_isBusy">
+            @if (_isBusy)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <Icon Name="plus" Size="16" />
+            }
+            <span>Create Backup</span>
+        </button>
+    </section>
+
+    <section class="backups-workspace">
+        <article class="backups-panel backups-panel--wide">
+            <div class="backups-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Archive</span>
+                    <h2><Icon Name="backup" Size="18" /> Available Backups</h2>
+                </div>
+                <span class="backups-panel__count">@_backups.Count file(s)</span>
+            </div>
+
+            @if (_backups.Any())
+            {
+                <div class="backups-table-wrapper">
+                    <table class="backups-table">
+                        <thead>
+                        <tr>
+                            <th scope="col">File</th>
+                            <th scope="col">Created UTC</th>
+                            <th scope="col">Size</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var backup in _backups)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="backup-file-name">
+                                        <span><Icon Name="file" Size="16" /></span>
+                                        <strong>@backup.FileName</strong>
+                                    </div>
+                                </td>
+                                <td class="backups-table__muted">@backup.CreatedUtc.ToString("u")</td>
+                                <td class="backups-table__muted">@FormatBytes(backup.Bytes)</td>
+                                <td>
+                                    <div class="backup-actions">
+                                        <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
+                                            <Icon Name="file" Size="15" /> Download
+                                        </a>
+                                        <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">
+                                            <Icon Name="refresh" Size="15" /> Restore
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">
+                                            <Icon Name="trash" Size="15" /> Delete
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="backups-card-list">
+                    @foreach (var backup in _backups)
+                    {
+                        <article class="backup-card">
+                            <div class="backup-card__header">
+                                <div class="backup-file-name">
+                                    <span><Icon Name="file" Size="16" /></span>
+                                    <strong>@backup.FileName</strong>
+                                </div>
+                                <span>@FormatBytes(backup.Bytes)</span>
+                            </div>
+                            <div class="backup-card__meta">@backup.CreatedUtc.ToString("u")</div>
+                            <div class="backup-actions">
+                                <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
+                                    <Icon Name="file" Size="15" /> Download
+                                </a>
+                                <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">
+                                    <Icon Name="refresh" Size="15" /> Restore
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">
+                                    <Icon Name="trash" Size="15" /> Delete
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="backups-empty-state">
+                    <Icon Name="backup" Size="28" />
+                    <strong>No backups found.</strong>
+                    <span>Create a backup to capture the current config state.</span>
+                </div>
+            }
+        </article>
+
+        <article class="backups-panel">
+            <div class="backups-panel__header">
+                <div>
+                    <span class="spotify-eyebrow">Import</span>
+                    <h2><Icon Name="file" Size="18" /> Config JSON</h2>
+                </div>
+            </div>
+
+            <p class="backups-panel__copy">Import overwrites current settings and automatically creates a versioned backup first.</p>
+
+            <div class="backup-import-control">
+                <InputFile id="settingsImportFile"
+                           OnChange="OnImportFileSelected"
+                           accept=".json,application/json"
+                           class="backup-native-file"
+                           style="position:absolute;inline-size:1px;block-size:1px;opacity:0;pointer-events:none;" />
+                <label class="backup-file-button" for="settingsImportFile">
+                    <Icon Name="file" Size="16" />
+                    <span>Choose JSON</span>
+                </label>
+                <span class="backup-selected-file">@(!string.IsNullOrWhiteSpace(_selectedImportFileName) ? _selectedImportFileName : "No file selected")</span>
+            </div>
+
+            <button class="btn btn-warning backups-import-btn" @onclick="ImportSelectedFileAsync" disabled="@(_isBusy || _selectedImportFile is null)">
+                <Icon Name="refresh" Size="16" /> Import Selected File
+            </button>
+        </article>
+    </section>
 </div>
 
 @code {
@@ -313,6 +385,12 @@
         }
 
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private string GetLatestBackupLabel()
+    {
+        var latest = _backups.FirstOrDefault();
+        return latest is null ? "None" : latest.CreatedUtc.ToLocalTime().ToString("dd.MM");
     }
 
     private void ShowStatus(string message, bool isError = false)
