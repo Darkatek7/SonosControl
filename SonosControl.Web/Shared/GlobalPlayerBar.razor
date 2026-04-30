@@ -59,7 +59,7 @@
                 title="Sync current playback to all speakers"
                 aria-label="Sync current playback to all speakers"
                 data-qa="global-player-sync"
-                disabled="@PlaybackState.IsLoading || PlaybackState.IsSyncing">
+                disabled="@(PlaybackState.IsLoading || PlaybackState.IsSyncing)">
             @if (PlaybackState.IsSyncing)
             {
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

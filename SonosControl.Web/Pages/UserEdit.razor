@@ -10,12 +10,31 @@
 <AuthorizeView Context="authContext">
     <Authorized>
         <div class="auth-shell">
-            <section class="auth-card panel stack-sm user-edit-card" aria-labelledby="user-edit-heading">
-                <h3 id="user-edit-heading" class="page-title text-center mb-3">📝 Edit User</h3>
+            <section class="profile-console-shell" aria-labelledby="user-edit-heading">
+                <header class="profile-hero">
+                    <div>
+                        <span class="spotify-eyebrow">Profile Settings</span>
+                        <h1 id="user-edit-heading">Account</h1>
+                        <p>Update profile details and rotate your password from one compact account panel.</p>
+                    </div>
+                    @if (user is not null)
+                    {
+                        <div class="profile-identity-card">
+                            <span class="profile-avatar"><Icon Name="person" Size="18" /></span>
+                            <div>
+                                <strong>@editModel.UserName</strong>
+                                <span>@editModel.Email</span>
+                            </div>
+                        </div>
+                    }
+                </header>
 
                 @if (user == null)
                 {
-                    <p class="text-muted text-center mb-0">Loading...</p>
+                    <div class="profile-panel profile-empty-state">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <strong>Loading profile...</strong>
+                    </div>
                     @if (!string.IsNullOrEmpty(statusMessage))
                     {
                         <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
@@ -23,39 +42,50 @@
                 }
                 else
                 {
-                    <EditForm Model="editModel" OnValidSubmit="HandleUpdate" class="stack-md">
-                        <DataAnnotationsValidator />
-                        <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
-
-                        <FormField Label="First Name" Id="edit-firstname">
-                            <InputText id="edit-firstname" class="form-control" @bind-Value="editModel.FirstName" />
-                        </FormField>
-
-                        <FormField Label="Last Name" Id="edit-lastname">
-                            <InputText id="edit-lastname" class="form-control" @bind-Value="editModel.LastName" />
-                        </FormField>
-
-                        <FormField Label="Email" Id="edit-email">
-                            <InputText id="edit-email" type="email" class="form-control" @bind-Value="editModel.Email" />
-                        </FormField>
-
-                        <FormField Label="Username" Id="edit-username">
-                            <InputText id="edit-username" class="form-control" disabled @bind-Value="editModel.UserName" />
-                        </FormField>
-
-                        <FormField Label="New Password (optional)" Id="edit-new-password">
-                            <InputText id="edit-new-password" type="password" class="form-control" @bind-Value="editModel.NewPassword" />
-                        </FormField>
-
-                        <FormField Label="Confirm Password (optional)" Id="edit-confirm-password">
-                            <InputText id="edit-confirm-password" type="password" class="form-control" @bind-Value="editModel.ConfirmPassword" />
-                        </FormField>
-
-                        <div class="stack-sm">
-                            <button type="submit" class="btn btn-primary w-100">Update</button>
-                            <button type="button" class="btn btn-outline-secondary w-100" @onclick="Cancel">Cancel</button>
+                    <section class="profile-panel">
+                        <div class="profile-panel__header">
+                            <div>
+                                <span class="spotify-eyebrow">Identity</span>
+                                <h2><Icon Name="person" Size="18" /> Profile details</h2>
+                            </div>
                         </div>
-                    </EditForm>
+
+                        <EditForm Model="editModel" OnValidSubmit="HandleUpdate" class="profile-form">
+                            <DataAnnotationsValidator />
+                            <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
+
+                            <div class="profile-form-grid">
+                                <FormField Label="First Name" Id="edit-firstname">
+                                    <InputText id="edit-firstname" class="form-control" @bind-Value="editModel.FirstName" />
+                                </FormField>
+
+                                <FormField Label="Last Name" Id="edit-lastname">
+                                    <InputText id="edit-lastname" class="form-control" @bind-Value="editModel.LastName" />
+                                </FormField>
+
+                                <FormField Label="Email" Id="edit-email">
+                                    <InputText id="edit-email" type="email" class="form-control" @bind-Value="editModel.Email" />
+                                </FormField>
+
+                                <FormField Label="Username" Id="edit-username">
+                                    <InputText id="edit-username" class="form-control" disabled @bind-Value="editModel.UserName" />
+                                </FormField>
+
+                                <FormField Label="New Password (optional)" Id="edit-new-password">
+                                    <InputText id="edit-new-password" type="password" class="form-control" @bind-Value="editModel.NewPassword" />
+                                </FormField>
+
+                                <FormField Label="Confirm Password (optional)" Id="edit-confirm-password">
+                                    <InputText id="edit-confirm-password" type="password" class="form-control" @bind-Value="editModel.ConfirmPassword" />
+                                </FormField>
+                            </div>
+
+                            <div class="profile-actions">
+                                <button type="submit" class="btn btn-primary"><Icon Name="check" Size="16" /> Update</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="Cancel"><Icon Name="x" Size="16" /> Cancel</button>
+                            </div>
+                        </EditForm>
+                    </section>
                 }
             </section>
         </div>
@@ -173,4 +203,3 @@
         public string? ConfirmPassword { get; set; }
     }
 }
-

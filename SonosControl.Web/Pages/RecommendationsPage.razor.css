@@ -316,6 +316,56 @@ html:not([data-theme='dark']) .recommendations-hero {
     white-space: nowrap;
 }
 
+.recommendation-row--trending {
+    grid-template-columns: 2.4rem minmax(0, 1fr) minmax(4.9rem, auto);
+    align-items: center;
+}
+
+.recommendation-row--trending .recommendation-row__body strong {
+    max-width: 100%;
+}
+
+.recommendation-row__track {
+    height: 0.34rem;
+    margin-top: 0.45rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-3) 72%, transparent);
+}
+
+.recommendation-row__track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #5fd0cf, var(--brand-primary));
+    box-shadow: 0 0 16px color-mix(in srgb, var(--brand-primary) 26%, transparent);
+}
+
+.recommendation-row--trending .recommendation-row__metric {
+    min-width: 4.9rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
+    border-radius: 0.72rem;
+    background: color-mix(in srgb, var(--surface-1) 52%, transparent);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    line-height: 1.1;
+    text-align: right;
+    text-transform: uppercase;
+}
+
+.recommendation-row--trending .recommendation-row__metric strong,
+.recommendation-row--trending .recommendation-row__metric span {
+    display: block;
+}
+
+.recommendation-row--trending .recommendation-row__metric strong {
+    margin-bottom: 0.12rem;
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    text-transform: none;
+}
+
 .recommendations-empty,
 .recommendations-empty-cell {
     color: var(--text-muted);
@@ -399,5 +449,22 @@ html:not([data-theme='dark']) .recommendations-hero {
 
     .recommendation-row__metric {
         grid-column: 2;
+    }
+
+    .recommendation-row--trending {
+        grid-template-columns: 2.4rem minmax(0, 1fr);
+    }
+
+    .recommendation-row--trending .recommendation-row__body strong {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .recommendation-row--trending .recommendation-row__metric {
+        grid-column: 2;
+        justify-self: start;
+        text-align: left;
     }
 }

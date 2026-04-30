@@ -166,12 +166,24 @@
             }
             else
             {
-                <div class="stats-chart">
-                    <RadzenChart>
-                        <RadzenColumnSeries Data="@stationStats" CategoryProperty="Station" ValueProperty="DurationHours" Title="Hours Played" LineType="LineType.Dashed" />
-                        <RadzenColumnOptions Radius="5" />
-                        <RadzenValueAxis Formatter="@FormatTimeAxis" />
-                    </RadzenChart>
+                var maxStationDuration = stationStats.Max(station => station.Duration);
+                <div class="stats-station-rank" aria-label="Top stations ranked by listening time">
+                    @foreach (var station in stationStats.Take(8).Select((value, index) => new { value, index }))
+                    {
+                        var percent = maxStationDuration > 0 ? Math.Max(3, station.value.Duration / maxStationDuration * 100) : 0;
+                        <article class="stats-station-rank__row">
+                            <span class="stats-station-rank__position">@(station.index + 1)</span>
+                            <div class="stats-station-rank__body">
+                                <div class="stats-station-rank__meta">
+                                    <strong title="@station.value.Station">@station.value.Station</strong>
+                                    <span>@FormatDuration(station.value.Duration) · @station.value.PlayCount plays</span>
+                                </div>
+                                <div class="stats-station-rank__track" aria-hidden="true">
+                                    <span style="@($"width: {percent:F1}%")"></span>
+                                </div>
+                            </div>
+                        </article>
+                    }
                 </div>
 
                 <div class="table-responsive stats-table-wrap stats-table-wrap--compact">
@@ -259,28 +271,26 @@
         }
         else
         {
-            <div class="table-responsive stats-table-wrap">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>Track</th>
-                            <th>Artist</th>
-                            <th>Total Time</th>
-                            <th>Play Count</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var track in trackStats)
-                        {
-                            <tr>
-                                <td class="fw-bold">@track.Track</td>
-                                <td>@track.Artist</td>
-                                <td>@FormatDuration(track.Duration)</td>
-                                <td>@track.PlayCount</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            var maxTrackDuration = trackStats.Max(track => track.Duration);
+            <div class="stats-track-list" aria-label="Top tracks ranked by listening time">
+                @foreach (var track in trackStats.Select((value, index) => new { value, index }))
+                {
+                    var percent = maxTrackDuration > 0 ? Math.Max(3, track.value.Duration / maxTrackDuration * 100) : 0;
+                    <article class="stats-track-row">
+                        <span class="stats-track-row__position">@(track.index + 1)</span>
+                        <div class="stats-track-row__main">
+                            <strong title="@track.value.Track">@track.value.Track</strong>
+                            <span title="@track.value.Artist">@(!string.IsNullOrWhiteSpace(track.value.Artist) ? track.value.Artist : "Unknown artist")</span>
+                            <div class="stats-track-row__track" aria-hidden="true">
+                                <span style="@($"width: {percent:F1}%")"></span>
+                            </div>
+                        </div>
+                        <div class="stats-track-row__metrics">
+                            <span><strong>@FormatDuration(track.value.Duration)</strong> Total time</span>
+                            <span><strong>@track.value.PlayCount</strong> Plays</span>
+                        </div>
+                    </article>
+                }
             </div>
         }
     </section>
