@@ -74,12 +74,15 @@ public class StatsPageTests
             // Verify New Sections
             Assert.Contains("Total Listening Time", cut.Markup);
             Assert.Contains("Station Master", cut.Markup);
+            Assert.Contains("stats-station-rank", cut.Markup);
+            Assert.Contains("stats-track-list", cut.Markup);
+            Assert.Contains("Radio 1", cut.Markup);
         });
 
         // Verify that RadzenCharts are present (stubbed)
         var charts = cut.FindComponents<Stub<RadzenChart>>();
         Assert.NotEmpty(charts);
-        // We expect 3 charts (Trends, Peak, Media) + 1 Top Stations = 4 charts
-        Assert.Equal(4, charts.Count);
+        // We expect 3 charts (Trends, Peak, Media). Top Stations is a ranked bar list to avoid label overlap.
+        Assert.Equal(3, charts.Count);
     }
 }
