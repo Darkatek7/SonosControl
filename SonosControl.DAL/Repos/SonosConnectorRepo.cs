@@ -181,8 +181,8 @@ namespace SonosControl.DAL.Repos
                     var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
                     var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
 
-                    var title = titleMatch.Success ? titleMatch.Groups[1].Value : "Unknown Title";
-                    var artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "Unknown Artist";
+                    var title = titleMatch.Success ? DecodeMetadataText(titleMatch.Groups[1].Value) : "Unknown Title";
+                    var artist = creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "Unknown Artist";
 
                     return $"{title} — {artist}";
                 }
@@ -246,15 +246,15 @@ namespace SonosControl.DAL.Repos
 
                     var trackInfo = new SonosTrackInfo
                     {
-                        Title = titleMatch.Success ? titleMatch.Groups[1].Value : "",
-                        Artist = creatorMatch.Success ? creatorMatch.Groups[1].Value : "",
-                        Album = albumMatch.Success ? albumMatch.Groups[1].Value : "",
-                        StreamContent = streamContentMatch.Success ? streamContentMatch.Groups[1].Value : null
+                        Title = titleMatch.Success ? DecodeMetadataText(titleMatch.Groups[1].Value) : "",
+                        Artist = creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "",
+                        Album = albumMatch.Success ? DecodeMetadataText(albumMatch.Groups[1].Value) : "",
+                        StreamContent = streamContentMatch.Success ? DecodeMetadataText(streamContentMatch.Groups[1].Value) : null
                     };
 
                     if (albumArtMatch.Success)
                     {
-                        var artUri = albumArtMatch.Groups[1].Value;
+                        var artUri = DecodeMetadataText(albumArtMatch.Groups[1].Value);
                         if (!string.IsNullOrWhiteSpace(artUri))
                         {
                             // If it's a relative path, prepend the speaker's address
@@ -279,6 +279,11 @@ namespace SonosControl.DAL.Repos
                 Console.WriteLine($"Error getting track info: {ex.Message}");
                 return null;
             }
+        }
+
+        private static string DecodeMetadataText(string? value)
+        {
+            return WebUtility.HtmlDecode(value)?.Trim() ?? string.Empty;
         }
 
         public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default)

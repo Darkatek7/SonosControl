@@ -181,6 +181,44 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task GetTrackInfoAsync_DecodesHtmlEntitiesInMetadataFields()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <TrackMetaData>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:r='urn:schemas-rinconnetworks-com:metadata-1-0/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;Youssou N&amp;apos;dour Neneh Cherry - 7 Seconds&lt;/dc:title&gt;
+          &lt;dc:creator&gt;A&amp;amp;B Artist&lt;/dc:creator&gt;
+          &lt;upnp:album&gt;Radio &amp;amp; Hits&lt;/upnp:album&gt;
+          &lt;r:streamContent&gt;Youssou N&amp;apos;dour Neneh Cherry - 7 Seconds&lt;/r:streamContent&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</TrackMetaData>
+    </u:GetPositionInfoResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
+
+        var result = await repo.GetTrackInfoAsync("1.2.3.4");
+
+        Assert.NotNull(result);
+        Assert.Equal("Youssou N'dour Neneh Cherry - 7 Seconds", result.Title);
+        Assert.Equal("A&B Artist", result.Artist);
+        Assert.Equal("Radio & Hits", result.Album);
+        Assert.Equal("Youssou N'dour Neneh Cherry - 7 Seconds", result.StreamContent);
+        Assert.DoesNotContain("&apos;", result.GetDisplayString());
+    }
+
+    [Fact]
     public async Task SetTuneInStationAsync_Success_PostsSoapRequestAndStartsPlayback()
     {
         var handler = new QueueHttpMessageHandler();
