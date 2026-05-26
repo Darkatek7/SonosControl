@@ -3,22 +3,32 @@
     ViewData["Title"] = "Login";
 }
 
-<div class="auth-shell">
-    <div class="auth-background-effects">
-        <div class="auth-glow auth-glow-1"></div>
-        <div class="auth-glow auth-glow-2"></div>
-    </div>
-    <form id="loginForm" method="post" action="/auth/login" class="auth-card panel stack-md">
+<div class="auth-page-shell">
+    <section class="auth-brand-panel" aria-label="SonosControl">
+        <span class="spotify-eyebrow">Command Center</span>
+        <h1>SonosControl</h1>
+        <p>Sign in to manage rooms, queues, schedules, recommendations, and system settings from one focused console.</p>
+        <div class="auth-brand-panel__meta">
+            <span>Playback</span>
+            <span>Automation</span>
+            <span>Insights</span>
+        </div>
+    </section>
+
+    <form id="loginForm" method="post" action="/auth/login" class="auth-console-card">
         @Html.AntiForgeryToken()
-        <div class="auth-card-header">
-            <div class="auth-icon">
+        <div class="auth-console-card__header">
+            <div class="auth-console-card__icon">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
             </div>
-            <h2 class="fw-semibold text-center">Welcome Back</h2>
-            <p class="text-muted text-center mb-0">Sign in to your account</p>
+            <div>
+                <span class="spotify-eyebrow">Access</span>
+                <h2>Welcome back</h2>
+                <p>Use your SonosControl account to continue.</p>
+            </div>
         </div>
 
         @if (ViewBag.Error != null)
@@ -44,7 +54,7 @@
             </div>
         </div>
 
-        <div class="form-check mb-3">
+        <div class="form-check auth-console-card__remember">
             <input id="rememberMe" name="rememberMe" type="checkbox" value="true" checked class="form-check-input auth-checkbox" />
             <input type="hidden" name="rememberMe" value="false" />
             <label for="rememberMe" class="form-check-label">Remember Me</label>
@@ -58,7 +68,7 @@
             </span>
         </button>
 
-        <div class="text-center mt-3">
+        <div class="auth-console-card__footer">
             <a href="/register" class="auth-link text-decoration-none">Don’t have an account? <span class="auth-link-highlight">Register</span></a>
         </div>
     </form>

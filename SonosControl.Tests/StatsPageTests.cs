@@ -44,6 +44,8 @@ public class StatsPageTests
         dbContext.PlaybackStats.Add(new PlaybackHistory { MediaType = "Spotify", DurationSeconds = 120, TrackName = "Track1", Artist = "Artist1" });
         // Add Station data for the 4th chart
         dbContext.PlaybackStats.Add(new PlaybackHistory { MediaType = "Station", DurationSeconds = 300, TrackName = "Radio 1", Artist = "BBC" });
+        dbContext.PlaybackStats.Add(new PlaybackHistory { MediaType = "Track", DurationSeconds = 600, TrackName = "breakz?ref=rb-djclubcharts&amp;upd-meta&amp;token=abc123", Artist = "" });
+        dbContext.PlaybackStats.Add(new PlaybackHistory { MediaType = "Track", DurationSeconds = 500, TrackName = "vbg-q2a", Artist = "" });
         dbContext.SaveChanges();
 
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
@@ -76,7 +78,10 @@ public class StatsPageTests
             Assert.Contains("Station Master", cut.Markup);
             Assert.Contains("stats-station-rank", cut.Markup);
             Assert.Contains("stats-track-list", cut.Markup);
+            Assert.Contains("Track1", cut.Markup);
             Assert.Contains("Radio 1", cut.Markup);
+            Assert.DoesNotContain("breakz?", cut.Markup);
+            Assert.DoesNotContain("vbg-q2a", cut.Markup);
         });
 
         // Verify that RadzenCharts are present (stubbed)

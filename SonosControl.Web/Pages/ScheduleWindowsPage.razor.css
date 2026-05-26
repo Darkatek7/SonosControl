@@ -130,8 +130,15 @@ html:not([data-theme='dark']) .schedule-hero {
     gap: var(--spacing-md);
     padding: clamp(1rem, 1.35vw, 1.2rem);
     background:
-        linear-gradient(90deg, color-mix(in srgb, var(--brand-info) 14%, transparent) 0%, transparent 55%),
+        linear-gradient(90deg, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 55%),
         linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+}
+
+[data-theme='light'] .schedule-active-strip,
+html:not([data-theme='dark']) .schedule-active-strip {
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--brand-primary) 8%, transparent) 0%, transparent 55%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
 }
 
 .schedule-active-strip strong {

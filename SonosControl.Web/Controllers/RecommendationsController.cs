@@ -189,14 +189,20 @@ public sealed class RecommendationsController : ControllerBase
             .Select(row =>
             {
                 var resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType);
-                return new RecommendationItem(
-                    resolved.Name,
-                    resolved.MediaType,
-                    row.Score,
-                    row.PlayCount,
-                    resolved.SourceUrl);
+                return new
+                {
+                    row,
+                    resolved
+                };
             })
-            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .Where(item => !string.IsNullOrWhiteSpace(item.resolved.Name))
+            .Where(item => item.resolved.MatchedCatalog || !RecommendationMediaResolver.IsTechnicalPlaybackDisplayName(item.resolved.Name, item.row.Artist))
+            .Select(item => new RecommendationItem(
+                item.resolved.Name,
+                item.resolved.MediaType,
+                item.row.Score,
+                item.row.PlayCount,
+                item.resolved.SourceUrl))
             .GroupBy(item => new { item.Name, item.MediaType })
             .Select(group => new RecommendationItem(
                 group.Key.Name,

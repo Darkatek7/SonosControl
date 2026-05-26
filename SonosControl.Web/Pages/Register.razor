@@ -5,26 +5,36 @@
 @inject NavigationManager Navigation
 @inject IUnitOfWork _uow
 
-<div class="auth-shell">
-    <div class="auth-background-effects">
-        <div class="auth-glow auth-glow-1"></div>
-        <div class="auth-glow auth-glow-2"></div>
-    </div>
-    <section class="auth-card panel stack-md" aria-labelledby="register-heading">
-        <div class="auth-card-header">
-            <div class="auth-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4"></path>
-                </svg>
+<PageTitle>Register - Sonos Control</PageTitle>
+
+<div class="auth-page-shell">
+    <section class="auth-brand-panel" aria-label="SonosControl">
+        <span class="spotify-eyebrow">Command Center</span>
+        <h1>SonosControl</h1>
+        <p>Create an account for controlled room access, saved preferences, and role-based operation.</p>
+        <div class="auth-brand-panel__meta">
+            <span>Rooms</span>
+            <span>Roles</span>
+            <span>History</span>
+        </div>
+    </section>
+
+    <section class="auth-console-card" aria-labelledby="register-heading">
+        <div class="auth-console-card__header">
+            <div class="auth-console-card__icon">
+                <Icon Name="person" Size="24" />
             </div>
-            <h3 id="register-heading" class="page-title text-center mb-1">Create Account</h3>
-            <p class="text-muted text-center mb-0">Join SonosControl today</p>
+            <div>
+                <span class="spotify-eyebrow">Registration</span>
+                <h2 id="register-heading">Create account</h2>
+                <p>Set up your SonosControl identity.</p>
+            </div>
         </div>
 
         @if (!allowRegistration)
         {
             <FormStatus StatusMessage="User registration is currently disabled." Severity="FormStatus.AlertSeverity.Warning" />
-            <div class="text-center mt-3">
+            <div class="auth-console-card__footer">
                 <a href="/auth/login?" class="auth-link text-decoration-none">Return to login</a>
             </div>
         }
@@ -70,7 +80,7 @@
 
                 <button type="submit" class="btn btn-primary w-100 auth-submit mt-2">Create Account</button>
 
-                <div class="text-center mt-3">
+                <div class="auth-console-card__footer">
                     <a href="/auth/login?" class="auth-link text-decoration-none">Already have an account? <span class="auth-link-highlight">Sign in</span></a>
                 </div>
             </EditForm>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using SonosControl.DAL.Models;
 
 namespace SonosControl.Web.Services;
@@ -128,6 +129,27 @@ internal sealed class RecommendationMediaResolver
             : fallbackSource.Trim();
 
         return new ResolvedRecommendationMedia(fallbackLabel, normalizedMediaType, null, false);
+    }
+
+    public static bool IsTechnicalPlaybackDisplayName(string? name, string? artist)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var decoded = WebUtility.HtmlDecode(name).Trim();
+        if (IsGenericPlaybackTrackLabel(decoded) || LooksLikeUrl(decoded))
+        {
+            return true;
+        }
+
+        if (ContainsTransportQuery(decoded))
+        {
+            return true;
+        }
+
+        return string.IsNullOrWhiteSpace(artist) && LooksLikeCompactStreamToken(decoded);
     }
 
     private void AddEntry(string? name, string mediaType, string? sourceUrl)
@@ -292,6 +314,28 @@ internal sealed class RecommendationMediaResolver
                || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                || trimmed.StartsWith(RinconPrefix, StringComparison.OrdinalIgnoreCase)
                || (trimmed.Contains('.') && trimmed.Contains('/'));
+    }
+
+    private static bool ContainsTransportQuery(string value)
+    {
+        var normalized = value.ToLowerInvariant();
+        return normalized.Contains('?')
+               || normalized.Contains("&amp;", StringComparison.Ordinal)
+               || normalized.Contains("upd-", StringComparison.Ordinal)
+               || normalized.Contains("aggregator=", StringComparison.Ordinal)
+               || normalized.Contains("playerid=", StringComparison.Ordinal)
+               || normalized.Contains("token=", StringComparison.Ordinal)
+               || normalized.Contains("sid=", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeCompactStreamToken(string value)
+    {
+        if (value.Length is < 3 or > 12 || !value.Contains('-', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
     }
 
     private static string NormalizeLoose(string? value)
