@@ -35,7 +35,7 @@
             <div>
                 <h2>Longest Session</h2>
                 <strong>@(longestSession != null ? FormatDuration(longestSession.DurationSeconds) : "-")</strong>
-                <span class="text-truncate">@(longestSession?.TrackName ?? "None")</span>
+                <span class="text-truncate">@longestSessionLabel</span>
             </div>
         </article>
         <article class="stats-kpi-card">
@@ -383,6 +383,7 @@
 
     private double totalDuration;
     private PlaybackHistory? longestSession;
+    private string longestSessionLabel = "None";
     private string mostActiveDay = "-";
 
     private List<DateStat>? activityOverTime;
@@ -486,6 +487,7 @@
         longestSession = await playbackInWindow
             .OrderByDescending(x => x.DurationSeconds)
             .FirstOrDefaultAsync();
+        longestSessionLabel = ResolvePlaybackDisplayLabel(longestSession, resolver);
         await InvokeAsync(StateHasChanged);
 
         try
@@ -591,8 +593,9 @@
                 Resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType)
             })
             .Where(x => !string.Equals(x.Resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase))
-            .Where(x => !string.IsNullOrWhiteSpace(x.Row.TrackName))
-            .GroupBy(x => new { x.Row.TrackName, x.Row.Artist })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Resolved.Name))
+            .Where(x => x.Resolved.MatchedCatalog || !RecommendationMediaResolver.IsTechnicalPlaybackDisplayName(x.Resolved.Name, x.Row.Artist))
+            .GroupBy(x => new { TrackName = x.Resolved.Name, x.Row.Artist })
             .Select(g => new TrackStat
             {
                 Track = g.Key.TrackName,
@@ -605,6 +608,25 @@
             .Take(20)
             .ToList();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private static string ResolvePlaybackDisplayLabel(PlaybackHistory? playback, RecommendationMediaResolver resolver)
+    {
+        if (playback is null)
+        {
+            return "None";
+        }
+
+        var resolved = resolver.ResolveFromPlaybackEntry(playback.TrackName, playback.Artist, playback.MediaType);
+        if (!string.IsNullOrWhiteSpace(resolved.Name)
+            && (resolved.MatchedCatalog || !RecommendationMediaResolver.IsTechnicalPlaybackDisplayName(resolved.Name, playback.Artist)))
+        {
+            return resolved.Name;
+        }
+
+        return string.Equals(resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase)
+            ? "Station playback"
+            : "Stream playback";
     }
 
     private string FormatDuration(double seconds)

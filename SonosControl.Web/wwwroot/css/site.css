@@ -3084,3 +3084,205 @@ input[type="checkbox"].auth-checkbox:focus,
 [data-theme='dark'] .auth-glow-2 {
     background: radial-gradient(circle, color-mix(in srgb, var(--brand-accent) 20%, transparent) 0%, transparent 70%);
 }
+
+/* Console-style auth entry points */
+.auth-page-shell {
+    width: min(calc(100% - 2rem), 1020px);
+    min-height: calc(100vh - 6rem);
+    margin: clamp(1rem, 6vh, 3.5rem) auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+    gap: clamp(1.25rem, 3vw, 2rem);
+    align-items: center;
+    padding: 0;
+}
+
+.auth-brand-panel,
+.auth-console-card {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
+    border-radius: 1rem;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+.auth-brand-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--spacing-md);
+    min-height: clamp(380px, 52vh, 520px);
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 14%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #04070d 6%) 0%, color-mix(in srgb, #101423 80%, var(--surface-1)) 100%);
+}
+
+.auth-brand-panel h1 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(2.8rem, 4.6vw, 4.4rem);
+    line-height: 0.95;
+}
+
+.auth-brand-panel p {
+    max-width: 42rem;
+    margin: 0;
+    color: color-mix(in srgb, var(--text-secondary) 88%, white 12%);
+    font-size: clamp(1rem, 0.6vw + 0.9rem, 1.25rem);
+}
+
+.auth-brand-panel__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: var(--spacing-sm);
+}
+
+.auth-brand-panel__meta span {
+    padding: 0.45rem 0.7rem;
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 32%, transparent);
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--brand-primary) 62%, white 38%);
+    background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+    font-size: var(--font-size-sm);
+    font-weight: 800;
+}
+
+.auth-console-card {
+    width: 100%;
+    align-self: center;
+    justify-self: end;
+    padding: clamp(1.2rem, 2vw, 1.5rem);
+}
+
+.auth-console-card__header {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.auth-console-card__icon {
+    width: 3rem;
+    height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.85rem;
+    color: #fff;
+    background: var(--gradient-primary);
+    box-shadow: 0 10px 20px color-mix(in srgb, var(--brand-primary) 24%, transparent);
+}
+
+.auth-console-card__header h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(1.55rem, 1vw + 1.2rem, 2rem);
+    line-height: 1;
+}
+
+.auth-console-card__header p {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+}
+
+.auth-console-card .form-floating-group {
+    gap: 0.8rem;
+}
+
+.auth-console-card .form-row {
+    gap: 0.8rem;
+}
+
+.auth-console-card .form-label-float {
+    top: -0.45rem;
+    transform: none;
+    padding: 0 0.35rem;
+    color: var(--text-muted);
+    background: var(--surface-1);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.auth-console-card .form-floating .form-control.auth-input:focus ~ .form-label-float,
+.auth-console-card .form-floating .form-control.auth-input:not(:placeholder-shown) ~ .form-label-float {
+    top: -0.45rem;
+    transform: none;
+    color: var(--brand-primary);
+    background: var(--surface-1);
+}
+
+[data-theme='dark'] .auth-console-card .form-label-float,
+[data-theme='dark'] .auth-console-card .form-floating .form-control.auth-input:focus ~ .form-label-float,
+[data-theme='dark'] .auth-console-card .form-floating .form-control.auth-input:not(:placeholder-shown) ~ .form-label-float {
+    background: var(--surface-1);
+}
+
+.auth-console-card .auth-input {
+    min-height: 48px;
+    border-radius: 0.72rem;
+}
+
+.auth-console-card__remember {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: var(--spacing-md) 0;
+    color: var(--text-secondary);
+}
+
+.auth-console-card__footer {
+    margin-top: var(--spacing-md);
+    text-align: center;
+}
+
+[data-theme='light'] .auth-brand-panel,
+[data-theme='light'] .auth-console-card,
+html:not([data-theme='dark']) .auth-brand-panel,
+html:not([data-theme='dark']) .auth-console-card {
+    border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+}
+
+[data-theme='light'] .auth-brand-panel,
+html:not([data-theme='dark']) .auth-brand-panel {
+    background:
+        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
+        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+}
+
+@media (max-width: 991.98px) {
+    .auth-page-shell {
+        grid-template-columns: 1fr;
+        min-height: auto;
+        width: min(calc(100% - 1.5rem), 680px);
+    }
+
+    .auth-brand-panel {
+        min-height: auto;
+        justify-content: flex-start;
+    }
+
+    .auth-console-card {
+        justify-self: stretch;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .auth-page-shell {
+        margin-block: var(--spacing-md);
+        padding-inline: var(--spacing-sm);
+    }
+
+    .auth-brand-panel,
+    .auth-console-card {
+        border-radius: 0.85rem;
+    }
+
+    .auth-brand-panel h1 {
+        font-size: 2.5rem;
+    }
+}
