@@ -65,19 +65,36 @@ public class RecommendationsControllerTests
     }
 
     [Fact]
-    public async Task Get_UsesArtistUrlAsFallbackWhenTrackLabelIsGeneric()
+    public async Task Get_SuppressesUnresolvedTechnicalPlaybackLabels()
     {
         await using var db = CreateDbContext();
         var now = DateTime.UtcNow;
 
-        db.PlaybackStats.Add(new PlaybackHistory
-        {
-            StartTime = now.AddMinutes(-25),
-            TrackName = "mp3",
-            Artist = "x-rincon-mp3radio://example.invalid/live/stream/mp3",
-            MediaType = "Stream",
-            DurationSeconds = 90
-        });
+        db.PlaybackStats.AddRange(
+            new PlaybackHistory
+            {
+                StartTime = now.AddMinutes(-25),
+                TrackName = "mp3",
+                Artist = "x-rincon-mp3radio://example.invalid/live/stream/mp3",
+                MediaType = "Stream",
+                DurationSeconds = 90
+            },
+            new PlaybackHistory
+            {
+                StartTime = now.AddMinutes(-20),
+                TrackName = "breakz?ref=rb-djclubcharts&amp;upd-meta&amp;token=abc123",
+                Artist = "",
+                MediaType = "Track",
+                DurationSeconds = 120
+            },
+            new PlaybackHistory
+            {
+                StartTime = now.AddMinutes(-15),
+                TrackName = "Human Song",
+                Artist = "Known Artist",
+                MediaType = "Track",
+                DurationSeconds = 60
+            });
 
         await db.SaveChangesAsync();
 
@@ -89,8 +106,8 @@ public class RecommendationsControllerTests
         var payload = Assert.IsType<RecommendationsController.RecommendationResponse>(ok.Value);
 
         var teamItem = Assert.Single(payload.TeamTrending);
-        Assert.Equal("example.invalid/live/stream/mp3", teamItem.Name);
-        Assert.Equal("Station", teamItem.MediaType);
+        Assert.Equal("Human Song", teamItem.Name);
+        Assert.Equal("Track", teamItem.MediaType);
     }
 
     private static RecommendationsController CreateController(ApplicationDbContext db, SonosSettings settings)

@@ -99,3 +99,4 @@ Validation summary
 ## Maintenance Rule
 
 - When CI workflows, verification scripts, or required checks change, update `AGENTS.md`, `.github/workflows/docs-quality.yml`, and `.markdownlint-cli2.jsonc` in the same change.
+- GitHub Actions JavaScript actions should stay on Node 24-ready major versions when available, and CI should install the SDK version targeted by the projects.
