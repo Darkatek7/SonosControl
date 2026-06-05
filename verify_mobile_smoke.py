@@ -27,7 +27,7 @@ VIEWPORTS = [
 ]
 
 ROUTES = [
-    ("/", "home", "Media Sources"),
+    ("/", "home", "Today at a glance"),
     ("/admin/users", "users", "User Management"),
     ("/config", "config", "System Configuration"),
     ("/logs", "logs", "System Logs"),
@@ -142,13 +142,17 @@ def assert_bottom_player_does_not_cover_content(page):
     ), "Main content does not reserve enough space for the global bottom player."
 
 
-def assert_spotify_home_layout(page):
-    expect(page.locator(".spotify-home-shell")).to_be_visible(timeout=10000)
-    expect(page.locator(".spotify-library")).to_be_visible(timeout=10000)
-    expect(page.locator(".spotify-home-context .playback-card")).to_be_visible(timeout=10000)
-    expect(page.locator(".spotify-home-context .spotify-now-card")).to_be_visible(timeout=10000)
-    expect(page.locator(".media-list__item").first).to_be_visible(timeout=10000)
-    expect(page.locator(".queue-panel")).to_be_visible(timeout=10000)
+def assert_home_dashboard_layout(page):
+    expect(page.locator(".home-dashboard-shell")).to_be_visible(timeout=10000)
+    expect(page.locator("[data-qa='home-operations-dashboard']")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Today at a glance")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Now Playing")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Device Health")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Quick Sources")).to_be_visible(timeout=10000)
+    expect(page.locator(".spotify-library")).to_have_count(0)
+    expect(page.locator(".spotify-home-context")).to_have_count(0)
+    expect(page.locator(".spotify-room-picker")).to_have_count(0)
     expect(page.locator("[data-qa='global-player-sync']")).to_be_visible(timeout=10000)
 
 
@@ -157,7 +161,7 @@ def verify_responsive_home(page, output_dir):
         page.set_viewport_size({"width": width, "height": height})
         page.goto(f"{BASE_URL}/", wait_until="networkidle")
         assert_global_player_visible(page)
-        assert_spotify_home_layout(page)
+        assert_home_dashboard_layout(page)
         assert_no_horizontal_overflow(page)
         assert_bottom_player_does_not_cover_content(page)
         page.screenshot(path=str(output_dir / f"home_{slug}.png"), full_page=True)
