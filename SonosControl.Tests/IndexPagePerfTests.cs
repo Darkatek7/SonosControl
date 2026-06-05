@@ -52,6 +52,7 @@ namespace SonosControl.Tests
             Services.AddSingleton(_mockAuthProvider.Object);
             Services.AddSingleton(_mockNotificationService.Object);
             Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+            Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
             Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
             Services.AddScoped<PlaybackUiStateService>();
 
@@ -107,7 +108,7 @@ namespace SonosControl.Tests
             cut.WaitForState(() => cut.Instance != null);
 
             // Find the Home-page Sync Play button, not the global player control.
-            var syncButton = cut.Find("button.speaker-controls__sync");
+            var syncButton = cut.Find("button[data-qa='home-dashboard-sync']");
             cut.WaitForAssertion(() => Assert.False(syncButton.HasAttribute("disabled")));
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();

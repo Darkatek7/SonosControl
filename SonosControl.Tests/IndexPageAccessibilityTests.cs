@@ -70,6 +70,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
@@ -84,7 +85,7 @@ public class IndexPageAccessibilityTests
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var img = cut.Find("img.currently-playing-art");
+            var img = cut.Find("img.home-ops-now__art");
             // This is what we want to see (Accessible song by Accessible Artist)
             // But currently it is "Album Art"
             Assert.Equal("Album art for Accessible Song — Accessible Artist", img.GetAttribute("alt"));
@@ -141,6 +142,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
@@ -155,8 +157,8 @@ public class IndexPageAccessibilityTests
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var fallback = cut.Find(".currently-playing-art-placeholder");
-            Assert.NotNull(fallback);
+            var fallback = cut.Find(".home-ops-now__art--placeholder");
+            Assert.Equal("true", fallback.GetAttribute("aria-hidden"));
         });
     }
 }
