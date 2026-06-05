@@ -31,9 +31,9 @@
                 var nowLocal = DateTimeOffset.Now;
                 var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, nowLocal);
                 var activeScene = GetScene(activeWindow?.SceneId);
-                var upcomingWindows = GetUpcomingScheduleWindows(nowLocal).ToList();
+                var nextWindow = GetNextScheduleWindow(nowLocal, activeWindow);
                 var healthSummary = GetDeviceHealthSummary();
-                var quickSources = GetDashboardRecommendations().ToList();
+                var libraryItems = GetActiveLibrarySources().ToList();
                 var recentActivity = GetRecentActivity().ToList();
             }
             <header class="home-ops-dashboard__header">
@@ -197,23 +197,20 @@
                         </div>
                     </div>
                     <div class="home-ops-timeline" aria-label="Upcoming schedule windows">
-                        @if (upcomingWindows.Any())
+                        @if (nextWindow is not null)
                         {
-                            @foreach (var window in upcomingWindows)
-                            {
-                                <div class="home-ops-timeline__row">
-                                    <time>@window.StartTime.ToString("HH\\:mm")</time>
-                                    <div>
-                                        <strong>@window.Name</strong>
-                                        <span>@GetSceneName(window.SceneId) · @GetWindowTimeRange(window)</span>
-                                    </div>
-                                    <span class="home-ops-timeline__state @GetWindowStatusClass(window, activeWindow)"> @GetWindowStatusLabel(window, activeWindow)</span>
+                            <div class="home-ops-timeline__row">
+                                <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
+                                <div>
+                                    <strong>@nextWindow.Name</strong>
+                                    <span>@GetSceneName(nextWindow.SceneId) · @GetWindowTimeRange(nextWindow)</span>
                                 </div>
-                            }
+                                <span class="home-ops-timeline__state is-ready">Next</span>
+                            </div>
                         }
                         else
                         {
-                            <div class="home-ops-empty-row">No upcoming schedule windows.</div>
+                            <div class="home-ops-empty-row">No next schedule window.</div>
                         }
                     </div>
                 </article>
@@ -283,10 +280,24 @@
                     </div>
                 </article>
 
-                <article class="home-ops-panel home-ops-panel--sources">
+                <article class="home-ops-panel home-ops-panel--library">
                     <div class="home-ops-panel__header">
-                        <h3><Icon Name="star" Size="17" /> Quick Sources</h3>
-                        <span>Compact library</span>
+                        <h3><Icon Name="star" Size="17" /> Library</h3>
+                        <span>All sources</span>
+                    </div>
+                    <div class="home-ops-library-tabs" role="tablist" aria-label="Media library">
+                        <button id="home-library-tab-stations" type="button" role="tab" class='@GetLibraryTabClass("stations")' aria-selected='@IsLibraryTabActive("stations").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("stations")'>Stations</button>
+                        <button id="home-library-tab-spotify" type="button" role="tab" class='@GetLibraryTabClass("spotify")' aria-selected='@IsLibraryTabActive("spotify").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("spotify")'>Spotify</button>
+                        <button id="home-library-tab-youtube" type="button" role="tab" class='@GetLibraryTabClass("youtube")' aria-selected='@IsLibraryTabActive("youtube").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("youtube")'>YouTube</button>
+                    </div>
+                    <div class="home-ops-library-search">
+                        <Icon Name="search" Size="14" />
+                        <input type="search"
+                               class="form-control form-control-sm"
+                               @bind-value="_librarySearch"
+                               @bind-value:event="oninput"
+                               placeholder="@GetLibrarySearchPlaceholder()"
+                               aria-label="Search active library tab" />
                     </div>
                     <div class="home-ops-source-toolbar">
                         <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddStationModal" aria-label="Add Station">
@@ -302,16 +313,16 @@
                             <Icon Name="settings" Size="14" /> Manage
                         </a>
                     </div>
-                    <div class="home-ops-recommendations">
-                        @if (quickSources.Any())
+                    <div class="home-ops-library-list">
+                        @if (libraryItems.Any())
                         {
-                            @foreach (var item in quickSources)
+                            @foreach (var item in libraryItems)
                             {
-                                <div class="home-ops-recommendation">
-                                    <span class="home-ops-recommendation__icon"><Icon Name="@GetMediaIcon(item.MediaType)" Size="15" /></span>
+                                <div class="home-ops-library-item">
+                                    <span class="home-ops-library-item__icon"><Icon Name="@GetMediaIcon(item.MediaType)" Size="15" /></span>
                                     <div>
                                         <strong title="@item.Name">@item.Name</strong>
-                                        <span>@FormatMediaTypeLabel(item.MediaType)</span>
+                                        <span title="@item.Url">@FormatMediaTypeLabel(item.MediaType) · @item.Url</span>
                                     </div>
                                     <button class="btn btn-sm btn-primary home-ops-mini-play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" disabled="@(_loadingMediaUrl == item.Url)">
                                         @if (_loadingMediaUrl == item.Url)
@@ -328,7 +339,7 @@
                         }
                         else
                         {
-                            <div class="home-ops-empty-row">Save stations, Spotify, or YouTube sources to see quick starts.</div>
+                            <div class="home-ops-empty-row">@GetLibraryEmptyMessage()</div>
                         }
                     </div>
                 </article>
@@ -345,7 +356,7 @@
                             {
                                 <div class="home-ops-activity__row">
                                     <div>
-                                        <strong>@(!string.IsNullOrWhiteSpace(log.Details) ? log.Details : log.Action)</strong>
+                                        <strong class="home-ops-activity__details">@(!string.IsNullOrWhiteSpace(log.Details) ? log.Details : log.Action)</strong>
                                         <span>@(log.PerformedBy ?? "System") · @log.Action</span>
                                     </div>
                                     <time>@log.Timestamp.ToLocalTime().ToString("t")</time>
@@ -499,6 +510,8 @@
 
     // Quick Source add buttons reuse the same modal and set the target collection here.
     private string _activeMediaTab = "stations";
+    private string _activeLibraryTab = "stations";
+    private string _librarySearch = string.Empty;
     private AddMediaItemModal _addMediaItemModal = default!;
     private string? _addModalError;
 
@@ -686,22 +699,22 @@
         return $"{Math.Max(1, remaining.Minutes)}m";
     }
 
-    private IEnumerable<ScheduleWindow> GetUpcomingScheduleWindows(DateTimeOffset nowLocal)
+    private ScheduleWindow? GetNextScheduleWindow(DateTimeOffset nowLocal, ScheduleWindow? activeWindow)
     {
         if (_settings?.ScheduleWindows is null)
         {
-            return Array.Empty<ScheduleWindow>();
+            return null;
         }
 
         return _settings.ScheduleWindows
             .Where(window => window.IsEnabled)
+            .Where(window => activeWindow is null || !string.Equals(window.Id, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
             .Select(window => new { Window = window, NextStart = GetNextStart(window, nowLocal) })
             .Where(item => item.NextStart is not null)
             .OrderBy(item => item.NextStart)
             .ThenBy(item => item.Window.Priority)
-            .Take(3)
             .Select(item => item.Window)
-            .ToList();
+            .FirstOrDefault();
     }
 
     private static DateTimeOffset? GetNextStart(ScheduleWindow window, DateTimeOffset nowLocal)
@@ -794,21 +807,74 @@
         return status.LastLatencyMs.HasValue ? $"{status.LastLatencyMs.Value} ms" : "Online";
     }
 
-    private IEnumerable<DashboardRecommendation> GetDashboardRecommendations()
+    private IEnumerable<DashboardRecommendation> GetActiveLibrarySources()
     {
-        var sources = new List<DashboardRecommendation>();
+        var sources = _activeLibraryTab switch
+        {
+            "spotify" => (_settings?.SpotifyTracks ?? new List<SpotifyObject>())
+                .OrderBy(track => track.Name)
+                .Select(track => new DashboardRecommendation(track.Name, track.Url, "spotify")),
+            "youtube" => (_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
+                .OrderBy(collection => collection.Name)
+                .Select(collection => new DashboardRecommendation(collection.Name, collection.Url, "youtube")),
+            _ => (_settings?.Stations ?? new List<TuneInStation>())
+                .OrderBy(station => station.Name)
+                .Select(station => new DashboardRecommendation(station.Name, station.Url, "station"))
+        };
 
-        sources.AddRange((_settings?.Stations ?? new List<TuneInStation>())
-            .OrderBy(station => station.Name)
-            .Select(station => new DashboardRecommendation(station.Name, station.Url, "station")));
-        sources.AddRange((_settings?.SpotifyTracks ?? new List<SpotifyObject>())
-            .OrderBy(track => track.Name)
-            .Select(track => new DashboardRecommendation(track.Name, track.Url, "spotify")));
-        sources.AddRange((_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>())
-            .OrderBy(collection => collection.Name)
-            .Select(collection => new DashboardRecommendation(collection.Name, collection.Url, "youtube")));
+        if (string.IsNullOrWhiteSpace(_librarySearch))
+        {
+            return sources;
+        }
 
-        return sources.Take(6);
+        return sources.Where(source =>
+            source.Name.Contains(_librarySearch, StringComparison.OrdinalIgnoreCase) ||
+            source.Url.Contains(_librarySearch, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsLibraryTabActive(string tab) => string.Equals(_activeLibraryTab, tab, StringComparison.OrdinalIgnoreCase);
+
+    private string GetLibraryTabClass(string tab) => IsLibraryTabActive(tab)
+        ? "home-ops-library-tab is-active"
+        : "home-ops-library-tab";
+
+    private void SetLibraryTab(string tab)
+    {
+        if (!IsLibraryTabActive(tab))
+        {
+            _activeLibraryTab = tab;
+            _librarySearch = string.Empty;
+        }
+    }
+
+    private string GetLibrarySearchPlaceholder()
+    {
+        return _activeLibraryTab switch
+        {
+            "spotify" => "Search Spotify",
+            "youtube" => "Search YouTube",
+            _ => "Search stations"
+        };
+    }
+
+    private string GetLibraryEmptyMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(_librarySearch))
+        {
+            return _activeLibraryTab switch
+            {
+                "spotify" => "No matching Spotify tracks.",
+                "youtube" => "No matching YouTube collections.",
+                _ => "No matching stations."
+            };
+        }
+
+        return _activeLibraryTab switch
+        {
+            "spotify" => "No Spotify tracks saved.",
+            "youtube" => "No YouTube collections saved.",
+            _ => "No saved stations."
+        };
     }
 
     private static string GetMediaIcon(string mediaType)
@@ -1067,9 +1133,7 @@
             return "YouTube Music";
         }
 
-        var matched = _stations.FirstOrDefault(s =>
-            !string.IsNullOrWhiteSpace(s.Url) &&
-            normalizedStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+        var matched = _stations.FirstOrDefault(s => IsSameStoredMedia(normalizedStationUrl, s.Url));
 
         return matched?.Name ?? "Playing stream";
     }
@@ -1158,11 +1222,44 @@
             return "YouTube Music";
         }
 
-        var matched = _stations.FirstOrDefault(s =>
-            !string.IsNullOrWhiteSpace(s.Url) &&
-            normalizedStationUrl.Contains(s.Url, StringComparison.OrdinalIgnoreCase));
+        var matched = _stations.FirstOrDefault(s => IsSameStoredMedia(normalizedStationUrl, s.Url));
 
         return matched?.Name ?? normalizedStationUrl;
+    }
+
+    private static bool IsSameStoredMedia(string currentUri, string? storedUrl)
+    {
+        var current = NormalizeMediaUriForMatching(currentUri);
+        var stored = NormalizeMediaUriForMatching(storedUrl);
+
+        return !string.IsNullOrWhiteSpace(current)
+            && !string.IsNullOrWhiteSpace(stored)
+            && (current.Contains(stored, StringComparison.OrdinalIgnoreCase)
+                || stored.Contains(current, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeMediaUriForMatching(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            return string.Empty;
+        }
+
+        var normalized = uri.Trim()
+            .Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
+
+        var queryIndex = normalized.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+        {
+            normalized = normalized[..queryIndex];
+        }
+
+        normalized = normalized.Trim().Trim('/');
+        return normalized.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            ? normalized[4..]
+            : normalized;
     }
 
     private static string FormatTrackProgress(TimeSpan position, TimeSpan duration)
