@@ -32,22 +32,10 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            // Check for empty states for Stations (default tab)
-            Assert.Contains("No stations saved", cut.Markup);
-        });
-
-        // Switch to Spotify
-        cut.Find("button.nav-link:nth-child(2)").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("No Spotify tracks saved", cut.Markup);
-        });
-
-        // Switch to YouTube
-        cut.Find("button.nav-link:nth-child(3)").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("No YouTube collections saved", cut.Markup);
+            Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
+            Assert.Contains("Quick Sources", cut.Markup);
+            Assert.Contains("Save stations, Spotify, or YouTube sources to see quick starts.", cut.Markup);
+            Assert.Empty(cut.FindAll(".spotify-library"));
         });
     }
 
@@ -66,28 +54,12 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            // Check for items in Stations (default)
             Assert.Contains("Test Station", cut.Markup);
-            var playButtons = cut.FindAll("button[aria-label^='Play Test Station']");
-            Assert.NotEmpty(playButtons);
-        });
-
-        // Switch to Spotify
-        cut.Find("button.nav-link:nth-child(2)").Click();
-        cut.WaitForAssertion(() =>
-        {
             Assert.Contains("Test Track", cut.Markup);
-            var playButtons = cut.FindAll("button[aria-label^='Play Test Track']");
-            Assert.NotEmpty(playButtons);
-        });
-
-        // Switch to YouTube
-        cut.Find("button.nav-link:nth-child(3)").Click();
-        cut.WaitForAssertion(() =>
-        {
             Assert.Contains("Test Collection", cut.Markup);
-             var playButtons = cut.FindAll("button[aria-label^='Play Test Collection']");
-            Assert.NotEmpty(playButtons);
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Station']"));
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Track']"));
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Collection']"));
         });
     }
 
@@ -145,6 +117,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
@@ -215,6 +188,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
@@ -231,12 +205,12 @@ public class IndexPageUXTests
             Assert.Contains("Office Pair", cut.Markup);
             Assert.Contains("Stereo/group: Office Right", cut.Markup);
             Assert.Contains("Paused", cut.Find(".speaker-status-badge").TextContent);
-            Assert.DoesNotContain("Office Right</span>", cut.Markup);
+            Assert.DoesNotContain("Linked to Office Pair", cut.Markup);
         });
     }
 
     [Fact]
-    public void IndexPage_HasAccessibleTabs_And_AddButtons()
+    public void IndexPage_HasAccessibleQuickSourceAddButtons()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -245,33 +219,103 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            // Verify tabs
-            var stationsTab = cut.Find("#tab-stations");
-            Assert.Equal("tab", stationsTab.GetAttribute("role"));
-            Assert.Equal("true", stationsTab.GetAttribute("aria-selected"));
-            Assert.Equal("panel-stations", stationsTab.GetAttribute("aria-controls"));
+            Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
+            Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']"));
+            Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']"));
+            Assert.Empty(cut.FindAll("[role='tab']"));
+        });
+    }
 
-            var spotifyTab = cut.Find("#tab-spotify");
-            Assert.Equal("tab", spotifyTab.GetAttribute("role"));
-            Assert.Equal("false", spotifyTab.GetAttribute("aria-selected"));
+    [Fact]
+    public void IndexPage_RendersDashboardOnlyHome_WithQuickSourcesAutomationHealthAndActivity()
+    {
+        using var ctx = new TestContext();
 
-            // Verify content panel
-            var panel = cut.Find("#panel-stations");
-            Assert.Equal("tabpanel", panel.GetAttribute("role"));
-            Assert.Equal("tab-stations", panel.GetAttribute("aria-labelledby"));
+        var scene = new Scene
+        {
+            Id = "scene-morning",
+            Name = "Morning Radio",
+            SourceType = SceneSourceType.Station,
+            SpeakerIps = new List<string> { "1.2.3.4", "1.2.3.5" }
+        };
+        var settings = new SonosSettings
+        {
+            IP_Adress = "1.2.3.4",
+            Volume = 38,
+            MaxVolume = 80,
+            Stations = new List<TuneInStation>
+            {
+                new() { Name = "ORF Radio Wien", Url = "http://orf.example/stream" },
+                new() { Name = "Cafe del Mar", Url = "http://cafe.example/stream" }
+            },
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { IpAddress = "1.2.3.4", Name = "Kitchen" },
+                new() { IpAddress = "1.2.3.5", Name = "Living Room" },
+                new() { IpAddress = "1.2.3.6", Name = "Bedroom" }
+            },
+            Scenes = new List<Scene> { scene },
+            ScheduleWindows = new List<ScheduleWindow>
+            {
+                new()
+                {
+                    Name = "Morning Radio",
+                    SceneId = scene.Id,
+                    RecurrenceType = ScheduleRecurrenceType.Daily,
+                    StartTime = new TimeOnly(0, 0),
+                    StopTime = new TimeOnly(23, 59),
+                    Priority = 10,
+                    FadeOutSeconds = 20
+                }
+            }
+        };
 
-            // Verify Add buttons have aria-labels
-            // Note: The visibility depends on which tab is active. Stations is active by default.
-            var addStationBtn = cut.Find("button[aria-label='Add Station']");
-            Assert.NotNull(addStationBtn);
+        var healthStore = new DeviceHealthSnapshotStore();
+        healthStore.Replace(new[]
+        {
+            new DeviceHealthStatus { SpeakerIp = "1.2.3.4", SpeakerName = "Kitchen", IsOnline = true, LastLatencyMs = 12 },
+            new DeviceHealthStatus { SpeakerIp = "1.2.3.5", SpeakerName = "Living Room", IsOnline = true, LastLatencyMs = 18 },
+            new DeviceHealthStatus { SpeakerIp = "1.2.3.6", SpeakerName = "Bedroom", IsOnline = false, LastError = "Timeout" }
         });
 
-        // Switch tab to check other buttons
-        cut.Find("#tab-spotify").Click();
+        using var resources = ConfigureServices(
+            ctx,
+            settings.Stations,
+            settings.SpotifyTracks,
+            settings.YouTubeMusicCollections,
+            settings,
+            healthStore);
+
+        resources.DbContext.Logs.Add(new LogEntry
+        {
+            Action = "SceneApplied",
+            Details = "Morning Radio scene applied by scheduler",
+            PerformedBy = "System",
+            Timestamp = DateTime.UtcNow
+        });
+        resources.DbContext.SaveChanges();
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
         cut.WaitForAssertion(() =>
         {
-             var addSpotifyBtn = cut.Find("button[aria-label='Add Spotify Track']");
-             Assert.NotNull(addSpotifyBtn);
+            Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
+            Assert.Empty(cut.FindAll(".spotify-library"));
+            Assert.Empty(cut.FindAll(".spotify-home-context"));
+            Assert.Empty(cut.FindAll(".spotify-room-picker"));
+            Assert.Contains("Today at a glance", cut.Markup);
+            Assert.Contains("Morning Radio", cut.Markup);
+            Assert.Contains("Scene: Morning Radio", cut.Markup);
+            Assert.Contains("Device Health", cut.Markup);
+            Assert.Contains("Quick Sources", cut.Markup);
+            Assert.Contains("Online", cut.Markup);
+            Assert.Contains("Offline", cut.Markup);
+            Assert.Contains("Recent Activity", cut.Markup);
+            Assert.Contains("Morning Radio scene applied by scheduler", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label='Add Station']"));
+            var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
+            Assert.Contains("Play ORF Radio Wien", buttonLabels);
+            Assert.Contains("home-ops-dashboard", cut.Find("[data-qa='home-operations-dashboard']").ClassList);
         });
     }
 
@@ -290,7 +334,13 @@ public class IndexPageUXTests
         }
     }
 
-    private static TestResources ConfigureServices(TestContext ctx, List<TuneInStation> stations, List<SpotifyObject> tracks, List<YouTubeMusicObject> collections)
+    private static TestResources ConfigureServices(
+        TestContext ctx,
+        List<TuneInStation> stations,
+        List<SpotifyObject> tracks,
+        List<YouTubeMusicObject> collections,
+        SonosSettings? settingsOverride = null,
+        IDeviceHealthSnapshotStore? healthStore = null)
     {
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
@@ -302,7 +352,7 @@ public class IndexPageUXTests
         var dbContext = new ApplicationDbContext(options);
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
 
-        var settings = new SonosSettings
+        var settings = settingsOverride ?? new SonosSettings
         {
             IP_Adress = "1.2.3.4",
             Volume = 20,
@@ -336,6 +386,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
+        ctx.Services.AddSingleton(healthStore ?? new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
