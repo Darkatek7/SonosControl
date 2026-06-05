@@ -33,20 +33,23 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
-            Assert.Contains("Quick Sources", cut.Markup);
-            Assert.Contains("Save stations, Spotify, or YouTube sources to see quick starts.", cut.Markup);
+            Assert.Contains("Library", cut.Markup);
+            Assert.DoesNotContain("Quick Sources", cut.Markup);
+            Assert.Contains("No saved stations.", cut.Markup);
             Assert.Empty(cut.FindAll(".spotify-library"));
         });
     }
 
     [Fact]
-    public void IndexPage_RendersItems_WhenListsAreNotEmpty()
+    public void IndexPage_LibraryListsAllSourcesInTabs_AndSearchesActiveTab()
     {
         using var ctx = new TestContext();
 
-        var stations = new List<TuneInStation> { new TuneInStation { Name = "Test Station", Url = "http://test" } };
-        var tracks = new List<SpotifyObject> { new SpotifyObject { Name = "Test Track", Url = "spotify:track:test" } };
-        var collections = new List<YouTubeMusicObject> { new YouTubeMusicObject { Name = "Test Collection", Url = "https://music.youtube.com/playlist" } };
+        var stations = Enumerable.Range(1, 8)
+            .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
+            .ToList();
+        var tracks = new List<SpotifyObject> { new SpotifyObject { Name = "Focus Track", Url = "spotify:track:focus" } };
+        var collections = new List<YouTubeMusicObject> { new YouTubeMusicObject { Name = "Workout Collection", Url = "https://music.youtube.com/playlist?list=workout" } };
 
         using var resources = ConfigureServices(ctx, stations, tracks, collections);
 
@@ -54,12 +57,35 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("Test Station", cut.Markup);
-            Assert.Contains("Test Track", cut.Markup);
-            Assert.Contains("Test Collection", cut.Markup);
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Station']"));
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Track']"));
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Test Collection']"));
+            Assert.Contains("Library", cut.Markup);
+            Assert.Contains("Station 1", cut.Markup);
+            Assert.Contains("Station 8", cut.Markup);
+            Assert.DoesNotContain("Focus Track", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Station 8']"));
+        });
+
+        cut.Find("input[aria-label='Search active library tab']").Input("Station 8");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Station 8", cut.Markup);
+            Assert.DoesNotContain("Station 1", cut.Markup);
+        });
+
+        cut.Find("#home-library-tab-spotify").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Focus Track", cut.Markup);
+            Assert.DoesNotContain("Station 8", cut.Markup);
+            Assert.Empty(cut.FindAll("button[aria-label^='Play Station']"));
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Focus Track']"));
+        });
+
+        cut.Find("#home-library-tab-youtube").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Workout Collection", cut.Markup);
+            Assert.DoesNotContain("Focus Track", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Workout Collection']"));
         });
     }
 
@@ -210,7 +236,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_HasAccessibleQuickSourceAddButtons()
+    public void IndexPage_HasAccessibleLibraryTabs_AndAddButtons()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -219,15 +245,19 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
+            Assert.Equal("tab", cut.Find("#home-library-tab-stations").GetAttribute("role"));
+            Assert.Equal("true", cut.Find("#home-library-tab-stations").GetAttribute("aria-selected"));
+            Assert.Equal("tab", cut.Find("#home-library-tab-spotify").GetAttribute("role"));
+            Assert.Equal("tab", cut.Find("#home-library-tab-youtube").GetAttribute("role"));
+            Assert.NotNull(cut.Find("input[aria-label='Search active library tab']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']"));
             Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']"));
-            Assert.Empty(cut.FindAll("[role='tab']"));
         });
     }
 
     [Fact]
-    public void IndexPage_RendersDashboardOnlyHome_WithQuickSourcesAutomationHealthAndActivity()
+    public void IndexPage_RendersDashboardOnlyHome_WithLibraryAutomationHealthAndActivity()
     {
         using var ctx = new TestContext();
 
@@ -266,6 +296,24 @@ public class IndexPageUXTests
                     StopTime = new TimeOnly(23, 59),
                     Priority = 10,
                     FadeOutSeconds = 20
+                },
+                new()
+                {
+                    Name = "Lunch Radio",
+                    SceneId = scene.Id,
+                    RecurrenceType = ScheduleRecurrenceType.Daily,
+                    StartTime = new TimeOnly(23, 59),
+                    StopTime = new TimeOnly(23, 59),
+                    Priority = 20
+                },
+                new()
+                {
+                    Name = "Late Radio",
+                    SceneId = scene.Id,
+                    RecurrenceType = ScheduleRecurrenceType.Daily,
+                    StartTime = new TimeOnly(23, 59),
+                    StopTime = new TimeOnly(23, 59),
+                    Priority = 30
                 }
             }
         };
@@ -307,15 +355,63 @@ public class IndexPageUXTests
             Assert.Contains("Morning Radio", cut.Markup);
             Assert.Contains("Scene: Morning Radio", cut.Markup);
             Assert.Contains("Device Health", cut.Markup);
-            Assert.Contains("Quick Sources", cut.Markup);
+            Assert.Contains("Library", cut.Markup);
+            Assert.DoesNotContain("Quick Sources", cut.Markup);
             Assert.Contains("Online", cut.Markup);
             Assert.Contains("Offline", cut.Markup);
             Assert.Contains("Recent Activity", cut.Markup);
             Assert.Contains("Morning Radio scene applied by scheduler", cut.Markup);
+            Assert.Single(cut.FindAll(".home-ops-timeline__row"));
             Assert.NotEmpty(cut.FindAll("button[aria-label='Add Station']"));
             var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
             Assert.Contains("Play ORF Radio Wien", buttonLabels);
             Assert.Contains("home-ops-dashboard", cut.Find("[data-qa='home-operations-dashboard']").ClassList);
+        });
+    }
+
+    [Fact]
+    public void IndexPage_RendersRecentActivityDetailsWithoutTruncation()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var longDetails = "Window 'Party Time Wochenende' triggered scene '07a0464f9bb045b181057580af9cf723' for the configured weekend speakers without truncating the operational trail.";
+        resources.DbContext.Logs.Add(new LogEntry
+        {
+            Action = "ScheduleTriggered",
+            Details = longDetails,
+            PerformedBy = "System",
+            Timestamp = DateTime.UtcNow
+        });
+        resources.DbContext.SaveChanges();
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(longDetails, cut.Markup);
+            Assert.Contains("home-ops-activity__details", cut.Find(".home-ops-activity__row strong").ClassList);
+        });
+    }
+
+    [Fact]
+    public void IndexPage_ResolvesSavedStationNameForNowPlaying()
+    {
+        using var ctx = new TestContext();
+        var station = new TuneInStation { Name = "Breakz Radio", Url = "https://breakz-2012-high.rautemusik.fm/stream/mp3" };
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation> { station },
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            connectorCurrentStation: $"x-rincon-mp3radio://{station.Url}/?ref=rb-djclubcharts");
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Breakz Radio ·", cut.Markup);
+            Assert.DoesNotContain("breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts", cut.Markup);
         });
     }
 
@@ -340,7 +436,8 @@ public class IndexPageUXTests
         List<SpotifyObject> tracks,
         List<YouTubeMusicObject> collections,
         SonosSettings? settingsOverride = null,
-        IDeviceHealthSnapshotStore? healthStore = null)
+        IDeviceHealthSnapshotStore? healthStore = null,
+        string? connectorCurrentStation = null)
     {
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
@@ -371,7 +468,7 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(settings.Volume);
         connectorRepo.Setup(r => r.IsPlaying(It.IsAny<string>())).ReturnsAsync(false);
         connectorRepo.Setup(r => r.GetCurrentStationAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync("");
+            .ReturnsAsync(connectorCurrentStation ?? "");
         connectorRepo.Setup(r => r.GetCurrentTrackAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync("");
         connectorRepo.Setup(r => r.GetTrackProgressAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))

@@ -41,7 +41,35 @@ public class GlobalPlayerBarTests
         });
     }
 
-    private static Mock<ISonosConnectorRepo> ConfigureServices(TestContext ctx)
+    [Fact]
+    public void GlobalPlayerBar_ResolvesSavedStationNameFromCurrentUri()
+    {
+        using var ctx = new TestContext();
+        ConfigureServices(
+            ctx,
+            stations:
+            [
+                new TuneInStation
+                {
+                    Name = "Breakz Radio",
+                    Url = "https://breakz-2012-high.rautemusik.fm/stream/mp3"
+                }
+            ],
+            currentStationUri: "x-rincon-mp3radio://breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts");
+
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Breakz Radio", cut.Markup);
+            Assert.DoesNotContain("breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts", cut.Markup);
+        });
+    }
+
+    private static Mock<ISonosConnectorRepo> ConfigureServices(
+        TestContext ctx,
+        List<TuneInStation>? stations = null,
+        string currentStationUri = "http://stream.example/live")
     {
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
@@ -57,6 +85,7 @@ public class GlobalPlayerBarTests
             IP_Adress = "10.0.0.1",
             Volume = 25,
             MaxVolume = 80,
+            Stations = stations ?? new List<TuneInStation>(),
             Speakers =
             [
                 new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" },
@@ -72,7 +101,7 @@ public class GlobalPlayerBarTests
         connectorRepo.Setup(repo => repo.GetVolume("10.0.0.1")).ReturnsAsync(settings.Volume);
         connectorRepo.Setup(repo => repo.IsPlaying("10.0.0.1")).ReturnsAsync(true);
         connectorRepo.Setup(repo => repo.GetCurrentStationAsync("10.0.0.1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync("http://stream.example/live");
+            .ReturnsAsync(currentStationUri);
         connectorRepo.Setup(repo => repo.GetTrackInfoAsync("10.0.0.1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SonosTrackInfo { Title = "Current track", Artist = "Current artist" });
         connectorRepo.Setup(repo => repo.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))

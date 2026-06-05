@@ -277,8 +277,7 @@ public sealed class PlaybackUiStateService
 
         foreach (var source in allSources)
         {
-            if (!string.IsNullOrWhiteSpace(source.Url)
-                && currentStationUrl.Contains(source.Url, StringComparison.OrdinalIgnoreCase))
+            if (IsSameStoredMedia(currentStationUrl, source.Url))
             {
                 return source.Name;
             }
@@ -290,6 +289,41 @@ public sealed class PlaybackUiStateService
         }
 
         return currentStationUrl.Length > 44 ? $"{currentStationUrl[..41]}..." : currentStationUrl;
+    }
+
+    private static bool IsSameStoredMedia(string currentUri, string? storedUrl)
+    {
+        var current = NormalizeMediaUriForMatching(currentUri);
+        var stored = NormalizeMediaUriForMatching(storedUrl);
+
+        return !string.IsNullOrWhiteSpace(current)
+            && !string.IsNullOrWhiteSpace(stored)
+            && (current.Contains(stored, StringComparison.OrdinalIgnoreCase)
+                || stored.Contains(current, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeMediaUriForMatching(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri))
+        {
+            return string.Empty;
+        }
+
+        var normalized = uri.Trim()
+            .Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
+
+        var queryIndex = normalized.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+        {
+            normalized = normalized[..queryIndex];
+        }
+
+        normalized = normalized.Trim().Trim('/');
+        return normalized.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            ? normalized[4..]
+            : normalized;
     }
 
     private void ApplyTrackInfo(SonosTrackInfo? trackInfo)
