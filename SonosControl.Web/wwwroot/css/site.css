@@ -939,8 +939,8 @@ h3[tabindex="-1"]:focus {
     grid-template-columns: minmax(17rem, 0.95fr) minmax(24rem, 1.35fr) minmax(17rem, 0.95fr);
     grid-template-areas:
         "now automation automation"
-        "health queue sources"
-        "activity activity sources";
+        "health queue library"
+        "activity activity library";
     align-items: start;
     gap: 0.85rem;
     padding: 0.85rem;
@@ -971,8 +971,8 @@ h3[tabindex="-1"]:focus {
     grid-area: queue;
 }
 
-.home-ops-panel--sources {
-    grid-area: sources;
+.home-ops-panel--library {
+    grid-area: library;
 }
 
 .home-ops-panel--activity {
@@ -1181,6 +1181,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-timeline,
 .home-ops-recommendations,
+.home-ops-library-list,
 .home-ops-activity,
 .home-ops-queue-list {
     display: grid;
@@ -1216,6 +1217,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-timeline__row strong,
 .home-ops-recommendation strong,
+.home-ops-library-item strong,
 .home-ops-room strong,
 .home-ops-activity__row strong {
     display: block;
@@ -1226,6 +1228,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-timeline__row span,
 .home-ops-recommendation span,
+.home-ops-library-item span,
 .home-ops-room span,
 .home-ops-activity__row span {
     color: var(--text-muted);
@@ -1254,6 +1257,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-room,
 .home-ops-recommendation,
+.home-ops-library-item,
 .home-ops-activity__row {
     min-width: 0;
 }
@@ -1298,7 +1302,8 @@ h3[tabindex="-1"]:focus {
     background: var(--brand-warning);
 }
 
-.home-ops-recommendation {
+.home-ops-recommendation,
+.home-ops-library-item {
     display: grid;
     grid-template-columns: 2.2rem minmax(0, 1fr) 2.1rem;
     align-items: center;
@@ -1308,7 +1313,8 @@ h3[tabindex="-1"]:focus {
     background: color-mix(in srgb, var(--surface-2) 46%, transparent);
 }
 
-.home-ops-recommendation__icon {
+.home-ops-recommendation__icon,
+.home-ops-library-item__icon {
     display: grid;
     place-items: center;
     width: 2.2rem;
@@ -1334,6 +1340,60 @@ h3[tabindex="-1"]:focus {
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
+}
+
+.home-ops-library-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin-bottom: 0.65rem;
+}
+
+.home-ops-library-tab {
+    min-width: 0;
+    min-height: 2rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: var(--radius-md);
+    border: 1px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.home-ops-library-tab.is-active {
+    color: #fff;
+    background: var(--gradient-primary);
+    border-color: color-mix(in srgb, var(--brand-primary) 74%, transparent);
+}
+
+.home-ops-library-search {
+    position: relative;
+    margin-bottom: 0.65rem;
+}
+
+.home-ops-library-search svg {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.home-ops-library-search .form-control {
+    padding-left: 2rem;
+}
+
+.home-ops-library-item > div {
+    min-width: 0;
+}
+
+.home-ops-library-item strong,
+.home-ops-library-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .home-ops-queue-row {
@@ -1370,6 +1430,15 @@ h3[tabindex="-1"]:focus {
     gap: 0.75rem;
     padding: 0.55rem 0;
     border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 58%, transparent);
+}
+
+.home-ops-activity__row > div {
+    min-width: 0;
+}
+
+.home-ops-activity__details {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .home-ops-activity__row:last-child {
@@ -1416,20 +1485,20 @@ h3[tabindex="-1"]:focus {
     .home-ops-panel--automation,
     .home-ops-panel--health,
     .home-ops-panel--queue,
-    .home-ops-panel--sources,
+    .home-ops-panel--library,
     .home-ops-panel--activity {
         grid-area: auto;
     }
 
     .home-ops-panel--automation,
-    .home-ops-panel--sources,
+    .home-ops-panel--library,
     .home-ops-panel--activity {
         grid-column: span 2;
     }
 }
 
 @media (min-width: 1101px) {
-    .home-ops-panel--sources .home-ops-recommendations {
+    .home-ops-panel--library .home-ops-library-list {
         max-height: 16.5rem;
         overflow-y: auto;
         padding-right: 0.15rem;
@@ -1446,7 +1515,7 @@ h3[tabindex="-1"]:focus {
     .home-ops-panel--automation,
     .home-ops-panel--health,
     .home-ops-panel--queue,
-    .home-ops-panel--sources,
+    .home-ops-panel--library,
     .home-ops-panel--activity {
         grid-area: auto;
         grid-column: auto;

@@ -149,7 +149,7 @@ def assert_home_dashboard_layout(page):
     expect(page.get_by_role("heading", name="Now Playing")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Device Health")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Quick Sources")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Library")).to_be_visible(timeout=10000)
     expect(page.locator(".spotify-library")).to_have_count(0)
     expect(page.locator(".spotify-home-context")).to_have_count(0)
     expect(page.locator(".spotify-room-picker")).to_have_count(0)
