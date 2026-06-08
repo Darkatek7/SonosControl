@@ -15,7 +15,7 @@ from playwright.sync_api import expect, sync_playwright
 CHROME_PATH = os.getenv("PLAYWRIGHT_CHROME_PATH")
 
 ROUTES = [
-    ("/", "home", "Media Sources"),
+    ("/", "home", "Today at a glance"),
     ("/config", "config", "System Configuration"),
     ("/stats", "stats", "Statistics"),
     ("/admin/users", "users", "User Management"),
