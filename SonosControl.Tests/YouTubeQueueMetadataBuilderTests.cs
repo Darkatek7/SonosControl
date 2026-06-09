@@ -41,4 +41,14 @@ public class YouTubeQueueMetadataBuilderTests
         Assert.Contains("title=one&amp;two=true", metadata);
         Assert.Contains("cover?x=1&amp;y=2", metadata);
     }
+
+    [Fact]
+    public void FormatStreamContent_DoesNotDuplicateArtistPrefix()
+    {
+        var streamContent = YouTubeQueueMetadataBuilder.FormatStreamContent(
+            "Madison Beer - lovergirl (Official Music Video)",
+            "Madison Beer");
+
+        Assert.Equal("Madison Beer - lovergirl (Official Music Video)", streamContent);
+    }
 }

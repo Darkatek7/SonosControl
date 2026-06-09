@@ -51,6 +51,11 @@ public static class YouTubeQueueMetadataBuilder
 
         if (!string.IsNullOrWhiteSpace(trimmedArtist) && !string.IsNullOrWhiteSpace(trimmedTitle))
         {
+            if (StartsWithArtist(trimmedTitle, trimmedArtist))
+            {
+                return trimmedTitle;
+            }
+
             return $"{trimmedArtist} - {trimmedTitle}";
         }
 
@@ -60,6 +65,20 @@ public static class YouTubeQueueMetadataBuilder
         }
 
         return string.IsNullOrWhiteSpace(trimmedArtist) ? "YouTube Audio" : trimmedArtist;
+    }
+
+    public static bool StartsWithArtist(string? title, string? artist)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist))
+        {
+            return false;
+        }
+
+        var trimmedTitle = title.Trim();
+        var trimmedArtist = artist.Trim();
+        return trimmedTitle.StartsWith($"{trimmedArtist} - ", StringComparison.OrdinalIgnoreCase)
+            || trimmedTitle.StartsWith($"{trimmedArtist} – ", StringComparison.OrdinalIgnoreCase)
+            || trimmedTitle.StartsWith($"{trimmedArtist}: ", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string EscapeOrFallback(string? value, string fallback)

@@ -187,6 +187,78 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task GetQueue_DoesNotDoubleDecodeAlbumArtQueryStrings()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <Result>&lt;DIDL-Lite xmlns:dc=&quot;http://purl.org/dc/elements/1.1/&quot; xmlns:upnp=&quot;urn:schemas-upnp-org:metadata-1-0/upnp/&quot; xmlns:r=&quot;urn:schemas-rinconnetworks-com:metadata-1-0/&quot; xmlns=&quot;urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/&quot;&gt;&lt;item id=&quot;Q:0/1&quot; parentID=&quot;Q:0&quot; restricted=&quot;true&quot;&gt;&lt;res protocolInfo=&quot;http-get:*:application/octet-stream:*&quot;&gt;http://app/api/youtube-audio/session1/0&lt;/res&gt;&lt;upnp:albumArtURI&gt;/getaa?u=http%3a%2f%2fapp%2fapi%2fyoutube-audio%2fsession1%2f0&amp;amp;v=0&lt;/upnp:albumArtURI&gt;&lt;dc:title&gt;Queue Track&lt;/dc:title&gt;&lt;upnp:class&gt;object.item&lt;/upnp:class&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</Result>
+      <NumberReturned>1</NumberReturned>
+      <TotalMatches>1</TotalMatches>
+      <UpdateID>1</UpdateID>
+    </u:BrowseResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
+
+        var result = await repo.GetQueue("1.2.3.4");
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("Queue Track", item.Title);
+        Assert.Equal("http://app/api/youtube-audio/session1/0", item.ResourceUri);
+    }
+
+    [Fact]
+    public async Task GetQueue_EnrichesYouTubeItemsFromPlaybackSession()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <Result>&lt;DIDL-Lite xmlns:dc=&quot;http://purl.org/dc/elements/1.1/&quot; xmlns:upnp=&quot;urn:schemas-upnp-org:metadata-1-0/upnp/&quot; xmlns:r=&quot;urn:schemas-rinconnetworks-com:metadata-1-0/&quot; xmlns=&quot;urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/&quot;&gt;&lt;item id=&quot;Q:0/1&quot; parentID=&quot;Q:0&quot; restricted=&quot;true&quot;&gt;&lt;res protocolInfo=&quot;http-get:*:application/octet-stream:*&quot;&gt;http://app/api/youtube-audio/session1/0&lt;/res&gt;&lt;dc:title&gt;0&lt;/dc:title&gt;&lt;upnp:class&gt;object.item&lt;/upnp:class&gt;&lt;/item&gt;&lt;/DIDL-Lite&gt;</Result>
+      <NumberReturned>1</NumberReturned>
+      <TotalMatches>1</TotalMatches>
+      <UpdateID>1</UpdateID>
+    </u:BrowseResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var playbackService = new Mock<IYouTubePlaybackService>();
+        playbackService.Setup(service => service.GetQueueItemAsync("session1", 0, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new YouTubePlaybackQueueItem
+            {
+                Index = 0,
+                Title = "lovergirl",
+                Artist = "Madison Beer",
+                StreamUrl = "http://app/api/youtube-audio/session1/0"
+            });
+
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo, playbackService.Object);
+
+        var result = await repo.GetQueue("1.2.3.4");
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("lovergirl", item.Title);
+        Assert.Equal("Madison Beer", item.Artist);
+    }
+
+    [Fact]
     public async Task GetTrackInfoAsync_DecodesHtmlEntitiesInMetadataFields()
     {
         var handler = new QueueHttpMessageHandler();
@@ -225,6 +297,54 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task GetTrackInfoAsync_UsesYouTubeSessionMetadata_WhenTrackUriMatchesSession()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <Track>1</Track>
+      <TrackMetaData>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:r='urn:schemas-rinconnetworks-com:metadata-1-0/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;0&lt;/dc:title&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</TrackMetaData>
+      <TrackURI>http://app/api/youtube-audio/session1/0</TrackURI>
+    </u:GetPositionInfoResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var playbackService = new Mock<IYouTubePlaybackService>();
+        playbackService.Setup(service => service.GetQueueItemAsync("session1", 0, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new YouTubePlaybackQueueItem
+            {
+                Index = 0,
+                Title = "Madison Beer - lovergirl (Official Music Video)",
+                Artist = "Madison Beer",
+                AlbumArtUrl = "https://i.ytimg.com/vi/q4lU1N3oqYQ/hqdefault.jpg",
+                StreamContent = "Madison Beer - Madison Beer - lovergirl (Official Music Video)",
+                StreamUrl = "http://app/api/youtube-audio/session1/0"
+            });
+
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo, playbackService.Object);
+
+        var result = await repo.GetTrackInfoAsync("1.2.3.4");
+
+        Assert.NotNull(result);
+        Assert.Equal("Madison Beer - lovergirl (Official Music Video)", result.Title);
+        Assert.Equal("Madison Beer", result.Artist);
+        Assert.Equal("Madison Beer - Madison Beer - lovergirl (Official Music Video)", result.StreamContent);
+        Assert.Equal("https://i.ytimg.com/vi/q4lU1N3oqYQ/hqdefault.jpg", result.AlbumArtUri);
+    }
+
+    [Fact]
     public async Task GetTrackInfoAsync_UsesUpnpArtistWhenPresent()
     {
         var handler = new QueueHttpMessageHandler();
@@ -247,6 +367,68 @@ public class SonosConnectorRepoTests
         {
             Content = new StringContent(soapResponse)
         });
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
+
+        var result = await repo.GetTrackInfoAsync("1.2.3.4");
+
+        Assert.NotNull(result);
+        Assert.Equal("Lovergirl", result.Title);
+        Assert.Equal("Sabrina Carpenter Channel", result.Artist);
+        Assert.Equal("Sabrina Carpenter Channel - Lovergirl", result.StreamContent);
+    }
+
+    [Fact]
+    public async Task GetTrackInfoAsync_FallsBackToQueueMetadata_WhenContainerTrackIsReported()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string positionInfoResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <Track>0</Track>
+      <TrackMetaData>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;0&lt;/dc:title&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</TrackMetaData>
+    </u:GetPositionInfoResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        const string mediaInfoResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetMediaInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <CurrentURI>x-rincon-queue:RINCON_TEST#0</CurrentURI>
+    </u:GetMediaInfoResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        const string queueResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:BrowseResponse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <Result>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:r='urn:schemas-rinconnetworks-com:metadata-1-0/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;Lovergirl&lt;/dc:title&gt;
+          &lt;upnp:artist&gt;Sabrina Carpenter Channel&lt;/upnp:artist&gt;
+          &lt;r:streamContent&gt;Sabrina Carpenter Channel - Lovergirl&lt;/r:streamContent&gt;
+          &lt;res&gt;http://app/api/youtube-audio/session1/0&lt;/res&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</Result>
+      <NumberReturned>1</NumberReturned>
+      <TotalMatches>11</TotalMatches>
+      <UpdateID>1</UpdateID>
+    </u:BrowseResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(positionInfoResponse) });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(mediaInfoResponse) });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(queueResponse) });
+
         var client = new HttpClient(handler);
         var settingsRepo = new Mock<ISettingsRepo>().Object;
         var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
@@ -289,6 +471,7 @@ public class SonosConnectorRepoTests
         {
             Content = new StringContent("<root><UDN>uuid:RINCON_1234567890ABCDEF</UDN></root>")
         });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
 
         var playbackService = new Mock<IYouTubePlaybackService>();
@@ -334,7 +517,7 @@ public class SonosConnectorRepoTests
         await repo.PlayYouTubeAudioAsync("1.2.3.4", "https://www.youtube.com/watch?v=abc123xyz00", YouTubePlaybackMode.AutoQueueRelated, 10);
 
         Assert.Equal(1, repo.StartPlayingCallCount);
-        Assert.Equal(5, handler.Requests.Count);
+        Assert.Equal(6, handler.Requests.Count);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"", handler.Requests[1].SoapAction);
         Assert.Contains("Track 1", handler.Requests[1].Body);
@@ -347,6 +530,9 @@ public class SonosConnectorRepoTests
         Assert.Contains("device_description.xml", handler.Requests[3].Uri!.ToString());
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", handler.Requests[4].SoapAction);
         Assert.Contains("x-rincon-queue:RINCON_1234567890ABCDEF#0", handler.Requests[4].Body);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#Seek\"", handler.Requests[5].SoapAction);
+        Assert.Contains("<Unit>TRACK_NR</Unit>", handler.Requests[5].Body);
+        Assert.Contains("<Target>1</Target>", handler.Requests[5].Body);
     }
 
     [Fact]
