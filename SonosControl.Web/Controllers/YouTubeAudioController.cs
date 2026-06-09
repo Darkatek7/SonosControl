@@ -17,9 +17,13 @@ public sealed class YouTubeAudioController : ControllerBase
     }
 
     [HttpGet("{sessionId}")]
-    public async Task<IActionResult> GetAudioAsync(string sessionId, CancellationToken cancellationToken)
+    public Task<IActionResult> GetAudioAsync(string sessionId, CancellationToken cancellationToken)
+        => GetAudioItemAsync(sessionId, 0, cancellationToken);
+
+    [HttpGet("{sessionId}/{itemIndex:int}")]
+    public async Task<IActionResult> GetAudioItemAsync(string sessionId, int itemIndex, CancellationToken cancellationToken)
     {
-        var result = await _playbackService.OpenPlaybackAsync(sessionId, cancellationToken);
+        var result = await _playbackService.OpenPlaybackAsync(sessionId, itemIndex, cancellationToken);
         if (result is null)
         {
             return NotFound();

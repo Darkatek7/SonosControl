@@ -449,7 +449,13 @@
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
                     break;
                 case "youtube":
-                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(_selectedSpeakerIp, item.SourceUrl);
+                    var youTubeEntry = _settings?.YouTubeCollections?
+                        .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), item.SourceUrl.Trim(), StringComparison.OrdinalIgnoreCase));
+                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(
+                        _selectedSpeakerIp,
+                        item.SourceUrl,
+                        YouTubePlaybackModeResolver.GetEffectiveMode(item.SourceUrl, youTubeEntry?.PlaybackMode),
+                        YouTubePlaybackModeResolver.GetEffectiveQueueLength(youTubeEntry?.PreferredQueueLength));
                     break;
                 case "youtubemusic":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);

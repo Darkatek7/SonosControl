@@ -474,6 +474,8 @@ public class IndexPageUXTests
         resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
             "1.2.3.5",
             "https://www.youtube.com/watch?v=abc123xyz00",
+            It.IsAny<YouTubePlaybackMode?>(),
+            It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Once);
         resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Once);
     }

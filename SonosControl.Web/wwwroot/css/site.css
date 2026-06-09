@@ -1329,8 +1329,8 @@ h3[tabindex="-1"]:focus {
 }
 
 .home-ops-source-toolbar {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
     margin-bottom: 0.75rem;
 }
@@ -1340,11 +1340,12 @@ h3[tabindex="-1"]:focus {
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
+    min-width: 0;
 }
 
 .home-ops-library-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.35rem;
     margin-bottom: 0.65rem;
 }
@@ -1387,6 +1388,8 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-library-item > div {
     min-width: 0;
+    display: grid;
+    gap: 0.35rem;
 }
 
 .home-ops-library-item strong,
@@ -1394,6 +1397,20 @@ h3[tabindex="-1"]:focus {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.home-ops-youtube-mode {
+    max-width: 14rem;
+}
+
+@media (min-width: 768px) {
+    .home-ops-library-tabs {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .home-ops-source-toolbar {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
 }
 
 .home-ops-queue-row {

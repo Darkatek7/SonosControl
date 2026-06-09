@@ -146,7 +146,7 @@
                                 <button type="button" class="btn btn-sm btn-outline-secondary home-ops-icon-button" @onclick="HandleQueueRefresh" title="Refresh queue" aria-label="Refresh queue">
                                     <Icon Name="refresh" Size="14" />
                                 </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary home-ops-icon-button" @onclick="NextTrack" disabled="@(!_isSpotifyPlaying || _isNextTrackLoading)" title="Next Spotify track" aria-label="Next Spotify track">
+                                <button type="button" class="btn btn-sm btn-outline-secondary home-ops-icon-button" @onclick="NextTrack" disabled="@(!CanSkipToNextTrack() || _isNextTrackLoading)" title="Next track" aria-label="Next track">
                                     <Icon Name="forward" Size="14" />
                                 </button>
                                 @if (_timerEndTimeUtc is not null)
@@ -327,6 +327,25 @@
                                     <div>
                                         <strong title="@item.Name">@item.Name</strong>
                                         <span title="@item.Url">@FormatMediaTypeLabel(item.MediaType) · @item.Url</span>
+                                        @if (item.MediaType == "youtube")
+                                        {
+                                            var youTubeEntry = FindYouTubeEntry(item.Url);
+                                            if (youTubeEntry is not null)
+                                            {
+                                                <select class="form-select form-select-sm home-ops-youtube-mode"
+                                                        value="@GetYouTubePlaybackModeValue(youTubeEntry)"
+                                                        aria-label="@($"Playback mode for {item.Name}")"
+                                                        @onchange="async e => await SetYouTubePlaybackModeAsync(youTubeEntry, e.Value?.ToString())">
+                                                    <option value="@YouTubePlaybackMode.AutoQueueRelated">Auto Queue</option>
+                                                    <option value="@YouTubePlaybackMode.Single">Single</option>
+                                                    @if (YouTubePlaybackModeResolver.IsPlaylistLikeUrl(youTubeEntry.Url))
+                                                    {
+                                                        <option value="@YouTubePlaybackMode.PlaylistOrdered">Playlist Ordered</option>
+                                                        <option value="@YouTubePlaybackMode.PlaylistShuffle">Playlist Shuffle</option>
+                                                    }
+                                                </select>
+                                            }
+                                        }
                                     </div>
                                     <button class="btn btn-sm btn-primary home-ops-mini-play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" disabled="@(_loadingMediaUrl == item.Url)">
                                         @if (_loadingMediaUrl == item.Url)
@@ -1518,6 +1537,36 @@
         return _settings?.IP_Adress ?? string.Empty;
     }
 
+    private bool CanSkipToNextTrack()
+        => _isSpotifyPlaying || _queueTotalMatches > 0;
+
+    private YouTubeObject? FindYouTubeEntry(string url)
+        => (_settings?.YouTubeCollections ?? new List<YouTubeObject>())
+            .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), url.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private static string GetYouTubePlaybackModeValue(YouTubeObject entry)
+        => YouTubePlaybackModeResolver.GetEffectiveMode(entry.Url, entry.PlaybackMode).ToString();
+
+    private static (YouTubePlaybackMode Mode, int PreferredQueueLength) GetYouTubePlaybackOptions(YouTubeObject? entry, string url)
+    {
+        return (
+            YouTubePlaybackModeResolver.GetEffectiveMode(url, entry?.PlaybackMode),
+            YouTubePlaybackModeResolver.GetEffectiveQueueLength(entry?.PreferredQueueLength));
+    }
+
+    private async Task SetYouTubePlaybackModeAsync(YouTubeObject entry, string? value)
+    {
+        if (!Enum.TryParse<YouTubePlaybackMode>(value, ignoreCase: true, out var parsedMode))
+        {
+            return;
+        }
+
+        entry.PlaybackMode = parsedMode;
+        entry.PreferredQueueLength ??= YouTubePlaybackModeResolver.DefaultRelatedQueueLength;
+        await SaveSettings();
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task PlayMediaItem(string url, string type)
     {
         if (string.IsNullOrEmpty(url) || _settings is null) return;
@@ -1547,14 +1596,18 @@
                     await NotificationService.SendNotificationAsync($"Spotify track changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "youtube":
-                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url);
+                    var youTubeEntry = FindYouTubeEntry(url);
+                    var youTubeOptions = GetYouTubePlaybackOptions(youTubeEntry, url);
+                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
                     await AddLog("YouTube Video Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube video changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    _isSpotifyPlaying = true;
                     break;
                 case "youtubemusic":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube Music changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    _isSpotifyPlaying = false;
                     break;
             }
             await _uow.ISonosConnectorRepo.StartPlaying(targetSpeakerIp);
@@ -1729,8 +1782,9 @@
                 var entry = _youTubeVideos.FirstOrDefault(t => t.Url == selectionValue);
                 selectionName = entry?.Name ?? selectionValue;
                 logSource = $"YouTube: {selectionName}";
-                await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, selectionValue);
-                _isSpotifyPlaying = false;
+                var youTubeOptions = GetYouTubePlaybackOptions(entry, selectionValue);
+                await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, selectionValue, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
+                _isSpotifyPlaying = true;
             }
             else if (selectionType == "youtubemusic")
             {
@@ -2166,7 +2220,13 @@
                     _addModalError = "YouTube video with this name or URL already exists.";
                     return;
                 }
-                _settings.YouTubeCollections.Add(new YouTubeObject { Name = data.Name, Url = data.Url });
+                _settings.YouTubeCollections.Add(new YouTubeObject
+                {
+                    Name = data.Name,
+                    Url = data.Url,
+                    PlaybackMode = YouTubePlaybackModeResolver.GetEffectiveMode(data.Url, null),
+                    PreferredQueueLength = YouTubePlaybackModeResolver.DefaultRelatedQueueLength
+                });
                 await AddLog("YouTube Video Link Added", $"{data.Name} ({data.Url})");
                 break;
             case "youtubemusic":

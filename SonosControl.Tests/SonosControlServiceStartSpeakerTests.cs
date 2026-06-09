@@ -119,7 +119,12 @@ public class SonosControlServiceStartSpeakerTests
 
         await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
 
-        sonosRepo.Verify(r => r.PlayYouTubeAudioAsync(settings.IP_Adress, "https://www.youtube.com/watch?v=abc123xyz00", It.IsAny<CancellationToken>()), Times.Once);
+        sonosRepo.Verify(r => r.PlayYouTubeAudioAsync(
+            settings.IP_Adress,
+            "https://www.youtube.com/watch?v=abc123xyz00",
+            It.IsAny<YouTubePlaybackMode?>(),
+            It.IsAny<int?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

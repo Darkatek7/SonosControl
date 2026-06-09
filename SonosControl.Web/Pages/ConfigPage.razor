@@ -246,6 +246,37 @@ else
                             Limits the highest volume that can be set from the main control panel.
                         </div>
                     </div>
+
+                    @if (_settings.YouTubeCollections.Any())
+                    {
+                        <div class="config-field">
+                            <label class="form-label config-label"><Icon Name="play" Size="16" /> YouTube Playback Modes</label>
+                            <div class="d-grid gap-2">
+                                @foreach (var video in _settings.YouTubeCollections.OrderBy(v => v.Name))
+                                {
+                                    <div class="row g-2 align-items-center">
+                                        <div class="col-12 col-md-6">
+                                            <span class="fw-semibold">@video.Name</span>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <select class="form-select form-select-sm"
+                                                    value="@GetYouTubePlaybackModeValue(video)"
+                                                    aria-label="@($"Playback mode for {video.Name}")"
+                                                    @onchange="async e => await SetYouTubePlaybackModeAsync(video, e.Value?.ToString())">
+                                                <option value="@YouTubePlaybackMode.AutoQueueRelated">Auto Queue</option>
+                                                <option value="@YouTubePlaybackMode.Single">Single</option>
+                                                @if (YouTubePlaybackModeResolver.IsPlaylistLikeUrl(video.Url))
+                                                {
+                                                    <option value="@YouTubePlaybackMode.PlaylistOrdered">Playlist Ordered</option>
+                                                    <option value="@YouTubePlaybackMode.PlaylistShuffle">Playlist Shuffle</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
                 </section>
             }
@@ -1224,6 +1255,21 @@ else
 
         await _uow.ISettingsRepo.WriteSettings(_settings);
 
+    }
+
+    private static string GetYouTubePlaybackModeValue(YouTubeObject video)
+        => YouTubePlaybackModeResolver.GetEffectiveMode(video.Url, video.PlaybackMode).ToString();
+
+    private async Task SetYouTubePlaybackModeAsync(YouTubeObject video, string? value)
+    {
+        if (!Enum.TryParse<YouTubePlaybackMode>(value, ignoreCase: true, out var mode))
+        {
+            return;
+        }
+
+        video.PlaybackMode = mode;
+        video.PreferredQueueLength ??= YouTubePlaybackModeResolver.DefaultRelatedQueueLength;
+        await SaveSettings();
     }
 
 

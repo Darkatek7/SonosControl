@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using SonosControl.DAL.Interfaces;
+using SonosControl.DAL.Models;
 using SonosControl.DAL.Repos;
 using Xunit;
 
@@ -70,6 +71,11 @@ public class SonosConnectorRepoTests
 
         public TestableSonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
             : base(httpClientFactory, settingsRepo)
+        {
+        }
+
+        public TestableSonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo, IYouTubePlaybackService playbackService)
+            : base(httpClientFactory, settingsRepo, playbackService)
         {
         }
 
@@ -235,6 +241,57 @@ public class SonosConnectorRepoTests
         Assert.Contains("x-rincon-mp3radio://example.com/stream", request.Body);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", request.SoapAction);
         Assert.Equal(1, repo.StartPlayingCallCount);
+    }
+
+    [Fact]
+    public async Task PlayYouTubeAudioAsync_PopulatesQueueAndStartsPlayback()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<root><UDN>uuid:RINCON_1234567890ABCDEF</UDN></root>")
+        });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+
+        var playbackService = new Mock<IYouTubePlaybackService>();
+        playbackService.Setup(service => service.PreparePlaybackAsync(
+                "https://www.youtube.com/watch?v=abc123xyz00",
+                YouTubePlaybackMode.AutoQueueRelated,
+                10,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new YouTubePlaybackSession
+            {
+                SessionId = "session1",
+                Title = "Video",
+                PlaybackMode = YouTubePlaybackMode.AutoQueueRelated,
+                QueueItems = new[]
+                {
+                    new YouTubePlaybackQueueItem { Index = 0, Title = "Track 1", StreamUrl = "http://app/api/youtube-audio/session1/0" },
+                    new YouTubePlaybackQueueItem { Index = 1, Title = "Track 2", StreamUrl = "http://app/api/youtube-audio/session1/1" }
+                }
+            });
+        playbackService.Setup(service => service.ActivateSessionAsync("session1", "1.2.3.4", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo, playbackService.Object);
+
+        await repo.PlayYouTubeAudioAsync("1.2.3.4", "https://www.youtube.com/watch?v=abc123xyz00", YouTubePlaybackMode.AutoQueueRelated, 10);
+
+        Assert.Equal(1, repo.StartPlayingCallCount);
+        Assert.Equal(5, handler.Requests.Count);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"", handler.Requests[1].SoapAction);
+        Assert.Contains("Track 1", handler.Requests[1].Body);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"", handler.Requests[2].SoapAction);
+        Assert.Contains("Track 2", handler.Requests[2].Body);
+        Assert.Contains("device_description.xml", handler.Requests[3].Uri!.ToString());
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", handler.Requests[4].SoapAction);
+        Assert.Contains("x-rincon-queue:RINCON_1234567890ABCDEF#0", handler.Requests[4].Body);
     }
 
     [Fact]
