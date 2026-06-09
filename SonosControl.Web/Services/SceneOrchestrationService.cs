@@ -343,6 +343,10 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 EnsureSourceUrl(scene);
                 await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, scene.SourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
                 return;
+            case SceneSourceType.YouTube:
+                EnsureSourceUrl(scene);
+                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, scene.SourceUrl!, cancellationToken)));
+                return;
             default:
                 throw new InvalidOperationException($"Unsupported source type '{scene.SourceType}'.");
         }

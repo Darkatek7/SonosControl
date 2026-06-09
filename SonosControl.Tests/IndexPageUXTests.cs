@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Bunit;
@@ -49,9 +50,10 @@ public class IndexPageUXTests
             .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
             .ToList();
         var tracks = new List<SpotifyObject> { new SpotifyObject { Name = "Focus Track", Url = "spotify:track:focus" } };
+        var videos = new List<YouTubeObject> { new YouTubeObject { Name = "Live Set", Url = "https://www.youtube.com/watch?v=abc123xyz00" } };
         var collections = new List<YouTubeMusicObject> { new YouTubeMusicObject { Name = "Workout Collection", Url = "https://music.youtube.com/playlist?list=workout" } };
 
-        using var resources = ConfigureServices(ctx, stations, tracks, collections);
+        using var resources = ConfigureServices(ctx, stations, tracks, collections, youTubeVideos: videos);
 
         var cut = ctx.RenderComponent<IndexPage>();
 
@@ -83,8 +85,15 @@ public class IndexPageUXTests
         cut.Find("#home-library-tab-youtube").Click();
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("Workout Collection", cut.Markup);
+            Assert.Contains("Live Set", cut.Markup);
             Assert.DoesNotContain("Focus Track", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Live Set']"));
+        });
+
+        cut.Find("#home-library-tab-youtube-music").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Workout Collection", cut.Markup);
             Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Workout Collection']"));
         });
     }
@@ -249,9 +258,11 @@ public class IndexPageUXTests
             Assert.Equal("true", cut.Find("#home-library-tab-stations").GetAttribute("aria-selected"));
             Assert.Equal("tab", cut.Find("#home-library-tab-spotify").GetAttribute("role"));
             Assert.Equal("tab", cut.Find("#home-library-tab-youtube").GetAttribute("role"));
+            Assert.Equal("tab", cut.Find("#home-library-tab-youtube-music").GetAttribute("role"));
             Assert.NotNull(cut.Find("input[aria-label='Search active library tab']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']"));
+            Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']"));
             Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']"));
         });
     }
@@ -415,13 +426,67 @@ public class IndexPageUXTests
         });
     }
 
+    [Fact]
+    public void IndexPage_PlayMediaItem_UsesSelectedSpeakerEvenWhenPersistedSpeakerDiffers()
+    {
+        using var ctx = new TestContext();
+
+        var settings = new SonosSettings
+        {
+            IP_Adress = "1.2.3.4",
+            Volume = 20,
+            MaxVolume = 80,
+            YouTubeCollections = new List<YouTubeObject>
+            {
+                new() { Name = "Live Set", Url = "https://www.youtube.com/watch?v=abc123xyz00" }
+            },
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { IpAddress = "1.2.3.4", Name = "Kitchen" },
+                new() { IpAddress = "1.2.3.5", Name = "Living Room" }
+            }
+        };
+
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            settings,
+            youTubeVideos: settings.YouTubeCollections);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotNull(cut.Find("#home-library-tab-youtube"));
+        });
+
+        cut.Find("#home-library-tab-youtube").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
+
+        var selectedSpeakerField = typeof(IndexPage).GetField("_selectedSpeakerIp", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(selectedSpeakerField);
+        selectedSpeakerField!.SetValue(cut.Instance, "1.2.3.5");
+
+        cut.Find("button[aria-label='Play Live Set']").Click();
+
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
+            "1.2.3.5",
+            "https://www.youtube.com/watch?v=abc123xyz00",
+            It.IsAny<CancellationToken>()), Times.Once);
+        resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Once);
+    }
+
     private sealed class TestResources : IDisposable
     {
         public ApplicationDbContext DbContext { get; }
+        public Mock<ISonosConnectorRepo> ConnectorRepo { get; }
 
-        public TestResources(ApplicationDbContext dbContext)
+        public TestResources(ApplicationDbContext dbContext, Mock<ISonosConnectorRepo> connectorRepo)
         {
             DbContext = dbContext;
+            ConnectorRepo = connectorRepo;
         }
 
         public void Dispose()
@@ -437,7 +502,8 @@ public class IndexPageUXTests
         List<YouTubeMusicObject> collections,
         SonosSettings? settingsOverride = null,
         IDeviceHealthSnapshotStore? healthStore = null,
-        string? connectorCurrentStation = null)
+        string? connectorCurrentStation = null,
+        List<YouTubeObject>? youTubeVideos = null)
     {
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
@@ -456,6 +522,7 @@ public class IndexPageUXTests
             MaxVolume = 80,
             Stations = stations,
             SpotifyTracks = tracks,
+            YouTubeCollections = youTubeVideos ?? new List<YouTubeObject>(),
             YouTubeMusicCollections = collections,
             Speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = "1.2.3.4", Name = "Living Room" } }
         };
@@ -492,6 +559,6 @@ public class IndexPageUXTests
             .Build();
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
-        return new TestResources(dbContext);
+        return new TestResources(dbContext, connectorRepo);
     }
 }

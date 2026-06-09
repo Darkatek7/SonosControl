@@ -207,11 +207,18 @@ else
                             <option value="">-- None --</option>
                             <option value="randomStation">Random Station</option>
                             <option value="randomSpotify">Random Spotify</option>
-                            <option value="randomYouTube">Random YouTube Music</option>
+                            <option value="randomYouTube">Random YouTube</option>
+                            <option value="randomYouTubeMusic">Random YouTube Music</option>
                             <optgroup label="Stations">
                                 @foreach (var station in _settings.Stations)
                                 {
                                     <option value="station:@station.Url">@station.Name</option>
+                                }
+                            </optgroup>
+                            <optgroup label="YouTube">
+                                @foreach (var video in _settings.YouTubeCollections)
+                                {
+                                    <option value="youtubevideo:@video.Url">@video.Name</option>
                                 }
                             </optgroup>
                             <optgroup label="Spotify">
@@ -223,7 +230,7 @@ else
                             <optgroup label="YouTube Music">
                                 @foreach (var collection in _settings.YouTubeMusicCollections)
                                 {
-                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                    <option value="youtubemusic:@collection.Url">@collection.Name</option>
                                 }
                             </optgroup>
                         </select>
@@ -332,11 +339,18 @@ else
                                             <option value="">-- None --</option>
                                             <option value="randomStation">Random Station</option>
                                             <option value="randomSpotify">Random Spotify</option>
-                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <option value="randomYouTube">Random YouTube</option>
+                                            <option value="randomYouTubeMusic">Random YouTube Music</option>
                                             <optgroup label="Stations">
                                                 @foreach (var station in _settings.Stations)
                                                 {
                                                     <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube">
+                                                @foreach (var video in _settings.YouTubeCollections)
+                                                {
+                                                    <option value="youtubevideo:@video.Url">@video.Name</option>
                                                 }
                                             </optgroup>
                                             <optgroup label="Spotify">
@@ -348,7 +362,7 @@ else
                                             <optgroup label="YouTube Music">
                                                 @foreach (var collection in _settings.YouTubeMusicCollections)
                                                 {
-                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                    <option value="youtubemusic:@collection.Url">@collection.Name</option>
                                                 }
                                             </optgroup>
                                         </select>
@@ -404,11 +418,18 @@ else
                                         <option value="">-- None --</option>
                                         <option value="randomStation">Random Station</option>
                                         <option value="randomSpotify">Random Spotify</option>
-                                        <option value="randomYouTube">Random YouTube Music</option>
+                                        <option value="randomYouTube">Random YouTube</option>
+                                        <option value="randomYouTubeMusic">Random YouTube Music</option>
                                         <optgroup label="Stations">
                                             @foreach (var station in _settings.Stations)
                                             {
                                                 <option value="station:@station.Url">@station.Name</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="YouTube">
+                                            @foreach (var video in _settings.YouTubeCollections)
+                                            {
+                                                <option value="youtubevideo:@video.Url">@video.Name</option>
                                             }
                                         </optgroup>
                                         <optgroup label="Spotify">
@@ -420,7 +441,7 @@ else
                                         <optgroup label="YouTube Music">
                                             @foreach (var collection in _settings.YouTubeMusicCollections)
                                             {
-                                                <option value="youtube:@collection.Url">@collection.Name</option>
+                                                <option value="youtubemusic:@collection.Url">@collection.Name</option>
                                             }
                                         </optgroup>
                                     </select>
@@ -529,11 +550,18 @@ else
                                             <option value="skip">-- Do not play --</option>
                                             <option value="randomStation">Random Station</option>
                                             <option value="randomSpotify">Random Spotify</option>
-                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <option value="randomYouTube">Random YouTube</option>
+                                            <option value="randomYouTubeMusic">Random YouTube Music</option>
                                             <optgroup label="Stations">
                                                 @foreach (var station in _settings.Stations)
                                                 {
                                                     <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube">
+                                                @foreach (var video in _settings.YouTubeCollections)
+                                                {
+                                                    <option value="youtubevideo:@video.Url">@video.Name</option>
                                                 }
                                             </optgroup>
                                             <optgroup label="Spotify">
@@ -545,7 +573,7 @@ else
                                             <optgroup label="YouTube Music">
                                                 @foreach (var collection in _settings.YouTubeMusicCollections)
                                                 {
-                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                    <option value="youtubemusic:@collection.Url">@collection.Name</option>
                                                 }
                                             </optgroup>
                                         </select>
@@ -625,11 +653,18 @@ else
                                             <option value="skip">-- Do not play --</option>
                                             <option value="randomStation">Random Station</option>
                                             <option value="randomSpotify">Random Spotify</option>
-                                            <option value="randomYouTube">Random YouTube Music</option>
+                                            <option value="randomYouTube">Random YouTube</option>
+                                            <option value="randomYouTubeMusic">Random YouTube Music</option>
                                             <optgroup label="Stations">
                                                 @foreach (var station in _settings.Stations)
                                                 {
                                                     <option value="station:@station.Url">@station.Name</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="YouTube">
+                                                @foreach (var video in _settings.YouTubeCollections)
+                                                {
+                                                    <option value="youtubevideo:@video.Url">@video.Name</option>
                                                 }
                                             </optgroup>
                                             <optgroup label="Spotify">
@@ -641,7 +676,7 @@ else
                                             <optgroup label="YouTube Music">
                                                 @foreach (var collection in _settings.YouTubeMusicCollections)
                                                 {
-                                                    <option value="youtube:@collection.Url">@collection.Name</option>
+                                                    <option value="youtubemusic:@collection.Url">@collection.Name</option>
                                                 }
                                             </optgroup>
                                         </select>
@@ -770,6 +805,7 @@ else
 
             _settings = await _uow.ISettingsRepo.GetSettings();
 
+            _settings.YouTubeCollections ??= new();
             _settings.YouTubeMusicCollections ??= new();
 
             _settings.HolidaySchedules ??= new();
@@ -880,9 +916,13 @@ else
 
                   return "randomSpotify";
 
-              if (_settings.AutoPlayRandomYouTubeMusic)
+              if (_settings.AutoPlayRandomYouTube)
 
                   return "randomYouTube";
+
+              if (_settings.AutoPlayRandomYouTubeMusic)
+
+                  return "randomYouTubeMusic";
 
               if (!string.IsNullOrEmpty(_settings.AutoPlayStationUrl))
 
@@ -892,9 +932,13 @@ else
 
                   return $"spotify:{_settings.AutoPlaySpotifyUrl}";
 
+              if (!string.IsNullOrEmpty(_settings.AutoPlayYouTubeUrl))
+
+                  return $"youtubevideo:{_settings.AutoPlayYouTubeUrl}";
+
               if (!string.IsNullOrEmpty(_settings.AutoPlayYouTubeMusicUrl))
 
-                  return $"youtube:{_settings.AutoPlayYouTubeMusicUrl}";
+                  return $"youtubemusic:{_settings.AutoPlayYouTubeMusicUrl}";
 
               return string.Empty;
 
@@ -908,11 +952,15 @@ else
 
               _settings.AutoPlayRandomSpotify = false;
 
+              _settings.AutoPlayRandomYouTube = false;
+
               _settings.AutoPlayRandomYouTubeMusic = false;
 
               _settings.AutoPlayStationUrl = null;
 
               _settings.AutoPlaySpotifyUrl = null;
+
+              _settings.AutoPlayYouTubeUrl = null;
 
               _settings.AutoPlayYouTubeMusicUrl = null;
 
@@ -930,6 +978,10 @@ else
 
                   else if (value == "randomYouTube")
 
+                      _settings.AutoPlayRandomYouTube = true;
+
+                  else if (value == "randomYouTubeMusic")
+
                       _settings.AutoPlayRandomYouTubeMusic = true;
 
                   else
@@ -946,7 +998,15 @@ else
 
                           _settings.AutoPlaySpotifyUrl = parts[1];
 
+                      else if (parts[0] == "youtubevideo")
+
+                          _settings.AutoPlayYouTubeUrl = parts[1];
+
                       else if (parts[0] == "youtube")
+
+                          _settings.AutoPlayYouTubeUrl = parts[1];
+
+                      else if (parts[0] == "youtubemusic")
 
                           _settings.AutoPlayYouTubeMusicUrl = parts[1];
 
@@ -1192,9 +1252,13 @@ else
 
             return "randomSpotify";
 
-        if (schedule.PlayRandomYouTubeMusic)
+        if (schedule.PlayRandomYouTube)
 
             return "randomYouTube";
+
+        if (schedule.PlayRandomYouTubeMusic)
+
+            return "randomYouTubeMusic";
 
         if (!string.IsNullOrEmpty(schedule.StationUrl))
 
@@ -1204,9 +1268,13 @@ else
 
             return $"spotify:{schedule.SpotifyUrl}";
 
+        if (!string.IsNullOrEmpty(schedule.YouTubeUrl))
+
+            return $"youtubevideo:{schedule.YouTubeUrl}";
+
         if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
 
-            return $"youtube:{schedule.YouTubeMusicUrl}";
+            return $"youtubemusic:{schedule.YouTubeMusicUrl}";
 
         return string.Empty;
 
@@ -1222,11 +1290,15 @@ else
 
         schedule.PlayRandomSpotify = false;
 
+        schedule.PlayRandomYouTube = false;
+
         schedule.PlayRandomYouTubeMusic = false;
 
         schedule.StationUrl = null;
 
         schedule.SpotifyUrl = null;
+
+        schedule.YouTubeUrl = null;
 
         schedule.YouTubeMusicUrl = null;
 
@@ -1282,6 +1354,10 @@ else
 
         else if (selection == "randomYouTube")
 
+            schedule.PlayRandomYouTube = true;
+
+        else if (selection == "randomYouTubeMusic")
+
             schedule.PlayRandomYouTubeMusic = true;
 
         else
@@ -1302,7 +1378,15 @@ else
 
                     schedule.SpotifyUrl = parts[1];
 
+                else if (parts[0] == "youtubevideo")
+
+                    schedule.YouTubeUrl = parts[1];
+
                 else if (parts[0] == "youtube")
+
+                    schedule.YouTubeUrl = parts[1];
+
+                else if (parts[0] == "youtubemusic")
 
                     schedule.YouTubeMusicUrl = parts[1];
 
@@ -1322,11 +1406,15 @@ else
 
                || schedule.PlayRandomSpotify
 
+               || schedule.PlayRandomYouTube
+
                || schedule.PlayRandomYouTubeMusic
 
                || !string.IsNullOrWhiteSpace(schedule.StationUrl)
 
                || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+
+               || !string.IsNullOrWhiteSpace(schedule.YouTubeUrl)
 
                || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
 

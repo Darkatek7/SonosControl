@@ -175,6 +175,14 @@ namespace SonosControl.Web.Services
                     else
                         playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
+                else if (schedule.PlayRandomYouTube)
+                {
+                    var url = GetRandomYouTubeUrl(settings);
+                    if (url != null)
+                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url);
+                    else
+                        playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
                 else if (schedule.PlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
@@ -185,6 +193,8 @@ namespace SonosControl.Web.Services
                 }
                 else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
+                else if (!string.IsNullOrEmpty(schedule.YouTubeUrl))
+                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, schedule.YouTubeUrl);
                 else if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
@@ -210,6 +220,14 @@ namespace SonosControl.Web.Services
                     else
                         playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
+                else if (settings.AutoPlayRandomYouTube)
+                {
+                    var url = GetRandomYouTubeUrl(settings);
+                    if (url != null)
+                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url);
+                    else
+                        playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
+                }
                 else if (settings.AutoPlayRandomStation)
                 {
                     var url = GetRandomStationUrl(settings);
@@ -220,6 +238,8 @@ namespace SonosControl.Web.Services
                 }
                 else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
+                else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeUrl))
+                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, settings.AutoPlayYouTubeUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeMusicUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
@@ -293,6 +313,15 @@ namespace SonosControl.Web.Services
 
             var index = Random.Shared.Next(settings.YouTubeMusicCollections.Count);
             return settings.YouTubeMusicCollections[index].Url;
+        }
+
+        private string? GetRandomYouTubeUrl(SonosSettings settings)
+        {
+            if (settings.YouTubeCollections == null || settings.YouTubeCollections.Count == 0)
+                return null;
+
+            var index = Random.Shared.Next(settings.YouTubeCollections.Count);
+            return settings.YouTubeCollections[index].Url;
         }
 
         private async Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> WaitUntilStartTime(IUnitOfWork uow, CancellationToken token)
@@ -451,8 +480,10 @@ namespace SonosControl.Web.Services
             return schedule.PlayRandomStation
                    || schedule.PlayRandomSpotify
                    || schedule.PlayRandomYouTubeMusic
+                   || schedule.PlayRandomYouTube
                    || !string.IsNullOrWhiteSpace(schedule.StationUrl)
                    || !string.IsNullOrWhiteSpace(schedule.SpotifyUrl)
+                   || !string.IsNullOrWhiteSpace(schedule.YouTubeUrl)
                    || !string.IsNullOrWhiteSpace(schedule.YouTubeMusicUrl);
         }
 

@@ -24,16 +24,37 @@ namespace SonosControl.DAL.Repos
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ISettingsRepo _settingsRepo;
+        private readonly IYouTubePlaybackService _youTubePlaybackService;
 
         public SonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
+            : this(httpClientFactory, settingsRepo, NullYouTubePlaybackService.Instance)
+        {
+        }
+
+        public SonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo, IYouTubePlaybackService youTubePlaybackService)
         {
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             _settingsRepo = settingsRepo ?? throw new ArgumentNullException(nameof(settingsRepo));
+            _youTubePlaybackService = youTubePlaybackService ?? throw new ArgumentNullException(nameof(youTubePlaybackService));
         }
 
         private HttpClient CreateClient()
         {
             return _httpClientFactory.CreateClient(nameof(SonosConnectorRepo));
+        }
+
+        private sealed class NullYouTubePlaybackService : IYouTubePlaybackService
+        {
+            public static NullYouTubePlaybackService Instance { get; } = new();
+
+            public Task<YouTubePlaybackSession> PreparePlaybackAsync(string sourceUrl, CancellationToken cancellationToken = default)
+                => throw new InvalidOperationException("YouTube playback service is not configured.");
+
+            public Task<YouTubePlaybackOpenResult?> OpenPlaybackAsync(string sessionId, CancellationToken cancellationToken = default)
+                => Task.FromResult<YouTubePlaybackOpenResult?>(null);
+
+            public Task CleanupExpiredSessionsAsync(CancellationToken cancellationToken = default)
+                => Task.CompletedTask;
         }
         public async Task PausePlaying(string ip)
         {
@@ -623,6 +644,19 @@ namespace SonosControl.DAL.Repos
 
             cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
+        }
+
+        public async Task PlayYouTubeAudioAsync(string ip, string youtubeUrl, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var session = await _youTubePlaybackService.PreparePlaybackAsync(youtubeUrl, cancellationToken);
+            if (string.IsNullOrWhiteSpace(session.StreamUrl))
+            {
+                throw new InvalidOperationException("YouTube playback session did not produce a stream URL.");
+            }
+
+            await SetTuneInStationAsync(ip, session.StreamUrl, cancellationToken);
         }
 
 

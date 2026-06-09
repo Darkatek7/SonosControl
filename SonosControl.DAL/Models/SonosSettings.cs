@@ -35,11 +35,15 @@ namespace SonosControl.DAL.Models
             new YouTubeMusicObject { Name = "Energize", Url = "https://music.youtube.com/watch?v=dQw4w9WgXcQ" }
         };
 
+        public List<YouTubeObject> YouTubeCollections { get; set; } = new();
+
         public string? AutoPlayStationUrl { get; set; }
         public string? AutoPlaySpotifyUrl { get; set; }
+        public string? AutoPlayYouTubeUrl { get; set; }
         public string? AutoPlayYouTubeMusicUrl { get; set; }
         public bool AutoPlayRandomStation { get; set; }
         public bool AutoPlayRandomSpotify { get; set; }
+        public bool AutoPlayRandomYouTube { get; set; }
         public bool AutoPlayRandomYouTubeMusic { get; set; }
 
         public Dictionary<DayOfWeek, DaySchedule> DailySchedules { get; set; } = new();

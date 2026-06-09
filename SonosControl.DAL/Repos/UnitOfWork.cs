@@ -9,11 +9,11 @@ namespace SonosControl.DAL.Repos
         private readonly IHolidayRepo _holidayRepo;
         private readonly ISonosConnectorRepo _sonosConnectorRepo;
 
-        public UnitOfWork(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo)
+        public UnitOfWork(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo, IYouTubePlaybackService youTubePlaybackService)
         {
             _settingsRepo = settingsRepo;
             _holidayRepo = new HolidayRepo(httpClientFactory);
-            _sonosConnectorRepo = new SonosConnectorRepo(httpClientFactory, settingsRepo);
+            _sonosConnectorRepo = new SonosConnectorRepo(httpClientFactory, settingsRepo, youTubePlaybackService);
         }
 
         public ISettingsRepo ISettingsRepo => _settingsRepo;
@@ -21,4 +21,3 @@ namespace SonosControl.DAL.Repos
         public ISonosConnectorRepo ISonosConnectorRepo => _sonosConnectorRepo;
     }
 }
-
