@@ -292,6 +292,8 @@ public sealed class YouTubeToolRunner : IYouTubeToolRunner
         var directAudioUrl = root.TryGetProperty("url", out var urlElement) ? urlElement.GetString() : null;
         var title = root.TryGetProperty("title", out var titleElement) ? titleElement.GetString() : null;
         var webpageUrl = root.TryGetProperty("webpage_url", out var webpageUrlElement) ? webpageUrlElement.GetString() : null;
+        var resolvedTitle = string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim();
+        var artist = GetFirstNonEmptyString(root, "uploader", "channel");
 
         if (string.IsNullOrWhiteSpace(directAudioUrl))
         {
@@ -301,12 +303,10 @@ public sealed class YouTubeToolRunner : IYouTubeToolRunner
         return new ResolvedYouTubeSourceItem(
             string.IsNullOrWhiteSpace(webpageUrl) ? normalizedUrl : webpageUrl.Trim(),
             directAudioUrl.Trim(),
-            string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim(),
-            GetFirstNonEmptyString(root, "uploader", "channel"),
+            resolvedTitle,
+            artist,
             GetThumbnailUrl(root),
-            YouTubeQueueMetadataBuilder.FormatStreamContent(
-                string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim(),
-                GetFirstNonEmptyString(root, "uploader", "channel")));
+            YouTubeQueueMetadataBuilder.FormatStreamContent(resolvedTitle, artist));
     }
 
     private static string? GetFirstNonEmptyString(JsonElement root, params string[] propertyNames)
@@ -1056,58 +1056,6 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
 
     private static string GetSessionUrlPrefix(string sessionId)
         => $"/api/youtube-audio/{sessionId}/";
-
-    private static string? GetFirstNonEmptyString(JsonElement root, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            if (!root.TryGetProperty(propertyName, out var element))
-            {
-                continue;
-            }
-
-            var value = element.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value.Trim();
-            }
-        }
-
-        return null;
-    }
-
-    private static string? GetThumbnailUrl(JsonElement root)
-    {
-        if (root.TryGetProperty("thumbnail", out var thumbnailElement))
-        {
-            var thumbnail = thumbnailElement.GetString();
-            if (!string.IsNullOrWhiteSpace(thumbnail))
-            {
-                return thumbnail.Trim();
-            }
-        }
-
-        if (!root.TryGetProperty("thumbnails", out var thumbnailsElement) || thumbnailsElement.ValueKind != JsonValueKind.Array)
-        {
-            return null;
-        }
-
-        foreach (var thumbnail in thumbnailsElement.EnumerateArray().Reverse())
-        {
-            if (!thumbnail.TryGetProperty("url", out var urlElement))
-            {
-                continue;
-            }
-
-            var url = urlElement.GetString();
-            if (!string.IsNullOrWhiteSpace(url))
-            {
-                return url.Trim();
-            }
-        }
-
-        return null;
-    }
 
     private static void TryDeleteTempFile(string? path)
     {
