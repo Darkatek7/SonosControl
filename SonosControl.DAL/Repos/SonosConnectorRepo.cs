@@ -57,6 +57,9 @@ namespace SonosControl.DAL.Repos
             public Task ActivateSessionAsync(string sessionId, string speakerIp, CancellationToken cancellationToken = default)
                 => Task.CompletedTask;
 
+            public Task<YouTubePlaybackQueueItem?> GetQueueItemAsync(string sessionId, int itemIndex, CancellationToken cancellationToken = default)
+                => Task.FromResult<YouTubePlaybackQueueItem?>(null);
+
             public Task<YouTubePlaybackOpenResult?> OpenPlaybackAsync(string sessionId, int itemIndex = 0, CancellationToken cancellationToken = default)
                 => Task.FromResult<YouTubePlaybackOpenResult?>(null);
 
@@ -200,6 +203,7 @@ namespace SonosControl.DAL.Repos
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
+                var trackNumber = TryParseTrackNumber(xml);
 
                 // Extract TrackMetaData block
                 var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
@@ -262,6 +266,7 @@ namespace SonosControl.DAL.Repos
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
+                var trackNumber = TryParseTrackNumber(xml);
 
                 // Extract <TrackMetaData> content
                 var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
@@ -276,6 +281,8 @@ namespace SonosControl.DAL.Repos
                     var albumMatch = Regex.Match(metadataXml, @"<upnp:album>(.*?)</upnp:album>");
                     var streamContentMatch = Regex.Match(metadataXml, @"<r:streamContent>(.*?)</r:streamContent>");
                     var albumArtMatch = Regex.Match(metadataXml, @"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
+                    var trackUriMatch = Regex.Match(xml, @"<TrackURI>(.*?)</TrackURI>", RegexOptions.Singleline);
+                    var trackUri = trackUriMatch.Success ? DecodeMetadataText(trackUriMatch.Groups[1].Value) : null;
 
                     var trackInfo = new SonosTrackInfo
                     {
@@ -304,6 +311,18 @@ namespace SonosControl.DAL.Repos
                         }
                     }
 
+                    var youTubeSessionFallback = await TryGetYouTubeSessionTrackInfoFallbackAsync(trackInfo, trackUri, cancellationToken);
+                    if (youTubeSessionFallback is not null)
+                    {
+                        return youTubeSessionFallback;
+                    }
+
+                    var queueFallback = await TryGetQueueTrackInfoFallbackAsync(ip, trackInfo, trackNumber, cancellationToken);
+                    if (queueFallback is not null)
+                    {
+                        return queueFallback;
+                    }
+
                     return trackInfo;
                 }
 
@@ -319,6 +338,100 @@ namespace SonosControl.DAL.Repos
         private static string DecodeMetadataText(string? value)
         {
             return WebUtility.HtmlDecode(value)?.Trim() ?? string.Empty;
+        }
+
+        private async Task<SonosTrackInfo?> TryGetYouTubeSessionTrackInfoFallbackAsync(
+            SonosTrackInfo currentInfo,
+            string? resourceUri,
+            CancellationToken cancellationToken)
+        {
+            if (currentInfo.IsValidMetadata()
+                && !string.Equals(currentInfo.Title, "0", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(currentInfo.Artist, "Unknown Artist", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (!TryParseYouTubePlaybackUri(resourceUri, out var sessionId, out var itemIndex))
+            {
+                return null;
+            }
+
+            var queueItem = await _youTubePlaybackService.GetQueueItemAsync(sessionId, itemIndex, cancellationToken);
+            if (queueItem is null)
+            {
+                return null;
+            }
+
+            var title = string.IsNullOrWhiteSpace(queueItem.Title) ? currentInfo.Title : queueItem.Title;
+            var artist = string.IsNullOrWhiteSpace(queueItem.Artist) ? currentInfo.Artist : queueItem.Artist;
+
+            return new SonosTrackInfo
+            {
+                Title = title,
+                Artist = artist,
+                Album = currentInfo.Album,
+                AlbumArtUri = string.IsNullOrWhiteSpace(queueItem.AlbumArtUrl) ? currentInfo.AlbumArtUri : queueItem.AlbumArtUrl,
+                StreamContent = string.IsNullOrWhiteSpace(queueItem.StreamContent)
+                    ? YouTubeQueueMetadataBuilder.FormatStreamContent(title, artist)
+                    : queueItem.StreamContent
+            };
+        }
+
+        private async Task<SonosTrackInfo?> TryGetQueueTrackInfoFallbackAsync(
+            string ip,
+            SonosTrackInfo currentInfo,
+            int? trackNumber,
+            CancellationToken cancellationToken)
+        {
+            if (currentInfo.IsValidMetadata()
+                && !string.Equals(currentInfo.Title, "0", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var currentStation = await GetCurrentStationAsync(ip, cancellationToken);
+            if (!currentStation.Contains("x-rincon-queue:", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var queueIndex = Math.Max(0, (trackNumber ?? 1) - 1);
+            var queuePage = await GetQueue(ip, queueIndex, 1, cancellationToken);
+            var queueItem = queuePage.Items.FirstOrDefault();
+            if (queueItem is null)
+            {
+                return null;
+            }
+
+            var title = string.IsNullOrWhiteSpace(queueItem.Title) ? currentInfo.Title : queueItem.Title;
+            var artist = string.IsNullOrWhiteSpace(queueItem.Artist) ? currentInfo.Artist : queueItem.Artist;
+            var album = string.IsNullOrWhiteSpace(queueItem.Album) ? currentInfo.Album : queueItem.Album;
+
+            return new SonosTrackInfo
+            {
+                Title = title,
+                Artist = artist,
+                Album = album,
+                AlbumArtUri = currentInfo.AlbumArtUri,
+                StreamContent = YouTubeQueueMetadataBuilder.FormatStreamContent(title, artist)
+            };
+        }
+
+        private static int? TryParseTrackNumber(string xml)
+        {
+            try
+            {
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+                return int.TryParse(doc.GetElementsByTagName("Track").Item(0)?.InnerText, out var trackNumber)
+                    ? trackNumber
+                    : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default)
@@ -720,6 +833,7 @@ namespace SonosControl.DAL.Repos
             }
 
             await SetQueueTransportAsync(ip, cancellationToken);
+            await SeekToTrackAsync(ip, 1, cancellationToken);
             await _youTubePlaybackService.ActivateSessionAsync(session.SessionId, ip, cancellationToken);
             await StartPlaying(ip);
         }
@@ -852,6 +966,33 @@ namespace SonosControl.DAL.Repos
             response.EnsureSuccessStatusCode();
         }
 
+        private async Task SeekToTrackAsync(string ip, int trackNumber, CancellationToken cancellationToken)
+        {
+            if (trackNumber <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(trackNumber), "Track number must be >= 1.");
+            }
+
+            var soapRequest = $@"
+                <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                            s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                  <s:Body>
+                    <u:Seek xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                      <InstanceID>0</InstanceID>
+                      <Unit>TRACK_NR</Unit>
+                      <Target>{trackNumber}</Target>
+                    </u:Seek>
+                  </s:Body>
+                </s:Envelope>";
+
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#Seek\"");
+
+            var client = CreateClient();
+            var response = await client.PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
 
         public async Task<SonosQueuePage> GetQueue(string ip, int startIndex = 0, int count = 100, CancellationToken cancellationToken = default)
         {
@@ -892,7 +1033,8 @@ namespace SonosControl.DAL.Repos
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                return ParseQueueResponse(responseBody, startIndex, count);
+                var queuePage = ParseQueueResponse(responseBody, startIndex, count);
+                return await EnrichQueuePageWithYouTubeSessionMetadataAsync(queuePage, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -903,6 +1045,48 @@ namespace SonosControl.DAL.Repos
                 Console.WriteLine($"Error fetching queue: {ex.Message}");
                 return new SonosQueuePage(Array.Empty<SonosQueueItem>(), startIndex, 0, startIndex);
             }
+        }
+
+        private async Task<SonosQueuePage> EnrichQueuePageWithYouTubeSessionMetadataAsync(SonosQueuePage queuePage, CancellationToken cancellationToken)
+        {
+            if (queuePage.Items.Count == 0)
+            {
+                return queuePage;
+            }
+
+            var enrichedItems = new List<SonosQueueItem>(queuePage.Items.Count);
+            foreach (var item in queuePage.Items)
+            {
+                if (!TryParseYouTubePlaybackUri(item.ResourceUri, out var sessionId, out var itemIndex))
+                {
+                    enrichedItems.Add(item);
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(item.Title)
+                    && !string.Equals(item.Title, "0", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(item.Artist))
+                {
+                    enrichedItems.Add(item);
+                    continue;
+                }
+
+                var queueItem = await _youTubePlaybackService.GetQueueItemAsync(sessionId, itemIndex, cancellationToken);
+                if (queueItem is null)
+                {
+                    enrichedItems.Add(item);
+                    continue;
+                }
+
+                enrichedItems.Add(new SonosQueueItem(
+                    item.Index,
+                    string.IsNullOrWhiteSpace(queueItem.Title) ? item.Title : queueItem.Title,
+                    string.IsNullOrWhiteSpace(queueItem.Artist) ? item.Artist : queueItem.Artist,
+                    item.Album,
+                    item.ResourceUri));
+            }
+
+            return new SonosQueuePage(enrichedItems, queuePage.StartIndex, queuePage.NumberReturned, queuePage.TotalMatches);
         }
 
         private static SonosQueuePage ParseQueueResponse(string responseBody, int startIndex, int requestedCount)
@@ -932,18 +1116,28 @@ namespace SonosControl.DAL.Repos
                     return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
                 }
 
-                var decoded = WebUtility.HtmlDecode(resultElement.Value);
-                if (string.IsNullOrWhiteSpace(decoded))
-                {
-                    decoded = resultElement.Value;
-                }
-
-                if (string.IsNullOrWhiteSpace(decoded))
+                var didlPayload = resultElement.Value;
+                if (string.IsNullOrWhiteSpace(didlPayload))
                 {
                     return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
                 }
 
-                var didl = XDocument.Parse(decoded);
+                XDocument didl;
+                try
+                {
+                    didl = XDocument.Parse(didlPayload);
+                }
+                catch (XmlException)
+                {
+                    var decoded = WebUtility.HtmlDecode(didlPayload);
+                    if (string.IsNullOrWhiteSpace(decoded))
+                    {
+                        return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
+                    }
+
+                    didl = XDocument.Parse(decoded);
+                }
+
                 var itemElements = didl.Root?
                     .Elements()
                     .Where(e => e.Name.LocalName == "item")
@@ -1015,6 +1209,30 @@ namespace SonosControl.DAL.Repos
             }
 
             return new SonosQueueItem(index, title.Trim(), artist?.Trim(), album?.Trim(), resourceUri?.Trim());
+        }
+
+        private static bool TryParseYouTubePlaybackUri(string? resourceUri, out string sessionId, out int itemIndex)
+        {
+            sessionId = string.Empty;
+            itemIndex = 0;
+
+            if (string.IsNullOrWhiteSpace(resourceUri))
+            {
+                return false;
+            }
+
+            var match = Regex.Match(
+                resourceUri,
+                @"/api/youtube-audio/(?<sessionId>[A-Za-z0-9]+)/(?<itemIndex>\d+)",
+                RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                return false;
+            }
+
+            sessionId = match.Groups["sessionId"].Value;
+            return int.TryParse(match.Groups["itemIndex"].Value, out itemIndex);
         }
 
         private static void ApplyStreamContentFallback(XElement element, ref string title, ref string? artist)

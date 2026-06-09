@@ -733,6 +733,25 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
         return Task.CompletedTask;
     }
 
+    public Task<YouTubePlaybackQueueItem?> GetQueueItemAsync(string sessionId, int itemIndex, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            return Task.FromResult<YouTubePlaybackQueueItem?>(null);
+        }
+
+        var item = session.Items.FirstOrDefault(candidate => candidate.Index == itemIndex);
+        if (item is null)
+        {
+            return Task.FromResult<YouTubePlaybackQueueItem?>(null);
+        }
+
+        session.LastAccessUtc = _timeProvider.GetUtcNow();
+        return Task.FromResult<YouTubePlaybackQueueItem?>(ToQueueItem(sessionId, item));
+    }
+
     public async Task<YouTubePlaybackOpenResult?> OpenPlaybackAsync(string sessionId, int itemIndex = 0, CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
