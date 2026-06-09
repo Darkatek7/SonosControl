@@ -211,6 +211,7 @@ namespace SonosControl.DAL.Repos
                     // Extract the title from TrackMetaData
                     var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
                     var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
+                    var artistMatch = Regex.Match(metadataXml, @"<upnp:artist>(.*?)</upnp:artist>");
 
                     var title = titleMatch.Success ? DecodeMetadataText(titleMatch.Groups[1].Value) : "Unknown Title";
                     var artist = creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "Unknown Artist";
@@ -271,6 +272,7 @@ namespace SonosControl.DAL.Repos
 
                     var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
                     var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
+                    var artistMatch = Regex.Match(metadataXml, @"<upnp:artist>(.*?)</upnp:artist>");
                     var albumMatch = Regex.Match(metadataXml, @"<upnp:album>(.*?)</upnp:album>");
                     var streamContentMatch = Regex.Match(metadataXml, @"<r:streamContent>(.*?)</r:streamContent>");
                     var albumArtMatch = Regex.Match(metadataXml, @"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
@@ -278,7 +280,9 @@ namespace SonosControl.DAL.Repos
                     var trackInfo = new SonosTrackInfo
                     {
                         Title = titleMatch.Success ? DecodeMetadataText(titleMatch.Groups[1].Value) : "",
-                        Artist = creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "",
+                        Artist = artistMatch.Success
+                            ? DecodeMetadataText(artistMatch.Groups[1].Value)
+                            : creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "",
                         Album = albumMatch.Success ? DecodeMetadataText(albumMatch.Groups[1].Value) : "",
                         StreamContent = streamContentMatch.Success ? DecodeMetadataText(streamContentMatch.Groups[1].Value) : null
                     };
@@ -712,7 +716,7 @@ namespace SonosControl.DAL.Repos
             await ClearQueue(ip, cancellationToken);
             foreach (var item in session.QueueItems)
             {
-                await AddUriToQueue(ip, item.StreamUrl, CreateYouTubeQueueMetadata(item.Title, item.StreamUrl), false, cancellationToken);
+                await AddUriToQueue(ip, item.StreamUrl, YouTubeQueueMetadataBuilder.Build(item), false, cancellationToken);
             }
 
             await SetQueueTransportAsync(ip, cancellationToken);
@@ -817,22 +821,6 @@ namespace SonosControl.DAL.Repos
             var client = CreateClient();
             var response = await client.PostAsync(url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
-        }
-
-        private static string CreateYouTubeQueueMetadata(string title, string uri)
-        {
-            var safeTitle = string.IsNullOrWhiteSpace(title) ? "YouTube Audio" : title.Trim();
-            var safeUri = uri.Trim();
-
-            return $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
-                                   xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
-                                   xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                        <item id=""0"" parentID=""-1"" restricted=""true"">
-                            <dc:title>{safeTitle}</dc:title>
-                            <upnp:class>object.item.audioItem.musicTrack</upnp:class>
-                            <res protocolInfo=""http-get:*:audio/mpeg:*"">{safeUri}</res>
-                        </item>
-                     </DIDL-Lite>";
         }
 
         private async Task SetQueueTransportAsync(string ip, CancellationToken cancellationToken)

@@ -27,9 +27,9 @@ public class YouTubePlaybackServiceTests
                     "Playlist",
                     new List<ResolvedYouTubeSourceItem>
                     {
-                        new("https://www.youtube.com/watch?v=track1", "https://audio.example/1", "Track 1"),
-                        new("https://www.youtube.com/watch?v=track2", "https://audio.example/2", "Track 2"),
-                        new("https://www.youtube.com/watch?v=track3", "https://audio.example/3", "Track 3")
+                        CreateResolvedItem("track1", "Track 1"),
+                        CreateResolvedItem("track2", "Track 2"),
+                        CreateResolvedItem("track3", "Track 3")
                     },
                     mode ?? YouTubePlaybackMode.PlaylistShuffle,
                     true)));
@@ -40,6 +40,8 @@ public class YouTubePlaybackServiceTests
             Assert.All(session.QueueItems, item => Assert.Contains($"/api/youtube-audio/{session.SessionId}/", item.StreamUrl));
             Assert.Equal(YouTubePlaybackMode.PlaylistShuffle, session.PlaybackMode);
             Assert.True(session.UsesTempFile);
+            Assert.All(session.QueueItems, item => Assert.Equal("Test Channel", item.Artist));
+            Assert.All(session.QueueItems, item => Assert.Equal($"Test Channel - {item.Title}", item.StreamContent));
         }
         finally
         {
@@ -58,10 +60,10 @@ public class YouTubePlaybackServiceTests
             {
                 var items = new List<ResolvedYouTubeSourceItem>
                 {
-                    new("https://www.youtube.com/watch?v=track1", "https://audio.example/1", "Track 1"),
-                    new("https://www.youtube.com/watch?v=track2", "https://audio.example/2", "Track 2"),
-                    new("https://www.youtube.com/watch?v=track3", "https://audio.example/3", "Track 3"),
-                    new("https://www.youtube.com/watch?v=track4", "https://audio.example/4", "Track 4")
+                    CreateResolvedItem("track1", "Track 1"),
+                    CreateResolvedItem("track2", "Track 2"),
+                    CreateResolvedItem("track3", "Track 3"),
+                    CreateResolvedItem("track4", "Track 4")
                 };
 
                 return new ResolvedYouTubeQueue(
@@ -126,10 +128,7 @@ public class YouTubePlaybackServiceTests
                 "https://www.youtube.com/playlist?list=PL123",
                 "Playlist",
                 Enumerable.Range(1, Math.Max(4, preferredQueueLength))
-                    .Select(index => new ResolvedYouTubeSourceItem(
-                        $"https://www.youtube.com/watch?v=track{index}",
-                        $"https://audio.example/{index}",
-                        $"Track {index}"))
+                    .Select(index => CreateResolvedItem($"track{index}", $"Track {index}"))
                     .ToList(),
                 YouTubePlaybackMode.PlaylistOrdered,
                 true));
@@ -180,8 +179,8 @@ public class YouTubePlaybackServiceTests
                 "Playlist",
                 new List<ResolvedYouTubeSourceItem>
                 {
-                    new("https://www.youtube.com/watch?v=track1", "https://audio.example/1", "Track 1"),
-                    new("https://www.youtube.com/watch?v=track2", "https://audio.example/2", "Track 2")
+                    CreateResolvedItem("track1", "Track 1"),
+                    CreateResolvedItem("track2", "Track 2")
                 },
                 YouTubePlaybackMode.PlaylistOrdered,
                 true));
@@ -269,6 +268,15 @@ public class YouTubePlaybackServiceTests
             Directory.Delete(tempRoot, recursive: true);
         }
     }
+
+    private static ResolvedYouTubeSourceItem CreateResolvedItem(string id, string title)
+        => new(
+            $"https://www.youtube.com/watch?v={id}",
+            $"https://audio.example/{id}",
+            title,
+            "Test Channel",
+            $"https://images.example/{id}.jpg",
+            $"Test Channel - {title}");
 
     private sealed class FakeYouTubeToolRunner : IYouTubeToolRunner
     {

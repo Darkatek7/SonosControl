@@ -1343,6 +1343,40 @@ h3[tabindex="-1"]:focus {
     min-width: 0;
 }
 
+.home-ops-youtube-toolbar {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+}
+
+.home-ops-youtube-toolbar__header {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.home-ops-youtube-toolbar__label {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.home-ops-youtube-toolbar__modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.home-ops-youtube-toolbar__modes .btn {
+    flex: 1 1 8rem;
+}
+
 .home-ops-library-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1410,6 +1444,11 @@ h3[tabindex="-1"]:focus {
 
     .home-ops-source-toolbar {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .home-ops-youtube-toolbar__header {
+        grid-template-columns: auto minmax(0, 18rem);
+        align-items: center;
     }
 }
 
