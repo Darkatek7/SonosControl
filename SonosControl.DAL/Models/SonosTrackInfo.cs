@@ -19,6 +19,11 @@ namespace SonosControl.DAL.Models
             {
                 var title = string.IsNullOrWhiteSpace(Title) ? "Unknown Title" : Title;
                 var artist = string.IsNullOrWhiteSpace(Artist) ? "Unknown Artist" : Artist;
+                if (YouTubeQueueMetadataBuilder.StartsWithArtist(title, artist))
+                {
+                    return title;
+                }
+
                 return $"{title} — {artist}";
             }
 

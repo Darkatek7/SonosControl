@@ -52,6 +52,26 @@ public class IndexQueueTests
     }
 
     [Fact]
+    public void QueuePanel_DoesNotDuplicateArtist_WhenTitleAlreadyContainsArtistPrefix()
+    {
+        using var ctx = new TestContext();
+        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        using var cut = ctx.RenderComponent<QueuePanel>(parameters => parameters
+            .Add(p => p.Items, new[]
+            {
+                new SonosQueueItem(0, "Madison Beer - lovergirl (Official Music Video)", "Madison Beer", null, null)
+            })
+            .Add(p => p.RefreshIntervals, new[] { 15, 30 })
+            .Add(p => p.RefreshIntervalSeconds, 15)
+            .Add(p => p.FormatItem, item => item.DisplayTitle));
+
+        var items = cut.FindAll(".queue-panel__item");
+        Assert.Single(items);
+        Assert.DoesNotContain("Madison Beer – Madison Beer -", items[0].TextContent);
+        Assert.Contains("Madison Beer - lovergirl", items[0].TextContent);
+    }
+
+    [Fact]
     public void QueuePanel_ShowsEmptyStateWhenQueueEmpty()
     {
         using var ctx = new TestContext();

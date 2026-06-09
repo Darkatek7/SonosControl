@@ -139,6 +139,7 @@ namespace SonosControl.Web.Services
                 mediaType = "Track";
                 // Refine media type if possible
                 if (stationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase)) mediaType = "Spotify";
+                else if (stationUrl.Contains("/api/youtube-audio/", StringComparison.OrdinalIgnoreCase)) mediaType = "YouTube";
                 else if (stationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase)) mediaType = "YouTube Music";
 
                 mediaSignature = $"{trackName}|{artist}|{album}";
@@ -150,6 +151,11 @@ namespace SonosControl.Web.Services
                 {
                     mediaType = "Spotify";
                     trackName = "Spotify Connect";
+                }
+                else if (cleanStationUrl.Contains("/api/youtube-audio/", StringComparison.OrdinalIgnoreCase))
+                {
+                    mediaType = "YouTube";
+                    trackName = "YouTube";
                 }
                 else if (cleanStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
                 {

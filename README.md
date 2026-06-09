@@ -10,29 +10,35 @@ SonosControl is a deployer-friendly Blazor control center for automating Sonos p
 ### 1. Run with Docker Compose
 
 ```yaml
-version: "3.4"
 services:
   sonos:
-    image: darkatek7/sonoscontrol:latest
-    container_name: sonos
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sonoscontrol:local
+    container_name: sonoscontrol
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      - TZ=Europe/Vienna
-      - ADMIN_USERNAME=admin
-      - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=ChangeMe123!
+      TZ: Europe/Vienna
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ChangeMe123!
+      PLAYBACK_PUBLIC_BASE_URL: http://192.168.1.50:8080
     volumes:
       - ./Data:/app/Data
-      - ./DataProtectionKeys:/root/.aspnet/DataProtection-Keys
+      - ./DataProtectionKeys:/app/DataProtectionKeys
+      - ./artifacts:/app/artifacts
 ```
 
 ```bash
-docker compose up -d
+cp .env.example .env
+docker compose up -d --build
 ```
 
 Open `http://localhost:8080` and sign in with the seeded admin account.
+Set `PLAYBACK_PUBLIC_BASE_URL` to the LAN URL that your Sonos devices can reach. `localhost` does not work for YouTube audio streaming to Sonos.
 
 ### 2. Run locally with .NET 10
 
@@ -67,13 +73,15 @@ Then open `http://localhost:5107`.
 ## Feature Highlights
 - Real-time Sonos dashboard with playback, queue, group, and volume controls.
 - Day-based automation with start/stop windows and optional random media selection.
-- TuneIn and Spotify source management from a single UI.
+- TuneIn, Spotify, YouTube, and YouTube Music source management from a single UI.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
 - Searchable audit logs for operational traceability.
 - Health and metrics endpoints (`/healthz`, `/metricsz`) for basic monitoring.
+- Docker image includes `ffmpeg` and `yt-dlp` for YouTube audio playback without extra sidecars.
 
 ## Docs Index
 - [Deploy and Config Guide](docs/deploy-and-config.md)
+- [Docker Operations](docs/docker-operations.md)
 - [Operations and Observability](docs/operations-and-observability.md)
 - [Testing and Troubleshooting](docs/testing-and-troubleshooting.md)
 - [Warning triage notes](docs/quality-warning-triage.md)

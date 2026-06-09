@@ -6,5 +6,7 @@ public sealed record SonosQueueItem(int Index, string Title, string? Artist, str
 {
     public string DisplayTitle => string.IsNullOrWhiteSpace(Artist)
         ? Title
-        : $"{Artist} – {Title}";
+        : YouTubeQueueMetadataBuilder.StartsWithArtist(Title, Artist)
+            ? Title
+            : $"{Artist} – {Title}";
 }

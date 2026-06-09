@@ -28,7 +28,7 @@
                             <input type="number" min="1" class="form-control" @bind-value="TimerMinutesValue" @bind-value:event="oninput" @ref="_minutesInputRef" />
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Station or Spotify</label>
+                            <label class="form-label">Playback source</label>
                             <select class="form-select" @bind="SelectedSourceValue" aria-label="Timer source selection">
                                 <option value="">-- Select Source --</option>
                                 @if (Stations?.Count > 0)
@@ -49,12 +49,21 @@
                                         }
                                     </optgroup>
                                 }
+                                @if (YouTubeVideos?.Count > 0)
+                                {
+                                    <optgroup label="YouTube">
+                                        @foreach (var entry in YouTubeVideos)
+                                        {
+                                            <option value="youtubevideo|@entry.Url">@Truncate(entry.Name)</option>
+                                        }
+                                    </optgroup>
+                                }
                                 @if (YouTubeCollections?.Count > 0)
                                 {
                                     <optgroup label="YouTube Music">
                                         @foreach (var entry in YouTubeCollections)
                                         {
-                                            <option value="youtube|@entry.Url">@Truncate(entry.Name)</option>
+                                            <option value="youtubemusic|@entry.Url">@Truncate(entry.Name)</option>
                                         }
                                     </optgroup>
                                 }
@@ -99,6 +108,9 @@
 
     [Parameter]
     public IReadOnlyList<SpotifyObject>? SpotifyTracks { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<YouTubeObject>? YouTubeVideos { get; set; }
 
     [Parameter]
     public IReadOnlyList<YouTubeMusicObject>? YouTubeCollections { get; set; }

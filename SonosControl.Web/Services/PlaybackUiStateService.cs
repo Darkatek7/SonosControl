@@ -50,6 +50,7 @@ public sealed class PlaybackUiStateService
     public async Task InitializeAsync()
     {
         _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.YouTubeCollections ??= new List<YouTubeObject>();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
         var configuredIp = _settings.IP_Adress;
@@ -273,6 +274,7 @@ public sealed class PlaybackUiStateService
         var allSources = (_settings?.Stations ?? new List<TuneInStation>())
             .Select(s => (s.Name, s.Url))
             .Concat((_settings?.SpotifyTracks ?? new List<SpotifyObject>()).Select(s => (s.Name, s.Url)))
+            .Concat((_settings?.YouTubeCollections ?? new List<YouTubeObject>()).Select(s => (s.Name, s.Url)))
             .Concat((_settings?.YouTubeMusicCollections ?? new List<YouTubeMusicObject>()).Select(s => (s.Name, s.Url)));
 
         foreach (var source in allSources)

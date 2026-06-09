@@ -6,6 +6,7 @@ This guide covers production and local deployment for SonosControl, plus the set
 - Docker (for container deployment) or .NET 10 SDK (for local run)
 - A reachable Sonos speaker IP
 - Admin seed credentials (`ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`)
+- For YouTube playback, a LAN-reachable app URL that Sonos devices can open
 
 ## Docker Deployment
 1. Create a folder with a `docker-compose.yml`.
@@ -13,29 +14,37 @@ This guide covers production and local deployment for SonosControl, plus the set
 3. Start the container.
 
 ```yaml
-version: "3.4"
 services:
   sonos:
-    image: darkatek7/sonoscontrol:latest
-    container_name: sonos
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sonoscontrol:local
+    container_name: sonoscontrol
     restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      - TZ=Europe/Vienna
-      - ADMIN_USERNAME=admin
-      - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=ChangeMe123!
+      TZ: Europe/Vienna
+      ADMIN_USERNAME: admin
+      ADMIN_EMAIL: admin@example.com
+      ADMIN_PASSWORD: ChangeMe123!
+      PLAYBACK_PUBLIC_BASE_URL: http://192.168.1.50:8080
     volumes:
       - ./Data:/app/Data
-      - ./DataProtectionKeys:/root/.aspnet/DataProtection-Keys
+      - ./DataProtectionKeys:/app/DataProtectionKeys
+      - ./artifacts:/app/artifacts
 ```
 
 ```bash
-docker compose up -d
+cp .env.example .env
+docker compose up -d --build
 ```
 
 After startup, open `http://localhost:8080`.
+
+The shipped image already includes `ffmpeg` and `yt-dlp`, so YouTube playback works inside the same container. The only external requirement is that `PLAYBACK_PUBLIC_BASE_URL` points to the host and port your Sonos devices can reach on the LAN.
+For update, restart, backup, and restore commands, use [Docker Operations](docker-operations.md).
 
 ## Local Development Run
 
@@ -62,6 +71,7 @@ dotnet run --project SonosControl.Web --urls http://localhost:5107
 | `TZ` | Runtime timezone | Recommended |
 | `ConnectionStrings__DefaultConnection` | Override database path | Optional |
 | `DataProtection__KeysDirectory` | Key persistence directory | Optional |
+| `Playback__PublicBaseUrl` or `PLAYBACK_PUBLIC_BASE_URL` | LAN URL Sonos should use for YouTube audio | Required for YouTube |
 
 ## Config File Contract
 - Runtime config file: `SonosControl.Web/Data/config.json` (not tracked)
@@ -76,5 +86,6 @@ At minimum, verify:
 - `Data/app.db` stores Identity, logs, and playback statistics.
 - `Data/config.json` stores automation and playback settings.
 - Data protection keys keep auth cookies valid across restarts.
+- `artifacts/` stores short-lived YouTube audio fallback files inside the container bind mount.
 
 For production, back up all three regularly.

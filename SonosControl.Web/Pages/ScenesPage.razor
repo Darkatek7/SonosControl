@@ -152,6 +152,7 @@
                                         <option value="@SceneSourceType.None">None</option>
                                         <option value="@SceneSourceType.Station">Station</option>
                                         <option value="@SceneSourceType.Spotify">Spotify</option>
+                                        <option value="@SceneSourceType.YouTube">YouTube</option>
                                         <option value="@SceneSourceType.YouTubeMusic">YouTube Music</option>
                                     </select>
                                 </div>
@@ -308,6 +309,7 @@
         _settings.Speakers ??= new();
         _settings.Stations ??= new();
         _settings.SpotifyTracks ??= new();
+        _settings.YouTubeCollections ??= new();
         _settings.YouTubeMusicCollections ??= new();
     }
 
@@ -333,7 +335,8 @@
     {
         SceneSourceType.Station => "Station",
         SceneSourceType.Spotify => "Spotify",
-        SceneSourceType.YouTubeMusic => "YouTube",
+        SceneSourceType.YouTube => "YouTube",
+        SceneSourceType.YouTubeMusic => "YouTube Music",
         _ => "None"
     };
 
@@ -577,6 +580,12 @@
                 .DistinctBy(s => s.Item1, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(s => s.Item2)
                 .ToList(),
+            SceneSourceType.YouTube => _settings.YouTubeCollections
+                .Where(s => !string.IsNullOrWhiteSpace(s.Url))
+                .Select(s => (s.Url.Trim(), string.IsNullOrWhiteSpace(s.Name) ? s.Url.Trim() : s.Name.Trim()))
+                .DistinctBy(s => s.Item1, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s.Item2)
+                .ToList(),
             SceneSourceType.YouTubeMusic => _settings.YouTubeMusicCollections
                 .Where(s => !string.IsNullOrWhiteSpace(s.Url))
                 .Select(s => (s.Url.Trim(), string.IsNullOrWhiteSpace(s.Name) ? s.Url.Trim() : s.Name.Trim()))
@@ -622,6 +631,7 @@
         {
             SceneSourceType.Station => _settings?.Stations?.Select(s => s.Url),
             SceneSourceType.Spotify => _settings?.SpotifyTracks?.Select(s => s.Url),
+            SceneSourceType.YouTube => _settings?.YouTubeCollections?.Select(s => s.Url),
             SceneSourceType.YouTubeMusic => _settings?.YouTubeMusicCollections?.Select(s => s.Url),
             _ => null
         };
