@@ -225,6 +225,41 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task GetTrackInfoAsync_UsesUpnpArtistWhenPresent()
+    {
+        var handler = new QueueHttpMessageHandler();
+        const string soapResponse = """
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <TrackMetaData>&lt;DIDL-Lite xmlns:dc='http://purl.org/dc/elements/1.1/' xmlns:upnp='urn:schemas-upnp-org:metadata-1-0/upnp/' xmlns:r='urn:schemas-rinconnetworks-com:metadata-1-0/'&gt;
+        &lt;item id='1'&gt;
+          &lt;dc:title&gt;Lovergirl&lt;/dc:title&gt;
+          &lt;upnp:artist&gt;Sabrina Carpenter Channel&lt;/upnp:artist&gt;
+          &lt;r:streamContent&gt;Sabrina Carpenter Channel - Lovergirl&lt;/r:streamContent&gt;
+        &lt;/item&gt;
+      &lt;/DIDL-Lite&gt;</TrackMetaData>
+    </u:GetPositionInfoResponse>
+  </s:Body>
+</s:Envelope>
+""";
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(soapResponse)
+        });
+        var client = new HttpClient(handler);
+        var settingsRepo = new Mock<ISettingsRepo>().Object;
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
+
+        var result = await repo.GetTrackInfoAsync("1.2.3.4");
+
+        Assert.NotNull(result);
+        Assert.Equal("Lovergirl", result.Title);
+        Assert.Equal("Sabrina Carpenter Channel", result.Artist);
+        Assert.Equal("Sabrina Carpenter Channel - Lovergirl", result.StreamContent);
+    }
+
+    [Fact]
     public async Task SetTuneInStationAsync_Success_PostsSoapRequestAndStartsPlayback()
     {
         var handler = new QueueHttpMessageHandler();
@@ -269,8 +304,24 @@ public class SonosConnectorRepoTests
                 PlaybackMode = YouTubePlaybackMode.AutoQueueRelated,
                 QueueItems = new[]
                 {
-                    new YouTubePlaybackQueueItem { Index = 0, Title = "Track 1", StreamUrl = "http://app/api/youtube-audio/session1/0" },
-                    new YouTubePlaybackQueueItem { Index = 1, Title = "Track 2", StreamUrl = "http://app/api/youtube-audio/session1/1" }
+                    new YouTubePlaybackQueueItem
+                    {
+                        Index = 0,
+                        Title = "Track 1",
+                        Artist = "Creator 1",
+                        AlbumArtUrl = "https://images.example/1.jpg",
+                        StreamContent = "Creator 1 - Track 1",
+                        StreamUrl = "http://app/api/youtube-audio/session1/0"
+                    },
+                    new YouTubePlaybackQueueItem
+                    {
+                        Index = 1,
+                        Title = "Track 2",
+                        Artist = "Creator 2",
+                        AlbumArtUrl = "https://images.example/2.jpg",
+                        StreamContent = "Creator 2 - Track 2",
+                        StreamUrl = "http://app/api/youtube-audio/session1/1"
+                    }
                 }
             });
         playbackService.Setup(service => service.ActivateSessionAsync("session1", "1.2.3.4", It.IsAny<CancellationToken>()))
@@ -287,8 +338,12 @@ public class SonosConnectorRepoTests
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"", handler.Requests[1].SoapAction);
         Assert.Contains("Track 1", handler.Requests[1].Body);
+        Assert.Contains("Creator 1", handler.Requests[1].Body);
+        Assert.Contains("Creator 1 - Track 1", handler.Requests[1].Body);
+        Assert.Contains("albumArtURI", handler.Requests[1].Body);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"", handler.Requests[2].SoapAction);
         Assert.Contains("Track 2", handler.Requests[2].Body);
+        Assert.Contains("Creator 2", handler.Requests[2].Body);
         Assert.Contains("device_description.xml", handler.Requests[3].Uri!.ToString());
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", handler.Requests[4].SoapAction);
         Assert.Contains("x-rincon-queue:RINCON_1234567890ABCDEF#0", handler.Requests[4].Body);

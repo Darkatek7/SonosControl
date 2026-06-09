@@ -480,6 +480,61 @@ public class IndexPageUXTests
         resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Once);
     }
 
+    [Fact]
+    public void IndexPage_YouTubeToolbarModeControl_IsVisibleAndUpdatesSelectedEntry()
+    {
+        using var ctx = new TestContext();
+
+        var settings = new SonosSettings
+        {
+            IP_Adress = "1.2.3.4",
+            Volume = 20,
+            MaxVolume = 80,
+            YouTubeCollections = new List<YouTubeObject>
+            {
+                new() { Name = "Playlist Entry", Url = "https://www.youtube.com/playlist?list=PL123", PlaybackMode = YouTubePlaybackMode.PlaylistOrdered },
+                new() { Name = "Single Entry", Url = "https://www.youtube.com/watch?v=abc123xyz00", PlaybackMode = YouTubePlaybackMode.AutoQueueRelated }
+            },
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { IpAddress = "1.2.3.4", Name = "Kitchen" }
+            }
+        };
+
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            settings,
+            youTubeVideos: settings.YouTubeCollections);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.Find("#home-library-tab-youtube").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotNull(cut.Find("[data-qa='home-youtube-mode-toolbar']"));
+            Assert.NotEmpty(cut.FindAll(".home-ops-youtube-mode"));
+            Assert.Contains("Shuffle", cut.Markup);
+        });
+
+        cut.Find("#home-youtube-mode-entry").Change("https://www.youtube.com/playlist?list=PL123");
+        cut.FindAll("button")
+            .First(button => button.TextContent.Contains("Shuffle", StringComparison.OrdinalIgnoreCase))
+            .Click();
+
+        Assert.Equal(YouTubePlaybackMode.PlaylistShuffle, settings.YouTubeCollections[0].PlaybackMode);
+        Assert.Equal(YouTubePlaybackMode.AutoQueueRelated, settings.YouTubeCollections[1].PlaybackMode);
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<YouTubePlaybackMode?>(),
+            It.IsAny<int?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private sealed class TestResources : IDisposable
     {
         public ApplicationDbContext DbContext { get; }

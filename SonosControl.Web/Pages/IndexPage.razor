@@ -281,6 +281,10 @@
                 </article>
 
                 <article class="home-ops-panel home-ops-panel--library">
+                    @{
+                        var toolbarYouTubeEntry = GetActiveToolbarYouTubeEntry();
+                        var visibleYouTubeEntries = GetVisibleYouTubeEntries();
+                    }
                     <div class="home-ops-panel__header">
                         <h3><Icon Name="star" Size="17" /> Library</h3>
                         <span>All sources</span>
@@ -316,6 +320,53 @@
                         <a class="btn btn-sm btn-outline-secondary" href="/recommendations">
                             <Icon Name="settings" Size="14" /> Manage
                         </a>
+                        @if (toolbarYouTubeEntry is not null)
+                        {
+                            <div class="home-ops-youtube-toolbar" data-qa="home-youtube-mode-toolbar">
+                                <div class="home-ops-youtube-toolbar__header">
+                                    <label class="home-ops-youtube-toolbar__label" for="home-youtube-mode-entry">Mode</label>
+                                    <select id="home-youtube-mode-entry"
+                                            class="form-select form-select-sm"
+                                            value="@toolbarYouTubeEntry.Url"
+                                            aria-label="Select YouTube entry for playback mode"
+                                            @onchange="e => SetActiveYouTubeToolbarEntry(e.Value?.ToString())">
+                                        @foreach (var entry in visibleYouTubeEntries)
+                                        {
+                                            <option value="@entry.Url">@entry.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="home-ops-youtube-toolbar__modes" role="group" aria-label="YouTube playback mode">
+                                    <button type="button"
+                                            class="@GetYouTubeModeButtonClass(toolbarYouTubeEntry, YouTubePlaybackMode.AutoQueueRelated)"
+                                            aria-pressed="@IsYouTubeModeSelected(toolbarYouTubeEntry, YouTubePlaybackMode.AutoQueueRelated).ToString().ToLowerInvariant()"
+                                            @onclick="() => SetYouTubePlaybackModeAsync(toolbarYouTubeEntry, YouTubePlaybackMode.AutoQueueRelated.ToString())">
+                                        Auto Queue
+                                    </button>
+                                    <button type="button"
+                                            class="@GetYouTubeModeButtonClass(toolbarYouTubeEntry, YouTubePlaybackMode.Single)"
+                                            aria-pressed="@IsYouTubeModeSelected(toolbarYouTubeEntry, YouTubePlaybackMode.Single).ToString().ToLowerInvariant()"
+                                            @onclick="() => SetYouTubePlaybackModeAsync(toolbarYouTubeEntry, YouTubePlaybackMode.Single.ToString())">
+                                        Single
+                                    </button>
+                                    @if (YouTubePlaybackModeResolver.IsPlaylistLikeUrl(toolbarYouTubeEntry.Url))
+                                    {
+                                        <button type="button"
+                                                class="@GetYouTubeModeButtonClass(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistOrdered)"
+                                                aria-pressed="@IsYouTubeModeSelected(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistOrdered).ToString().ToLowerInvariant()"
+                                                @onclick="() => SetYouTubePlaybackModeAsync(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistOrdered.ToString())">
+                                            Ordered
+                                        </button>
+                                        <button type="button"
+                                                class="@GetYouTubeModeButtonClass(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistShuffle)"
+                                                aria-pressed="@IsYouTubeModeSelected(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistShuffle).ToString().ToLowerInvariant()"
+                                                @onclick="() => SetYouTubePlaybackModeAsync(toolbarYouTubeEntry, YouTubePlaybackMode.PlaylistShuffle.ToString())">
+                                            Shuffle
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
                     </div>
                     <div class="home-ops-library-list">
                         @if (libraryItems.Any())
@@ -483,6 +534,7 @@
     private bool _isSpotifyPlaying;
     private string? spotifyUrl;
     private string? _selectedSpeakerIp;
+    private string? _activeYouTubeToolbarUrl;
 
     private string SelectedSpeakerIp
     {
@@ -864,6 +916,57 @@
             source.Url.Contains(_librarySearch, StringComparison.OrdinalIgnoreCase));
     }
 
+    private List<YouTubeObject> GetVisibleYouTubeEntries()
+    {
+        var entries = (_settings?.YouTubeCollections ?? new List<YouTubeObject>())
+            .OrderBy(video => video.Name)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(_librarySearch))
+        {
+            return entries;
+        }
+
+        return entries
+            .Where(entry =>
+                entry.Name.Contains(_librarySearch, StringComparison.OrdinalIgnoreCase) ||
+                entry.Url.Contains(_librarySearch, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private YouTubeObject? GetActiveToolbarYouTubeEntry()
+    {
+        if (!IsLibraryTabActive("youtube"))
+        {
+            return null;
+        }
+
+        var visibleEntries = GetVisibleYouTubeEntries();
+        if (visibleEntries.Count == 0)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_activeYouTubeToolbarUrl))
+        {
+            var selectedEntry = visibleEntries.FirstOrDefault(entry =>
+                string.Equals(entry.Url, _activeYouTubeToolbarUrl, StringComparison.OrdinalIgnoreCase));
+            if (selectedEntry is not null)
+            {
+                return selectedEntry;
+            }
+        }
+
+        var fallbackEntry = visibleEntries[0];
+        _activeYouTubeToolbarUrl = fallbackEntry.Url;
+        return fallbackEntry;
+    }
+
+    private void SetActiveYouTubeToolbarEntry(string? url)
+    {
+        _activeYouTubeToolbarUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+    }
+
     private bool IsLibraryTabActive(string tab) => string.Equals(_activeLibraryTab, tab, StringComparison.OrdinalIgnoreCase);
 
     private string GetLibraryTabClass(string tab) => IsLibraryTabActive(tab)
@@ -876,6 +979,11 @@
         {
             _activeLibraryTab = tab;
             _librarySearch = string.Empty;
+
+            if (!string.Equals(tab, "youtube", StringComparison.OrdinalIgnoreCase))
+            {
+                _activeYouTubeToolbarUrl = null;
+            }
         }
     }
 
@@ -1566,6 +1674,14 @@
         await SaveSettings();
         await InvokeAsync(StateHasChanged);
     }
+
+    private bool IsYouTubeModeSelected(YouTubeObject entry, YouTubePlaybackMode mode)
+        => YouTubePlaybackModeResolver.GetEffectiveMode(entry.Url, entry.PlaybackMode) == mode;
+
+    private string GetYouTubeModeButtonClass(YouTubeObject entry, YouTubePlaybackMode mode)
+        => IsYouTubeModeSelected(entry, mode)
+            ? "btn btn-sm btn-primary"
+            : "btn btn-sm btn-outline-primary";
 
     private async Task PlayMediaItem(string url, string type)
     {

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Security;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
@@ -24,7 +23,10 @@ public sealed class YouTubePlaybackOptions
 public sealed record ResolvedYouTubeSourceItem(
     string VideoUrl,
     string DirectAudioUrl,
-    string Title);
+    string Title,
+    string? Artist,
+    string? AlbumArtUrl,
+    string? StreamContent);
 
 public sealed record ResolvedYouTubeQueue(
     string OriginalUrl,
@@ -299,7 +301,64 @@ public sealed class YouTubeToolRunner : IYouTubeToolRunner
         return new ResolvedYouTubeSourceItem(
             string.IsNullOrWhiteSpace(webpageUrl) ? normalizedUrl : webpageUrl.Trim(),
             directAudioUrl.Trim(),
-            string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim());
+            string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim(),
+            GetFirstNonEmptyString(root, "uploader", "channel"),
+            GetThumbnailUrl(root),
+            YouTubeQueueMetadataBuilder.FormatStreamContent(
+                string.IsNullOrWhiteSpace(title) ? normalizedUrl : title.Trim(),
+                GetFirstNonEmptyString(root, "uploader", "channel")));
+    }
+
+    private static string? GetFirstNonEmptyString(JsonElement root, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!root.TryGetProperty(propertyName, out var element))
+            {
+                continue;
+            }
+
+            var value = element.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetThumbnailUrl(JsonElement root)
+    {
+        if (root.TryGetProperty("thumbnail", out var thumbnailElement))
+        {
+            var thumbnail = thumbnailElement.GetString();
+            if (!string.IsNullOrWhiteSpace(thumbnail))
+            {
+                return thumbnail.Trim();
+            }
+        }
+
+        if (!root.TryGetProperty("thumbnails", out var thumbnailsElement) || thumbnailsElement.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var thumbnail in thumbnailsElement.EnumerateArray().Reverse())
+        {
+            if (!thumbnail.TryGetProperty("url", out var urlElement))
+            {
+                continue;
+            }
+
+            var url = urlElement.GetString();
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                return url.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static async Task<(string? Title, List<string> Urls)> ResolvePlaylistEntriesAsync(string playlistUrl, int maxItems, CancellationToken cancellationToken)
@@ -892,7 +951,7 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
             session.ContinuationUrl = resolved.VideoUrl;
 
             var queueItem = ToQueueItem(session.SessionId, state);
-            await repo.AddUriToQueue(session.SpeakerIp!, queueItem.StreamUrl, CreateYouTubeQueueMetadata(queueItem.Title, queueItem.StreamUrl), false, cancellationToken);
+            await repo.AddUriToQueue(session.SpeakerIp!, queueItem.StreamUrl, YouTubeQueueMetadataBuilder.Build(queueItem), false, cancellationToken);
         }
 
         return additionalItems.Count;
@@ -977,25 +1036,12 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
         {
             Index = item.Index,
             Title = item.Resolved.Title,
+            Artist = item.Resolved.Artist,
+            AlbumArtUrl = item.Resolved.AlbumArtUrl,
+            StreamContent = item.Resolved.StreamContent,
             StreamUrl = $"{GetRequiredPublicBaseUrl()}/api/youtube-audio/{sessionId}/{item.Index}",
             UsesTempFile = item.PreferTempFile
         };
-    }
-
-    private static string CreateYouTubeQueueMetadata(string title, string uri)
-    {
-        var safeTitle = SecurityElement.Escape(string.IsNullOrWhiteSpace(title) ? "YouTube Audio" : title.Trim()) ?? "YouTube Audio";
-        var safeUri = SecurityElement.Escape(uri.Trim()) ?? string.Empty;
-
-        return $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
-                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
-                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                    <item id=""0"" parentID=""-1"" restricted=""true"">
-                        <dc:title>{safeTitle}</dc:title>
-                        <upnp:class>object.item.audioItem.musicTrack</upnp:class>
-                        <res protocolInfo=""http-get:*:audio/mpeg:*"">{safeUri}</res>
-                    </item>
-                 </DIDL-Lite>";
     }
 
     private string GetRequiredPublicBaseUrl()
@@ -1010,6 +1056,58 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
 
     private static string GetSessionUrlPrefix(string sessionId)
         => $"/api/youtube-audio/{sessionId}/";
+
+    private static string? GetFirstNonEmptyString(JsonElement root, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!root.TryGetProperty(propertyName, out var element))
+            {
+                continue;
+            }
+
+            var value = element.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static string? GetThumbnailUrl(JsonElement root)
+    {
+        if (root.TryGetProperty("thumbnail", out var thumbnailElement))
+        {
+            var thumbnail = thumbnailElement.GetString();
+            if (!string.IsNullOrWhiteSpace(thumbnail))
+            {
+                return thumbnail.Trim();
+            }
+        }
+
+        if (!root.TryGetProperty("thumbnails", out var thumbnailsElement) || thumbnailsElement.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var thumbnail in thumbnailsElement.EnumerateArray().Reverse())
+        {
+            if (!thumbnail.TryGetProperty("url", out var urlElement))
+            {
+                continue;
+            }
+
+            var url = urlElement.GetString();
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                return url.Trim();
+            }
+        }
+
+        return null;
+    }
 
     private static void TryDeleteTempFile(string? path)
     {

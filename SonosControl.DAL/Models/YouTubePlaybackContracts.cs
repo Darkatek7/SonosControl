@@ -14,6 +14,9 @@ public sealed class YouTubePlaybackQueueItem
 {
     public int Index { get; init; }
     public string Title { get; init; } = string.Empty;
+    public string? Artist { get; init; }
+    public string? AlbumArtUrl { get; init; }
+    public string? StreamContent { get; init; }
     public string StreamUrl { get; init; } = string.Empty;
     public bool UsesTempFile { get; init; }
 }
