@@ -180,6 +180,145 @@ public class SceneOrchestrationServiceTests
         Assert.Contains(db.Logs, log => log.Action == "SceneApplyFailed");
     }
 
+    [Fact]
+    public async Task ApplySceneByIdAsync_WhenSceneUsesYouTubeMusic_StartsPlaybackOnTargetSpeaker()
+    {
+        var scene = new Scene
+        {
+            Id = "scene-youtube",
+            Name = "YouTube Mix",
+            SourceType = SceneSourceType.YouTubeMusic,
+            SourceUrl = "https://music.youtube.com/playlist?list=PL123",
+            IsSyncedPlayback = false,
+            Actions = new List<SceneAction>
+            {
+                new() { SpeakerIp = "192.168.0.12", IncludeInPlayback = true, Volume = 22 }
+            }
+        };
+
+        var settings = new SonosSettings
+        {
+            Volume = 10,
+            MaxVolume = 100,
+            AutoPlayStationUrl = "fallback://station",
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { Name = "Studio", IpAddress = "192.168.0.12" }
+            },
+            Scenes = new List<Scene> { scene }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
+
+        var connectorRepo = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
+        connectorRepo.Setup(repo => repo.UngroupSpeaker("192.168.0.12", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.SetSpeakerVolume("192.168.0.12", 22, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.PlayYouTubeMusicTrackAsync(
+                "192.168.0.12",
+                "https://music.youtube.com/playlist?list=PL123",
+                "fallback://station",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
+        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
+        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
+
+        var notificationService = new Mock<INotificationService>();
+        notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
+
+        var (actionLogger, db) = CreateActionLogger();
+        var service = new SceneOrchestrationService(
+            uow.Object,
+            Mock.Of<IServiceScopeFactory>(),
+            notificationService.Object,
+            actionLogger,
+            NullLogger<SceneOrchestrationService>.Instance);
+
+        var result = await service.ApplySceneByIdAsync("scene-youtube", "tester", CancellationToken.None);
+
+        Assert.True(result.Success);
+        connectorRepo.Verify(repo => repo.PlayYouTubeMusicTrackAsync(
+            "192.168.0.12",
+            "https://music.youtube.com/playlist?list=PL123",
+            "fallback://station",
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains(db.Logs, log => log.Action == "SceneApplied");
+    }
+
+    [Fact]
+    public async Task ApplySceneByIdAsync_WhenSceneUsesYouTube_StartsPlaybackOnTargetSpeaker()
+    {
+        var scene = new Scene
+        {
+            Id = "scene-youtube-video",
+            Name = "YouTube Video",
+            SourceType = SceneSourceType.YouTube,
+            SourceUrl = "https://www.youtube.com/watch?v=abc123xyz00",
+            IsSyncedPlayback = false,
+            Actions = new List<SceneAction>
+            {
+                new() { SpeakerIp = "192.168.0.13", IncludeInPlayback = true, Volume = 18 }
+            }
+        };
+
+        var settings = new SonosSettings
+        {
+            Volume = 10,
+            MaxVolume = 100,
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { Name = "Ops", IpAddress = "192.168.0.13" }
+            },
+            Scenes = new List<Scene> { scene }
+        };
+
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
+
+        var connectorRepo = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
+        connectorRepo.Setup(repo => repo.UngroupSpeaker("192.168.0.13", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.SetSpeakerVolume("192.168.0.13", 18, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.PlayYouTubeAudioAsync(
+                "192.168.0.13",
+                "https://www.youtube.com/watch?v=abc123xyz00",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
+        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
+        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
+
+        var notificationService = new Mock<INotificationService>();
+        notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns(Task.CompletedTask);
+
+        var (actionLogger, db) = CreateActionLogger();
+        var service = new SceneOrchestrationService(
+            uow.Object,
+            Mock.Of<IServiceScopeFactory>(),
+            notificationService.Object,
+            actionLogger,
+            NullLogger<SceneOrchestrationService>.Instance);
+
+        var result = await service.ApplySceneByIdAsync("scene-youtube-video", "tester", CancellationToken.None);
+
+        Assert.True(result.Success);
+        connectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
+            "192.168.0.13",
+            "https://www.youtube.com/watch?v=abc123xyz00",
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains(db.Logs, log => log.Action == "SceneApplied");
+    }
+
     private static (ActionLogger Logger, ApplicationDbContext Db) CreateActionLogger()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

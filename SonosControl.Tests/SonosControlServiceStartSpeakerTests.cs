@@ -95,6 +95,34 @@ public class SonosControlServiceStartSpeakerTests
     }
 
     [Fact]
+    public async Task StartSpeaker_WithExplicitYouTubeSchedule_UsesYouTubePlayback()
+    {
+        var sonosRepo = new Mock<ISonosConnectorRepo>();
+        sonosRepo.Setup(r => r.GetSpeakerUUID(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
+        var uow = new Mock<IUnitOfWork>();
+        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(sonosRepo.Object);
+
+        var scopeFactory = CreateMockScopeFactory(uow.Object);
+        var service = new SonosControlService(scopeFactory);
+
+        var settings = new SonosSettings
+        {
+            IP_Adress = "127.0.0.1"
+        };
+        var speakers = new List<SonosSpeaker> { new SonosSpeaker { IpAddress = settings.IP_Adress } };
+
+        var schedule = new DaySchedule
+        {
+            YouTubeUrl = "https://www.youtube.com/watch?v=abc123xyz00"
+        };
+
+        await InvokeStartSpeakerAsync(service, uow.Object, speakers, settings, schedule);
+
+        sonosRepo.Verify(r => r.PlayYouTubeAudioAsync(settings.IP_Adress, "https://www.youtube.com/watch?v=abc123xyz00", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task StartSpeaker_WhenSynced_GroupsAndPlaysOnMaster()
     {
         var sonosRepo = new Mock<ISonosConnectorRepo>();

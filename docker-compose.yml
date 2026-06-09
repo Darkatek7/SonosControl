@@ -1,17 +1,31 @@
-version: '3.4'
 services:
   sonos:
-    container_name: sonos
-    image: darkatek7/sonoscontrol:latest
+    container_name: sonoscontrol
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sonoscontrol:local
     ports:
-      - 8080:8080
+      - "8080:8080"
     restart: unless-stopped
     environment:
-      - TZ=Europe/Vienna
-      - ADMIN_USERNAME=admin
-      - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=xIlQuKfFjeJfUsfm
+      TZ: ${TZ:-Europe/Vienna}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      Playback__PublicBaseUrl: ${PLAYBACK_PUBLIC_BASE_URL:-http://192.168.1.50:8080}
+      Playback__ArtifactDirectory: /app/artifacts/youtube-audio
+      Playback__SessionTtlMinutes: ${PLAYBACK_SESSION_TTL_MINUTES:-30}
+      ConnectionStrings__DefaultConnection: Data Source=/app/Data/app.db
+      ASPNETCORE_URLS: http://+:8080
+      DataProtection__KeysDirectory: /app/DataProtectionKeys
     volumes:
       - ./Data:/app/Data
-      # persist data-protection keys
-      - ./dpkeys:/root/.aspnet/DataProtection-Keys
+      - ./DataProtectionKeys:/app/DataProtectionKeys
+      - ./artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
