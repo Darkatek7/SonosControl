@@ -289,6 +289,8 @@ public class SceneOrchestrationServiceTests
         connectorRepo.Setup(repo => repo.PlayYouTubeAudioAsync(
                 "192.168.0.13",
                 "https://www.youtube.com/watch?v=abc123xyz00",
+                It.IsAny<YouTubePlaybackMode?>(),
+                It.IsAny<int?>(),
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
@@ -315,6 +317,8 @@ public class SceneOrchestrationServiceTests
         connectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
             "192.168.0.13",
             "https://www.youtube.com/watch?v=abc123xyz00",
+            It.IsAny<YouTubePlaybackMode?>(),
+            It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Once);
         Assert.Contains(db.Logs, log => log.Action == "SceneApplied");
     }

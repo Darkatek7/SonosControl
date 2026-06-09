@@ -6,6 +6,16 @@ public sealed class YouTubePlaybackSession
     public string StreamUrl { get; init; } = string.Empty;
     public string Title { get; init; } = string.Empty;
     public bool UsesTempFile { get; init; }
+    public YouTubePlaybackMode PlaybackMode { get; init; } = YouTubePlaybackMode.AutoQueueRelated;
+    public IReadOnlyList<YouTubePlaybackQueueItem> QueueItems { get; init; } = Array.Empty<YouTubePlaybackQueueItem>();
+}
+
+public sealed class YouTubePlaybackQueueItem
+{
+    public int Index { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string StreamUrl { get; init; } = string.Empty;
+    public bool UsesTempFile { get; init; }
 }
 
 public sealed class YouTubePlaybackOpenResult : IAsyncDisposable

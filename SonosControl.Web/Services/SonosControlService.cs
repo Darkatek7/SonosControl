@@ -179,7 +179,10 @@ namespace SonosControl.Web.Services
                 {
                     var url = GetRandomYouTubeUrl(settings);
                     if (url != null)
-                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url);
+                    {
+                        var options = GetYouTubePlaybackOptions(settings, url);
+                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url, options.Mode, options.PreferredQueueLength);
+                    }
                     else
                         playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
@@ -194,7 +197,10 @@ namespace SonosControl.Web.Services
                 else if (!string.IsNullOrEmpty(schedule.SpotifyUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, schedule.SpotifyUrl);
                 else if (!string.IsNullOrEmpty(schedule.YouTubeUrl))
-                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, schedule.YouTubeUrl);
+                {
+                    var options = GetYouTubePlaybackOptions(settings, schedule.YouTubeUrl);
+                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, schedule.YouTubeUrl, options.Mode, options.PreferredQueueLength);
+                }
                 else if (!string.IsNullOrEmpty(schedule.YouTubeMusicUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, schedule.YouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(schedule.StationUrl))
@@ -224,7 +230,10 @@ namespace SonosControl.Web.Services
                 {
                     var url = GetRandomYouTubeUrl(settings);
                     if (url != null)
-                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url);
+                    {
+                        var options = GetYouTubePlaybackOptions(settings, url);
+                        playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, url, options.Mode, options.PreferredQueueLength);
+                    }
                     else
                         playAction = (ip) => uow.ISonosConnectorRepo.StartPlaying(ip);
                 }
@@ -239,7 +248,10 @@ namespace SonosControl.Web.Services
                 else if (!string.IsNullOrEmpty(settings!.AutoPlaySpotifyUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, settings.AutoPlaySpotifyUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeUrl))
-                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, settings.AutoPlayYouTubeUrl);
+                {
+                    var options = GetYouTubePlaybackOptions(settings, settings.AutoPlayYouTubeUrl);
+                    playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, settings.AutoPlayYouTubeUrl, options.Mode, options.PreferredQueueLength);
+                }
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayYouTubeMusicUrl))
                     playAction = (ip) => uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, settings.AutoPlayYouTubeMusicUrl, settings.AutoPlayStationUrl);
                 else if (!string.IsNullOrEmpty(settings!.AutoPlayStationUrl))
@@ -322,6 +334,16 @@ namespace SonosControl.Web.Services
 
             var index = Random.Shared.Next(settings.YouTubeCollections.Count);
             return settings.YouTubeCollections[index].Url;
+        }
+
+        private static (YouTubePlaybackMode Mode, int PreferredQueueLength) GetYouTubePlaybackOptions(SonosSettings settings, string? url)
+        {
+            var entry = settings.YouTubeCollections?
+                .FirstOrDefault(candidate => string.Equals(candidate.Url?.Trim(), url?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            return (
+                YouTubePlaybackModeResolver.GetEffectiveMode(url, entry?.PlaybackMode),
+                YouTubePlaybackModeResolver.GetEffectiveQueueLength(entry?.PreferredQueueLength));
         }
 
         private async Task<(SonosSettings settings, DaySchedule? schedule, DateTimeOffset startTime)> WaitUntilStartTime(IUnitOfWork uow, CancellationToken token)

@@ -47,11 +47,21 @@ namespace SonosControl.DAL.Repos
         {
             public static NullYouTubePlaybackService Instance { get; } = new();
 
-            public Task<YouTubePlaybackSession> PreparePlaybackAsync(string sourceUrl, CancellationToken cancellationToken = default)
+            public Task<YouTubePlaybackSession> PreparePlaybackAsync(
+                string sourceUrl,
+                YouTubePlaybackMode? playbackMode = null,
+                int? preferredQueueLength = null,
+                CancellationToken cancellationToken = default)
                 => throw new InvalidOperationException("YouTube playback service is not configured.");
 
-            public Task<YouTubePlaybackOpenResult?> OpenPlaybackAsync(string sessionId, CancellationToken cancellationToken = default)
+            public Task ActivateSessionAsync(string sessionId, string speakerIp, CancellationToken cancellationToken = default)
+                => Task.CompletedTask;
+
+            public Task<YouTubePlaybackOpenResult?> OpenPlaybackAsync(string sessionId, int itemIndex = 0, CancellationToken cancellationToken = default)
                 => Task.FromResult<YouTubePlaybackOpenResult?>(null);
+
+            public Task MaintainSessionsAsync(CancellationToken cancellationToken = default)
+                => Task.CompletedTask;
 
             public Task CleanupExpiredSessionsAsync(CancellationToken cancellationToken = default)
                 => Task.CompletedTask;
@@ -344,6 +354,44 @@ namespace SonosControl.DAL.Repos
             catch
             {
                 return (TimeSpan.Zero, TimeSpan.Zero);
+            }
+        }
+
+        public async Task<int?> GetCurrentTrackNumberAsync(string ip, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+
+                using var content = new StringContent(
+                    @"<?xml version=""1.0"" encoding=""utf-8""?>
+            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                        s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                <s:Body>
+                    <u:GetPositionInfo xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                        <InstanceID>0</InstanceID>
+                    </u:GetPositionInfo>
+                </s:Body>
+            </s:Envelope>", Encoding.UTF8, "text/xml");
+
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("text/xml; charset=utf-8");
+                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
+
+                var client = CreateClient();
+                var response = await client.PostAsync(url, content, cancellationToken);
+                response.EnsureSuccessStatusCode();
+
+                var xml = await response.Content.ReadAsStringAsync(cancellationToken);
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                return int.TryParse(doc.GetElementsByTagName("Track").Item(0)?.InnerText, out var trackNumber)
+                    ? trackNumber
+                    : null;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -646,17 +694,30 @@ namespace SonosControl.DAL.Repos
             await StartPlaying(ip);
         }
 
-        public async Task PlayYouTubeAudioAsync(string ip, string youtubeUrl, CancellationToken cancellationToken = default)
+        public async Task PlayYouTubeAudioAsync(
+            string ip,
+            string youtubeUrl,
+            YouTubePlaybackMode? playbackMode = null,
+            int? preferredQueueLength = null,
+            CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var session = await _youTubePlaybackService.PreparePlaybackAsync(youtubeUrl, cancellationToken);
-            if (string.IsNullOrWhiteSpace(session.StreamUrl))
+            var session = await _youTubePlaybackService.PreparePlaybackAsync(youtubeUrl, playbackMode, preferredQueueLength, cancellationToken);
+            if (session.QueueItems.Count == 0)
             {
-                throw new InvalidOperationException("YouTube playback session did not produce a stream URL.");
+                throw new InvalidOperationException("YouTube playback session did not produce any queue items.");
             }
 
-            await SetTuneInStationAsync(ip, session.StreamUrl, cancellationToken);
+            await ClearQueue(ip, cancellationToken);
+            foreach (var item in session.QueueItems)
+            {
+                await AddUriToQueue(ip, item.StreamUrl, CreateYouTubeQueueMetadata(item.Title, item.StreamUrl), false, cancellationToken);
+            }
+
+            await SetQueueTransportAsync(ip, cancellationToken);
+            await _youTubePlaybackService.ActivateSessionAsync(session.SessionId, ip, cancellationToken);
+            await StartPlaying(ip);
         }
 
 
@@ -755,6 +816,51 @@ namespace SonosControl.DAL.Repos
 
             var client = CreateClient();
             var response = await client.PostAsync(url, content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+        }
+
+        private static string CreateYouTubeQueueMetadata(string title, string uri)
+        {
+            var safeTitle = string.IsNullOrWhiteSpace(title) ? "YouTube Audio" : title.Trim();
+            var safeUri = uri.Trim();
+
+            return $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
+                                   xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
+                                   xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
+                        <item id=""0"" parentID=""-1"" restricted=""true"">
+                            <dc:title>{safeTitle}</dc:title>
+                            <upnp:class>object.item.audioItem.musicTrack</upnp:class>
+                            <res protocolInfo=""http-get:*:audio/mpeg:*"">{safeUri}</res>
+                        </item>
+                     </DIDL-Lite>";
+        }
+
+        private async Task SetQueueTransportAsync(string ip, CancellationToken cancellationToken)
+        {
+            var rinconHex = await GetRinconIdAsync(ip, cancellationToken);
+            if (string.IsNullOrWhiteSpace(rinconHex))
+            {
+                throw new InvalidOperationException($"Could not resolve the Sonos queue transport for speaker {ip}.");
+            }
+
+            var queueUri = $"x-rincon-queue:RINCON_{rinconHex}#0";
+            var soapRequest = $@"
+                <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                            s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                  <s:Body>
+                    <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                      <InstanceID>0</InstanceID>
+                      <CurrentURI>{SecurityElement.Escape(queueUri)}</CurrentURI>
+                      <CurrentURIMetaData></CurrentURIMetaData>
+                    </u:SetAVTransportURI>
+                  </s:Body>
+                </s:Envelope>";
+
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
+
+            var client = CreateClient();
+            var response = await client.PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
             response.EnsureSuccessStatusCode();
         }
 
