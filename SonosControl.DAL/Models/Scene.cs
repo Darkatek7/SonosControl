@@ -5,7 +5,8 @@ public enum SceneSourceType
     None = 0,
     Station = 1,
     Spotify = 2,
-    YouTubeMusic = 3
+    YouTubeMusic = 3,
+    YouTube = 4
 }
 
 public class Scene

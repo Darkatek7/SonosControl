@@ -35,8 +35,12 @@ builder.Services.AddHttpClient(nameof(SonosDeviceDiscoveryService), client =>
     client.Timeout = TimeSpan.FromSeconds(5);
 });
 builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
+builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSection("Playback"));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+builder.Services.AddSingleton<IYouTubeToolRunner, YouTubeToolRunner>();
+builder.Services.AddSingleton<YouTubePlaybackService>();
+builder.Services.AddSingleton<IYouTubePlaybackService>(sp => sp.GetRequiredService<YouTubePlaybackService>());
 builder.Services.AddScoped<ISceneOrchestrationService, SceneOrchestrationService>();
 builder.Services.AddScoped<ICollaborativeJukeboxService, CollaborativeJukeboxService>();
 builder.Services.AddSingleton<ISonosDeviceDiscoveryService, SonosDeviceDiscoveryService>();
@@ -46,6 +50,8 @@ builder.Services.AddHostedService<SonosControlService>();
 builder.Services.AddHostedService<PlaybackMonitorService>();
 builder.Services.AddHostedService<ScheduleWindowAutomationService>();
 builder.Services.AddHostedService<DeviceHealthMonitorService>();
+builder.Services.AddHostedService<YouTubePlaybackMaintenanceService>();
+builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
 // builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
 builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();

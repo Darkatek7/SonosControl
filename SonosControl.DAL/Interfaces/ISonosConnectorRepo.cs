@@ -15,10 +15,12 @@ namespace SonosControl.DAL.Interfaces
         Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default);
         Task<SonosTrackInfo?> GetTrackInfoAsync(string ip, CancellationToken cancellationToken = default);
         Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default);
+        Task<int?> GetCurrentTrackNumberAsync(string ip, CancellationToken cancellationToken = default);
         Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default);
         Task<string> GetCurrentStationAsync(string ip, CancellationToken cancellationToken = default);
         Task<string?> SearchSpotifyTrackAsync(string query, string accessToken, CancellationToken cancellationToken = default);
         Task PlaySpotifyTrackAsync(string ip, string spotifyUri, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
+        Task PlayYouTubeAudioAsync(string ip, string youtubeUrl, YouTubePlaybackMode? playbackMode = null, int? preferredQueueLength = null, CancellationToken cancellationToken = default);
         Task PlayYouTubeMusicTrackAsync(string ip, string youtubeMusicUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default);
         Task ClearQueue(string ip, CancellationToken cancellationToken = default);
         Task AddUriToQueue(string ip, string uri, string? metadata = null, bool enqueueAsNext = false, CancellationToken cancellationToken = default);

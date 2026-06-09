@@ -246,6 +246,7 @@
     {
         return mediaType switch
         {
+            "YouTube" => "YouTube",
             "YouTubeMusic" => "YouTube Music",
             _ => mediaType
         };
@@ -351,6 +352,7 @@
         {
             "Station Changed",
             "Spotify Track Changed",
+            "YouTube Video Changed",
             "YouTube Music Changed",
             "Spotify URL Played"
         };
@@ -446,8 +448,16 @@
                 case "spotify":
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
                     break;
-                case "youtubemusic":
                 case "youtube":
+                    var youTubeEntry = _settings?.YouTubeCollections?
+                        .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), item.SourceUrl.Trim(), StringComparison.OrdinalIgnoreCase));
+                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(
+                        _selectedSpeakerIp,
+                        item.SourceUrl,
+                        YouTubePlaybackModeResolver.GetEffectiveMode(item.SourceUrl, youTubeEntry?.PlaybackMode),
+                        YouTubePlaybackModeResolver.GetEffectiveQueueLength(youTubeEntry?.PreferredQueueLength));
+                    break;
+                case "youtubemusic":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
                     break;
                 default:
@@ -474,6 +484,7 @@
             "Station Changed" => "Station",
             "Spotify Track Changed" => "Spotify",
             "Spotify URL Played" => "Spotify",
+            "YouTube Video Changed" => "YouTube",
             "YouTube Music Changed" => "YouTubeMusic",
             _ => "Unknown"
         };

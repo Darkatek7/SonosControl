@@ -41,6 +41,7 @@ internal sealed class RecommendationMediaResolver
         settings ??= new SonosSettings();
         settings.Stations ??= new();
         settings.SpotifyTracks ??= new();
+        settings.YouTubeCollections ??= new();
         settings.YouTubeMusicCollections ??= new();
 
         foreach (var station in settings.Stations.Where(s => !string.IsNullOrWhiteSpace(s.Url)))
@@ -51,6 +52,11 @@ internal sealed class RecommendationMediaResolver
         foreach (var spotify in settings.SpotifyTracks.Where(s => !string.IsNullOrWhiteSpace(s.Url)))
         {
             resolver.AddEntry(spotify.Name, "Spotify", spotify.Url);
+        }
+
+        foreach (var yt in settings.YouTubeCollections.Where(s => !string.IsNullOrWhiteSpace(s.Url)))
+        {
+            resolver.AddEntry(yt.Name, "YouTube", yt.Url);
         }
 
         foreach (var yt in settings.YouTubeMusicCollections.Where(s => !string.IsNullOrWhiteSpace(s.Url)))
@@ -289,7 +295,7 @@ internal sealed class RecommendationMediaResolver
             "station" => "Station",
             "stream" => "Station",
             "spotify" => "Spotify",
-            "youtube" => "YouTubeMusic",
+            "youtube" => "YouTube",
             "youtube music" => "YouTubeMusic",
             "youtubemusic" => "YouTubeMusic",
             _ => normalized

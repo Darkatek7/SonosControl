@@ -218,6 +218,7 @@ namespace SonosControl.DAL.Repos
 
                 settings.Stations ??= new();
                 settings.SpotifyTracks ??= new();
+                settings.YouTubeCollections ??= new();
                 settings.YouTubeMusicCollections ??= new();
                 settings.DailySchedules ??= new();
                 settings.ActiveDays ??= new();
