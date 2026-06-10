@@ -53,7 +53,7 @@
     public EventCallback OnClose { get; set; }
 
     [Parameter]
-    public EventCallback<(string Name, string Url)> OnSave { get; set; }
+    public Func<(string Name, string Url), Task<bool>>? OnSave { get; set; }
     
     public string Name { get; set; } = "";
     public string Url { get; set; } = "";
@@ -61,11 +61,11 @@
 
     private bool IsSaveDisabled => string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(Url);
 
-    public void Show(string title)
+    public void Show(string title, string? name = null, string? url = null)
     {
         Title = title;
-        Name = "";
-        Url = "";
+        Name = name ?? "";
+        Url = url ?? "";
         _show = true;
         _focusNextRender = true;
         _syncBodyLockOnNextRender = true;
@@ -106,9 +106,15 @@
     {
         if (IsSaveDisabled) return;
 
-        await OnSave.InvokeAsync((Name, Url));
+        if (OnSave is null)
+        {
+            return;
+        }
+
+        var saved = await OnSave.Invoke((Name, Url));
+        await InvokeAsync(StateHasChanged);
         
-        if (string.IsNullOrEmpty(ErrorMessage))
+        if (saved)
         {
             await Close();
         }
