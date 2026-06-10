@@ -27,6 +27,7 @@
 
     <div class="nav-scrollable px-3" data-drawer-open="@(IsDrawerOpen ? "true" : "false")">
         <nav class="nav-links">
+            <span class="nav-section-label">Listen</span>
             <div class="nav-item">
                 <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
                     <Icon Name="home" Size="16" Class="nav-icon" />
@@ -42,6 +43,7 @@
 
             <AuthorizeView Roles="admin,operator,superadmin">
                 <Authorized>
+                    <span class="nav-section-label">Insights</span>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
                             <Icon Name="graph" Size="16" Class="nav-icon" />
@@ -65,7 +67,7 @@
 
             <AuthorizeView Roles="admin,superadmin">
                 <Authorized>
-                    <div class="nav-divider" aria-hidden="true"></div>
+                    <span class="nav-section-label">Manage</span>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
                             <Icon Name="calendar" Size="16" Class="nav-icon" />
