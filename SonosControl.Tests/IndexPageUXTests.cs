@@ -35,6 +35,7 @@ public class IndexPageUXTests
         {
             Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
             Assert.Contains("Library", cut.Markup);
+            Assert.Contains("Direct URL Play", cut.Markup);
             Assert.DoesNotContain("Quick Sources", cut.Markup);
             Assert.Contains("No saved stations.", cut.Markup);
             Assert.Empty(cut.FindAll(".spotify-library"));
@@ -260,6 +261,9 @@ public class IndexPageUXTests
             Assert.Equal("tab", cut.Find("#home-library-tab-youtube").GetAttribute("role"));
             Assert.Equal("tab", cut.Find("#home-library-tab-youtube-music").GetAttribute("role"));
             Assert.NotNull(cut.Find("input[aria-label='Search active library tab']"));
+            Assert.NotNull(cut.Find("input[aria-label='Direct media URL']"));
+            Assert.NotNull(cut.Find("button[aria-label='Play direct URL']"));
+            Assert.NotNull(cut.Find("button[aria-label='Save direct URL']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']"));
             Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']"));
@@ -377,6 +381,38 @@ public class IndexPageUXTests
             var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
             Assert.Contains("Play ORF Radio Wien", buttonLabels);
             Assert.Contains("home-ops-dashboard", cut.Find("[data-qa='home-operations-dashboard']").ClassList);
+        });
+    }
+
+    [Fact]
+    public void IndexPage_UpNext_ShowsOnlyNextTwoQueueItems()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        resources.ConnectorRepo
+            .Setup(r => r.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosQueuePage(
+                new[]
+                {
+                    new SonosQueueItem(0, "Track 1", "Artist 1", null, null),
+                    new SonosQueueItem(1, "Track 2", "Artist 2", null, null),
+                    new SonosQueueItem(2, "Track 3", "Artist 3", null, null),
+                    new SonosQueueItem(3, "Track 4", "Artist 4", null, null)
+                },
+                0,
+                4,
+                4));
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Up Next", cut.Markup);
+            Assert.Contains("Track 1", cut.Markup);
+            Assert.Contains("Track 2", cut.Markup);
+            Assert.DoesNotContain("Track 3", cut.Markup);
+            Assert.DoesNotContain("Track 4", cut.Markup);
         });
     }
 
@@ -500,7 +536,6 @@ public class IndexPageUXTests
                 new() { IpAddress = "1.2.3.4", Name = "Kitchen" }
             }
         };
-
         using var resources = ConfigureServices(
             ctx,
             new List<TuneInStation>(),
@@ -535,6 +570,127 @@ public class IndexPageUXTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public void IndexPage_DirectUrlPlay_ResolvesMediaTypes_AndUsesSelectedSpeaker()
+    {
+        using var ctx = new TestContext();
+
+        var settings = new SonosSettings
+        {
+            IP_Adress = "1.2.3.4",
+            Speakers = new List<SonosSpeaker>
+            {
+                new() { IpAddress = "1.2.3.4", Name = "Kitchen" },
+                new() { IpAddress = "1.2.3.5", Name = "Living Room" }
+            }
+        };
+
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>(), settings);
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        var selectedSpeakerField = typeof(IndexPage).GetField("_selectedSpeakerIp", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(selectedSpeakerField);
+        selectedSpeakerField!.SetValue(cut.Instance, "1.2.3.5");
+
+        var directUrlInput = cut.Find("input[aria-label='Direct media URL']");
+        directUrlInput.Input("https://open.spotify.com/track/123");
+        cut.Find("button[aria-label='Play direct URL']").Click();
+        resources.ConnectorRepo.Verify(repo => repo.PlaySpotifyTrackAsync("1.2.3.5", "https://open.spotify.com/track/123", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        directUrlInput.Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
+        cut.Find("button[aria-label='Play direct URL']").Click();
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync("1.2.3.5", "https://www.youtube.com/watch?v=5EsEJRXlrGk", It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        directUrlInput.Input("https://youtu.be/5EsEJRXlrGk");
+        cut.Find("button[aria-label='Play direct URL']").Click();
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync("1.2.3.5", "https://youtu.be/5EsEJRXlrGk", It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        directUrlInput.Input("https://music.youtube.com/watch?v=5EsEJRXlrGk");
+        cut.Find("button[aria-label='Play direct URL']").Click();
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeMusicTrackAsync("1.2.3.5", "https://music.youtube.com/watch?v=5EsEJRXlrGk", settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
+
+        directUrlInput.Input("https://stream.example/live");
+        cut.Find("button[aria-label='Play direct URL']").Click();
+        resources.ConnectorRepo.Verify(repo => repo.SetTuneInStationAsync("1.2.3.5", "https://stream.example/live", It.IsAny<CancellationToken>()), Times.Once);
+        resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Exactly(5));
+    }
+
+    [Fact]
+    public void IndexPage_DirectUrlPlay_RejectsEmptyUrl()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.Find("input[aria-label='Direct media URL']").Input(string.Empty);
+        var playButton = cut.Find("button[aria-label='Play direct URL']");
+        Assert.True(playButton.HasAttribute("disabled"));
+
+        resources.ConnectorRepo.Verify(repo => repo.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        resources.ConnectorRepo.Verify(repo => repo.PlaySpotifyTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void IndexPage_DirectUrlSave_PrefillsModal_AndAddsItemToLibrary()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.Find("input[aria-label='Direct media URL']").Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
+        cut.Find("button[aria-label='Save direct URL']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Add New YouTube Video", cut.Markup);
+            Assert.Equal("https://www.youtube.com/watch?v=5EsEJRXlrGk", cut.Find("#mediaUrl").GetAttribute("value"));
+        });
+
+        cut.Find("#mediaName").Input("Friday Mix");
+        cut.Find(".modal-content button.btn.btn-primary").Click();
+
+        cut.Find("#home-library-tab-youtube").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Friday Mix", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label='Play Friday Mix']"));
+        });
+    }
+
+    [Fact]
+    public void IndexPage_DirectUrlSave_ShowsDuplicateValidationError()
+    {
+        using var ctx = new TestContext();
+        var videos = new List<YouTubeObject>
+        {
+            new() { Name = "Friday Mix", Url = "https://www.youtube.com/watch?v=5EsEJRXlrGk" }
+        };
+
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            youTubeVideos: videos);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.Find("input[aria-label='Direct media URL']").Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
+        cut.Find("button[aria-label='Save direct URL']").Click();
+
+        cut.Find("#mediaName").Input("Friday Mix");
+        cut.Find(".modal-content button.btn.btn-primary").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("YouTube video with this name or URL already exists.", cut.Markup);
+        });
+    }
+
     private sealed class TestResources : IDisposable
     {
         public ApplicationDbContext DbContext { get; }
@@ -565,6 +721,7 @@ public class IndexPageUXTests
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
+        ctx.JSInterop.SetupVoid("window.sonosUi.setBodyScrollLock", _ => true);
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -598,6 +755,11 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.GetTrackProgressAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
         connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.PlaySpotifyTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.PlayYouTubeAudioAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);

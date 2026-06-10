@@ -446,13 +446,16 @@ public class SonosConnectorRepoTests
     {
         var handler = new QueueHttpMessageHandler();
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
         var settingsRepo = new Mock<ISettingsRepo>().Object;
         var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
         await repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream");
 
-        var request = Assert.Single(handler.Requests);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+        var request = handler.Requests[1];
         Assert.Equal("http://1.2.3.4:1400/MediaRenderer/AVTransport/Control", request.Uri!.ToString());
         Assert.NotNull(request.Body);
         Assert.Contains("x-rincon-mp3radio://example.com/stream", request.Body);
@@ -539,6 +542,7 @@ public class SonosConnectorRepoTests
     public async Task SetTuneInStationAsync_Failure_DoesNotStartPlayback()
     {
         var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var client = new HttpClient(handler);
         var settingsRepo = new Mock<ISettingsRepo>().Object;
@@ -546,7 +550,9 @@ public class SonosConnectorRepoTests
 
         await repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream");
 
-        var request = Assert.Single(handler.Requests);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+        var request = handler.Requests[1];
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", request.SoapAction);
         Assert.Equal(0, repo.StartPlayingCallCount);
     }
@@ -555,6 +561,7 @@ public class SonosConnectorRepoTests
     public async Task PlaySpotifyTrackAsync_Success_UsesFallbackAndStartsPlayback()
     {
         var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -567,18 +574,20 @@ public class SonosConnectorRepoTests
 
         await repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345", "fallback-station");
 
-        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal(4, handler.Requests.Count);
 
-        var fallbackRequest = handler.Requests[0];
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+
+        var fallbackRequest = handler.Requests[1];
         Assert.Equal(HttpMethod.Post, fallbackRequest.Method);
         Assert.NotNull(fallbackRequest.Body);
         Assert.Contains("fallback-station", fallbackRequest.Body);
 
-        var deviceDescriptionRequest = handler.Requests[1];
+        var deviceDescriptionRequest = handler.Requests[2];
         Assert.Equal(HttpMethod.Get, deviceDescriptionRequest.Method);
         Assert.Equal("http://1.2.3.4:1400/xml/device_description.xml", deviceDescriptionRequest.Uri!.ToString());
 
-        var spotifyRequest = handler.Requests[2];
+        var spotifyRequest = handler.Requests[3];
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"", spotifyRequest.SoapAction);
         Assert.Equal(2, repo.StartPlayingCallCount);
     }
@@ -587,6 +596,7 @@ public class SonosConnectorRepoTests
     public async Task PlaySpotifyTrackAsync_Failure_DoesNotStartPlayback()
     {
         var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("<root><UDN>uuid:RINCON_ABC123</UDN></root>")
@@ -598,9 +608,10 @@ public class SonosConnectorRepoTests
 
         await repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345");
 
-        Assert.Equal(2, handler.Requests.Count);
-        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
-        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+        Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+        Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
         Assert.Equal(0, repo.StartPlayingCallCount);
     }
 

@@ -296,7 +296,6 @@ public class YouTubePlaybackServiceTests
             ResolveCallCount++;
             return Task.FromResult(_resolver(sourceUrl, playbackMode, preferredQueueLength));
         }
-
         public async Task<string> MaterializeAudioAsync(ResolvedYouTubeSourceItem source, string artifactDirectory, CancellationToken cancellationToken)
         {
             Directory.CreateDirectory(artifactDirectory);

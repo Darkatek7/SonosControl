@@ -112,6 +112,41 @@
                             <Icon Name="timer" Size="16" /> Timer
                         </button>
                     </div>
+                    <div class="home-ops-control-strip__direct">
+                        <label for="homeDirectMediaUrl">Direct URL Play</label>
+                        <div class="home-ops-direct-play">
+                            <input id="homeDirectMediaUrl"
+                                   type="url"
+                                   class="form-control"
+                                   @bind-value="_directMediaUrl"
+                                   @bind-value:event="oninput"
+                                   placeholder="https://..."
+                                   aria-label="Direct media URL" />
+                            <button type="button"
+                                    class="btn btn-primary"
+                                    @onclick="PlayDirectMediaUrl"
+                                    disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                    aria-label="Play direct URL">
+                                @if (_isDirectUrlLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <Icon Name="play" Size="14" />
+                                    <span>Play</span>
+                                }
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-primary"
+                                    @onclick="OpenDirectUrlSaveModal"
+                                    disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                    aria-label="Save direct URL">
+                                <Icon Name="plus" Size="14" />
+                                <span>Save</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             }
 
@@ -264,7 +299,7 @@
                         }
                         else if (_queueItems.Any())
                         {
-                            @foreach (var item in _queueItems.Take(5))
+                            @foreach (var item in _queueItems.Take(2))
                             {
                                 var formatted = FormatQueueItem(item);
                                 <div class="home-ops-queue-row">
@@ -529,10 +564,10 @@
     private bool isGroupModalOpen;
     private bool _isMainPlaybackLoading;
     private bool _isNextTrackLoading;
-    private bool _isSpotifyUrlLoading;
+    private bool _isDirectUrlLoading;
     private string? _loadingMediaUrl;
     private bool _isSpotifyPlaying;
-    private string? spotifyUrl;
+    private string _directMediaUrl = string.Empty;
     private string? _selectedSpeakerIp;
     private string? _activeYouTubeToolbarUrl;
 
@@ -1682,10 +1717,67 @@
         => IsYouTubeModeSelected(entry, mode)
             ? "btn btn-sm btn-primary"
             : "btn btn-sm btn-outline-primary";
+    private async Task PlayDirectMediaUrl()
+    {
+        var resolution = DirectUrlMediaResolver.Resolve(_directMediaUrl);
+        if (!resolution.IsValid)
+        {
+            ShowCommandStatus(resolution.ErrorMessage ?? "The media URL is invalid.", isError: true, autoHideMs: 4500);
+            return;
+        }
 
+        _isDirectUrlLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await ExecuteMediaPlaybackAsync(resolution.NormalizedUrl, resolution.MediaType, resolution.NormalizedUrl);
+        }
+        finally
+        {
+            _isDirectUrlLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenDirectUrlSaveModal()
+    {
+        var resolution = DirectUrlMediaResolver.Resolve(_directMediaUrl);
+        if (!resolution.IsValid)
+        {
+            ShowCommandStatus(resolution.ErrorMessage ?? "The media URL is invalid.", isError: true, autoHideMs: 4500);
+            return;
+        }
+
+        _addModalError = null;
+        _activeMediaTab = GetLibraryTabForMediaType(resolution.MediaType);
+        _addMediaItemModal.Show(GetAddModalTitle(_activeMediaTab), url: resolution.NormalizedUrl);
+        await InvokeAsync(StateHasChanged);
+    }
     private async Task PlayMediaItem(string url, string type)
     {
         if (string.IsNullOrEmpty(url) || _settings is null) return;
+        _loadingMediaUrl = url;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var displayName = GetDisplayNameForMedia(url, type);
+            await ExecuteMediaPlaybackAsync(url, type, displayName);
+        }
+        finally
+        {
+            _loadingMediaUrl = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ExecuteMediaPlaybackAsync(string url, string mediaType, string displayName)
+    {
+        if (_settings is null)
+        {
+            return;
+        }
 
         var targetSpeakerIp = GetActivePlaybackSpeakerIp();
         if (string.IsNullOrWhiteSpace(targetSpeakerIp))
@@ -1694,104 +1786,58 @@
             return;
         }
 
-        _loadingMediaUrl = url;
-        await InvokeAsync(StateHasChanged);
-
         try
         {
-            switch (type)
+            switch (mediaType)
             {
                 case "station":
                     await _uow.ISonosConnectorRepo.SetTuneInStationAsync(targetSpeakerIp, url);
                     await AddLog("Station Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"Station changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    await NotificationService.SendNotificationAsync($"Station changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "spotify":
                     await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(targetSpeakerIp, url);
                     await AddLog("Spotify Track Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"Spotify track changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    await NotificationService.SendNotificationAsync($"Spotify track changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "youtube":
                     var youTubeEntry = FindYouTubeEntry(url);
                     var youTubeOptions = GetYouTubePlaybackOptions(youTubeEntry, url);
                     await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
                     await AddLog("YouTube Video Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"YouTube video changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    await NotificationService.SendNotificationAsync($"YouTube video changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     _isSpotifyPlaying = true;
                     break;
                 case "youtubemusic":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
-                    await NotificationService.SendNotificationAsync($"YouTube Music changed to {url} on {targetSpeakerIp}", await GetCurrentUserAsync());
+                    await NotificationService.SendNotificationAsync($"YouTube Music changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     _isSpotifyPlaying = false;
                     break;
+                default:
+                    ShowCommandStatus("Unsupported media URL.", isError: true, autoHideMs: 4500);
+                    return;
             }
+
             await _uow.ISonosConnectorRepo.StartPlaying(targetSpeakerIp);
             ShowCommandStatus("Playback command sent.");
         }
         catch (Exception ex)
         {
-            TrackSonosCommandError($"play_{type}", ex);
+            TrackSonosCommandError($"play_{mediaType}", ex);
             ShowCommandStatus("Playback command failed. Please retry.", isError: true, autoHideMs: 4500);
         }
-        finally
-        {
-            _loadingMediaUrl = null;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-    
-    private async Task HandleKeyPress(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            if (!string.IsNullOrEmpty(spotifyUrl))
-            {
-                await PlaySpotifyTrack(spotifyUrl);
-                spotifyUrl = string.Empty; // Clear the input field after submission
-            }
-        }
     }
 
-    private async Task SubmitSpotifyUrl()
+    private string GetDisplayNameForMedia(string url, string mediaType)
     {
-        if (!string.IsNullOrWhiteSpace(spotifyUrl))
+        return mediaType switch
         {
-            await PlaySpotifyTrack(spotifyUrl);
-            spotifyUrl = string.Empty;
-        }
-    }
-
-    private async Task PlaySpotifyTrack(string url)
-    {
-        if (_settings is not null)
-        {
-            var targetSpeakerIp = GetActivePlaybackSpeakerIp();
-            if (string.IsNullOrWhiteSpace(targetSpeakerIp))
-            {
-                ShowCommandStatus("No active speaker selected.", isError: true, autoHideMs: 4500);
-                return;
-            }
-
-            _isSpotifyUrlLoading = true;
-            await InvokeAsync(StateHasChanged);
-            try
-            {
-                await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(targetSpeakerIp, url);
-                await AddLog("Spotify URL Played", url);
-                ShowCommandStatus("Spotify URL sent to Sonos.");
-            }
-            catch (Exception ex)
-            {
-                TrackSonosCommandError("spotify_url_play", ex);
-                ShowCommandStatus("Spotify URL playback failed. Please retry.", isError: true, autoHideMs: 4500);
-            }
-            finally
-            {
-                _isSpotifyUrlLoading = false;
-                await InvokeAsync(StateHasChanged);
-            }
-        }
+            "spotify" => _tracks.FirstOrDefault(track => string.Equals(track.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url,
+            "youtube" => _youTubeVideos.FirstOrDefault(video => string.Equals(video.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url,
+            "youtubemusic" => _youTubeCollections.FirstOrDefault(collection => string.Equals(collection.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url,
+            _ => _stations.FirstOrDefault(station => string.Equals(station.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url
+        };
     }
 
     private async Task NextTrack()
@@ -2278,31 +2324,45 @@
         await _uow.ISettingsRepo.WriteSettings(_settings!);
     }
 
+    private static string GetLibraryTabForMediaType(string mediaType)
+        => string.Equals(mediaType, "station", StringComparison.OrdinalIgnoreCase) ? "stations" : mediaType;
+
+    private static string GetAddModalTitle(string activeMediaTab)
+    {
+        return activeMediaTab switch
+        {
+            "spotify" => "Add New Spotify Item",
+            "youtube" => "Add New YouTube Video",
+            "youtubemusic" => "Add New YouTube Music Item",
+            _ => "Add New Station"
+        };
+    }
+
     private void ShowAddStationModal()
     {
         _activeMediaTab = "stations";
-        _addMediaItemModal.Show("Add New Station");
+        _addMediaItemModal.Show(GetAddModalTitle(_activeMediaTab));
     }
 
     private void ShowAddSpotifyModal()
     {
         _activeMediaTab = "spotify";
-        _addMediaItemModal.Show("Add New Spotify Item");
+        _addMediaItemModal.Show(GetAddModalTitle(_activeMediaTab));
     }
 
     private void ShowAddYouTubeModal()
     {
         _activeMediaTab = "youtube";
-        _addMediaItemModal.Show("Add New YouTube Video");
+        _addMediaItemModal.Show(GetAddModalTitle(_activeMediaTab));
     }
 
     private void ShowAddYouTubeMusicModal()
     {
         _activeMediaTab = "youtubemusic";
-        _addMediaItemModal.Show("Add New YouTube Music Item");
+        _addMediaItemModal.Show(GetAddModalTitle(_activeMediaTab));
     }
 
-    private async Task SaveNewMediaItem((string Name, string Url) data)
+    private async Task<bool> SaveNewMediaItem((string Name, string Url) data)
     {
         _addModalError = null;
         _settings ??= new SonosSettings();
@@ -2314,7 +2374,8 @@
                 if (_settings.Stations.Any(s => s.Name == data.Name || s.Url == data.Url))
                 {
                     _addModalError = "Station with this name or URL already exists.";
-                    return;
+                    await InvokeAsync(StateHasChanged);
+                    return false;
                 }
                 _settings.Stations.Add(new TuneInStation { Name = data.Name, Url = data.Url });
                 await AddLog("Station Added", $"{data.Name} ({data.Url})");
@@ -2324,7 +2385,8 @@
                  if (_settings.SpotifyTracks.Any(s => s.Name == data.Name || s.Url == data.Url))
                 {
                     _addModalError = "Spotify item with this name or URL already exists.";
-                    return;
+                    await InvokeAsync(StateHasChanged);
+                    return false;
                 }
                 _settings.SpotifyTracks.Add(new SpotifyObject { Name = data.Name, Url = data.Url });
                 await AddLog("Spotify Track Added", $"{data.Name} ({data.Url})");
@@ -2334,7 +2396,8 @@
                  if (_settings.YouTubeCollections.Any(s => s.Name == data.Name || s.Url == data.Url))
                 {
                     _addModalError = "YouTube video with this name or URL already exists.";
-                    return;
+                    await InvokeAsync(StateHasChanged);
+                    return false;
                 }
                 _settings.YouTubeCollections.Add(new YouTubeObject
                 {
@@ -2350,7 +2413,8 @@
                  if (_settings.YouTubeMusicCollections.Any(s => s.Name == data.Name || s.Url == data.Url))
                 {
                     _addModalError = "YouTube Music item with this name or URL already exists.";
-                    return;
+                    await InvokeAsync(StateHasChanged);
+                    return false;
                 }
                 _settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = data.Name, Url = data.Url });
                 await AddLog("YouTube Music Link Added", $"{data.Name} ({data.Url})");
@@ -2359,6 +2423,7 @@
         
         await SaveSettings();
         await InvokeAsync(StateHasChanged);
+        return true;
     }
 
     private async Task RemoveStation(TuneInStation station)

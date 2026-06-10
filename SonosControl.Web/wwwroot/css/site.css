@@ -850,7 +850,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-control-strip {
     display: grid;
-    grid-template-columns: minmax(14rem, 0.9fr) minmax(0, 2.1fr);
+    grid-template-columns: minmax(13rem, 0.8fr) minmax(0, 1.6fr) minmax(16rem, 1.1fr);
     align-items: end;
     gap: 0.85rem;
     padding: 0.85rem 1.1rem;
@@ -886,6 +886,36 @@ h3[tabindex="-1"]:focus {
     justify-content: center;
     gap: 0.42rem;
     min-height: 2.35rem;
+}
+
+.home-ops-control-strip__direct {
+    min-width: 0;
+}
+
+.home-ops-control-strip__direct label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.home-ops-direct-play {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.home-ops-direct-play .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2.35rem;
+    white-space: nowrap;
 }
 
 .home-ops-sync-button {
@@ -1596,6 +1626,10 @@ h3[tabindex="-1"]:focus {
 
     .home-ops-control-strip__actions {
         justify-content: flex-start;
+    }
+
+    .home-ops-direct-play {
+        grid-template-columns: 1fr;
     }
 
     .home-ops-active-window,

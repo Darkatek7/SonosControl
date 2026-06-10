@@ -125,6 +125,8 @@ namespace SonosControl.DAL.Repos
 
         public virtual async Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default)
         {
+            await ClearQueue(ip, cancellationToken);
+
             stationUri = stationUri
                 .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
                 .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
@@ -588,6 +590,10 @@ namespace SonosControl.DAL.Repos
             {
                 await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
             }
+            else
+            {
+                await ClearQueue(ip, cancellationToken);
+            }
 
             string? rinconId = await GetRinconIdAsync(ip, cancellationToken);
             if (rinconId == null)
@@ -692,6 +698,10 @@ namespace SonosControl.DAL.Repos
             if (!string.IsNullOrWhiteSpace(fallbackStationUri))
             {
                 await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            }
+            else
+            {
+                await ClearQueue(ip, cancellationToken);
             }
 
             string trimmedUrl = youtubeMusicUrl.Trim();
