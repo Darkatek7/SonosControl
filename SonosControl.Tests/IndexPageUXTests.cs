@@ -265,10 +265,16 @@ public class IndexPageUXTests
             Assert.NotNull(cut.Find("button[aria-label='Play direct URL']"));
             Assert.NotNull(cut.Find("button[aria-label='Save direct URL']"));
             Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
-            Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']"));
-            Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']"));
-            Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']"));
         });
+
+        cut.Find("#home-library-tab-spotify").Click();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']")));
+
+        cut.Find("#home-library-tab-youtube").Click();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']")));
+
+        cut.Find("#home-library-tab-youtube-music").Click();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']")));
     }
 
     [Fact]
@@ -377,7 +383,7 @@ public class IndexPageUXTests
             Assert.Contains("Recent Activity", cut.Markup);
             Assert.Contains("Morning Radio scene applied by scheduler", cut.Markup);
             Assert.Single(cut.FindAll(".home-ops-timeline__row"));
-            Assert.NotEmpty(cut.FindAll("button[aria-label='Add Station']"));
+            Assert.Single(cut.FindAll(".home-ops-source-toolbar button"));
             var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
             Assert.Contains("Play ORF Radio Wien", buttonLabels);
             Assert.Contains("home-ops-dashboard", cut.Find("[data-qa='home-operations-dashboard']").ClassList);

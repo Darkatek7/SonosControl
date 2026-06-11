@@ -1367,8 +1367,8 @@ h3[tabindex="-1"]:focus {
 }
 
 .home-ops-source-toolbar {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
 }
@@ -1379,6 +1379,11 @@ h3[tabindex="-1"]:focus {
     justify-content: center;
     gap: 0.35rem;
     min-width: 0;
+}
+
+.home-ops-source-toolbar .btn-primary {
+    min-width: 2.5rem;
+    padding-inline: 0.75rem;
 }
 
 .home-ops-youtube-toolbar {
