@@ -38,6 +38,7 @@ builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISetti
 builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSection("Playback"));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+builder.Services.AddSingleton<ISchedulePriorityCoordinator, SchedulePriorityCoordinator>();
 builder.Services.AddSingleton<IYouTubeToolRunner, YouTubeToolRunner>();
 builder.Services.AddSingleton<YouTubePlaybackService>();
 builder.Services.AddSingleton<IYouTubePlaybackService>(sp => sp.GetRequiredService<YouTubePlaybackService>());

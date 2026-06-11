@@ -11,6 +11,7 @@ public sealed class ScheduleWindowAutomationService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScheduleWindowAutomationService> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly ISchedulePriorityCoordinator _schedulePriorityCoordinator;
 
     private string? _activeWindowId;
     private DateTime _activeWindowAppliedUtc;
@@ -18,11 +19,13 @@ public sealed class ScheduleWindowAutomationService : BackgroundService
     public ScheduleWindowAutomationService(
         IServiceScopeFactory scopeFactory,
         ILogger<ScheduleWindowAutomationService> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ISchedulePriorityCoordinator? schedulePriorityCoordinator = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _schedulePriorityCoordinator = schedulePriorityCoordinator ?? new SchedulePriorityCoordinator();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,6 +69,14 @@ public sealed class ScheduleWindowAutomationService : BackgroundService
 
         var now = _timeProvider.GetLocalNow();
         var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(settings.ScheduleWindows, now);
+        _schedulePriorityCoordinator.ObserveActiveWindow(activeWindow?.Id);
+
+        if (_schedulePriorityCoordinator.IsSonosConfigOwningPlayback)
+        {
+            _activeWindowId = null;
+            _activeWindowAppliedUtc = default;
+            return;
+        }
 
         if (activeWindow is null)
         {
@@ -77,6 +88,11 @@ public sealed class ScheduleWindowAutomationService : BackgroundService
                 _activeWindowAppliedUtc = default;
             }
 
+            return;
+        }
+
+        if (!_schedulePriorityCoordinator.CanApplyWindow(activeWindow.Id))
+        {
             return;
         }
 

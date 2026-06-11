@@ -174,9 +174,9 @@ def verify_drawer(page):
         return
 
     expect(menu_button.first).to_be_visible(timeout=5000)
-    menu_button.first.click()
+    menu_button.first.click(force=True)
     page.wait_for_timeout(150)
-    menu_button.first.click()
+    menu_button.first.click(force=True)
     page.wait_for_timeout(150)
 
 

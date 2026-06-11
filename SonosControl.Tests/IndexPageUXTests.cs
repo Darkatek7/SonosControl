@@ -388,7 +388,12 @@ public class IndexPageUXTests
     public void IndexPage_UpNext_ShowsOnlyNextTwoQueueItems()
     {
         using var ctx = new TestContext();
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            connectorCurrentStation: "x-rincon-queue:RINCON_TEST#0");
 
         resources.ConnectorRepo
             .Setup(r => r.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -413,6 +418,41 @@ public class IndexPageUXTests
             Assert.Contains("Track 2", cut.Markup);
             Assert.DoesNotContain("Track 3", cut.Markup);
             Assert.DoesNotContain("Track 4", cut.Markup);
+        });
+    }
+
+    [Fact]
+    public void IndexPage_UpNext_ShowsQueueEmpty_WhenSpeakerIsNotOnQueueTransport()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            connectorCurrentStation: "x-rincon-mp3radio://stream.example.com/live");
+
+        resources.ConnectorRepo
+            .Setup(r => r.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosQueuePage(
+                new[]
+                {
+                    new SonosQueueItem(0, "0", null, null, null),
+                    new SonosQueueItem(1, "1", null, null, null),
+                    new SonosQueueItem(2, "2", null, null, null)
+                },
+                0,
+                3,
+                11));
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Up Next", cut.Markup);
+            Assert.Contains("Queue empty", cut.Markup);
+            Assert.Contains("Queue is empty.", cut.Markup);
+            Assert.Empty(cut.FindAll(".home-ops-panel--queue .home-ops-queue-row"));
         });
     }
 
