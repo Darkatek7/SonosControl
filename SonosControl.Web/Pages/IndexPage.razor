@@ -122,29 +122,31 @@
                                    @bind-value:event="oninput"
                                    placeholder="https://..."
                                    aria-label="Direct media URL" />
-                            <button type="button"
-                                    class="btn btn-primary"
-                                    @onclick="PlayDirectMediaUrl"
-                                    disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
-                                    aria-label="Play direct URL">
-                                @if (_isDirectUrlLoading)
-                                {
-                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                }
-                                else
-                                {
-                                    <Icon Name="play" Size="14" />
-                                    <span>Play</span>
-                                }
-                            </button>
-                            <button type="button"
-                                    class="btn btn-outline-primary"
-                                    @onclick="OpenDirectUrlSaveModal"
-                                    disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
-                                    aria-label="Save direct URL">
-                                <Icon Name="plus" Size="14" />
-                                <span>Save</span>
-                            </button>
+                            <div class="home-ops-direct-play__actions">
+                                <button type="button"
+                                        class="btn btn-primary"
+                                        @onclick="PlayDirectMediaUrl"
+                                        disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                        aria-label="Play direct URL">
+                                    @if (_isDirectUrlLoading)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                    }
+                                    else
+                                    {
+                                        <Icon Name="play" Size="14" />
+                                        <span>Play</span>
+                                    }
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-primary"
+                                        @onclick="OpenDirectUrlSaveModal"
+                                        disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                        aria-label="Save direct URL">
+                                    <Icon Name="plus" Size="14" />
+                                    <span>Save</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

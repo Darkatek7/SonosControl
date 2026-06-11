@@ -905,8 +905,15 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-direct-play {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
+    align-items: start;
+}
+
+.home-ops-direct-play__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
     align-items: center;
 }
 
@@ -1631,6 +1638,10 @@ h3[tabindex="-1"]:focus {
 
     .home-ops-direct-play {
         grid-template-columns: 1fr;
+    }
+
+    .home-ops-direct-play__actions {
+        justify-content: flex-start;
     }
 
     .home-ops-active-window,
