@@ -11,12 +11,18 @@ namespace SonosControl.Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly TimeProvider _timeProvider;
         private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+        private readonly ISchedulePriorityCoordinator _schedulePriorityCoordinator;
 
-        public SonosControlService(IServiceScopeFactory scopeFactory, TimeProvider? timeProvider = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
+        public SonosControlService(
+            IServiceScopeFactory scopeFactory,
+            TimeProvider? timeProvider = null,
+            Func<TimeSpan, CancellationToken, Task>? delay = null,
+            ISchedulePriorityCoordinator? schedulePriorityCoordinator = null)
         {
             _scopeFactory = scopeFactory;
             _timeProvider = timeProvider ?? TimeProvider.System;
             _delay = delay ?? TaskDelay;
+            _schedulePriorityCoordinator = schedulePriorityCoordinator ?? new SchedulePriorityCoordinator();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,14 +36,6 @@ namespace SonosControl.Web.Services
                     var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
                     var currentSettings = await uow.ISettingsRepo.GetSettings();
-                    var scheduleWindowsEnabled = currentSettings?.ScheduleWindows?.Any(w => w.IsEnabled) == true;
-                    if (scheduleWindowsEnabled)
-                    {
-                        // Scheduler 2.0 windows are handled by ScheduleWindowAutomationService.
-                        await _delay(TimeSpan.FromSeconds(30), stoppingToken);
-                        continue;
-                    }
-
                     // Continuously evaluate settings until start time is reached
                     var (settings, schedule, startTime) = await WaitUntilStartTime(uow, stoppingToken);
 
@@ -265,6 +263,7 @@ namespace SonosControl.Web.Services
                 await Task.WhenAll(targetSpeakers.Select(ip => playAction(ip)));
             }
 
+            _schedulePriorityCoordinator.NotifySonosConfigStart(SelectActiveWindowId(settings, now));
             Console.WriteLine($"{now:g}: Started Playing");
         }
 
@@ -566,6 +565,14 @@ namespace SonosControl.Web.Services
             {
                 await Task.WhenAll(speakers.Select(speaker => uow.ISonosConnectorRepo.UngroupSpeaker(speaker.IpAddress, cancellationToken)));
             }
+
+            var latestSettings = uow.ISettingsRepo is null
+                ? null
+                : await uow.ISettingsRepo.GetSettings();
+            _schedulePriorityCoordinator.NotifySonosConfigStop(SelectActiveWindowId(latestSettings, _timeProvider.GetLocalNow()));
         }
+
+        private static string? SelectActiveWindowId(SonosSettings? settings, DateTimeOffset now)
+            => ScheduleWindowEvaluator.SelectActiveWindow(settings?.ScheduleWindows, now)?.Id;
     }
 }

@@ -555,6 +555,7 @@
     private string? _commandStatusMessage;
     private bool _commandStatusIsError;
     private CancellationTokenSource? _commandStatusCts;
+    private bool _hasActiveQueueTransport;
 
     private List<SpeakerStatusViewModel> _speakerStatuses = new();
     private SonosSettings? _settings;
@@ -1170,6 +1171,10 @@
 
             await Task.WhenAll(updateStatusesTask, selectedSpeakerTask);
             PopulateSelectedSpeakerMedia();
+            if (!_hasActiveQueueTransport)
+            {
+                ClearQueueState();
+            }
 
             _lastSuccessfulRefreshUtc = DateTime.UtcNow;
             if (runSlowLane)
@@ -1345,7 +1350,9 @@
 
         await Task.WhenAll(stationTask, trackInfoTask, progressTask);
 
-        currentStationUrl = NormalizeStationUrl(await stationTask);
+        var rawStationUrl = await stationTask;
+        _hasActiveQueueTransport = IsQueueTransport(rawStationUrl);
+        currentStationUrl = NormalizeStationUrl(rawStationUrl);
         currentStationDisplay = ResolveStationDisplay(currentStationUrl);
         _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
 
@@ -1377,7 +1384,9 @@
 
         await Task.WhenAll(stationTask, progressTask);
 
-        currentStationUrl = NormalizeStationUrl(await stationTask);
+        var rawStationUrl = await stationTask;
+        _hasActiveQueueTransport = IsQueueTransport(rawStationUrl);
+        currentStationUrl = NormalizeStationUrl(rawStationUrl);
         currentStationDisplay = ResolveStationDisplay(currentStationUrl);
         _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
 
@@ -1441,6 +1450,10 @@
             ? normalized[4..]
             : normalized;
     }
+
+    private static bool IsQueueTransport(string? rawStationUrl)
+        => !string.IsNullOrWhiteSpace(rawStationUrl)
+            && rawStationUrl.Contains("x-rincon-queue:", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatTrackProgress(TimeSpan position, TimeSpan duration)
     {
@@ -1545,10 +1558,13 @@
     {
         if (_settings is null || string.IsNullOrWhiteSpace(SelectedSpeakerIp))
         {
-            _queueItems = Array.Empty<SonosQueueItem>();
-            _queueStartIndex = 0;
-            _queueTotalMatches = 0;
-            _queueErrorMessage = null;
+            ClearQueueState();
+            return;
+        }
+
+        if (!_hasActiveQueueTransport)
+        {
+            ClearQueueState();
             return;
         }
 
@@ -1604,6 +1620,14 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
+    }
+
+    private void ClearQueueState()
+    {
+        _queueItems = Array.Empty<SonosQueueItem>();
+        _queueStartIndex = 0;
+        _queueTotalMatches = 0;
+        _queueErrorMessage = null;
     }
 
     private static string FormatQueueItem(SonosQueueItem item) => item.DisplayTitle;

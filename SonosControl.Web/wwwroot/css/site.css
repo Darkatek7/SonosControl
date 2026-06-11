@@ -850,7 +850,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-control-strip {
     display: grid;
-    grid-template-columns: minmax(13rem, 0.8fr) minmax(0, 1.6fr) minmax(16rem, 1.1fr);
+    grid-template-columns: minmax(14rem, 0.9fr) minmax(0, 2.1fr);
     align-items: end;
     gap: 0.85rem;
     padding: 0.85rem 1.1rem;
@@ -890,6 +890,7 @@ h3[tabindex="-1"]:focus {
 
 .home-ops-control-strip__direct {
     min-width: 0;
+    grid-column: 1 / -1;
 }
 
 .home-ops-control-strip__direct label {
