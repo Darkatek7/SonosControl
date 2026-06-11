@@ -342,17 +342,8 @@
                                aria-label="Search active library tab" />
                     </div>
                     <div class="home-ops-source-toolbar">
-                        <button type="button" class="btn btn-sm btn-primary" @onclick="ShowAddStationModal" aria-label="Add Station">
-                            <Icon Name="plus" Size="14" /> Station
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddSpotifyModal" aria-label="Add Spotify Track">
-                            <Icon Name="plus" Size="14" /> Spotify
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddYouTubeModal" aria-label="Add YouTube Video">
-                            <Icon Name="plus" Size="14" /> YouTube
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddYouTubeMusicModal" aria-label="Add YouTube Music Collection">
-                            <Icon Name="plus" Size="14" /> YouTube Music
+                        <button type="button" class="btn btn-sm btn-primary" @onclick="OpenActiveLibraryAddModal" aria-label="@GetActiveLibraryAddAriaLabel()">
+                            <Icon Name="plus" Size="14" />
                         </button>
                         <a class="btn btn-sm btn-outline-secondary" href="/recommendations">
                             <Icon Name="settings" Size="14" /> Manage
@@ -1034,6 +1025,36 @@
             "youtubemusic" => "Search YouTube Music",
             _ => "Search stations"
         };
+    }
+
+    private string GetActiveLibraryAddAriaLabel()
+    {
+        return _activeLibraryTab switch
+        {
+            "spotify" => "Add Spotify Track",
+            "youtube" => "Add YouTube Video",
+            "youtubemusic" => "Add YouTube Music Collection",
+            _ => "Add Station"
+        };
+    }
+
+    private void OpenActiveLibraryAddModal()
+    {
+        switch (_activeLibraryTab.ToLowerInvariant())
+        {
+            case "spotify":
+                ShowAddSpotifyModal();
+                break;
+            case "youtube":
+                ShowAddYouTubeModal();
+                break;
+            case "youtubemusic":
+                ShowAddYouTubeMusicModal();
+                break;
+            default:
+                ShowAddStationModal();
+                break;
+        }
     }
 
     private string GetLibraryEmptyMessage()
