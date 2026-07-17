@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AngleSharp.Dom;
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components.Web;
@@ -24,7 +25,7 @@ namespace SonosControl.Tests;
 public class IndexPageUXTests
 {
     [Fact]
-    public void IndexPage_RendersPlaybackFirstHierarchy_WithoutDuplicateTransportControls()
+    public void IndexPage_RendersRedesignedHierarchy_WithHeroRoomsLibraryAndFooter()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -33,44 +34,75 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.NotEmpty(cut.FindAll(".home-ops-primary .home-ops-panel--library"));
-            Assert.NotEmpty(cut.FindAll(".home-ops-primary .home-ops-panel--queue"));
-            Assert.NotEmpty(cut.FindAll(".home-ops-sidebar .home-ops-panel--automation"));
-            Assert.NotEmpty(cut.FindAll(".home-ops-sidebar .home-ops-panel--health"));
-            Assert.Empty(cut.FindAll(".home-ops-panel--now"));
+            Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
+            Assert.NotEmpty(cut.FindAll("[data-qa='now-playing-hero']"));
+            Assert.NotEmpty(cut.FindAll("[data-qa='room-card']"));
+            Assert.NotEmpty(cut.FindAll(".library"));
+            Assert.NotEmpty(cut.FindAll(".home-footer"));
+            // Legacy markup must be gone.
+            Assert.Empty(cut.FindAll(".home-ops-dashboard"));
+            Assert.Empty(cut.FindAll(".home-ops-panel"));
+            Assert.Empty(cut.FindAll("details[data-qa='home-direct-url']"));
             Assert.Empty(cut.FindAll("#activeSpeakerSelect"));
-            Assert.Empty(cut.FindAll("[data-qa='home-dashboard-sync']"));
-
-            var directUrl = cut.Find("details[data-qa='home-direct-url']");
-            Assert.Null(directUrl.GetAttribute("open"));
         });
     }
 
     [Fact]
-    public void IndexPage_LibraryTabs_ExposeTabPanelSemantics_AndSupportArrowKeys()
+    public void IndexPage_LibraryChips_FilterSources_AndSearches()
     {
         using var ctx = new TestContext();
-        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var stations = Enumerable.Range(1, 8)
+            .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
+            .ToList();
+        var tracks = new List<SpotifyObject> { new SpotifyObject { Name = "Focus Track", Url = "spotify:track:focus" } };
+        var videos = new List<YouTubeObject> { new YouTubeObject { Name = "Live Set", Url = "https://www.youtube.com/watch?v=abc123xyz00" } };
+        var collections = new List<YouTubeMusicObject> { new YouTubeMusicObject { Name = "Workout Collection", Url = "https://music.youtube.com/playlist?list=workout" } };
+
+        using var resources = ConfigureServices(ctx, stations, tracks, collections, youTubeVideos: videos);
 
         var cut = ctx.RenderComponent<IndexPage>();
 
+        // Default "All" chip shows every source.
         cut.WaitForAssertion(() =>
         {
-            var activeTab = cut.Find("#home-library-tab-stations");
-            Assert.Equal("0", activeTab.GetAttribute("tabindex"));
-            Assert.Equal("home-library-panel", activeTab.GetAttribute("aria-controls"));
-            Assert.Equal("home-library-tab-stations", cut.Find("#home-library-panel").GetAttribute("aria-labelledby"));
+            Assert.True(IsChipActive(cut, "All"));
+            Assert.Contains("Station 1", cut.Markup);
+            Assert.Contains("Station 8", cut.Markup);
+            Assert.Contains("Focus Track", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label='Play Station 8']"));
         });
 
-        cut.Find("#home-library-tab-stations").KeyDown(new KeyboardEventArgs { Key = "ArrowRight" });
-
+        // Search filters across all sources.
+        cut.Find("input[aria-label='Search media library']").Input("Station 8");
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("true", cut.Find("#home-library-tab-spotify").GetAttribute("aria-selected"));
-            Assert.Equal("0", cut.Find("#home-library-tab-spotify").GetAttribute("tabindex"));
-            Assert.Equal("-1", cut.Find("#home-library-tab-stations").GetAttribute("tabindex"));
-            Assert.Equal("home-library-tab-spotify", cut.Find("#home-library-panel").GetAttribute("aria-labelledby"));
+            Assert.Contains("Station 8", cut.Markup);
+            Assert.DoesNotContain("Station 1", cut.Markup);
+            Assert.DoesNotContain("Focus Track", cut.Markup);
+        });
+
+        // Spotify chip shows only Spotify.
+        ClickChip(cut, "Spotify");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(IsChipActive(cut, "Spotify"));
+            Assert.Contains("Focus Track", cut.Markup);
+            Assert.DoesNotContain("Station 8", cut.Markup);
+            Assert.Empty(cut.FindAll("button[aria-label^='Play Station']"));
+            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Focus Track']"));
+        });
+
+        // YouTube chip shows only YouTube.
+        ClickChip(cut, "YouTube");
+        cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
+
+        // YT Music chip shows only YT Music.
+        ClickChip(cut, "YT Music");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Workout Collection", cut.Markup);
+            Assert.DoesNotContain("Live Set", cut.Markup);
         });
     }
 
@@ -103,7 +135,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_RendersEmptyStates_WhenListsAreEmpty()
+    public void IndexPage_RendersEmptyState_WhenLibraryIsEmpty()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -112,69 +144,9 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
-            Assert.Contains("Library", cut.Markup);
-            Assert.Contains("Direct URL Play", cut.Markup);
-            Assert.DoesNotContain("Quick Sources", cut.Markup);
-            Assert.Contains("No saved stations.", cut.Markup);
+            Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
+            Assert.Contains("No saved media yet.", cut.Markup);
             Assert.Empty(cut.FindAll(".spotify-library"));
-        });
-    }
-
-    [Fact]
-    public void IndexPage_LibraryListsAllSourcesInTabs_AndSearchesActiveTab()
-    {
-        using var ctx = new TestContext();
-
-        var stations = Enumerable.Range(1, 8)
-            .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
-            .ToList();
-        var tracks = new List<SpotifyObject> { new SpotifyObject { Name = "Focus Track", Url = "spotify:track:focus" } };
-        var videos = new List<YouTubeObject> { new YouTubeObject { Name = "Live Set", Url = "https://www.youtube.com/watch?v=abc123xyz00" } };
-        var collections = new List<YouTubeMusicObject> { new YouTubeMusicObject { Name = "Workout Collection", Url = "https://music.youtube.com/playlist?list=workout" } };
-
-        using var resources = ConfigureServices(ctx, stations, tracks, collections, youTubeVideos: videos);
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Library", cut.Markup);
-            Assert.Contains("Station 1", cut.Markup);
-            Assert.Contains("Station 8", cut.Markup);
-            Assert.DoesNotContain("Focus Track", cut.Markup);
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Station 8']"));
-        });
-
-        cut.Find("input[aria-label='Search active library tab']").Input("Station 8");
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Station 8", cut.Markup);
-            Assert.DoesNotContain("Station 1", cut.Markup);
-        });
-
-        cut.Find("#home-library-tab-spotify").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Focus Track", cut.Markup);
-            Assert.DoesNotContain("Station 8", cut.Markup);
-            Assert.Empty(cut.FindAll("button[aria-label^='Play Station']"));
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Focus Track']"));
-        });
-
-        cut.Find("#home-library-tab-youtube").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Live Set", cut.Markup);
-            Assert.DoesNotContain("Focus Track", cut.Markup);
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Live Set']"));
-        });
-
-        cut.Find("#home-library-tab-youtube-music").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Workout Collection", cut.Markup);
-            Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Workout Collection']"));
         });
     }
 
@@ -183,7 +155,6 @@ public class IndexPageUXTests
     {
         using var ctx = new TestContext();
 
-        // Setup speakers - MUST use valid Hex characters for Regex matching in component
         var master = new SonosSpeaker { Name = "Living Room", IpAddress = "192.168.1.10", Uuid = "uuid:RINCON_1234567890ABCDEF" };
         var slave = new SonosSpeaker { Name = "Kitchen", IpAddress = "192.168.1.11", Uuid = "uuid:RINCON_0000000000000000" };
         var speakers = new List<SonosSpeaker> { master, slave };
@@ -194,7 +165,6 @@ public class IndexPageUXTests
             Speakers = speakers
         };
 
-        // Mocks
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
@@ -218,11 +188,10 @@ public class IndexPageUXTests
             .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
         connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
 
-        // Grouping setup: Master playing stream, Slave playing group stream
         connectorRepo.Setup(r => r.GetCurrentStationAsync(master.IpAddress, It.IsAny<CancellationToken>()))
             .ReturnsAsync("http://somestream.com");
         connectorRepo.Setup(r => r.GetCurrentStationAsync(slave.IpAddress, It.IsAny<CancellationToken>()))
-            .ReturnsAsync($"x-rincon-group:{master.Uuid}"); // Slave points to Master
+            .ReturnsAsync($"x-rincon-group:{master.Uuid}");
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
@@ -246,11 +215,11 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("Living Room", cut.Markup);
-            Assert.Contains("Stereo/group: Kitchen", cut.Markup);
+            Assert.Contains("Kitchen", cut.Markup);
             Assert.DoesNotContain("Linked to Living Room", cut.Markup);
             Assert.DoesNotContain("↳", cut.Markup);
-            Assert.Single(cut.FindAll(".speaker-status-item"));
-            Assert.Contains("speaker-status-badge", cut.Find(".speaker-status-badge").ClassList);
+            Assert.Single(cut.FindAll(".room-groups__item"));
+            Assert.Contains("Playing", cut.Find(".room-groups__item .badge").TextContent);
         });
     }
 
@@ -316,16 +285,16 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Single(cut.FindAll(".speaker-status-item"));
+            Assert.Single(cut.FindAll(".room-groups__item"));
             Assert.Contains("Office Pair", cut.Markup);
-            Assert.Contains("Stereo/group: Office Right", cut.Markup);
-            Assert.Contains("Paused", cut.Find(".speaker-status-badge").TextContent);
+            Assert.Contains("Office Right", cut.Markup);
+            Assert.Contains("Paused", cut.Find(".room-groups__item .badge").TextContent);
             Assert.DoesNotContain("Linked to Office Pair", cut.Markup);
         });
     }
 
     [Fact]
-    public void IndexPage_HasAccessibleLibraryTabs_AndAddButtons()
+    public void IndexPage_HasAccessibleLibraryChips_AndAddButton()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -334,30 +303,25 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("tab", cut.Find("#home-library-tab-stations").GetAttribute("role"));
-            Assert.Equal("true", cut.Find("#home-library-tab-stations").GetAttribute("aria-selected"));
-            Assert.Equal("tab", cut.Find("#home-library-tab-spotify").GetAttribute("role"));
-            Assert.Equal("tab", cut.Find("#home-library-tab-youtube").GetAttribute("role"));
-            Assert.Equal("tab", cut.Find("#home-library-tab-youtube-music").GetAttribute("role"));
-            Assert.NotNull(cut.Find("input[aria-label='Search active library tab']"));
-            Assert.NotNull(cut.Find("input[aria-label='Direct media URL']"));
-            Assert.NotNull(cut.Find("button[aria-label='Play direct URL']"));
-            Assert.NotNull(cut.Find("button[aria-label='Save direct URL']"));
+            var allChip = ChipButton(cut, "All");
+            Assert.Equal("true", allChip.GetAttribute("aria-pressed"));
+            Assert.NotNull(cut.Find("input[aria-label='Search media library']"));
+            // Default add target is a station.
             Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
         });
 
-        cut.Find("#home-library-tab-spotify").Click();
+        ClickChip(cut, "Spotify");
         cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']")));
 
-        cut.Find("#home-library-tab-youtube").Click();
+        ClickChip(cut, "YouTube");
         cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']")));
 
-        cut.Find("#home-library-tab-youtube-music").Click();
+        ClickChip(cut, "YT Music");
         cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']")));
     }
 
     [Fact]
-    public void IndexPage_RendersDashboardOnlyHome_WithLibraryAutomationHealthAndActivity()
+    public void IndexPage_RendersDashboard_WithAutomationRoomsLibraryAndActivity()
     {
         using var ctx = new TestContext();
 
@@ -447,97 +411,23 @@ public class IndexPageUXTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Single(cut.FindAll("[data-qa='home-operations-dashboard']"));
+            Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
             Assert.Empty(cut.FindAll(".spotify-library"));
             Assert.Empty(cut.FindAll(".spotify-home-context"));
             Assert.Empty(cut.FindAll(".spotify-room-picker"));
-            Assert.Contains("Today at a glance", cut.Markup);
+            Assert.DoesNotContain("Today at a glance", cut.Markup);
             Assert.Contains("Morning Radio", cut.Markup);
             Assert.Contains("Scene: Morning Radio", cut.Markup);
-            Assert.Contains("Device Health", cut.Markup);
+            Assert.Contains("Speakers", cut.Markup);
             Assert.Contains("Library", cut.Markup);
-            Assert.DoesNotContain("Quick Sources", cut.Markup);
             Assert.Contains("Online", cut.Markup);
             Assert.Contains("Offline", cut.Markup);
             Assert.Contains("Recent Activity", cut.Markup);
             Assert.Contains("Morning Radio scene applied by scheduler", cut.Markup);
-            Assert.Single(cut.FindAll(".home-ops-timeline__row"));
-            Assert.Single(cut.FindAll(".home-ops-source-toolbar button"));
+            Assert.Single(cut.FindAll(".home-next"));
             var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
             Assert.Contains("Play ORF Radio Wien", buttonLabels);
-            Assert.Contains("home-ops-dashboard", cut.Find("[data-qa='home-operations-dashboard']").ClassList);
-        });
-    }
-
-    [Fact]
-    public void IndexPage_UpNext_ShowsOnlyNextTwoQueueItems()
-    {
-        using var ctx = new TestContext();
-        using var resources = ConfigureServices(
-            ctx,
-            new List<TuneInStation>(),
-            new List<SpotifyObject>(),
-            new List<YouTubeMusicObject>(),
-            connectorCurrentStation: "x-rincon-queue:RINCON_TEST#0");
-
-        resources.ConnectorRepo
-            .Setup(r => r.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SonosQueuePage(
-                new[]
-                {
-                    new SonosQueueItem(0, "Track 1", "Artist 1", null, null),
-                    new SonosQueueItem(1, "Track 2", "Artist 2", null, null),
-                    new SonosQueueItem(2, "Track 3", "Artist 3", null, null),
-                    new SonosQueueItem(3, "Track 4", "Artist 4", null, null)
-                },
-                0,
-                4,
-                4));
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Up Next", cut.Markup);
-            Assert.Contains("Track 1", cut.Markup);
-            Assert.Contains("Track 2", cut.Markup);
-            Assert.DoesNotContain("Track 3", cut.Markup);
-            Assert.DoesNotContain("Track 4", cut.Markup);
-        });
-    }
-
-    [Fact]
-    public void IndexPage_UpNext_ShowsQueueEmpty_WhenSpeakerIsNotOnQueueTransport()
-    {
-        using var ctx = new TestContext();
-        using var resources = ConfigureServices(
-            ctx,
-            new List<TuneInStation>(),
-            new List<SpotifyObject>(),
-            new List<YouTubeMusicObject>(),
-            connectorCurrentStation: "x-rincon-mp3radio://stream.example.com/live");
-
-        resources.ConnectorRepo
-            .Setup(r => r.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SonosQueuePage(
-                new[]
-                {
-                    new SonosQueueItem(0, "0", null, null, null),
-                    new SonosQueueItem(1, "1", null, null, null),
-                    new SonosQueueItem(2, "2", null, null, null)
-                },
-                0,
-                3,
-                11));
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Up Next", cut.Markup);
-            Assert.Contains("Queue empty", cut.Markup);
-            Assert.Contains("Queue is empty.", cut.Markup);
-            Assert.Empty(cut.FindAll(".home-ops-panel--queue .home-ops-queue-row"));
+            Assert.Contains("home-shell", cut.Find("[data-qa='home-dashboard']").ClassList);
         });
     }
 
@@ -562,7 +452,8 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Contains(longDetails, cut.Markup);
-            Assert.Contains("home-ops-activity__details", cut.Find(".home-ops-activity__row strong").ClassList);
+            Assert.NotEmpty(cut.FindAll(".home-activity__row strong"));
+            Assert.Contains(longDetails, cut.Find(".home-activity__row strong").TextContent);
         });
     }
 
@@ -597,12 +488,7 @@ public class IndexPageUXTests
 
         var cut = ctx.RenderComponent<IndexPage>();
 
-        cut.WaitForAssertion(() =>
-        {
-            Assert.NotNull(cut.Find("#home-library-tab-youtube"));
-        });
-
-        cut.Find("#home-library-tab-youtube").Click();
+        // "All" filter exposes the YouTube item directly.
         cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
 
         var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
@@ -620,7 +506,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_YouTubeToolbarModeControl_IsVisibleAndUpdatesSelectedEntry()
+    public void IndexPage_YouTubePerItemMode_UpdatesSelectedEntryWithoutPlaying()
     {
         using var ctx = new TestContext();
 
@@ -649,19 +535,14 @@ public class IndexPageUXTests
 
         var cut = ctx.RenderComponent<IndexPage>();
 
-        cut.Find("#home-library-tab-youtube").Click();
-
         cut.WaitForAssertion(() =>
         {
-            Assert.NotNull(cut.Find("[data-qa='home-youtube-mode-toolbar']"));
-            Assert.NotEmpty(cut.FindAll(".home-ops-youtube-mode"));
+            Assert.NotEmpty(cut.FindAll(".library__yt-mode"));
             Assert.Contains("Shuffle", cut.Markup);
         });
 
-        cut.Find("#home-youtube-mode-entry").Change("https://www.youtube.com/playlist?list=PL123");
-        cut.FindAll("button")
-            .First(button => button.TextContent.Contains("Shuffle", StringComparison.OrdinalIgnoreCase))
-            .Click();
+        // First YouTube item is the playlist-like entry; change its per-item mode to Shuffle.
+        cut.Find(".library__yt-mode").Change(YouTubePlaybackMode.PlaylistShuffle.ToString());
 
         Assert.Equal(YouTubePlaybackMode.PlaylistShuffle, settings.YouTubeCollections[0].PlaybackMode);
         Assert.Equal(YouTubePlaybackMode.AutoQueueRelated, settings.YouTubeCollections[1].PlaybackMode);
@@ -673,125 +554,14 @@ public class IndexPageUXTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task IndexPage_DirectUrlPlay_ResolvesMediaTypes_AndUsesPlaybackStateSpeaker()
-    {
-        using var ctx = new TestContext();
+    private static IElement ChipButton(IRenderedComponent<IndexPage> cut, string label)
+        => cut.FindAll(".library__chip").First(button => button.TextContent.Trim() == label);
 
-        var settings = new SonosSettings
-        {
-            IP_Adress = "1.2.3.4",
-            Speakers = new List<SonosSpeaker>
-            {
-                new() { IpAddress = "1.2.3.4", Name = "Kitchen" },
-                new() { IpAddress = "1.2.3.5", Name = "Living Room" }
-            }
-        };
+    private static void ClickChip(IRenderedComponent<IndexPage> cut, string label)
+        => ChipButton(cut, label).Click();
 
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>(), settings);
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
-        await playbackState.SetActiveSpeakerAsync("1.2.3.5");
-
-        var directUrlInput = cut.Find("input[aria-label='Direct media URL']");
-        directUrlInput.Input("https://open.spotify.com/track/123");
-        cut.Find("button[aria-label='Play direct URL']").Click();
-        resources.ConnectorRepo.Verify(repo => repo.PlaySpotifyTrackAsync("1.2.3.5", "https://open.spotify.com/track/123", It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
-
-        directUrlInput.Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
-        cut.Find("button[aria-label='Play direct URL']").Click();
-        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync("1.2.3.5", "https://www.youtube.com/watch?v=5EsEJRXlrGk", It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
-
-        directUrlInput.Input("https://youtu.be/5EsEJRXlrGk");
-        cut.Find("button[aria-label='Play direct URL']").Click();
-        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync("1.2.3.5", "https://youtu.be/5EsEJRXlrGk", It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
-
-        directUrlInput.Input("https://music.youtube.com/watch?v=5EsEJRXlrGk");
-        cut.Find("button[aria-label='Play direct URL']").Click();
-        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeMusicTrackAsync("1.2.3.5", "https://music.youtube.com/watch?v=5EsEJRXlrGk", settings.AutoPlayStationUrl, It.IsAny<CancellationToken>()), Times.Once);
-
-        directUrlInput.Input("https://stream.example/live");
-        cut.Find("button[aria-label='Play direct URL']").Click();
-        resources.ConnectorRepo.Verify(repo => repo.SetTuneInStationAsync("1.2.3.5", "https://stream.example/live", It.IsAny<CancellationToken>()), Times.Once);
-        resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Exactly(5));
-    }
-
-    [Fact]
-    public void IndexPage_DirectUrlPlay_RejectsEmptyUrl()
-    {
-        using var ctx = new TestContext();
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.Find("input[aria-label='Direct media URL']").Input(string.Empty);
-        var playButton = cut.Find("button[aria-label='Play direct URL']");
-        Assert.True(playButton.HasAttribute("disabled"));
-
-        resources.ConnectorRepo.Verify(repo => repo.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        resources.ConnectorRepo.Verify(repo => repo.PlaySpotifyTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
-        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
-        resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public void IndexPage_DirectUrlSave_PrefillsModal_AndAddsItemToLibrary()
-    {
-        using var ctx = new TestContext();
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.Find("input[aria-label='Direct media URL']").Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
-        cut.Find("button[aria-label='Save direct URL']").Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Add New YouTube Video", cut.Markup);
-            Assert.Equal("https://www.youtube.com/watch?v=5EsEJRXlrGk", cut.Find("#mediaUrl").GetAttribute("value"));
-        });
-
-        cut.Find("#mediaName").Input("Friday Mix");
-        cut.Find(".modal-content button.btn.btn-primary").Click();
-
-        cut.Find("#home-library-tab-youtube").Click();
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Friday Mix", cut.Markup);
-            Assert.NotEmpty(cut.FindAll("button[aria-label='Play Friday Mix']"));
-        });
-    }
-
-    [Fact]
-    public void IndexPage_DirectUrlSave_ShowsDuplicateValidationError()
-    {
-        using var ctx = new TestContext();
-        var videos = new List<YouTubeObject>
-        {
-            new() { Name = "Friday Mix", Url = "https://www.youtube.com/watch?v=5EsEJRXlrGk" }
-        };
-
-        using var resources = ConfigureServices(
-            ctx,
-            new List<TuneInStation>(),
-            new List<SpotifyObject>(),
-            new List<YouTubeMusicObject>(),
-            youTubeVideos: videos);
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.Find("input[aria-label='Direct media URL']").Input("https://www.youtube.com/watch?v=5EsEJRXlrGk");
-        cut.Find("button[aria-label='Save direct URL']").Click();
-
-        cut.Find("#mediaName").Input("Friday Mix");
-        cut.Find(".modal-content button.btn.btn-primary").Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("YouTube video with this name or URL already exists.", cut.Markup);
-        });
-    }
+    private static bool IsChipActive(IRenderedComponent<IndexPage> cut, string label)
+        => string.Equals(ChipButton(cut, label).GetAttribute("aria-pressed"), "true", StringComparison.OrdinalIgnoreCase);
 
     private sealed class TestResources : IDisposable
     {

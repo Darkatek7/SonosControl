@@ -1,0 +1,148 @@
+.room-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+    overflow: hidden;
+}
+
+.room-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.room-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-card);
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.room-card > * {
+    position: relative;
+}
+
+.room-card--active {
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+}
+
+.room-card__head {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.room-card__dot {
+    flex: 0 0 auto;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 999px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.room-card__dot.is-online {
+    color: var(--brand-success);
+    background: var(--brand-success);
+}
+
+.room-card__dot.is-offline {
+    color: var(--brand-danger);
+    background: var(--brand-danger);
+}
+
+.room-card__dot.is-unknown {
+    color: var(--text-muted);
+    background: var(--text-muted);
+}
+
+.room-card__title {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.room-card__title strong {
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-tight);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.room-card__status {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.room-card__active-badge {
+    flex: 0 0 auto;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: var(--spacing-2xs) var(--spacing-sm);
+    border-radius: 999px;
+    color: var(--brand-primary);
+    background: color-mix(in srgb, var(--brand-primary) 14%, transparent);
+}
+
+.room-card__volume {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--text-secondary);
+}
+
+.room-card__volume input[type="range"] {
+    flex: 1 1 auto;
+    accent-color: var(--brand-primary);
+}
+
+.room-card.is-offline .room-card__volume,
+.room-card.is-unknown .room-card__volume {
+    opacity: 0.55;
+}
+
+.room-card__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.room-card__play,
+.room-card__activate {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2xs);
+}
+
+[data-theme='dark'] .room-card {
+    background: var(--surface-1);
+}
+
+[data-theme='dark'] .room-card--active {
+    border-color: var(--brand-accent);
+    box-shadow: var(--shadow-md), var(--shadow-glow-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .room-card {
+        transition: none;
+    }
+    .room-card:hover {
+        transform: none;
+    }
+}
