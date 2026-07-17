@@ -9,6 +9,7 @@
 @using SonosControl.Web.Pages.Index.Components
 @using SonosControl.Web.Services
 @using SonosControl.Web.Shared
+@implements IAsyncDisposable
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
@@ -38,9 +39,9 @@
             }
             <header class="home-ops-dashboard__header">
                 <div>
-                    <span class="spotify-eyebrow">Operations</span>
+                    <span class="spotify-eyebrow">Home audio</span>
                     <h1 id="home-ops-heading">Today at a glance</h1>
-                    <p>Live playback, automation, device health, queue state, and compact source control.</p>
+                    <p>Choose what plays next while automation and room health stay within reach.</p>
                 </div>
                 <div class="home-ops-dashboard__status">
                     <span class="home-ops-status-pill @(activeWindow is null ? "is-idle" : "is-active")">
@@ -52,19 +53,15 @@
 
             @if (_settings.Speakers.Any())
             {
-                <div class="home-ops-control-strip" aria-label="Playback controls">
-                    <div class="home-ops-control-strip__room">
-                        <label for="activeSpeakerSelect">Active room</label>
-                        <select id="activeSpeakerSelect" class="form-select" @bind="SelectedSpeakerIp">
-                            @foreach (var speaker in _settings.Speakers)
-                            {
-                                <option value="@speaker.IpAddress">@speaker.Name</option>
-                            }
-                        </select>
+                <div class="home-ops-room-context" aria-label="Active room actions">
+                    <div class="home-ops-room-context__identity">
+                        <span>Active room</span>
+                        <strong>@PlaybackState.ActiveSpeakerName</strong>
+                        <small>Switch rooms and control playback from the player below.</small>
                     </div>
-                    <div class="home-ops-control-strip__actions">
+                    <div class="home-ops-room-context__actions">
                         <div class="btn-group">
-                            <button class="btn btn-outline-primary" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
+                            <button class="btn btn-outline-primary" data-qa="home-group-speakers" @onclick="OpenGroupModal" disabled="@(_isGrouping || _isUngrouping)" title="Group speakers">
                                 @if (_isGrouping)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -85,69 +82,16 @@
                                 }
                             </button>
                         </div>
-                        <button class="btn btn-outline-primary home-ops-sync-button" data-qa="home-dashboard-sync" @onclick="HandleSyncPlay" disabled="@PlaybackState.IsSyncing" title="Play current media on all speakers">
-                            @if (PlaybackState.IsSyncing)
-                            {
-                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                <span class="visually-hidden">Syncing...</span>
-                            }
-                            else
-                            {
-                                <Icon Name="refresh" Size="16" />
-                                <span>Sync Play</span>
-                            }
-                        </button>
-                        <button type="button" class="btn btn-primary home-ops-main-play" @onclick="() => Play(!_isPlaying)" disabled="@_isMainPlaybackLoading" aria-label="@(_isPlaying ? "Pause playback" : "Start playback")">
-                            @if (_isMainPlaybackLoading)
-                            {
-                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                            }
-                            else
-                            {
-                                <Icon Name="@(_isPlaying ? "pause" : "play")" Size="16" />
-                                <span>@(_isPlaying ? "Pause" : "Play")</span>
-                            }
-                        </button>
                         <button type="button" class="btn btn-outline-primary" @onclick="OpenTimerModal">
                             <Icon Name="timer" Size="16" /> Timer
                         </button>
-                    </div>
-                    <div class="home-ops-control-strip__direct">
-                        <label for="homeDirectMediaUrl">Direct URL Play</label>
-                        <div class="home-ops-direct-play">
-                            <input id="homeDirectMediaUrl"
-                                   type="url"
-                                   class="form-control"
-                                   @bind-value="_directMediaUrl"
-                                   @bind-value:event="oninput"
-                                   placeholder="https://..."
-                                   aria-label="Direct media URL" />
-                            <div class="home-ops-direct-play__actions">
-                                <button type="button"
-                                        class="btn btn-primary"
-                                        @onclick="PlayDirectMediaUrl"
-                                        disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
-                                        aria-label="Play direct URL">
-                                    @if (_isDirectUrlLoading)
-                                    {
-                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                    }
-                                    else
-                                    {
-                                        <Icon Name="play" Size="14" />
-                                        <span>Play</span>
-                                    }
-                                </button>
-                                <button type="button"
-                                        class="btn btn-outline-primary"
-                                        @onclick="OpenDirectUrlSaveModal"
-                                        disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
-                                        aria-label="Save direct URL">
-                                    <Icon Name="plus" Size="14" />
-                                    <span>Save</span>
-                                </button>
-                            </div>
-                        </div>
+                        @if (_timerEndTimeUtc is not null)
+                        {
+                            var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
+                            <button type="button" class="btn btn-outline-secondary" @onclick="CancelTimedPlayback">
+                                Cancel timer · @localStopTime.ToString("t")
+                            </button>
+                        }
                     </div>
                 </div>
             }
@@ -159,135 +103,8 @@
                 </div>
             }
 
-            <div class="home-ops-dashboard__grid">
-                <article class="home-ops-panel home-ops-panel--now">
-                    <div class="home-ops-panel__header">
-                        <h3><Icon Name="music" Size="17" /> Now Playing</h3>
-                        <span>@GetSelectedSpeakerName()</span>
-                    </div>
-                    <div class="home-ops-now">
-                        @if (!string.IsNullOrWhiteSpace(currentTrackArtUrl))
-                        {
-                            <img src="@currentTrackArtUrl" alt="@($"Album art for {currentlyPlaying}")" class="home-ops-now__art" />
-                        }
-                        else
-                        {
-                            <div class="home-ops-now__art home-ops-now__art--placeholder" aria-hidden="true">
-                                <Icon Name="music" Size="34" />
-                            </div>
-                        }
-                        <div class="home-ops-now__copy">
-                            <strong title="@currentlyPlaying">@currentlyPlaying</strong>
-                            <span title="@currentStationDisplay">@currentStationDisplay · @(_isPlaying ? "Playing" : "Paused")</span>
-                            <div class="home-ops-now__controls" aria-label="Playback quick controls">
-                                <button type="button" class="btn btn-sm btn-outline-secondary home-ops-icon-button" @onclick="HandleQueueRefresh" title="Refresh queue" aria-label="Refresh queue">
-                                    <Icon Name="refresh" Size="14" />
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary home-ops-icon-button" @onclick="NextTrack" disabled="@(!CanSkipToNextTrack() || _isNextTrackLoading)" title="Next track" aria-label="Next track">
-                                    <Icon Name="forward" Size="14" />
-                                </button>
-                                @if (_timerEndTimeUtc is not null)
-                                {
-                                    var localStopTime = _timerEndTimeUtc.Value.ToLocalTime();
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelTimedPlayback">
-                                        Cancel @localStopTime.ToString("t")
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    </div>
-                    <div class="home-ops-metrics">
-                        <div>
-                            <span>Volume</span>
-                            <strong>@Volume%</strong>
-                        </div>
-                        <div>
-                            <span>Rooms</span>
-                            <strong>@_speakerStatuses.Count</strong>
-                        </div>
-                        <div>
-                            <span>Queue</span>
-                            <strong>@_queueTotalMatches</strong>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="home-ops-panel home-ops-panel--automation">
-                    <div class="home-ops-panel__header">
-                        <h3><Icon Name="schedule" Size="17" /> Active Automation</h3>
-                        <span>Schedule Windows</span>
-                    </div>
-                    <div class="home-ops-active-window">
-                        <div>
-                            <h4>@(activeWindow?.Name ?? "Manual control")</h4>
-                            <p>@GetActiveAutomationDescription(activeWindow, activeScene)</p>
-                            <div class="home-ops-chip-row">
-                                <span class="home-ops-chip">Priority @(activeWindow?.Priority.ToString() ?? "-")</span>
-                                <span class="home-ops-chip">Scene: @(activeScene?.Name ?? "None")</span>
-                                <span class="home-ops-chip">Fade out @(activeWindow?.FadeOutSeconds ?? 0)s</span>
-                                <span class="home-ops-chip">@GetSpeakerTargetSummary(activeScene)</span>
-                            </div>
-                        </div>
-                        <div class="home-ops-handoff">
-                            <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
-                            <span>@(activeWindow is null ? "no active window" : "until handoff")</span>
-                        </div>
-                    </div>
-                    <div class="home-ops-timeline" aria-label="Upcoming schedule windows">
-                        @if (nextWindow is not null)
-                        {
-                            <div class="home-ops-timeline__row">
-                                <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
-                                <div>
-                                    <strong>@nextWindow.Name</strong>
-                                    <span>@GetSceneName(nextWindow.SceneId) · @GetWindowTimeRange(nextWindow)</span>
-                                </div>
-                                <span class="home-ops-timeline__state is-ready">Next</span>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="home-ops-empty-row">No next schedule window.</div>
-                        }
-                    </div>
-                </article>
-
-                <article class="home-ops-panel home-ops-panel--health">
-                    <div class="home-ops-panel__header">
-                        <h3><Icon Name="speaker" Size="17" /> Device Health</h3>
-                        <span>@(_settings.Speakers.Count) configured</span>
-                    </div>
-                    <div class="home-ops-health-grid">
-                        <div><span>Online</span><strong>@healthSummary.Online</strong></div>
-                        <div><span>Offline</span><strong>@healthSummary.Offline</strong></div>
-                        <div><span>Unknown</span><strong>@healthSummary.Unknown</strong></div>
-                    </div>
-                    <div class="home-ops-room-list">
-                        @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name).Take(5))
-                        {
-                            var status = healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var value) ? value : null;
-                            <div class="home-ops-room">
-                                <span class="home-ops-room__dot @GetHealthClass(status)" aria-hidden="true"></span>
-                                <strong>@speaker.Name</strong>
-                                <span>@GetHealthMeta(status)</span>
-                            </div>
-                        }
-                        @if (_speakerStatuses.Any(s => s.GroupMembers.Any()))
-                        {
-                            @foreach (var root in _speakerStatuses.Where(s => s.GroupMembers.Any()).OrderBy(s => s.Name))
-                            {
-                                <div class="home-ops-room home-ops-room--group speaker-status-item">
-                                    <span class="home-ops-room__dot @(root.IsPlaying ? "is-online" : "is-unknown")" aria-hidden="true"></span>
-                                    <strong>@root.Name</strong>
-                                    <span>@($"Stereo/group: {string.Join(", ", root.GroupMembers)}")</span>
-                                    <span class="badge rounded-pill text-uppercase speaker-status-badge @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
-                                        @(root.IsPlaying ? "Playing" : "Paused")
-                                    </span>
-                                </div>
-                            }
-                        }
-                    </div>
-                </article>
+            <div class="home-ops-layout">
+                <main class="home-ops-primary">
 
                 <article class="home-ops-panel home-ops-panel--queue">
                     <div class="home-ops-panel__header">
@@ -326,12 +143,56 @@
                         <h3><Icon Name="star" Size="17" /> Library</h3>
                         <span>All sources</span>
                     </div>
+                    <details class="home-ops-direct-disclosure" data-qa="home-direct-url">
+                        <summary>
+                            <span><Icon Name="link" Size="16" /> Direct URL Play</span>
+                            <small>Play or save a stream URL</small>
+                        </summary>
+                        <div class="home-ops-direct-disclosure__content">
+                            <label for="homeDirectMediaUrl">Media URL</label>
+                            <div class="home-ops-direct-play">
+                                <input id="homeDirectMediaUrl"
+                                       type="url"
+                                       class="form-control"
+                                       @bind-value="_directMediaUrl"
+                                       @bind-value:event="oninput"
+                                       placeholder="https://..."
+                                       aria-label="Direct media URL" />
+                                <div class="home-ops-direct-play__actions">
+                                    <button type="button"
+                                            class="btn btn-primary"
+                                            @onclick="PlayDirectMediaUrl"
+                                            disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                            aria-label="Play direct URL">
+                                        @if (_isDirectUrlLoading)
+                                        {
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        }
+                                        else
+                                        {
+                                            <Icon Name="play" Size="14" />
+                                            <span>Play</span>
+                                        }
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-outline-primary"
+                                            @onclick="OpenDirectUrlSaveModal"
+                                            disabled="@(_isDirectUrlLoading || string.IsNullOrWhiteSpace(_directMediaUrl))"
+                                            aria-label="Save direct URL">
+                                        <Icon Name="plus" Size="14" />
+                                        <span>Save</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
                     <div class="home-ops-library-tabs" role="tablist" aria-label="Media library">
-                        <button id="home-library-tab-stations" type="button" role="tab" class='@GetLibraryTabClass("stations")' aria-selected='@IsLibraryTabActive("stations").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("stations")'>Stations</button>
-                        <button id="home-library-tab-spotify" type="button" role="tab" class='@GetLibraryTabClass("spotify")' aria-selected='@IsLibraryTabActive("spotify").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("spotify")'>Spotify</button>
-                        <button id="home-library-tab-youtube" type="button" role="tab" class='@GetLibraryTabClass("youtube")' aria-selected='@IsLibraryTabActive("youtube").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("youtube")'>YouTube</button>
-                        <button id="home-library-tab-youtube-music" type="button" role="tab" class='@GetLibraryTabClass("youtubemusic")' aria-selected='@IsLibraryTabActive("youtubemusic").ToString().ToLowerInvariant()' @onclick='() => SetLibraryTab("youtubemusic")'>YouTube Music</button>
+                        <button @ref="_stationsTab" id="home-library-tab-stations" type="button" role="tab" class='@GetLibraryTabClass("stations")' aria-selected='@IsLibraryTabActive("stations").ToString().ToLowerInvariant()' aria-controls="home-library-panel" tabindex='@GetLibraryTabIndex("stations")' @onclick='() => SetLibraryTab("stations")' @onkeydown='e => HandleLibraryTabKeyDown(e, "stations")'>Stations</button>
+                        <button @ref="_spotifyTab" id="home-library-tab-spotify" type="button" role="tab" class='@GetLibraryTabClass("spotify")' aria-selected='@IsLibraryTabActive("spotify").ToString().ToLowerInvariant()' aria-controls="home-library-panel" tabindex='@GetLibraryTabIndex("spotify")' @onclick='() => SetLibraryTab("spotify")' @onkeydown='e => HandleLibraryTabKeyDown(e, "spotify")'>Spotify</button>
+                        <button @ref="_youtubeTab" id="home-library-tab-youtube" type="button" role="tab" class='@GetLibraryTabClass("youtube")' aria-selected='@IsLibraryTabActive("youtube").ToString().ToLowerInvariant()' aria-controls="home-library-panel" tabindex='@GetLibraryTabIndex("youtube")' @onclick='() => SetLibraryTab("youtube")' @onkeydown='e => HandleLibraryTabKeyDown(e, "youtube")'>YouTube</button>
+                        <button @ref="_youtubeMusicTab" id="home-library-tab-youtube-music" type="button" role="tab" class='@GetLibraryTabClass("youtubemusic")' aria-selected='@IsLibraryTabActive("youtubemusic").ToString().ToLowerInvariant()' aria-controls="home-library-panel" tabindex='@GetLibraryTabIndex("youtubemusic")' @onclick='() => SetLibraryTab("youtubemusic")' @onkeydown='e => HandleLibraryTabKeyDown(e, "youtubemusic")'>YouTube Music</button>
                     </div>
+                    <div id="home-library-panel" class="home-ops-library-panel" role="tabpanel" aria-labelledby="@GetActiveLibraryTabId()" tabindex="0">
                     <div class="home-ops-library-search">
                         <Icon Name="search" Size="14" />
                         <input type="search"
@@ -444,12 +305,13 @@
                             <div class="home-ops-empty-row">@GetLibraryEmptyMessage()</div>
                         }
                     </div>
+                    </div>
                 </article>
 
                 <article class="home-ops-panel home-ops-panel--activity">
                     <div class="home-ops-panel__header">
                         <h3><Icon Name="file" Size="17" /> Recent Activity</h3>
-                        <span>Operational trail</span>
+                        <a class="home-ops-panel__link" href="/logs">View all</a>
                     </div>
                     <div class="home-ops-activity">
                         @if (recentActivity.Any())
@@ -471,14 +333,91 @@
                         }
                     </div>
                 </article>
+                </main>
+
+                <aside class="home-ops-sidebar" aria-label="Operations status">
+                    <article class="home-ops-panel home-ops-panel--automation">
+                        <div class="home-ops-panel__header">
+                            <h3><Icon Name="schedule" Size="17" /> Active Automation</h3>
+                            <a class="home-ops-panel__link" href="/schedule-windows">Manage</a>
+                        </div>
+                        <div class="home-ops-active-window @(activeWindow is null ? "is-idle" : string.Empty)">
+                            <div>
+                                <h4>@(activeWindow?.Name ?? "Manual control")</h4>
+                                <p>@GetActiveAutomationDescription(activeWindow, activeScene)</p>
+                                @if (activeWindow is not null)
+                                {
+                                    <div class="home-ops-chip-row">
+                                        <span class="home-ops-chip">Priority @activeWindow.Priority</span>
+                                        <span class="home-ops-chip">Scene: @(activeScene?.Name ?? "None")</span>
+                                        <span class="home-ops-chip">Fade out @(activeWindow.FadeOutSeconds)s</span>
+                                        <span class="home-ops-chip">@GetSpeakerTargetSummary(activeScene)</span>
+                                    </div>
+                                }
+                            </div>
+                            <div class="home-ops-handoff">
+                                <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
+                                <span>@(activeWindow is null ? "no active window" : "until handoff")</span>
+                            </div>
+                        </div>
+                        <div class="home-ops-timeline" aria-label="Upcoming schedule windows">
+                            @if (nextWindow is not null)
+                            {
+                                <div class="home-ops-timeline__row">
+                                    <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
+                                    <div>
+                                        <strong>@nextWindow.Name</strong>
+                                        <span>@GetSceneName(nextWindow.SceneId) · @GetWindowTimeRange(nextWindow)</span>
+                                    </div>
+                                    <span class="home-ops-timeline__state is-ready">Next</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="home-ops-empty-row">No next schedule window.</div>
+                            }
+                        </div>
+                    </article>
+
+                    <article class="home-ops-panel home-ops-panel--health">
+                        <div class="home-ops-panel__header">
+                            <h3><Icon Name="speaker" Size="17" /> Device Health</h3>
+                            <a class="home-ops-panel__link" href="/devices">@(_settings.Speakers.Count) configured</a>
+                        </div>
+                        <div class="home-ops-health-grid">
+                            <div><span>Online</span><strong>@healthSummary.Online</strong></div>
+                            <div><span>Offline</span><strong>@healthSummary.Offline</strong></div>
+                            <div><span>Unknown</span><strong>@healthSummary.Unknown</strong></div>
+                        </div>
+                        <div class="home-ops-room-list">
+                            @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name).Take(5))
+                            {
+                                var status = healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var value) ? value : null;
+                                <div class="home-ops-room">
+                                    <span class="home-ops-room__dot @GetHealthClass(status)" aria-hidden="true"></span>
+                                    <strong>@speaker.Name</strong>
+                                    <span class="home-ops-room__status">@GetHealthMeta(status)</span>
+                                </div>
+                            }
+                            @if (_speakerStatuses.Any(s => s.GroupMembers.Any()))
+                            {
+                                @foreach (var root in _speakerStatuses.Where(s => s.GroupMembers.Any()).OrderBy(s => s.Name))
+                                {
+                                    <div class="home-ops-room home-ops-room--group speaker-status-item">
+                                        <span class="home-ops-room__dot @(root.IsPlaying ? "is-online" : "is-unknown")" aria-hidden="true"></span>
+                                        <strong>@root.Name</strong>
+                                        <span>@($"Stereo/group: {string.Join(", ", root.GroupMembers)}")</span>
+                                        <span class="badge rounded-pill text-uppercase speaker-status-badge @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                            @(root.IsPlaying ? "Playing" : "Paused")
+                                        </span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </article>
+                </aside>
             </div>
 
-            <div class="home-ops-actions">
-                <a class="btn btn-primary" href="/scenes"><Icon Name="scenes" Size="15" /> Apply Scene</a>
-                <a class="btn btn-outline-primary" href="/devices"><Icon Name="search" Size="15" /> Discover Devices</a>
-                <a class="btn btn-outline-primary" href="/schedule-windows"><Icon Name="schedule" Size="15" /> Open Schedule</a>
-                <a class="btn btn-outline-secondary" href="/logs"><Icon Name="file" Size="15" /> View Logs</a>
-            </div>
         </section>
     </div>
 }
@@ -552,107 +491,30 @@
 
     private List<SpeakerStatusViewModel> _speakerStatuses = new();
     private SonosSettings? _settings;
+    private bool _playbackStateSubscribed;
     private bool _isPlaying;
     private bool _isGrouping;
     private bool _isUngrouping;
     private bool isGroupModalOpen;
-    private bool _isMainPlaybackLoading;
-    private bool _isNextTrackLoading;
     private bool _isDirectUrlLoading;
     private string? _loadingMediaUrl;
-    private bool _isSpotifyPlaying;
     private string _directMediaUrl = string.Empty;
-    private string? _selectedSpeakerIp;
     private string? _activeYouTubeToolbarUrl;
 
-    private string SelectedSpeakerIp
-    {
-        get => _selectedSpeakerIp ?? _settings?.IP_Adress ?? "";
-        set
-        {
-            if (_selectedSpeakerIp != value)
-            { 
-                _selectedSpeakerIp = value;
-                if (_settings != null)
-                {
-                    _ = UpdateSpeakerRelatedData(value);
-                }
-            }
-        }
-    }
-
-    private async Task UpdateSpeakerRelatedData(string newIpAddress)
-    {
-        if (_settings is null)
-        {
-            return;
-        }
-
-        _settings.IP_Adress = newIpAddress;
-        await SaveSettings();
-        await PlaybackState.SetActiveSpeakerAsync(newIpAddress);
-
-        try
-        {
-            _settings.Volume = await _uow.ISonosConnectorRepo.GetVolume(newIpAddress);
-        }
-        catch
-        {
-            // Ignore if speaker is offline or returns error
-            _settings.Volume = 0; // Default to 0 or last known good if error
-        }
-
-        // Refresh data for the new speaker
-        await RequestPageRefreshAsync(forceSlowLane: true);
-        await RefreshQueueAsync(reset: true);
-    }
-
-    private async Task HandleSyncPlay()
-    {
-        var result = await PlaybackState.SyncPlayAsync();
-        ShowCommandStatus(result.Message, result.IsError, result.IsError ? 4500 : 3500);
-    }
+    private string SelectedSpeakerIp => PlaybackState.ActiveSpeakerIp;
 
     // Quick Source add buttons reuse the same modal and set the target collection here.
     private string _activeMediaTab = "stations";
+    private static readonly string[] _libraryTabs = ["stations", "spotify", "youtube", "youtubemusic"];
+    private ElementReference _stationsTab;
+    private ElementReference _spotifyTab;
+    private ElementReference _youtubeTab;
+    private ElementReference _youtubeMusicTab;
     private string _activeLibraryTab = "stations";
     private string _librarySearch = string.Empty;
     private AddMediaItemModal _addMediaItemModal = default!;
     private string? _addModalError;
 
-
-    private int Volume
-    {
-        get
-        {
-            if (_settings is null)
-            {
-                return 0;
-            }
-
-            var limit = MaxVolumeLimit;
-            return Math.Min(_settings.Volume, limit);
-        }
-        set
-        {
-            if (_settings is null)
-            {
-                return;
-            }
-
-            var limit = MaxVolumeLimit;
-            var clamped = Math.Clamp(value, 0, limit);
-
-            if (_settings.Volume == clamped)
-            {
-                return;
-            }
-
-            _settings.Volume = clamped;
-            _ = _uow.ISonosConnectorRepo.SetVolume(_settings.IP_Adress, clamped);
-            _ = SaveSettings();
-        }
-    }
 
     private int MaxVolumeLimit => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
 
@@ -667,10 +529,7 @@
     private string? _timerSelectionName;
 
     private string currentStationUrl = "Loading...";
-    private string currentStationDisplay = "Loading...";
-
     private string currentlyPlaying = "Loading...";
-    private string? currentTrackArtUrl;
     private string trackProgress = "";
     private Timer? _stationUpdateTimer;
 
@@ -728,17 +587,6 @@
         int Offline,
         int Unknown,
         IReadOnlyDictionary<string, DeviceHealthStatus> ByIp);
-
-    private string GetSelectedSpeakerName()
-    {
-        if (_settings?.Speakers is null || string.IsNullOrWhiteSpace(SelectedSpeakerIp))
-        {
-            return "No room selected";
-        }
-
-        return _settings.Speakers.FirstOrDefault(s => string.Equals(s.IpAddress, SelectedSpeakerIp, StringComparison.OrdinalIgnoreCase))?.Name
-            ?? SelectedSpeakerIp;
-    }
 
     private Scene? GetScene(string? sceneId)
     {
@@ -914,7 +762,7 @@
             return string.IsNullOrWhiteSpace(status.LastError) ? "Offline" : status.LastError;
         }
 
-        return status.LastLatencyMs.HasValue ? $"{status.LastLatencyMs.Value} ms" : "Online";
+        return status.LastLatencyMs.HasValue ? $"Online · {status.LastLatencyMs.Value} ms" : "Online";
     }
 
     private IEnumerable<DashboardRecommendation> GetActiveLibrarySources()
@@ -1002,6 +850,13 @@
         ? "home-ops-library-tab is-active"
         : "home-ops-library-tab";
 
+    private string GetLibraryTabIndex(string tab) => IsLibraryTabActive(tab) ? "0" : "-1";
+
+    private string GetActiveLibraryTabId() => $"home-library-tab-{GetLibraryTabIdSuffix(_activeLibraryTab)}";
+
+    private static string GetLibraryTabIdSuffix(string tab)
+        => string.Equals(tab, "youtubemusic", StringComparison.OrdinalIgnoreCase) ? "youtube-music" : tab;
+
     private void SetLibraryTab(string tab)
     {
         if (!IsLibraryTabActive(tab))
@@ -1015,6 +870,39 @@
             }
         }
     }
+
+    private async Task HandleLibraryTabKeyDown(KeyboardEventArgs args, string currentTab)
+    {
+        var currentIndex = Array.FindIndex(_libraryTabs, tab => string.Equals(tab, currentTab, StringComparison.OrdinalIgnoreCase));
+        if (currentIndex < 0)
+        {
+            return;
+        }
+
+        var nextIndex = args.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => (currentIndex + 1) % _libraryTabs.Length,
+            "ArrowLeft" or "ArrowUp" => (currentIndex - 1 + _libraryTabs.Length) % _libraryTabs.Length,
+            "Home" => 0,
+            "End" => _libraryTabs.Length - 1,
+            _ => currentIndex
+        };
+
+        if (nextIndex != currentIndex)
+        {
+            var nextTab = _libraryTabs[nextIndex];
+            SetLibraryTab(nextTab);
+            await GetLibraryTabReference(nextTab).FocusAsync();
+        }
+    }
+
+    private ElementReference GetLibraryTabReference(string tab) => tab switch
+    {
+        "spotify" => _spotifyTab,
+        "youtube" => _youtubeTab,
+        "youtubemusic" => _youtubeMusicTab,
+        _ => _stationsTab
+    };
 
     private string GetLibrarySearchPlaceholder()
     {
@@ -1109,7 +997,7 @@
         {
             return Db.Logs
                 .OrderByDescending(log => log.Timestamp)
-                .Take(4)
+                .Take(3)
                 .ToList();
         }
         catch
@@ -1376,19 +1264,15 @@
         var rawStationUrl = await stationTask;
         _hasActiveQueueTransport = IsQueueTransport(rawStationUrl);
         currentStationUrl = NormalizeStationUrl(rawStationUrl);
-        currentStationDisplay = ResolveStationDisplay(currentStationUrl);
-        _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
 
         var trackInfo = await trackInfoTask;
         if (trackInfo != null && trackInfo.IsValidMetadata())
         {
             currentlyPlaying = trackInfo.GetDisplayString();
-            currentTrackArtUrl = trackInfo.AlbumArtUri;
         }
         else
         {
             currentlyPlaying = "No metadata available";
-            currentTrackArtUrl = null;
         }
 
         var progress = await progressTask;
@@ -1410,33 +1294,9 @@
         var rawStationUrl = await stationTask;
         _hasActiveQueueTransport = IsQueueTransport(rawStationUrl);
         currentStationUrl = NormalizeStationUrl(rawStationUrl);
-        currentStationDisplay = ResolveStationDisplay(currentStationUrl);
-        _isSpotifyPlaying = currentStationDisplay.Equals("Spotify", StringComparison.OrdinalIgnoreCase);
 
         var progress = await progressTask;
         trackProgress = FormatTrackProgress(progress.Position, progress.Duration);
-    }
-
-    private string ResolveStationDisplay(string normalizedStationUrl)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedStationUrl))
-        {
-            return "Unknown";
-        }
-
-        if (normalizedStationUrl.Contains("spotify", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Spotify";
-        }
-
-        if (normalizedStationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase))
-        {
-            return "YouTube Music";
-        }
-
-        var matched = _stations.FirstOrDefault(s => IsSameStoredMedia(normalizedStationUrl, s.Url));
-
-        return matched?.Name ?? normalizedStationUrl;
     }
 
     private static bool IsSameStoredMedia(string currentUri, string? storedUrl)
@@ -1525,9 +1385,6 @@
         // Normalize and compare, this might need to be more robust
         return currentStationUrl.Contains(url, StringComparison.OrdinalIgnoreCase);
     }
-
-    private Task HandleQueueRefresh()
-        => RefreshQueueAsync(reset: true);
 
     private Task LoadMoreQueueItems()
         => RefreshQueueAsync(reset: false);
@@ -1718,17 +1575,7 @@
     }
 
     private string GetActivePlaybackSpeakerIp()
-    {
-        if (!string.IsNullOrWhiteSpace(_selectedSpeakerIp))
-        {
-            return _selectedSpeakerIp;
-        }
-
-        return _settings?.IP_Adress ?? string.Empty;
-    }
-
-    private bool CanSkipToNextTrack()
-        => _isSpotifyPlaying || _queueTotalMatches > 0;
+        => PlaybackState.ActiveSpeakerIp;
 
     private YouTubeObject? FindYouTubeEntry(string url)
         => (_settings?.YouTubeCollections ?? new List<YouTubeObject>())
@@ -1853,13 +1700,11 @@
                     await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
                     await AddLog("YouTube Video Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube video changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
-                    _isSpotifyPlaying = true;
                     break;
                 case "youtubemusic":
                     await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube Music changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
-                    _isSpotifyPlaying = false;
                     break;
                 default:
                     ShowCommandStatus("Unsupported media URL.", isError: true, autoHideMs: 4500);
@@ -1885,28 +1730,6 @@
             "youtubemusic" => _youTubeCollections.FirstOrDefault(collection => string.Equals(collection.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url,
             _ => _stations.FirstOrDefault(station => string.Equals(station.Url, url, StringComparison.OrdinalIgnoreCase))?.Name ?? url
         };
-    }
-
-    private async Task NextTrack()
-    {
-        _isNextTrackLoading = true;
-        await InvokeAsync(StateHasChanged);
-        try
-        {
-            await _uow.ISonosConnectorRepo.NextTrack(SelectedSpeakerIp);
-            await AddLog("Next Track");
-            ShowCommandStatus("Skipped to next track.");
-        }
-        catch (Exception ex)
-        {
-            TrackSonosCommandError("next_track", ex);
-            ShowCommandStatus("Next-track command failed. Please retry.", isError: true, autoHideMs: 4500);
-        }
-        finally
-        {
-            _isNextTrackLoading = false;
-            await InvokeAsync(StateHasChanged);
-        }
     }
 
     private void OpenTimerModal()
@@ -1976,7 +1799,6 @@
                 selectionName = station?.Name ?? selectionValue;
                 logSource = $"Station: {selectionName}";
                 await _uow.ISonosConnectorRepo.SetTuneInStationAsync(targetSpeakerIp, selectionValue);
-                _isSpotifyPlaying = false;
             }
             else if (selectionType == "spotify")
             {
@@ -1984,7 +1806,6 @@
                 selectionName = track?.Name ?? selectionValue;
                 logSource = $"Spotify: {selectionName}";
                 await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(targetSpeakerIp, selectionValue);
-                _isSpotifyPlaying = true;
             }
             else if (selectionType == "youtubevideo")
             {
@@ -1993,7 +1814,6 @@
                 logSource = $"YouTube: {selectionName}";
                 var youTubeOptions = GetYouTubePlaybackOptions(entry, selectionValue);
                 await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, selectionValue, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
-                _isSpotifyPlaying = true;
             }
             else if (selectionType == "youtubemusic")
             {
@@ -2001,7 +1821,6 @@
                 selectionName = entry?.Name ?? selectionValue;
                 logSource = $"YouTube Music: {selectionName}";
                 await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, selectionValue, _settings.AutoPlayStationUrl);
-                _isSpotifyPlaying = false;
             }
             else
             {
@@ -2131,16 +1950,27 @@
         _settings.YouTubeCollections ??= new List<YouTubeObject>();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
         await PlaybackState.InitializeAsync();
+        _settings.IP_Adress = PlaybackState.ActiveSpeakerIp;
 
-        if (_settings.Speakers.Any())
+        PlaybackState.StateChanged += HandlePlaybackStateChanged;
+        _playbackStateSubscribed = true;
+    }
+
+    private void HandlePlaybackStateChanged()
+    {
+        _ = InvokeAsync(async () =>
         {
-             // Use the first speaker or the last selected one if available
-            if (string.IsNullOrEmpty(_selectedSpeakerIp) || !_settings.Speakers.Any(s => s.IpAddress == _selectedSpeakerIp))
+            if (_settings is not null
+                && !string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)
+                && !string.Equals(_settings.IP_Adress, PlaybackState.ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase))
             {
-                 _selectedSpeakerIp = _settings.Speakers.First().IpAddress;
-                 _settings.IP_Adress = _selectedSpeakerIp;
+                _settings.IP_Adress = PlaybackState.ActiveSpeakerIp;
+                await RequestPageRefreshAsync(forceSlowLane: true);
+                await RefreshQueueAsync(reset: true);
             }
-        }
+
+            StateHasChanged();
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -2213,42 +2043,6 @@
         }
 
         await SaveSettings();
-    }
-
-    private async Task Play(bool play)
-    {
-        _isMainPlaybackLoading = true;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            if (play)
-            {
-                await _uow.ISonosConnectorRepo.StartPlaying(SelectedSpeakerIp);
-                _isPlaying = true;
-                await AddLog("Playback Started");
-                await NotificationService.SendNotificationAsync($"Playback started on {SelectedSpeakerIp}", await GetCurrentUserAsync());
-                ShowCommandStatus("Playback started.");
-            }
-            else
-            {
-                await _uow.ISonosConnectorRepo.PausePlaying(SelectedSpeakerIp);
-                _isPlaying = false;
-                await AddLog("Playback Paused");
-                await NotificationService.SendNotificationAsync($"Playback paused on {SelectedSpeakerIp}", await GetCurrentUserAsync());
-                ShowCommandStatus("Playback paused.");
-            }
-        }
-        catch (Exception ex)
-        {
-            TrackSonosCommandError(play ? "play" : "pause", ex);
-            ShowCommandStatus("Playback command failed. Please retry.", isError: true, autoHideMs: 4500);
-        }
-        finally
-        {
-            _isMainPlaybackLoading = false;
-            await InvokeAsync(StateHasChanged);
-        }
     }
 
     private async Task ApplyLegacySync(string masterIp, IEnumerable<string> slaveIps)
@@ -2554,6 +2348,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_playbackStateSubscribed)
+        {
+            PlaybackState.StateChanged -= HandlePlaybackStateChanged;
+            _playbackStateSubscribed = false;
+        }
+
         _disposeCts.Cancel();
 
         _stationUpdateTimer?.Dispose();

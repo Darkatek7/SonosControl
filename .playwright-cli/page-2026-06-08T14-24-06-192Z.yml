@@ -1,0 +1,150 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: SC
+        - generic [ref=e7]:
+          - generic [ref=e8]: SonosControl
+          - generic [ref=e9]: Command center
+      - navigation [ref=e11]:
+        - link "Home" [ref=e13] [cursor=pointer]:
+          - /url: ""
+          - img [ref=e14]
+          - generic [ref=e17]: Home
+        - link "Station Lookup" [ref=e19] [cursor=pointer]:
+          - /url: lookup
+          - img [ref=e20]
+          - generic [ref=e23]: Station Lookup
+        - link "Statistics" [ref=e25] [cursor=pointer]:
+          - /url: stats
+          - img [ref=e26]
+          - generic [ref=e27]: Statistics
+        - link "Scenes" [ref=e29] [cursor=pointer]:
+          - /url: scenes
+          - img [ref=e30]
+          - generic [ref=e34]: Scenes
+        - link "Recommendations" [ref=e36] [cursor=pointer]:
+          - /url: recommendations
+          - img [ref=e37]
+          - generic [ref=e39]: Recommendations
+        - link "Schedule Windows" [ref=e42] [cursor=pointer]:
+          - /url: schedule-windows
+          - img [ref=e43]
+          - generic [ref=e45]: Schedule Windows
+        - link "Device Ops" [ref=e47] [cursor=pointer]:
+          - /url: devices
+          - img [ref=e48]
+          - generic [ref=e52]: Device Ops
+        - link "Sonos Config" [ref=e54] [cursor=pointer]:
+          - /url: config
+          - img [ref=e55]
+          - generic [ref=e58]: Sonos Config
+        - link "User Management" [ref=e60] [cursor=pointer]:
+          - /url: admin/users
+          - img [ref=e61]
+          - generic [ref=e64]: User Management
+        - link "Logs" [ref=e66] [cursor=pointer]:
+          - /url: logs
+          - img [ref=e67]
+          - generic [ref=e70]: Logs
+        - link "Backups" [ref=e72] [cursor=pointer]:
+          - /url: settings-backups
+          - img [ref=e73]
+          - generic [ref=e75]: Backups
+      - generic [ref=e77]: Syncing rooms in real time.
+  - main [ref=e78]:
+    - generic [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]: SonosControl
+        - generic [ref=e83]: Master every room
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]: Theme
+          - group "Theme preference" [ref=e87]:
+            - button "System" [ref=e88] [cursor=pointer]
+            - button "Light" [ref=e89] [cursor=pointer]
+            - button "Dark" [pressed] [ref=e90] [cursor=pointer]
+        - generic [ref=e91]: Hello, Admin!
+        - button "Logout" [ref=e93] [cursor=pointer]
+        - link [ref=e94] [cursor=pointer]:
+          - /url: /useredit
+          - img [ref=e95]
+    - article [ref=e99]:
+      - generic [ref=e100]:
+        - region "Schedule Windows" [ref=e101]:
+          - generic [ref=e102]:
+            - generic [ref=e103]: Automation
+            - heading "Schedule Windows" [level=1] [ref=e104]
+            - paragraph [ref=e105]: Define recurring playback windows with deterministic priority, scene handoffs, and optional fades.
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - img [ref=e109]
+                - text: Windows
+              - strong [ref=e111]: "0"
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - img [ref=e114]
+                - text: Enabled
+              - strong [ref=e116]: "0"
+            - button "New Window" [ref=e117] [cursor=pointer]:
+              - img [ref=e118]
+              - text: New Window
+        - region "Active schedule window" [ref=e119]:
+          - generic [ref=e120]:
+            - generic [ref=e121]: Live state
+            - strong [ref=e122]: "Active window: None"
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - img [ref=e125]
+              - text: Monday, 8. June 2026 16:24
+            - generic [ref=e128]:
+              - img [ref=e129]
+              - text: "Scene: None"
+        - generic [ref=e133]:
+          - complementary "Configured schedule windows" [ref=e134]:
+            - generic [ref=e136]:
+              - generic [ref=e137]: Priority queue
+              - heading "Window library" [level=2] [ref=e138]:
+                - img [ref=e139]
+                - text: Window library
+            - generic [ref=e141]:
+              - img [ref=e142]
+              - strong [ref=e144]: No schedule windows configured.
+              - generic [ref=e145]: Create a window to automate scene changes by time and recurrence.
+          - main "Schedule window editor" [ref=e146]:
+            - generic [ref=e148]:
+              - generic [ref=e149]: Editor
+              - heading "Window command center" [level=2] [ref=e150]:
+                - img [ref=e151]
+                - text: Window command center
+            - generic [ref=e154]:
+              - img [ref=e155]
+              - strong [ref=e157]: Select a window or create a new one.
+              - generic [ref=e158]: The editor keeps timing, recurrence, scene routing, and fades in one workspace.
+    - complementary "Global playback controls" [ref=e159]:
+      - generic [ref=e160]:
+        - img [ref=e162]
+        - generic [ref=e166]:
+          - strong [ref=e167]: charlie puth - one call away
+          - generic "Kronehit" [ref=e168]
+      - generic [ref=e169]:
+        - button "Refresh playback state" [ref=e170] [cursor=pointer]:
+          - img [ref=e171]
+        - button "Pause playback" [ref=e175] [cursor=pointer]:
+          - img [ref=e176]
+        - link "Open player" [ref=e179] [cursor=pointer]:
+          - /url: /
+          - img [ref=e180]
+      - generic [ref=e183]:
+        - button "Sync current playback to all speakers" [ref=e184] [cursor=pointer]:
+          - img [ref=e185]
+          - generic [ref=e189]: Sync Play
+        - generic [ref=e190]: Active speaker
+        - combobox "Active speaker" [ref=e191]:
+          - option "op"
+          - option "küch" [selected]
+        - generic [ref=e192]:
+          - img [ref=e193]
+          - slider "Volume" [ref=e197]: "14"
+          - generic [ref=e198]: 14%

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Bunit;
 using Bunit.TestDoubles;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +23,85 @@ namespace SonosControl.Tests;
 
 public class IndexPageUXTests
 {
+    [Fact]
+    public void IndexPage_RendersPlaybackFirstHierarchy_WithoutDuplicateTransportControls()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotEmpty(cut.FindAll(".home-ops-primary .home-ops-panel--library"));
+            Assert.NotEmpty(cut.FindAll(".home-ops-primary .home-ops-panel--queue"));
+            Assert.NotEmpty(cut.FindAll(".home-ops-sidebar .home-ops-panel--automation"));
+            Assert.NotEmpty(cut.FindAll(".home-ops-sidebar .home-ops-panel--health"));
+            Assert.Empty(cut.FindAll(".home-ops-panel--now"));
+            Assert.Empty(cut.FindAll("#activeSpeakerSelect"));
+            Assert.Empty(cut.FindAll("[data-qa='home-dashboard-sync']"));
+
+            var directUrl = cut.Find("details[data-qa='home-direct-url']");
+            Assert.Null(directUrl.GetAttribute("open"));
+        });
+    }
+
+    [Fact]
+    public void IndexPage_LibraryTabs_ExposeTabPanelSemantics_AndSupportArrowKeys()
+    {
+        using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var activeTab = cut.Find("#home-library-tab-stations");
+            Assert.Equal("0", activeTab.GetAttribute("tabindex"));
+            Assert.Equal("home-library-panel", activeTab.GetAttribute("aria-controls"));
+            Assert.Equal("home-library-tab-stations", cut.Find("#home-library-panel").GetAttribute("aria-labelledby"));
+        });
+
+        cut.Find("#home-library-tab-stations").KeyDown(new KeyboardEventArgs { Key = "ArrowRight" });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("true", cut.Find("#home-library-tab-spotify").GetAttribute("aria-selected"));
+            Assert.Equal("0", cut.Find("#home-library-tab-spotify").GetAttribute("tabindex"));
+            Assert.Equal("-1", cut.Find("#home-library-tab-stations").GetAttribute("tabindex"));
+            Assert.Equal("home-library-tab-spotify", cut.Find("#home-library-panel").GetAttribute("aria-labelledby"));
+        });
+    }
+
+    [Fact]
+    public void IndexPage_GroupDialog_UsesPlaybackStateActiveSpeaker()
+    {
+        using var ctx = new TestContext();
+        var settings = new SonosSettings
+        {
+            IP_Adress = "10.0.0.2",
+            Speakers =
+            [
+                new SonosSpeaker { IpAddress = "10.0.0.1", Name = "Kitchen" },
+                new SonosSpeaker { IpAddress = "10.0.0.2", Name = "Office" }
+            ]
+        };
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            settingsOverride: settings);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("button[data-qa='home-group-speakers']")));
+
+        cut.Find("button[data-qa='home-group-speakers']").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("Office", cut.Find(".modal-body p strong").TextContent.Trim()));
+    }
+
     [Fact]
     public void IndexPage_RendersEmptyStates_WhenListsAreEmpty()
     {
@@ -488,28 +567,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_ResolvesSavedStationNameForNowPlaying()
-    {
-        using var ctx = new TestContext();
-        var station = new TuneInStation { Name = "Breakz Radio", Url = "https://breakz-2012-high.rautemusik.fm/stream/mp3" };
-        using var resources = ConfigureServices(
-            ctx,
-            new List<TuneInStation> { station },
-            new List<SpotifyObject>(),
-            new List<YouTubeMusicObject>(),
-            connectorCurrentStation: $"x-rincon-mp3radio://{station.Url}/?ref=rb-djclubcharts");
-
-        var cut = ctx.RenderComponent<IndexPage>();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains("Breakz Radio ·", cut.Markup);
-            Assert.DoesNotContain("breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts", cut.Markup);
-        });
-    }
-
-    [Fact]
-    public void IndexPage_PlayMediaItem_UsesSelectedSpeakerEvenWhenPersistedSpeakerDiffers()
+    public async Task IndexPage_PlayMediaItem_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
     {
         using var ctx = new TestContext();
 
@@ -547,9 +605,8 @@ public class IndexPageUXTests
         cut.Find("#home-library-tab-youtube").Click();
         cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
 
-        var selectedSpeakerField = typeof(IndexPage).GetField("_selectedSpeakerIp", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(selectedSpeakerField);
-        selectedSpeakerField!.SetValue(cut.Instance, "1.2.3.5");
+        var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await playbackState.SetActiveSpeakerAsync("1.2.3.5");
 
         cut.Find("button[aria-label='Play Live Set']").Click();
 
@@ -617,7 +674,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_DirectUrlPlay_ResolvesMediaTypes_AndUsesSelectedSpeaker()
+    public async Task IndexPage_DirectUrlPlay_ResolvesMediaTypes_AndUsesPlaybackStateSpeaker()
     {
         using var ctx = new TestContext();
 
@@ -634,9 +691,8 @@ public class IndexPageUXTests
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>(), settings);
         var cut = ctx.RenderComponent<IndexPage>();
 
-        var selectedSpeakerField = typeof(IndexPage).GetField("_selectedSpeakerIp", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(selectedSpeakerField);
-        selectedSpeakerField!.SetValue(cut.Instance, "1.2.3.5");
+        var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await playbackState.SetActiveSpeakerAsync("1.2.3.5");
 
         var directUrlInput = cut.Find("input[aria-label='Direct media URL']");
         directUrlInput.Input("https://open.spotify.com/track/123");

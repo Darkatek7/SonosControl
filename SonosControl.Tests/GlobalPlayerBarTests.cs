@@ -17,6 +17,26 @@ namespace SonosControl.Tests;
 public class GlobalPlayerBarTests
 {
     [Fact]
+    public void GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
+    {
+        using var ctx = new TestContext();
+        var connectorRepo = ConfigureServices(ctx);
+
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var nextButton = cut.Find("[data-qa='global-player-next']");
+            Assert.Null(nextButton.GetAttribute("disabled"));
+        });
+
+        cut.Find("[data-qa='global-player-next']").Click();
+
+        cut.WaitForAssertion(() =>
+            connectorRepo.Verify(repo => repo.NextTrack("10.0.0.1"), Times.Once));
+    }
+
+    [Fact]
     public void GlobalPlayerBar_SyncButton_IsEnabledAfterInitialRefresh()
     {
         using var ctx = new TestContext();
@@ -109,6 +129,7 @@ public class GlobalPlayerBarTests
         connectorRepo.Setup(repo => repo.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.NextTrack(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         var unitOfWork = new Mock<IUnitOfWork>();
         unitOfWork.SetupGet(uow => uow.ISettingsRepo).Returns(settingsRepo.Object);

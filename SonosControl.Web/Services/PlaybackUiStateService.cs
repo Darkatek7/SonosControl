@@ -41,6 +41,7 @@ public sealed class PlaybackUiStateService
     public string? CurrentTrackArtUrl { get; private set; }
     public bool IsPlaying { get; private set; }
     public bool IsLoading { get; private set; }
+    public bool IsSkipping { get; private set; }
     public bool IsSyncing { get; private set; }
     public bool IsStale { get; private set; }
     public int Volume { get; private set; }
@@ -146,6 +147,34 @@ public sealed class PlaybackUiStateService
         {
             IsStale = true;
             _logger.LogWarning(ex, "Failed to set volume for {SpeakerIp}", ActiveSpeakerIp);
+            NotifyStateChanged();
+        }
+    }
+
+    public async Task SkipNextAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ActiveSpeakerIp) || IsSkipping)
+        {
+            return;
+        }
+
+        IsSkipping = true;
+        NotifyStateChanged();
+
+        try
+        {
+            await _uow.ISonosConnectorRepo.NextTrack(ActiveSpeakerIp);
+            IsStale = false;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            IsStale = true;
+            _logger.LogWarning(ex, "Failed to skip to the next track for {SpeakerIp}", ActiveSpeakerIp);
+        }
+        finally
+        {
+            IsSkipping = false;
             NotifyStateChanged();
         }
     }

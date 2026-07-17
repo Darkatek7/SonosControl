@@ -8,8 +8,8 @@ using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
-using SonosControl.Web.Pages;
 using SonosControl.Web.Services;
+using SonosControl.Web.Shared;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -21,7 +21,7 @@ namespace SonosControl.Tests;
 public class IndexPageAccessibilityTests
 {
     [Fact]
-    public void CurrentlyPlaying_HasAccessibleAlbumArt()
+    public void GlobalPlayer_UsesDecorativeAlbumArtWithAdjacentTrackText()
     {
         using var ctx = new TestContext();
 
@@ -80,20 +80,19 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
 
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var img = cut.Find("img.home-ops-now__art");
-            // This is what we want to see (Accessible song by Accessible Artist)
-            // But currently it is "Album Art"
-            Assert.Equal("Album art for Accessible Song — Accessible Artist", img.GetAttribute("alt"));
+            var img = cut.Find(".global-player-bar__art img");
+            Assert.Equal(string.Empty, img.GetAttribute("alt"));
+            Assert.Contains("Accessible Song — Accessible Artist", cut.Find(".global-player-bar__meta strong").TextContent);
         });
     }
 
     [Fact]
-    public void CurrentlyPlaying_FallbackEmoji_IsHiddenFromScreenReaders()
+    public void GlobalPlayer_FallbackArt_IsHiddenFromScreenReaders()
     {
          using var ctx = new TestContext();
 
@@ -152,12 +151,12 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
 
         // Verify
         cut.WaitForAssertion(() =>
         {
-            var fallback = cut.Find(".home-ops-now__art--placeholder");
+            var fallback = cut.Find(".global-player-bar__art");
             Assert.Equal("true", fallback.GetAttribute("aria-hidden"));
         });
     }

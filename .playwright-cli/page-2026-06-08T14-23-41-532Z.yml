@@ -1,0 +1,224 @@
+- generic [ref=e191]:
+  - complementary [ref=e192]:
+    - generic [ref=e193]:
+      - generic [ref=e194]:
+        - generic [ref=e195]: SC
+        - generic [ref=e196]:
+          - generic [ref=e197]: SonosControl
+          - generic [ref=e198]: Command center
+      - navigation [ref=e200]:
+        - link "Home" [ref=e202] [cursor=pointer]:
+          - /url: ""
+          - img [ref=e203]
+          - generic [ref=e206]: Home
+        - link "Station Lookup" [ref=e208] [cursor=pointer]:
+          - /url: lookup
+          - img [ref=e209]
+          - generic [ref=e212]: Station Lookup
+        - link "Statistics" [ref=e214] [cursor=pointer]:
+          - /url: stats
+          - img [ref=e215]
+          - generic [ref=e216]: Statistics
+        - link "Scenes" [ref=e218] [cursor=pointer]:
+          - /url: scenes
+          - img [ref=e219]
+          - generic [ref=e223]: Scenes
+        - link "Recommendations" [ref=e225] [cursor=pointer]:
+          - /url: recommendations
+          - img [ref=e226]
+          - generic [ref=e228]: Recommendations
+        - link "Schedule Windows" [ref=e231] [cursor=pointer]:
+          - /url: schedule-windows
+          - img [ref=e232]
+          - generic [ref=e234]: Schedule Windows
+        - link "Device Ops" [ref=e236] [cursor=pointer]:
+          - /url: devices
+          - img [ref=e237]
+          - generic [ref=e241]: Device Ops
+        - link "Sonos Config" [ref=e243] [cursor=pointer]:
+          - /url: config
+          - img [ref=e244]
+          - generic [ref=e247]: Sonos Config
+        - link "User Management" [ref=e249] [cursor=pointer]:
+          - /url: admin/users
+          - img [ref=e250]
+          - generic [ref=e253]: User Management
+        - link "Logs" [ref=e255] [cursor=pointer]:
+          - /url: logs
+          - img [ref=e256]
+          - generic [ref=e259]: Logs
+        - link "Backups" [ref=e261] [cursor=pointer]:
+          - /url: settings-backups
+          - img [ref=e262]
+          - generic [ref=e264]: Backups
+      - generic [ref=e266]: Syncing rooms in real time.
+  - main [ref=e267]:
+    - generic [ref=e269]:
+      - generic [ref=e270]:
+        - generic [ref=e271]: SonosControl
+        - generic [ref=e272]: Master every room
+      - generic [ref=e273]:
+        - generic [ref=e274]:
+          - generic [ref=e275]: Theme
+          - group "Theme preference" [ref=e276]:
+            - button "System" [ref=e277] [cursor=pointer]
+            - button "Light" [ref=e278] [cursor=pointer]
+            - button "Dark" [pressed] [ref=e279] [cursor=pointer]
+        - generic [ref=e280]: Hello, Admin!
+        - button "Logout" [ref=e282] [cursor=pointer]
+        - link [ref=e283] [cursor=pointer]:
+          - /url: /useredit
+          - img [ref=e284]
+    - article [ref=e288]:
+      - generic [ref=e289]:
+        - region "Scenes" [ref=e290]:
+          - generic [ref=e291]:
+            - generic [ref=e292]: Presets
+            - heading "Scenes" [level=1] [ref=e293]
+            - paragraph [ref=e294]: Create one-tap room states with source, speaker targets, volume, synced playback, and optional timers.
+          - generic [ref=e295]:
+            - generic [ref=e296]:
+              - generic [ref=e297]:
+                - img [ref=e298]
+                - text: Configured
+              - strong [ref=e302]: "0"
+            - generic [ref=e303]:
+              - generic [ref=e304]:
+                - img [ref=e305]
+                - text: Enabled
+              - strong [ref=e307]: "0"
+            - button "New Scene" [active] [ref=e308] [cursor=pointer]:
+              - img [ref=e309]
+              - text: New Scene
+        - generic [ref=e310]:
+          - complementary "Configured scenes" [ref=e311]:
+            - generic [ref=e313]:
+              - generic [ref=e314]: Library
+              - heading "Scene presets" [level=2] [ref=e315]:
+                - img [ref=e316]
+                - text: Scene presets
+            - generic [ref=e320]:
+              - img [ref=e321]
+              - strong [ref=e325]: No scenes configured.
+              - generic [ref=e326]: Create a scene to save source, speaker, and volume presets.
+          - main "Scene editor" [ref=e327]:
+            - generic [ref=e328]:
+              - generic [ref=e329]:
+                - generic [ref=e330]: Builder
+                - heading "Scene command center" [level=2] [ref=e331]:
+                  - img [ref=e332]
+                  - text: Scene command center
+              - generic [ref=e380]: Enabled
+            - generic [ref=e381]:
+              - generic [ref=e382]:
+                - heading "Identity" [level=3] [ref=e384]:
+                  - img [ref=e385]
+                  - text: Identity
+                - generic [ref=e387]:
+                  - generic [ref=e388]:
+                    - generic [ref=e389]: Name
+                    - textbox [ref=e390]: Scene 1
+                  - generic [ref=e391]:
+                    - generic [ref=e392]: Enabled
+                    - checkbox [checked] [ref=e394]
+                  - generic [ref=e395]:
+                    - generic [ref=e396]: Description
+                    - textbox [ref=e397]
+              - generic [ref=e398]:
+                - heading "Source" [level=3] [ref=e400]:
+                  - img [ref=e401]
+                  - text: Source
+                - generic [ref=e405]:
+                  - generic [ref=e406]:
+                    - generic [ref=e407]: Source Type
+                    - combobox [ref=e408]:
+                      - option "None" [selected]
+                      - option "Station"
+                      - option "Spotify"
+                      - option "YouTube Music"
+                  - generic [ref=e409]:
+                    - generic [ref=e410]: Source Item
+                    - combobox [disabled] [ref=e411]:
+                      - option "Custom URL" [selected]
+                  - generic [ref=e412]:
+                    - generic [ref=e413]: Source URL
+                    - textbox [disabled] [ref=e414]
+              - generic [ref=e415]:
+                - heading "Playback" [level=3] [ref=e417]:
+                  - img [ref=e418]
+                  - text: Playback
+                - generic [ref=e421]:
+                  - generic [ref=e422]:
+                    - generic [ref=e423]: Timer (minutes)
+                    - spinbutton [ref=e424]: "0"
+                  - generic [ref=e425]:
+                    - generic [ref=e426]: Synced playback
+                    - checkbox [checked] [ref=e428]
+                  - generic [ref=e429]:
+                    - generic [ref=e430]: Master Speaker
+                    - combobox [ref=e431]:
+                      - option "Auto"
+                      - option "küch"
+                      - option "op" [selected]
+              - generic [ref=e432]:
+                - generic [ref=e433]:
+                  - heading "Speaker mixer" [level=3] [ref=e434]:
+                    - img [ref=e435]
+                    - text: Speaker mixer
+                  - generic [ref=e438]: 2 speakers selected
+                - generic [ref=e439]:
+                  - article [ref=e440]:
+                    - checkbox [checked] [ref=e442]
+                    - generic [ref=e443]:
+                      - strong [ref=e444]: küch
+                      - generic [ref=e445]: 10.1.12.252
+                    - generic [ref=e446]:
+                      - generic [ref=e447]: Volume
+                      - spinbutton "Volume" [ref=e448]
+                    - generic [ref=e449]:
+                      - radio "Master" [ref=e450]
+                      - generic [ref=e451]: Master
+                  - article [ref=e452]:
+                    - checkbox [checked] [ref=e454]
+                    - generic [ref=e455]:
+                      - strong [ref=e456]: op
+                      - generic [ref=e457]: 10.1.12.251
+                    - generic [ref=e458]:
+                      - generic [ref=e459]: Volume
+                      - spinbutton "Volume" [ref=e460]
+                    - generic [ref=e461]:
+                      - radio "Master" [checked] [ref=e462]
+                      - generic [ref=e463]: Master
+              - generic [ref=e464]:
+                - button "Save Scene" [ref=e465] [cursor=pointer]:
+                  - img [ref=e466]
+                  - text: Save Scene
+                - button "Apply Now" [ref=e468] [cursor=pointer]:
+                  - img [ref=e469]
+                  - text: Apply Now
+    - complementary "Global playback controls" [ref=e340]:
+      - generic [ref=e341]:
+        - img [ref=e343]
+        - generic [ref=e347]:
+          - strong [ref=e348]: charlie puth - one call away
+          - generic "Kronehit" [ref=e349]
+      - generic [ref=e350]:
+        - button "Refresh playback state" [ref=e351] [cursor=pointer]:
+          - img [ref=e352]
+        - button "Pause playback" [ref=e356] [cursor=pointer]:
+          - img [ref=e357]
+        - link "Open player" [ref=e360] [cursor=pointer]:
+          - /url: /
+          - img [ref=e361]
+      - generic [ref=e364]:
+        - button "Sync current playback to all speakers" [ref=e365] [cursor=pointer]:
+          - img [ref=e366]
+          - generic [ref=e370]: Sync Play
+        - generic [ref=e371]: Active speaker
+        - combobox "Active speaker" [ref=e372]:
+          - option "op"
+          - option "küch" [selected]
+        - generic [ref=e373]:
+          - img [ref=e374]
+          - slider "Volume" [ref=e378]: "10"
+          - generic [ref=e379]: 10%

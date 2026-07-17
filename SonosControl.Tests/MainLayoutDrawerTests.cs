@@ -19,6 +19,35 @@ namespace SonosControl.Tests;
 public class MainLayoutDrawerTests
 {
     [Fact]
+    public void MainLayout_DesktopHeader_ShowsPageContextAndConsolidatedProfileMenu()
+    {
+        using var ctx = new TestContext();
+        ConfigureAuthAndTheme(ctx);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var cut = ctx.RenderComponent<MainLayout>(parameters => parameters
+            .Add(p => p.Body, builder => builder.AddMarkupContent(0, "<p>Body</p>"))
+            .Add(p => p.AntiforgeryToken, "token"));
+
+        Assert.Equal("Home", cut.Find(".app-top-bar__page-title").TextContent.Trim());
+        Assert.NotEmpty(cut.FindAll("details.top-bar-profile"));
+        Assert.Empty(cut.FindAll(".top-bar-greeting"));
+        Assert.Empty(cut.FindAll(".app-top-bar .theme-toggle"));
+    }
+
+    [Fact]
+    public void NavMenu_GroupsLinksIntoPlaybackAutomationAndSystemSections()
+    {
+        using var ctx = new TestContext();
+        ConfigureAuthAndTheme(ctx);
+
+        var cut = ctx.RenderComponent<NavMenu>();
+
+        var labels = cut.FindAll(".nav-section-label").Select(label => label.TextContent.Trim()).ToList();
+        Assert.Equal(new[] { "Playback", "Automation", "System" }, labels);
+    }
+
+    [Fact]
     public void MainLayout_MobileMenuButton_TogglesDrawerState()
     {
         using var ctx = new TestContext();
