@@ -27,7 +27,7 @@ VIEWPORTS = [
 ]
 
 ROUTES = [
-    ("/", "home", "Today at a glance"),
+    ("/", "home", "All sources"),
     ("/admin/users", "users", "User Management"),
     ("/config", "config", "System Configuration"),
     ("/logs", "logs", "System Logs"),
@@ -143,17 +143,18 @@ def assert_bottom_player_does_not_cover_content(page):
 
 
 def assert_home_dashboard_layout(page):
-    expect(page.locator(".home-dashboard-shell")).to_be_visible(timeout=10000)
-    expect(page.locator("[data-qa='home-operations-dashboard']")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Today at a glance")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Now Playing")).to_be_visible(timeout=10000)
+    expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="All sources")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Device Health")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Library")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Recent Activity")).to_be_visible(timeout=10000)
     expect(page.locator(".spotify-library")).to_have_count(0)
     expect(page.locator(".spotify-home-context")).to_have_count(0)
     expect(page.locator(".spotify-room-picker")).to_have_count(0)
     expect(page.locator("[data-qa='global-player-sync']")).to_be_visible(timeout=10000)
+    # Hero and rooms only render when speakers are configured.
+    if page.locator("[data-qa='room-card']").count() > 0:
+        expect(page.locator("[data-qa='now-playing-hero']")).to_be_visible(timeout=10000)
+        expect(page.get_by_role("heading", name="Speakers")).to_be_visible(timeout=10000)
 
 
 def verify_responsive_home(page, output_dir):

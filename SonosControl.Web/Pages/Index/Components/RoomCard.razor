@@ -1,0 +1,105 @@
+@using SonosControl.DAL.Models
+@using SonosControl.Web.Shared
+
+<article class="room-card @StatusClass @(IsActive ? "room-card--active" : "")"
+         data-qa="room-card"
+         aria-label="@($"Speaker {Speaker.Name}")">
+    <header class="room-card__head">
+        <span class="room-card__dot @StatusClass" aria-hidden="true"></span>
+        <div class="room-card__title">
+            <strong>@Speaker.Name</strong>
+            <span class="room-card__status">@StatusLabel</span>
+        </div>
+        @if (IsActive)
+        {
+            <span class="room-card__active-badge" aria-label="Active room">Active</span>
+        }
+    </header>
+
+    @if (IsActive)
+    {
+        <div class="room-card__volume">
+            <Icon Name="volume" Size="14" />
+            <input type="range" min="0" max="100"
+                   value="@(Health?.CurrentVolume ?? 0)"
+                   aria-label="@($"Volume for {Speaker.Name}")"
+                   @onchange="HandleVolume" />
+            <span class="room-card__volume-value">@(Health?.CurrentVolume ?? 0)%</span>
+        </div>
+    }
+    else if (Health?.CurrentVolume is int v)
+    {
+        <div class="room-card__volume room-card__volume--readonly">
+            <Icon Name="volume" Size="14" />
+            <span>@v% volume</span>
+        </div>
+    }
+
+    <div class="room-card__actions">
+        @if (IsActive)
+        {
+            <button type="button" class="btn btn-primary btn-sm room-card__play"
+                    @onclick="TogglePlayback" disabled="@IsPlaybackLoading"
+                    aria-label="@(IsPlaying ? "Pause playback" : "Start playback")">
+                @if (IsPlaybackLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <Icon Name="@(IsPlaying ? "pause" : "play")" Size="14" />
+                    <span>@(IsPlaying ? "Pause" : "Play")</span>
+                }
+            </button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm room-card__activate"
+                    @onclick="Activate" disabled="@(!IsOnline)"
+                    aria-label="@($"Make {Speaker.Name} the active speaker")">
+                <Icon Name="play" Size="14" />
+                <span>Make active</span>
+            </button>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public SonosSpeaker Speaker { get; set; } = default!;
+    [Parameter] public DeviceHealthStatus? Health { get; set; }
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public bool IsPlaybackLoading { get; set; }
+    [Parameter] public EventCallback OnSetActive { get; set; }
+    [Parameter] public EventCallback<int> OnVolumeChanged { get; set; }
+    [Parameter] public EventCallback OnTogglePlayback { get; set; }
+
+    private bool IsOnline => Health?.IsOnline == true;
+    private bool IsPlaying => Health?.IsPlaying == true;
+
+    private string StatusClass => Health switch
+    {
+        null => "is-unknown",
+        _ when Health.IsOnline => "is-online",
+        _ => "is-offline"
+    };
+
+    private string StatusLabel => Health switch
+    {
+        null => "No snapshot",
+        _ when !Health.IsOnline => Health.LastError ?? "Offline",
+        _ when Health.IsPlaying => "Playing",
+        _ => "Online"
+    };
+
+    private Task Activate() => OnSetActive.InvokeAsync();
+    private Task TogglePlayback() => OnTogglePlayback.InvokeAsync();
+
+    private Task HandleVolume(ChangeEventArgs e)
+    {
+        if (IsActive && e.Value is string s && int.TryParse(s, out var v))
+        {
+            return OnVolumeChanged.InvokeAsync(v);
+        }
+        return Task.CompletedTask;
+    }
+}
