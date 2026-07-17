@@ -15,6 +15,7 @@
             }
         </div>
         <div class="global-player-bar__meta">
+            <span class="global-player-bar__eyebrow" role="heading" aria-level="2">Now Playing</span>
             <strong title="@PlaybackState.CurrentTrack">@PlaybackState.CurrentTrack</strong>
             <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay</span>
         </div>
@@ -44,12 +45,22 @@
                 <Icon Name="@PlayToggleIcon" Size="18" />
             }
         </button>
-        <a href="/"
-           class="global-player-bar__control"
-           title="Open player"
-           aria-label="Open player">
-            <Icon Name="home" Size="16" />
-        </a>
+        <button type="button"
+                class="global-player-bar__control"
+                @onclick="SkipNextAsync"
+                title="Next track"
+                aria-label="Next track"
+                data-qa="global-player-next"
+                disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping || string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp))">
+            @if (PlaybackState.IsSkipping)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            }
+            else
+            {
+                <Icon Name="forward" Size="16" />
+            }
+        </button>
     </div>
 
     <div class="global-player-bar__room">
@@ -119,6 +130,11 @@
     private Task RefreshAsync()
     {
         return PlaybackState.RefreshAsync();
+    }
+
+    private Task SkipNextAsync()
+    {
+        return PlaybackState.SkipNextAsync();
     }
 
     private async Task SyncPlayAsync()

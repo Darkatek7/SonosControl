@@ -69,38 +69,49 @@
 
         <header class="app-top-bar">
             <div class="app-top-bar__content px-4">
-                <div class="app-top-bar__identity">
-                    <span class="app-top-bar__title">SonosControl</span>
-                    <span class="app-top-bar__subtitle">Master every room</span>
+                <div class="app-top-bar__page">
+                    <span class="app-top-bar__eyebrow">Workspace</span>
+                    <strong class="app-top-bar__page-title">@CurrentPageTitle</strong>
                 </div>
                 <div class="top-bar-actions">
                     @if (isAuthenticated)
                     {
-                        <div class="theme-toggle">
-                            <span class="text-uppercase text-muted small mb-0">Theme</span>
-                            <div class="btn-group" role="group" aria-label="Theme preference">
-                                @foreach (var mode in ThemeOptions)
-                                {
-                                    <button type="button"
-                                            class="@GetThemeButtonClasses(mode)"
-                                            aria-pressed="@(mode == _userThemePreference ? "true" : "false")"
-                                            @onclick="() => ChangeThemeAsync(mode)">
-                                        @GetThemeLabel(mode)
-                                    </button>
-                                }
+                        <details class="top-bar-profile">
+                            <summary aria-label="Open account menu">
+                                <span class="top-bar-profile__avatar"><Icon Name="person" Size="16" /></span>
+                                <span class="top-bar-profile__summary-copy">
+                                    <small>Signed in</small>
+                                    <strong>@firstName</strong>
+                                </span>
+                            </summary>
+                            <div class="top-bar-profile__menu">
+                                <div class="top-bar-profile__identity">
+                                    <span>Account</span>
+                                    <strong>@firstName</strong>
+                                </div>
+                                <div class="top-bar-profile__theme">
+                                    <span>Theme</span>
+                                    <div class="btn-group w-100" role="group" aria-label="Theme preference">
+                                        @foreach (var mode in ThemeOptions)
+                                        {
+                                            <button type="button"
+                                                    class="@GetThemeButtonClasses(mode) flex-grow-1"
+                                                    aria-pressed="@(mode == _userThemePreference ? "true" : "false")"
+                                                    @onclick="() => ChangeThemeAsync(mode)">
+                                                @GetThemeLabel(mode)
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                                <a href="/useredit" class="btn btn-sm btn-outline-secondary w-100">
+                                    <Icon Name="settings" Size="15" /> Profile settings
+                                </a>
+                                <form method="post" action="/auth/logout" class="top-bar-logout">
+                                    <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">Logout</button>
+                                </form>
                             </div>
-                        </div>
-
-                        <span class="top-bar-greeting">Hello, @firstName!</span>
-
-                        <form method="post" action="/auth/logout" class="top-bar-logout">
-                            <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
-                            <button type="submit" class="btn btn-sm btn-danger">Logout</button>
-                        </form>
-
-                        <a href="@($"/useredit")" class="top-link top-link--icon">
-                            <Icon Name="person" Size="16" />
-                        </a>
+                        </details>
                     }
                     else
                     {
@@ -145,6 +156,30 @@
     private bool _isBodyScrollLocked;
     private bool _focusDrawerOnNextRender;
     private ElementReference _drawerRef;
+
+    private string CurrentPageTitle
+    {
+        get
+        {
+            var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+            return route switch
+            {
+                "" => "Home",
+                "lookup" => "Station Lookup",
+                "stats" => "Statistics",
+                "scenes" => "Scenes",
+                "recommendations" => "Recommendations",
+                "schedule-windows" => "Schedule Windows",
+                "devices" => "Device Operations",
+                "config" => "Sonos Configuration",
+                "admin/users" => "User Management",
+                "logs" => "System Logs",
+                "settings-backups" => "Backups",
+                "useredit" => "Profile Settings",
+                _ => "SonosControl"
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -230,7 +265,10 @@
         if (_isDrawerOpen)
         {
             _ = InvokeAsync(CloseDrawerAsync);
+            return;
         }
+
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)

@@ -1,0 +1,293 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: SC
+        - generic [ref=e7]:
+          - generic [ref=e8]: SonosControl
+          - generic [ref=e9]: Command center
+      - navigation [ref=e11]:
+        - link "Home" [ref=e13] [cursor=pointer]:
+          - /url: ""
+          - img [ref=e14]
+          - generic [ref=e17]: Home
+        - link "Station Lookup" [ref=e19] [cursor=pointer]:
+          - /url: lookup
+          - img [ref=e20]
+          - generic [ref=e23]: Station Lookup
+        - link "Statistics" [ref=e25] [cursor=pointer]:
+          - /url: stats
+          - img [ref=e26]
+          - generic [ref=e27]: Statistics
+        - link "Scenes" [ref=e29] [cursor=pointer]:
+          - /url: scenes
+          - img [ref=e30]
+          - generic [ref=e34]: Scenes
+        - link "Recommendations" [ref=e36] [cursor=pointer]:
+          - /url: recommendations
+          - img [ref=e37]
+          - generic [ref=e39]: Recommendations
+        - link "Schedule Windows" [ref=e42] [cursor=pointer]:
+          - /url: schedule-windows
+          - img [ref=e43]
+          - generic [ref=e45]: Schedule Windows
+        - link "Device Ops" [ref=e47] [cursor=pointer]:
+          - /url: devices
+          - img [ref=e48]
+          - generic [ref=e52]: Device Ops
+        - link "Sonos Config" [ref=e54] [cursor=pointer]:
+          - /url: config
+          - img [ref=e55]
+          - generic [ref=e58]: Sonos Config
+        - link "User Management" [ref=e60] [cursor=pointer]:
+          - /url: admin/users
+          - img [ref=e61]
+          - generic [ref=e64]: User Management
+        - link "Logs" [ref=e66] [cursor=pointer]:
+          - /url: logs
+          - img [ref=e67]
+          - generic [ref=e70]: Logs
+        - link "Backups" [ref=e72] [cursor=pointer]:
+          - /url: settings-backups
+          - img [ref=e73]
+          - generic [ref=e75]: Backups
+      - generic [ref=e77]: Syncing rooms in real time.
+  - main [ref=e78]:
+    - generic [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]: SonosControl
+        - generic [ref=e83]: Master every room
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]: Theme
+          - group "Theme preference" [ref=e87]:
+            - button "System" [ref=e88] [cursor=pointer]
+            - button "Light" [ref=e89] [cursor=pointer]
+            - button "Dark" [pressed] [ref=e90] [cursor=pointer]
+        - generic [ref=e91]: Hello, Admin!
+        - button "Logout" [ref=e93] [cursor=pointer]
+        - link [ref=e94] [cursor=pointer]:
+          - /url: /useredit
+          - img [ref=e95]
+    - article [ref=e99]:
+      - region "Today at a glance" [ref=e101]:
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]: Operations
+            - heading "Today at a glance" [level=1] [ref=e105]
+            - paragraph [ref=e106]: Live playback, automation, device health, queue state, and compact source control.
+          - generic [ref=e107]:
+            - generic [ref=e108]: Automation running
+            - generic [ref=e109]: Updated just now
+        - generic "Playback controls" [ref=e110]:
+          - generic [ref=e111]:
+            - generic [ref=e112]: Active room
+            - combobox "Active room" [ref=e113]:
+              - option "op" [selected]
+              - option "küch"
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - button "Group" [ref=e116] [cursor=pointer]:
+                - img [ref=e117]
+                - generic [ref=e120]: Group
+              - button "Ungroup active speaker" [ref=e121] [cursor=pointer]:
+                - img [ref=e122]
+            - button "Sync Play" [ref=e125] [cursor=pointer]:
+              - img [ref=e126]
+              - generic [ref=e130]: Sync Play
+            - button "Pause playback" [ref=e131] [cursor=pointer]:
+              - img [ref=e132]
+              - generic [ref=e135]: Pause
+            - button "Timer" [ref=e136] [cursor=pointer]:
+              - img [ref=e137]
+              - text: Timer
+        - status [ref=e451]: Playback command sent.
+        - generic [ref=e140]:
+          - article [ref=e141]:
+            - generic [ref=e142]:
+              - heading "Now Playing" [level=3] [ref=e143]:
+                - img [ref=e144]
+                - text: Now Playing
+              - generic [ref=e148]: op
+            - generic [ref=e149]:
+              - img [ref=e151]
+              - generic [ref=e155]:
+                - strong [ref=e156]: years & years - king
+                - generic "Kronehit" [ref=e157]: Kronehit · Playing
+                - generic "Playback quick controls" [ref=e158]:
+                  - button "Refresh queue" [ref=e159] [cursor=pointer]:
+                    - img [ref=e160]
+                  - button "Next Spotify track" [disabled]:
+                    - img
+            - generic [ref=e164]:
+              - generic [ref=e165]:
+                - generic [ref=e166]: Volume
+                - strong [ref=e167]: 20%
+              - generic [ref=e168]:
+                - generic [ref=e169]: Rooms
+                - strong [ref=e170]: "2"
+              - generic [ref=e171]:
+                - generic [ref=e172]: Queue
+                - strong [ref=e173]: "0"
+          - article [ref=e174]:
+            - generic [ref=e175]:
+              - heading "Active Automation" [level=3] [ref=e176]:
+                - img [ref=e177]
+                - text: Active Automation
+              - generic [ref=e179]: Schedule Windows
+            - generic [ref=e180]:
+              - generic [ref=e181]:
+                - heading "QA YouTube Window" [level=4] [ref=e182]
+                - paragraph [ref=e183]: Scene "QA YouTube Scene" is active from 06:00-18:00 with synced room state visible here.
+                - generic [ref=e184]:
+                  - generic [ref=e185]: Priority 100
+                  - generic [ref=e186]: "Scene: QA YouTube Scene"
+                  - generic [ref=e187]: Fade out 0s
+                  - generic [ref=e188]: 1 room
+              - generic [ref=e189]:
+                - strong [ref=e190]: 1h 29m
+                - generic [ref=e191]: until handoff
+            - generic "Upcoming schedule windows" [ref=e192]:
+              - generic [ref=e193]: No next schedule window.
+          - article [ref=e194]:
+            - generic [ref=e195]:
+              - heading "Device Health" [level=3] [ref=e196]:
+                - img [ref=e197]
+                - text: Device Health
+              - generic [ref=e200]: 2 configured
+            - generic [ref=e201]:
+              - generic [ref=e202]:
+                - generic [ref=e203]: Online
+                - strong [ref=e204]: "2"
+              - generic [ref=e205]:
+                - generic [ref=e206]: Offline
+                - strong [ref=e207]: "0"
+              - generic [ref=e208]:
+                - generic [ref=e209]: Unknown
+                - strong [ref=e210]: "0"
+            - generic [ref=e211]:
+              - generic [ref=e212]:
+                - strong [ref=e214]: küch
+                - generic [ref=e215]: 9 ms
+              - generic [ref=e216]:
+                - strong [ref=e218]: op
+                - generic [ref=e219]: 41 ms
+          - article [ref=e220]:
+            - generic [ref=e221]:
+              - heading "Up Next" [level=3] [ref=e222]:
+                - img [ref=e223]
+                - text: Up Next
+              - generic [ref=e225]: Queue empty
+            - generic [ref=e227]: Queue is empty.
+          - article [ref=e228]:
+            - generic [ref=e229]:
+              - heading "Library" [level=3] [ref=e230]:
+                - img [ref=e231]
+                - text: Library
+              - generic [ref=e233]: All sources
+            - tablist "Media library" [ref=e234]:
+              - tab "Stations" [ref=e235] [cursor=pointer]
+              - tab "Spotify" [ref=e236] [cursor=pointer]
+              - tab "YouTube" [selected] [ref=e237] [cursor=pointer]
+            - generic [ref=e238]:
+              - img
+              - searchbox "Search active library tab" [ref=e239]
+            - generic [ref=e240]:
+              - button "Add Station" [ref=e241] [cursor=pointer]:
+                - img [ref=e242]
+                - text: Station
+              - button "Add Spotify Track" [ref=e243] [cursor=pointer]:
+                - img [ref=e244]
+                - text: Spotify
+              - button "Add YouTube Music Collection" [ref=e245] [cursor=pointer]:
+                - img [ref=e246]
+                - text: YouTube
+              - link "Manage" [ref=e247] [cursor=pointer]:
+                - /url: /recommendations
+                - img [ref=e248]
+                - text: Manage
+            - generic [ref=e251]:
+              - generic [ref=e252]:
+                - img [ref=e254]
+                - generic [ref=e258]:
+                  - strong [ref=e259]: Energize
+                  - generic "https://music.youtube.com/watch?v=dQw4w9WgXcQ" [ref=e446]: YouTube Music · https://music.youtube.com/watch?v=dQw4w9WgXcQ
+                - button "Play Energize" [ref=e447] [cursor=pointer]:
+                  - img [ref=e452]
+              - generic [ref=e264]:
+                - img [ref=e266]
+                - generic [ref=e270]:
+                  - strong [ref=e271]: Supermix
+                  - generic "https://music.youtube.com/playlist?list=LM" [ref=e449]: YouTube Music · https://music.youtube.com/playlist?list=LM
+                - button "Play Supermix" [ref=e450] [cursor=pointer]:
+                  - img [ref=e274]
+          - article [ref=e360]:
+            - generic [ref=e361]:
+              - heading "Recent Activity" [level=3] [ref=e362]:
+                - img [ref=e363]
+                - text: Recent Activity
+              - generic [ref=e366]: Operational trail
+            - generic [ref=e367]:
+              - generic [ref=e368]:
+                - generic [ref=e369]:
+                  - strong [ref=e370]: "URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+                  - generic [ref=e371]: admin · YouTube Music Changed
+                - time [ref=e372]: 16:30
+              - generic [ref=e373]:
+                - generic [ref=e374]:
+                  - strong [ref=e375]: Window 'QA YouTube Window' triggered scene '3c6300eb31284460a18b18a6d7045d2a'.
+                  - generic [ref=e376]: Unknown · ScheduleTriggered
+                - time [ref=e377]: 16:30
+              - generic [ref=e378]:
+                - generic [ref=e379]:
+                  - strong [ref=e380]: QA YouTube Scene (3c6300eb31284460a18b18a6d7045d2a) on 10.1.12.252
+                  - generic [ref=e381]: Unknown · SceneApplied
+                - time [ref=e382]: 16:30
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - strong [ref=e385]: Window 'QA YouTube Window' triggered scene '3c6300eb31284460a18b18a6d7045d2a'.
+                  - generic [ref=e386]: Unknown · ScheduleTriggered
+                - time [ref=e387]: 16:24
+        - generic [ref=e388]:
+          - link "Apply Scene" [ref=e389] [cursor=pointer]:
+            - /url: /scenes
+            - img [ref=e390]
+            - text: Apply Scene
+          - link "Discover Devices" [ref=e394] [cursor=pointer]:
+            - /url: /devices
+            - img [ref=e395]
+            - text: Discover Devices
+          - link "Open Schedule" [ref=e398] [cursor=pointer]:
+            - /url: /schedule-windows
+            - img [ref=e399]
+            - text: Open Schedule
+          - link "View Logs" [ref=e401] [cursor=pointer]:
+            - /url: /logs
+            - img [ref=e402]
+            - text: View Logs
+    - complementary "Global playback controls" [ref=e405]:
+      - generic [ref=e406]:
+        - img [ref=e408]
+        - generic [ref=e412]:
+          - strong [ref=e413]: years & years - king
+          - generic "Kronehit" [ref=e414]
+      - generic [ref=e415]:
+        - button "Refresh playback state" [ref=e416] [cursor=pointer]:
+          - img [ref=e417]
+        - button "Pause playback" [ref=e421] [cursor=pointer]:
+          - img [ref=e422]
+        - link "Open player" [ref=e425] [cursor=pointer]:
+          - /url: /
+          - img [ref=e426]
+      - generic [ref=e429]:
+        - button "Sync current playback to all speakers" [ref=e430] [cursor=pointer]:
+          - img [ref=e431]
+          - generic [ref=e435]: Sync Play
+        - generic [ref=e436]: Active speaker
+        - combobox "Active speaker" [ref=e437]:
+          - option "op" [selected]
+          - option "küch"
+        - generic [ref=e438]:
+          - img [ref=e439]
+          - slider "Volume" [ref=e443]: "20"
+          - generic [ref=e444]: 20%

@@ -1,0 +1,208 @@
+- generic [ref=e199]:
+  - complementary [ref=e200]:
+    - generic [ref=e201]:
+      - generic [ref=e202]:
+        - generic [ref=e203]: SC
+        - generic [ref=e204]:
+          - generic [ref=e205]: SonosControl
+          - generic [ref=e206]: Command center
+      - navigation [ref=e208]:
+        - link "Home" [ref=e210] [cursor=pointer]:
+          - /url: ""
+          - img [ref=e211]
+          - generic [ref=e214]: Home
+        - link "Station Lookup" [ref=e216] [cursor=pointer]:
+          - /url: lookup
+          - img [ref=e217]
+          - generic [ref=e220]: Station Lookup
+        - link "Statistics" [ref=e222] [cursor=pointer]:
+          - /url: stats
+          - img [ref=e223]
+          - generic [ref=e224]: Statistics
+        - link "Scenes" [ref=e226] [cursor=pointer]:
+          - /url: scenes
+          - img [ref=e227]
+          - generic [ref=e231]: Scenes
+        - link "Recommendations" [ref=e233] [cursor=pointer]:
+          - /url: recommendations
+          - img [ref=e234]
+          - generic [ref=e236]: Recommendations
+        - link "Schedule Windows" [ref=e239] [cursor=pointer]:
+          - /url: schedule-windows
+          - img [ref=e240]
+          - generic [ref=e242]: Schedule Windows
+        - link "Device Ops" [ref=e244] [cursor=pointer]:
+          - /url: devices
+          - img [ref=e245]
+          - generic [ref=e249]: Device Ops
+        - link "Sonos Config" [ref=e251] [cursor=pointer]:
+          - /url: config
+          - img [ref=e252]
+          - generic [ref=e255]: Sonos Config
+        - link "User Management" [ref=e257] [cursor=pointer]:
+          - /url: admin/users
+          - img [ref=e258]
+          - generic [ref=e261]: User Management
+        - link "Logs" [ref=e263] [cursor=pointer]:
+          - /url: logs
+          - img [ref=e264]
+          - generic [ref=e267]: Logs
+        - link "Backups" [ref=e269] [cursor=pointer]:
+          - /url: settings-backups
+          - img [ref=e270]
+          - generic [ref=e272]: Backups
+      - generic [ref=e274]: Syncing rooms in real time.
+  - main [ref=e275]:
+    - generic [ref=e277]:
+      - generic [ref=e278]:
+        - generic [ref=e279]: SonosControl
+        - generic [ref=e280]: Master every room
+      - generic [ref=e281]:
+        - generic [ref=e282]:
+          - generic [ref=e283]: Theme
+          - group "Theme preference" [ref=e284]:
+            - button "System" [ref=e285] [cursor=pointer]
+            - button "Light" [ref=e286] [cursor=pointer]
+            - button "Dark" [pressed] [ref=e287] [cursor=pointer]
+        - generic [ref=e288]: Hello, Admin!
+        - button "Logout" [ref=e290] [cursor=pointer]
+        - link [ref=e291] [cursor=pointer]:
+          - /url: /useredit
+          - img [ref=e292]
+    - article [ref=e296]:
+      - generic [ref=e297]:
+        - region "Schedule Windows" [ref=e298]:
+          - generic [ref=e299]:
+            - generic [ref=e300]: Automation
+            - heading "Schedule Windows" [level=1] [ref=e301]
+            - paragraph [ref=e302]: Define recurring playback windows with deterministic priority, scene handoffs, and optional fades.
+          - generic [ref=e303]:
+            - generic [ref=e304]:
+              - generic [ref=e305]:
+                - img [ref=e306]
+                - text: Windows
+              - strong [ref=e308]: "0"
+            - generic [ref=e309]:
+              - generic [ref=e310]:
+                - img [ref=e311]
+                - text: Enabled
+              - strong [ref=e313]: "0"
+            - button "New Window" [active] [ref=e314] [cursor=pointer]:
+              - img [ref=e315]
+              - text: New Window
+        - region "Active schedule window" [ref=e316]:
+          - generic [ref=e317]:
+            - generic [ref=e318]: Live state
+            - strong [ref=e319]: "Active window: None"
+          - generic [ref=e320]:
+            - generic [ref=e321]:
+              - img [ref=e322]
+              - text: Monday, 8. June 2026 16:24
+            - generic [ref=e325]:
+              - img [ref=e326]
+              - text: "Scene: None"
+        - generic [ref=e330]:
+          - complementary "Configured schedule windows" [ref=e331]:
+            - generic [ref=e333]:
+              - generic [ref=e334]: Priority queue
+              - heading "Window library" [level=2] [ref=e335]:
+                - img [ref=e336]
+                - text: Window library
+            - generic [ref=e338]:
+              - img [ref=e339]
+              - strong [ref=e341]: No schedule windows configured.
+              - generic [ref=e342]: Create a window to automate scene changes by time and recurrence.
+          - main "Schedule window editor" [ref=e343]:
+            - generic [ref=e344]:
+              - generic [ref=e345]:
+                - generic [ref=e346]: Editor
+                - heading "Window command center" [level=2] [ref=e347]:
+                  - img [ref=e348]
+                  - text: Window command center
+              - generic [ref=e396]: Enabled
+            - generic [ref=e397]:
+              - generic [ref=e398]:
+                - heading "Identity" [level=3] [ref=e400]:
+                  - img [ref=e401]
+                  - text: Identity
+                - generic [ref=e403]:
+                  - generic [ref=e404]:
+                    - generic [ref=e405]: Name
+                    - textbox [ref=e406]: Window 1
+                  - generic [ref=e407]:
+                    - generic [ref=e408]: Enabled
+                    - checkbox [checked] [ref=e410]
+                  - generic [ref=e411]:
+                    - generic [ref=e412]: Priority
+                    - spinbutton [ref=e413]: "100"
+              - generic [ref=e414]:
+                - generic [ref=e415]:
+                  - heading "Timing" [level=3] [ref=e416]:
+                    - img [ref=e417]
+                    - text: Timing
+                  - generic [ref=e420]: 06:00-18:00
+                - generic [ref=e421]:
+                  - generic [ref=e422]:
+                    - generic [ref=e423]: Start
+                    - textbox [ref=e424]: 06:00
+                  - generic [ref=e425]:
+                    - generic [ref=e426]: Stop
+                    - textbox [ref=e427]: 18:00
+                  - generic [ref=e428]:
+                    - generic [ref=e429]: Recurrence
+                    - combobox [ref=e430]:
+                      - option "Daily"
+                      - option "Weekdays" [selected]
+                      - option "Weekends"
+                      - option "Custom Days"
+                  - generic [ref=e431]:
+                    - generic [ref=e432]: Start Date (optional)
+                    - textbox [ref=e433]
+                  - generic [ref=e434]:
+                    - generic [ref=e435]: End Date (optional)
+                    - textbox [ref=e436]
+              - generic [ref=e437]:
+                - heading "Scene and transition" [level=3] [ref=e439]:
+                  - img [ref=e440]
+                  - text: Scene and transition
+                - generic [ref=e444]:
+                  - generic [ref=e445]:
+                    - generic [ref=e446]: Scene
+                    - combobox [ref=e447]:
+                      - option "None" [selected]
+                      - option "QA YouTube Scene"
+                  - generic [ref=e448]:
+                    - generic [ref=e449]: Fade In (sec)
+                    - spinbutton [ref=e450]: "0"
+                  - generic [ref=e451]:
+                    - generic [ref=e452]: Fade Out (sec)
+                    - spinbutton [ref=e453]: "0"
+              - button "Save Window" [ref=e455] [cursor=pointer]:
+                - img [ref=e456]
+                - text: Save Window
+    - complementary "Global playback controls" [ref=e356]:
+      - generic [ref=e357]:
+        - img [ref=e359]
+        - generic [ref=e363]:
+          - strong [ref=e364]: charlie puth - one call away
+          - generic "Kronehit" [ref=e365]
+      - generic [ref=e366]:
+        - button "Refresh playback state" [ref=e367] [cursor=pointer]:
+          - img [ref=e368]
+        - button "Pause playback" [ref=e372] [cursor=pointer]:
+          - img [ref=e373]
+        - link "Open player" [ref=e376] [cursor=pointer]:
+          - /url: /
+          - img [ref=e377]
+      - generic [ref=e380]:
+        - button "Sync current playback to all speakers" [ref=e381] [cursor=pointer]:
+          - img [ref=e382]
+          - generic [ref=e386]: Sync Play
+        - generic [ref=e387]: Active speaker
+        - combobox "Active speaker" [ref=e388]:
+          - option "op"
+          - option "küch" [selected]
+        - generic [ref=e389]:
+          - img [ref=e390]
+          - slider "Volume" [ref=e394]: "14"
+          - generic [ref=e395]: 14%

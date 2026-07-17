@@ -13,6 +13,7 @@ using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
 using SonosControl.Web.Pages;
 using SonosControl.Web.Services;
+using SonosControl.Web.Shared;
 using Xunit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -102,13 +103,13 @@ namespace SonosControl.Tests
             _mockSonosRepo.Setup(s => s.StartPlaying(It.IsAny<string>()))
                 .Returns(async () => await Task.Delay(delayTime));
 
-            var cut = RenderComponent<IndexPage>();
+            var cut = RenderComponent<GlobalPlayerBar>();
 
             // Wait for OnInitializedAsync
             cut.WaitForState(() => cut.Instance != null);
 
-            // Find the Home-page Sync Play button, not the global player control.
-            var syncButton = cut.Find("button[data-qa='home-dashboard-sync']");
+            // Sync Play now has a single owner in the persistent global player.
+            var syncButton = cut.Find("button[data-qa='global-player-sync']");
             cut.WaitForAssertion(() => Assert.False(syncButton.HasAttribute("disabled")));
 
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();

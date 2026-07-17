@@ -1,0 +1,31 @@
+- generic [ref=e2]:
+  - region "SonosControl" [ref=e3]:
+    - generic [ref=e4]: Command Center
+    - heading "SonosControl" [level=1] [ref=e5]
+    - paragraph [ref=e6]: Sign in to manage rooms, queues, schedules, recommendations, and system settings from one focused console.
+    - generic [ref=e7]:
+      - generic [ref=e8]: Playback
+      - generic [ref=e9]: Automation
+      - generic [ref=e10]: Insights
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - img [ref=e14]
+      - generic [ref=e17]:
+        - generic [ref=e18]: Access
+        - heading "Welcome back" [level=2] [ref=e19]
+        - paragraph [ref=e20]: Use your SonosControl account to continue.
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - textbox "Username" [active] [ref=e23]:
+          - /placeholder: " "
+        - generic: Username
+      - generic [ref=e24]:
+        - textbox "Password" [ref=e25]:
+          - /placeholder: " "
+        - generic: Password
+    - generic [ref=e26]:
+      - checkbox "Remember Me" [checked] [ref=e27] [cursor=pointer]
+      - generic [ref=e28]: Remember Me
+    - button "Sign In" [ref=e29] [cursor=pointer]
+    - link "Don’t have an account? Register" [ref=e31] [cursor=pointer]:
+      - /url: /register

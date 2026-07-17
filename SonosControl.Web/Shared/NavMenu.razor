@@ -27,81 +27,95 @@
 
     <div class="nav-scrollable px-3" data-drawer-open="@(IsDrawerOpen ? "true" : "false")">
         <nav class="nav-links">
-            <div class="nav-item">
-                <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
-                    <Icon Name="home" Size="16" Class="nav-icon" />
-                    <span>Home</span>
-                </NavLink>
-            </div>
-            <div class="nav-item">
-                <NavLink class="nav-link" href="lookup" @onclick="HandleNavigate">
-                    <Icon Name="search" Size="16" Class="nav-icon" />
-                    <span>Station Lookup</span>
-                </NavLink>
-            </div>
-
-            <AuthorizeView Roles="admin,operator,superadmin">
-                <Authorized>
+            <section class="nav-section" aria-labelledby="nav-playback-label">
+                <span id="nav-playback-label" class="nav-section-label">Playback</span>
+                <div class="nav-section__links">
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
-                            <Icon Name="graph" Size="16" Class="nav-icon" />
-                            <span>Statistics</span>
+                        <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
+                            <Icon Name="home" Size="16" Class="nav-icon" />
+                            <span>Home</span>
                         </NavLink>
                     </div>
                     <div class="nav-item">
-                        <NavLink class="nav-link" href="scenes" @onclick="HandleNavigate">
-                            <Icon Name="layers" Size="16" Class="nav-icon" />
-                            <span>Scenes</span>
+                        <NavLink class="nav-link" href="lookup" @onclick="HandleNavigate">
+                            <Icon Name="search" Size="16" Class="nav-icon" />
+                            <span>Station Lookup</span>
                         </NavLink>
                     </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="recommendations" @onclick="HandleNavigate">
-                            <Icon Name="star" Size="16" Class="nav-icon" />
-                            <span>Recommendations</span>
-                        </NavLink>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
+                    <AuthorizeView Roles="admin,operator,superadmin">
+                        <Authorized>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
+                                    <Icon Name="graph" Size="16" Class="nav-icon" />
+                                    <span>Statistics</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="scenes" @onclick="HandleNavigate">
+                                    <Icon Name="layers" Size="16" Class="nav-icon" />
+                                    <span>Scenes</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="recommendations" @onclick="HandleNavigate">
+                                    <Icon Name="star" Size="16" Class="nav-icon" />
+                                    <span>Recommendations</span>
+                                </NavLink>
+                            </div>
+                        </Authorized>
+                    </AuthorizeView>
+                </div>
+            </section>
 
             <AuthorizeView Roles="admin,superadmin">
                 <Authorized>
-                    <div class="nav-divider" aria-hidden="true"></div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
-                            <Icon Name="calendar" Size="16" Class="nav-icon" />
-                            <span>Schedule Windows</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="devices" @onclick="HandleNavigate">
-                            <Icon Name="rss" Size="16" Class="nav-icon" />
-                            <span>Device Ops</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
-                            <Icon Name="cog" Size="16" Class="nav-icon" />
-                            <span>Sonos Config</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="admin/users" @onclick="HandleNavigate">
-                            <Icon Name="person" Size="16" Class="nav-icon" />
-                            <span>User Management</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
-                            <Icon Name="file" Size="16" Class="nav-icon" />
-                            <span>Logs</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="settings-backups" @onclick="HandleNavigate">
-                            <Icon Name="hard-drive" Size="16" Class="nav-icon" />
-                            <span>Backups</span>
-                        </NavLink>
-                    </div>
+                    <section class="nav-section" aria-labelledby="nav-automation-label">
+                        <span id="nav-automation-label" class="nav-section-label">Automation</span>
+                        <div class="nav-section__links">
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
+                                    <Icon Name="calendar" Size="16" Class="nav-icon" />
+                                    <span>Schedule Windows</span>
+                                </NavLink>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="nav-section" aria-labelledby="nav-system-label">
+                        <span id="nav-system-label" class="nav-section-label">System</span>
+                        <div class="nav-section__links">
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="devices" @onclick="HandleNavigate">
+                                    <Icon Name="rss" Size="16" Class="nav-icon" />
+                                    <span>Device Ops</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
+                                    <Icon Name="cog" Size="16" Class="nav-icon" />
+                                    <span>Sonos Config</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="admin/users" @onclick="HandleNavigate">
+                                    <Icon Name="person" Size="16" Class="nav-icon" />
+                                    <span>User Management</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
+                                    <Icon Name="file" Size="16" Class="nav-icon" />
+                                    <span>Logs</span>
+                                </NavLink>
+                            </div>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="settings-backups" @onclick="HandleNavigate">
+                                    <Icon Name="hard-drive" Size="16" Class="nav-icon" />
+                                    <span>Backups</span>
+                                </NavLink>
+                            </div>
+                        </div>
+                    </section>
                 </Authorized>
             </AuthorizeView>
         </nav>
