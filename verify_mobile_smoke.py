@@ -27,7 +27,7 @@ VIEWPORTS = [
 ]
 
 ROUTES = [
-    ("/", "home", "Saved sources"),
+    ("/", "home", "Favourites"),
     ("/library", "library", "Library"),
     ("/automation", "automation", "Automation"),
     ("/insights", "insights", "Insights"),
@@ -168,7 +168,7 @@ def assert_bottom_player_does_not_cover_content(page):
 
 def assert_home_dashboard_layout(page):
     expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Saved sources")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Favourites")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Device warnings")).to_be_visible(timeout=10000)
     expect(page.locator(".spotify-library")).to_have_count(0)
@@ -179,6 +179,29 @@ def assert_home_dashboard_layout(page):
     assert page.locator(".home-quick-library .library__item").count() <= 6
     if page.locator("[data-qa='room-card']").count() > 0:
         expect(page.get_by_role("heading", name="Speakers")).to_be_visible(timeout=10000)
+
+
+def assert_library_cards_are_uniform(page):
+    cards = page.locator(".source-card")
+    if cards.count() == 0:
+        return
+
+    dimensions = cards.evaluate_all(
+        """
+        elements => elements.map(element => {
+            const rect = element.getBoundingClientRect();
+            return { width: rect.width, height: rect.height };
+        })
+        """
+    )
+    heights = [round(item["height"], 2) for item in dimensions]
+    assert max(heights) - min(heights) <= 1, f"Library card heights differ: {heights}"
+    favourite_buttons = page.locator(".source-card__favourite")
+    expect(favourite_buttons).to_have_count(cards.count())
+    button_sizes = favourite_buttons.evaluate_all(
+        "elements => elements.map(element => element.getBoundingClientRect().width)"
+    )
+    assert all(size >= 44 for size in button_sizes), f"Favourite touch targets are too small: {button_sizes}"
 
 
 def verify_responsive_home(page, output_dir):
@@ -362,6 +385,8 @@ def run():
                         verify_drawer(page)
                     assert_no_horizontal_overflow(page)
                     assert_bottom_player_does_not_cover_content(page)
+                    if route == "/library":
+                        assert_library_cards_are_uniform(page)
 
                     page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}.png"), full_page=True)
 

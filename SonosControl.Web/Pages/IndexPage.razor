@@ -20,6 +20,7 @@
 @inject PlaybackUiStateService PlaybackState
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject HomeLibraryService HomeLibrary
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Home - SonosControl</PageTitle>
@@ -33,7 +34,7 @@
             var activeScene = GetScene(activeWindow?.SceneId);
             var nextWindow = GetNextScheduleWindow(nowLocal, activeWindow);
             var healthSummary = GetDeviceHealthSummary();
-            var libraryItems = GetActiveLibrarySources().Take(6).ToList();
+            var libraryItems = _homeLibraryItems;
         }
 
         @if (!string.IsNullOrWhiteSpace(_commandStatusMessage))
@@ -114,7 +115,7 @@
             <header class="library__head">
                 <div>
                     <span class="home-eyebrow">Quick access</span>
-                    <h2>Saved sources</h2>
+                    <h2>Favourites</h2>
                 </div>
                 <a class="btn btn-sm btn-outline-secondary" href="/library">
                     <span>View library</span>
@@ -130,7 +131,14 @@
                             <span class="library__item-icon"><Icon Name="@GetMediaIcon(item.MediaType)" Size="15" /></span>
                             <div class="library__item-meta">
                                 <strong title="@item.Name">@item.Name</strong>
-                                <span>@FormatMediaTypeLabel(item.MediaType)</span>
+                                @if (item.IsFavourite)
+                                {
+                                    <span>@FormatMediaTypeLabel(item.MediaType)</span>
+                                }
+                                else
+                                {
+                                    <span class="library__suggested">Suggested · @FormatMediaTypeLabel(item.MediaType)</span>
+                                }
                             </div>
                             <button class="btn btn-sm btn-primary library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" disabled="@(_loadingMediaUrl == item.Url)">
                                 @if (_loadingMediaUrl == item.Url) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
@@ -359,6 +367,7 @@
         .ToList();
 
     private sealed record DashboardRecommendation(string Name, string Url, string MediaType);
+    private IReadOnlyList<HomeLibrarySource> _homeLibraryItems = Array.Empty<HomeLibrarySource>();
 
     private sealed record DeviceHealthSummary(
         int Online,
@@ -1755,6 +1764,7 @@
         _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         _settings.YouTubeCollections ??= new List<YouTubeObject>();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
+        _homeLibraryItems = await HomeLibrary.GetQuickAccessAsync(_settings, 6);
         await PlaybackState.InitializeAsync();
         _settings.IP_Adress = PlaybackState.ActiveSpeakerIp;
 
