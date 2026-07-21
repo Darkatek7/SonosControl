@@ -14,7 +14,7 @@
 @inject SonosControl.Web.Services.ThemeService ThemeService
 @inject IJSRuntime JSRuntime
 
-<PageTitle>SonosControl.Web</PageTitle>
+<PageTitle>SonosControl</PageTitle>
 
 <div class="app-shell">
     <aside id="app-sidebar"
@@ -48,22 +48,11 @@
                 </button>
 
                 <div class="app-mobile-top-bar__identity">
-                    <span class="app-mobile-top-bar__title">SonosControl</span>
-                    <span class="app-mobile-top-bar__subtitle">Master every room</span>
+                    <span class="app-mobile-top-bar__title">@CurrentPageTitle</span>
+                    <span class="app-mobile-top-bar__subtitle">SonosControl</span>
                 </div>
 
-                <div class="app-mobile-top-bar__actions">
-                    @if (isAuthenticated)
-                    {
-                        <a href="@($"/useredit")" class="top-link top-link--icon app-mobile-top-bar__profile-link" aria-label="Open profile settings">
-                            <Icon Name="person" Size="16" />
-                        </a>
-                    }
-                    else
-                    {
-                        <a href="/auth/login" class="top-link top-link--ghost app-mobile-top-bar__login-link">Login</a>
-                    }
-                </div>
+                <span class="app-mobile-top-bar__mark" aria-hidden="true">SC</span>
             </div>
         </header>
 
@@ -103,7 +92,7 @@
                                         }
                                     </div>
                                 </div>
-                                <a href="/useredit" class="btn btn-sm btn-outline-secondary w-100">
+                                <a href="/account" class="btn btn-sm btn-outline-secondary w-100">
                                     <Icon Name="settings" Size="15" /> Profile settings
                                 </a>
                                 <form method="post" action="/auth/logout" class="top-bar-logout">
@@ -116,7 +105,10 @@
                     else
                     {
                         <a href="/auth/login" class="top-link top-link--ghost">Login</a>
-                        <a href="/register" class="top-link top-link--primary">Register</a>
+                        @if (_allowRegistration)
+                        {
+                            <a href="/register" class="top-link top-link--primary">Register</a>
+                        }
                     }
                 </div>
             </div>
@@ -128,7 +120,7 @@
             </article>
         </section>
 
-        @if (isAuthenticated)
+        @if (isAuthenticated && !IsHomeRoute)
         {
             <GlobalPlayerBar />
         }
@@ -138,6 +130,7 @@
 @code {
     private string? firstName;
     private bool isAuthenticated;
+    private bool _allowRegistration = true;
 
     [CascadingParameter(Name = "AntiforgeryToken")]
     public string? AntiforgeryToken { get; set; }
@@ -165,21 +158,18 @@
             return route switch
             {
                 "" => "Home",
-                "lookup" => "Station Lookup",
-                "stats" => "Statistics",
-                "scenes" => "Scenes",
-                "recommendations" => "Recommendations",
-                "schedule-windows" => "Schedule Windows",
-                "devices" => "Device Operations",
-                "config" => "Sonos Configuration",
-                "admin/users" => "User Management",
-                "logs" => "System Logs",
-                "settings-backups" => "Backups",
-                "useredit" => "Profile Settings",
+                "library" or "lookup" or "recommendations" => "Library",
+                "automation" or "scenes" or "schedule-windows" => "Automation",
+                "insights" or "stats" or "logs" => "Insights",
+                var value when value.StartsWith("administration", StringComparison.OrdinalIgnoreCase) => "Administration",
+                "devices" or "config" or "admin/users" or "settings-backups" => "Administration",
+                "account" or "useredit" => "Account",
                 _ => "SonosControl"
             };
         }
     }
+
+    private bool IsHomeRoute => string.IsNullOrWhiteSpace(Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/'));
 
     protected override async Task OnInitializedAsync()
     {
@@ -187,6 +177,7 @@
         var user = authState.User;
 
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+        _allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
 
         if (isAuthenticated)
         {

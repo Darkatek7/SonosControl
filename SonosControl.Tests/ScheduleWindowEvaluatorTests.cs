@@ -94,6 +94,39 @@ public class ScheduleWindowEvaluatorTests
     }
 
     [Fact]
+    public void IsWindowActive_ExcludedDate_SkipsOnlyThatDate()
+    {
+        var window = new ScheduleWindow
+        {
+            IsEnabled = true,
+            StartTime = new TimeOnly(9, 0),
+            StopTime = new TimeOnly(12, 0),
+            RecurrenceType = ScheduleRecurrenceType.Daily,
+            ExcludedDates = [new DateOnly(2026, 2, 16)]
+        };
+
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 16, 10, 0)));
+        Assert.True(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 17, 10, 0)));
+    }
+
+    [Fact]
+    public void IsWindowActive_OvernightWindow_UsesAnchorDateForExclusion()
+    {
+        var window = new ScheduleWindow
+        {
+            IsEnabled = true,
+            StartTime = new TimeOnly(22, 0),
+            StopTime = new TimeOnly(2, 0),
+            RecurrenceType = ScheduleRecurrenceType.Daily,
+            ExcludedDates = [new DateOnly(2026, 2, 16)]
+        };
+
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 16, 23, 0)));
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 17, 1, 0)));
+        Assert.True(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 17, 23, 0)));
+    }
+
+    [Fact]
     public void SelectActiveWindow_ResolvesOverlap_ByPriorityFirst()
     {
         var now = LocalTime(2026, 2, 16, 10, 15);

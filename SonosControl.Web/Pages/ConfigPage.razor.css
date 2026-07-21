@@ -701,3 +701,7 @@ html:not([data-theme='dark']) .config-console-hero {
         padding: var(--spacing-sm);
     }
 }
+.system-settings-only .config-rail,
+.system-settings-only .config-field-stack--device > .config-field:first-child,
+.system-settings-only .config-field:has(#autoPlay) { display: none; }
+.system-settings-only .config-console-layout { grid-template-columns: minmax(0, 1fr); }

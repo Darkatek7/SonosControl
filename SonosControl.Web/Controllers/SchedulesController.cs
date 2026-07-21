@@ -13,11 +13,16 @@ public sealed class SchedulesController : ControllerBase
 {
     private readonly IUnitOfWork _uow;
     private readonly ActionLogger _actionLogger;
+    private readonly ConfiguredTimeZoneService _appTimeZone;
 
-    public SchedulesController(IUnitOfWork uow, ActionLogger actionLogger)
+    public SchedulesController(
+        IUnitOfWork uow,
+        ActionLogger actionLogger,
+        ConfiguredTimeZoneService appTimeZone)
     {
         _uow = uow;
         _actionLogger = actionLogger;
+        _appTimeZone = appTimeZone;
     }
 
     [HttpGet]
@@ -40,7 +45,7 @@ public sealed class SchedulesController : ControllerBase
         var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         settings.ScheduleWindows ??= new();
 
-        var now = DateTimeOffset.Now;
+        var now = _appTimeZone.Now;
         var active = ScheduleWindowEvaluator.SelectActiveWindow(settings.ScheduleWindows, now);
 
         if (active is null)
@@ -68,6 +73,12 @@ public sealed class SchedulesController : ControllerBase
 
         var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         settings.ScheduleWindows ??= new();
+        settings.Scenes ??= new();
+        var sceneValidation = ValidateSceneReference(window, settings);
+        if (sceneValidation is not null)
+        {
+            return BadRequest(sceneValidation);
+        }
 
         window.Id = string.IsNullOrWhiteSpace(window.Id) ? Guid.NewGuid().ToString("N") : window.Id.Trim();
         window.LastModifiedUtc = DateTime.UtcNow;
@@ -96,6 +107,12 @@ public sealed class SchedulesController : ControllerBase
 
         var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         settings.ScheduleWindows ??= new();
+        settings.Scenes ??= new();
+        var sceneValidation = ValidateSceneReference(window, settings);
+        if (sceneValidation is not null)
+        {
+            return BadRequest(sceneValidation);
+        }
 
         var existing = settings.ScheduleWindows.FirstOrDefault(w => string.Equals(w.Id, id, StringComparison.OrdinalIgnoreCase));
         if (existing is null)
@@ -112,6 +129,7 @@ public sealed class SchedulesController : ControllerBase
         existing.DaysOfWeek = window.DaysOfWeek ?? new();
         existing.StartDate = window.StartDate;
         existing.EndDate = window.EndDate;
+        existing.ExcludedDates = window.ExcludedDates?.Distinct().OrderBy(date => date).ToList() ?? new();
         existing.SceneId = window.SceneId;
         existing.FadeInSeconds = Math.Max(0, window.FadeInSeconds);
         existing.FadeOutSeconds = Math.Max(0, window.FadeOutSeconds);
@@ -172,5 +190,22 @@ public sealed class SchedulesController : ControllerBase
         }
 
         return null;
+    }
+
+    private static string? ValidateSceneReference(ScheduleWindow window, SonosSettings settings)
+    {
+        if (!window.IsEnabled)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(window.SceneId))
+        {
+            return "An enabled schedule must reference a scene.";
+        }
+
+        return settings.Scenes.Any(scene => scene.Enabled && string.Equals(scene.Id, window.SceneId, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : "An enabled schedule must reference an existing enabled scene.";
     }
 }

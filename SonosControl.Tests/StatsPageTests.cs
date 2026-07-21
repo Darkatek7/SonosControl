@@ -13,6 +13,7 @@ using SonosControl.DAL.Interfaces;
 using SonosControl.Web.Data;
 using SonosControl.Web.Models;
 using SonosControl.Web.Pages;
+using SonosControl.Web.Services;
 using Xunit;
 
 namespace SonosControl.Tests;
@@ -60,6 +61,7 @@ public class StatsPageTests
         // IUnitOfWork is injected in _Imports.razor
         var unitOfWork = new Mock<IUnitOfWork>();
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
 
         // JSInterop for Radzen charts - might not be needed with stubs, but safer to keep loose
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;

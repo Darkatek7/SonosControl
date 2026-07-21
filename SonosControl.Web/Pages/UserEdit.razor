@@ -1,10 +1,12 @@
-﻿@page "/useredit"
+﻿@page "/account"
+@page "/useredit"
 @using System.ComponentModel.DataAnnotations
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager NavigationManager
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Edit User</PageTitle>
 <AuthorizeView Context="authContext">

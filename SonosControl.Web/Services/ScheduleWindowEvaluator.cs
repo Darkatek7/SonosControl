@@ -27,8 +27,11 @@ public static class ScheduleWindowEvaluator
             return false;
         }
 
-        var date = DateOnly.FromDateTime(nowLocal.LocalDateTime);
-        var time = TimeOnly.FromDateTime(nowLocal.LocalDateTime);
+        // DateTimeOffset.LocalDateTime converts through the host machine's zone.
+        // The caller already supplies the configured automation timezone, so use
+        // its wall-clock DateTime value directly.
+        var date = DateOnly.FromDateTime(nowLocal.DateTime);
+        var time = TimeOnly.FromDateTime(nowLocal.DateTime);
 
         if (window.StartDate.HasValue && date < window.StartDate.Value)
         {
@@ -48,25 +51,31 @@ public static class ScheduleWindowEvaluator
                 return false;
             }
 
-            return IsDateAllowed(window, nowLocal.DayOfWeek);
+            return IsDateAllowed(window, date, nowLocal.DayOfWeek);
         }
 
         if (time >= window.StartTime)
         {
-            return IsDateAllowed(window, nowLocal.DayOfWeek);
+            return IsDateAllowed(window, date, nowLocal.DayOfWeek);
         }
 
         if (time < window.StopTime)
         {
-            var previousDay = nowLocal.AddDays(-1).DayOfWeek;
-            return IsDateAllowed(window, previousDay);
+            var previous = nowLocal.AddDays(-1);
+            var previousDate = DateOnly.FromDateTime(previous.DateTime);
+            return IsDateAllowed(window, previousDate, previous.DayOfWeek);
         }
 
         return false;
     }
 
-    private static bool IsDateAllowed(ScheduleWindow window, DayOfWeek day)
+    private static bool IsDateAllowed(ScheduleWindow window, DateOnly date, DayOfWeek day)
     {
+        if (window.ExcludedDates?.Contains(date) == true)
+        {
+            return false;
+        }
+
         return window.RecurrenceType switch
         {
             ScheduleRecurrenceType.Daily => true,

@@ -3,7 +3,7 @@ param(
     [string]$Username = "",
     [string]$Password = "",
     [string]$Out = "docs/assets/readme/images",
-    [string]$DesktopViewport = "1366x768",
+    [string]$DesktopViewport = "1280x900",
     [string]$MobileViewport = "390x844",
     [switch]$NoAutoStart
 )

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AngleSharp.Dom;
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components.Web;
@@ -25,7 +24,7 @@ namespace SonosControl.Tests;
 public class IndexPageUXTests
 {
     [Fact]
-    public void IndexPage_RendersRedesignedHierarchy_WithHeroRoomsLibraryAndFooter()
+    public void IndexPage_RendersEverydayHierarchy_WithExpandedPlayerRoomsQuickLibraryAndFooter()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -35,9 +34,10 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
-            Assert.NotEmpty(cut.FindAll("[data-qa='now-playing-hero']"));
+            Assert.Single(cut.FindAll("[data-qa='global-player-bar'].player-surface--expanded"));
             Assert.NotEmpty(cut.FindAll("[data-qa='room-card']"));
-            Assert.NotEmpty(cut.FindAll(".library"));
+            Assert.Single(cut.FindAll(".home-quick-library"));
+            Assert.Equal("/library", cut.Find(".home-quick-library a").GetAttribute("href"));
             Assert.NotEmpty(cut.FindAll(".home-footer"));
             // Legacy markup must be gone.
             Assert.Empty(cut.FindAll(".home-ops-dashboard"));
@@ -48,7 +48,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_LibraryChips_FilterSources_AndSearches()
+    public void LibraryPage_SearchesAndFiltersEverySourceType()
     {
         using var ctx = new TestContext();
 
@@ -61,20 +61,17 @@ public class IndexPageUXTests
 
         using var resources = ConfigureServices(ctx, stations, tracks, collections, youTubeVideos: videos);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<LibraryPage>();
 
-        // Default "All" chip shows every source.
         cut.WaitForAssertion(() =>
         {
-            Assert.True(IsChipActive(cut, "All"));
             Assert.Contains("Station 1", cut.Markup);
             Assert.Contains("Station 8", cut.Markup);
             Assert.Contains("Focus Track", cut.Markup);
             Assert.NotEmpty(cut.FindAll("button[aria-label='Play Station 8']"));
         });
 
-        // Search filters across all sources.
-        cut.Find("input[aria-label='Search media library']").Input("Station 8");
+        cut.Find("#library-page-search").Input("Station 8");
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("Station 8", cut.Markup);
@@ -82,23 +79,20 @@ public class IndexPageUXTests
             Assert.DoesNotContain("Focus Track", cut.Markup);
         });
 
-        // Spotify chip shows only Spotify.
-        ClickChip(cut, "Spotify");
+        cut.Find("#library-page-search").Input(string.Empty);
+        cut.Find("#library-page-type").Change("spotify");
         cut.WaitForAssertion(() =>
         {
-            Assert.True(IsChipActive(cut, "Spotify"));
             Assert.Contains("Focus Track", cut.Markup);
-            Assert.DoesNotContain("Station 8", cut.Markup);
+            Assert.DoesNotContain("Station 1", cut.Markup);
             Assert.Empty(cut.FindAll("button[aria-label^='Play Station']"));
             Assert.NotEmpty(cut.FindAll("button[aria-label^='Play Focus Track']"));
         });
 
-        // YouTube chip shows only YouTube.
-        ClickChip(cut, "YouTube");
+        cut.Find("#library-page-type").Change("youtube");
         cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
 
-        // YT Music chip shows only YT Music.
-        ClickChip(cut, "YT Music");
+        cut.Find("#library-page-type").Change("youtubemusic");
         cut.WaitForAssertion(() =>
         {
             Assert.Contains("Workout Collection", cut.Markup);
@@ -107,7 +101,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_GroupDialog_UsesPlaybackStateActiveSpeaker()
+    public void IndexPage_ExpandedPlayerSheet_UsesPlaybackStateActiveSpeaker()
     {
         using var ctx = new TestContext();
         var settings = new SonosSettings
@@ -127,11 +121,16 @@ public class IndexPageUXTests
             settingsOverride: settings);
 
         var cut = ctx.RenderComponent<IndexPage>();
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("button[data-qa='home-group-speakers']")));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("button[aria-label='Open queue and room controls']")));
 
-        cut.Find("button[data-qa='home-group-speakers']").Click();
+        cut.Find("button[aria-label='Open queue and room controls']").Click();
 
-        cut.WaitForAssertion(() => Assert.Equal("Office", cut.Find(".modal-body p strong").TextContent.Trim()));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".player-sheet[role='dialog']"));
+            Assert.Equal("10.0.0.2", cut.Find("#player-sheet-room").GetAttribute("value"));
+            Assert.Contains("Office", cut.Find(".player-sheet__header").TextContent);
+        });
     }
 
     [Fact]
@@ -145,8 +144,8 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
-            Assert.Contains("No saved media yet.", cut.Markup);
-            Assert.Empty(cut.FindAll(".spotify-library"));
+            Assert.Contains("No saved sources yet. Add one in Library.", cut.Markup);
+            Assert.Single(cut.FindAll("a[href='/library']"));
         });
     }
 
@@ -203,6 +202,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()
@@ -274,6 +274,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()
@@ -294,34 +295,31 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_HasAccessibleLibraryChips_AndAddButton()
+    public void LibraryPage_HasAccessibleTabsSearchAndExplicitSourceType()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
-            var allChip = ChipButton(cut, "All");
-            Assert.Equal("true", allChip.GetAttribute("aria-pressed"));
-            Assert.NotNull(cut.Find("input[aria-label='Search media library']"));
-            // Default add target is a station.
-            Assert.NotNull(cut.Find("button[aria-label='Add Station']"));
+            Assert.Equal("page", cut.Find(".workspace-tab.is-active").GetAttribute("aria-current"));
+            Assert.NotNull(cut.Find("#library-page-search"));
+            Assert.NotNull(cut.Find("button.workspace-primary-action"));
         });
 
-        ClickChip(cut, "Spotify");
-        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add Spotify Track']")));
-
-        ClickChip(cut, "YouTube");
-        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Video']")));
-
-        ClickChip(cut, "YT Music");
-        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add YouTube Music Collection']")));
+        cut.Find("button.workspace-primary-action").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".app-dialog[role='dialog']"));
+            Assert.NotNull(cut.Find("#source-type"));
+            Assert.Equal(4, cut.FindAll("#source-type option").Count);
+        });
     }
 
     [Fact]
-    public void IndexPage_RendersDashboard_WithAutomationRoomsLibraryAndActivity()
+    public void IndexPage_RendersDashboard_WithAutomationRoomsQuickLibraryAndWarnings()
     {
         using var ctx = new TestContext();
 
@@ -419,11 +417,13 @@ public class IndexPageUXTests
             Assert.Contains("Morning Radio", cut.Markup);
             Assert.Contains("Scene: Morning Radio", cut.Markup);
             Assert.Contains("Speakers", cut.Markup);
-            Assert.Contains("Library", cut.Markup);
+            Assert.Contains("Saved sources", cut.Markup);
+            Assert.Contains("View library", cut.Markup);
             Assert.Contains("Online", cut.Markup);
             Assert.Contains("Offline", cut.Markup);
-            Assert.Contains("Recent Activity", cut.Markup);
-            Assert.Contains("Morning Radio scene applied by scheduler", cut.Markup);
+            Assert.Contains("Device warnings", cut.Markup);
+            Assert.Contains("Bedroom", cut.Markup);
+            Assert.DoesNotContain("Morning Radio scene applied by scheduler", cut.Markup);
             Assert.Single(cut.FindAll(".home-next"));
             var buttonLabels = string.Join("|", cut.FindAll("button").Select(button => button.GetAttribute("aria-label") ?? button.TextContent.Trim()));
             Assert.Contains("Play ORF Radio Wien", buttonLabels);
@@ -432,33 +432,39 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_RendersRecentActivityDetailsWithoutTruncation()
+    public void IndexPage_RendersDeviceWarningDetails()
     {
         using var ctx = new TestContext();
-        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
-
-        var longDetails = "Window 'Party Time Wochenende' triggered scene '07a0464f9bb045b181057580af9cf723' for the configured weekend speakers without truncating the operational trail.";
-        resources.DbContext.Logs.Add(new LogEntry
+        var healthStore = new DeviceHealthSnapshotStore();
+        healthStore.Replace(new[]
         {
-            Action = "ScheduleTriggered",
-            Details = longDetails,
-            PerformedBy = "System",
-            Timestamp = DateTime.UtcNow
+            new DeviceHealthStatus
+            {
+                SpeakerIp = "1.2.3.4",
+                SpeakerName = "Living Room",
+                IsOnline = false,
+                LastError = "Connection timed out"
+            }
         });
-        resources.DbContext.SaveChanges();
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>(),
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>(),
+            healthStore: healthStore);
 
         var cut = ctx.RenderComponent<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains(longDetails, cut.Markup);
             Assert.NotEmpty(cut.FindAll(".home-activity__row strong"));
-            Assert.Contains(longDetails, cut.Find(".home-activity__row strong").TextContent);
+            Assert.Contains("Living Room", cut.Find(".home-activity__row strong").TextContent);
+            Assert.Contains("Offline · 1.2.3.4", cut.Markup);
         });
     }
 
     [Fact]
-    public async Task IndexPage_PlayMediaItem_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
+    public async Task LibraryPage_PlaySource_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
     {
         using var ctx = new TestContext();
 
@@ -486,9 +492,8 @@ public class IndexPageUXTests
             settings,
             youTubeVideos: settings.YouTubeCollections);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<LibraryPage>();
 
-        // "All" filter exposes the YouTube item directly.
         cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
 
         var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
@@ -506,7 +511,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_YouTubePerItemMode_UpdatesSelectedEntryWithoutPlaying()
+    public void LibraryPage_YouTubeEditor_UpdatesSelectedEntryWithoutPlaying()
     {
         using var ctx = new TestContext();
 
@@ -533,19 +538,25 @@ public class IndexPageUXTests
             settings,
             youTubeVideos: settings.YouTubeCollections);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.RenderComponent<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.NotEmpty(cut.FindAll(".library__yt-mode"));
-            Assert.Contains("Shuffle", cut.Markup);
+            Assert.NotEmpty(cut.FindAll("button[aria-label='Edit Playlist Entry']"));
         });
 
-        // First YouTube item is the playlist-like entry; change its per-item mode to Shuffle.
-        cut.Find(".library__yt-mode").Change(YouTubePlaybackMode.PlaylistShuffle.ToString());
+        cut.Find("button[aria-label='Edit Playlist Entry']").Click();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("#source-playback-mode")));
+        cut.Find("#source-playback-mode").Change(YouTubePlaybackMode.PlaylistShuffle.ToString());
+        cut.Find(".app-dialog__actions .btn-primary").Click();
 
-        Assert.Equal(YouTubePlaybackMode.PlaylistShuffle, settings.YouTubeCollections[0].PlaybackMode);
-        Assert.Equal(YouTubePlaybackMode.AutoQueueRelated, settings.YouTubeCollections[1].PlaybackMode);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".app-dialog[role='dialog']")));
+        Assert.Equal(
+            YouTubePlaybackMode.PlaylistShuffle,
+            settings.YouTubeCollections.Single(item => item.Name == "Playlist Entry").PlaybackMode);
+        Assert.Equal(
+            YouTubePlaybackMode.AutoQueueRelated,
+            settings.YouTubeCollections.Single(item => item.Name == "Single Entry").PlaybackMode);
         resources.ConnectorRepo.Verify(repo => repo.PlayYouTubeAudioAsync(
             It.IsAny<string>(),
             It.IsAny<string>(),
@@ -553,15 +564,6 @@ public class IndexPageUXTests
             It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
-
-    private static IElement ChipButton(IRenderedComponent<IndexPage> cut, string label)
-        => cut.FindAll(".library__chip").First(button => button.TextContent.Trim() == label);
-
-    private static void ClickChip(IRenderedComponent<IndexPage> cut, string label)
-        => ChipButton(cut, label).Click();
-
-    private static bool IsChipActive(IRenderedComponent<IndexPage> cut, string label)
-        => string.Equals(ChipButton(cut, label).GetAttribute("aria-pressed"), "true", StringComparison.OrdinalIgnoreCase);
 
     private sealed class TestResources : IDisposable
     {
@@ -643,6 +645,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton(healthStore ?? new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()

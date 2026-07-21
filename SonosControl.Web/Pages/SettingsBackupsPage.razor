@@ -1,7 +1,9 @@
-@page "/settings-backups"
+@* Routed through AdministrationPage. *@
 @using System.Text.Json
-@inject IJSRuntime JS
+@using SonosControl.Web.Services
 @attribute [Authorize(Roles = "admin,superadmin")]
+@inject IWebHostEnvironment Environment
+@inject ConfiguredTimeZoneService AppTimeZone
 
 <PageTitle>Settings Backups - Sonos Control</PageTitle>
 
@@ -67,7 +69,7 @@
                         <thead>
                         <tr>
                             <th scope="col">File</th>
-                            <th scope="col">Created UTC</th>
+                            <th scope="col">Created</th>
                             <th scope="col">Size</th>
                             <th scope="col">Actions</th>
                         </tr>
@@ -82,17 +84,17 @@
                                         <strong>@backup.FileName</strong>
                                     </div>
                                 </td>
-                                <td class="backups-table__muted">@backup.CreatedUtc.ToString("u")</td>
+                                <td class="backups-table__muted">@FormatCreated(backup.CreatedUtc)</td>
                                 <td class="backups-table__muted">@FormatBytes(backup.Bytes)</td>
                                 <td>
                                     <div class="backup-actions">
                                         <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
                                             <Icon Name="file" Size="15" /> Download
                                         </a>
-                                        <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">
+                                        <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
                                             <Icon Name="refresh" Size="15" /> Restore
                                         </button>
-                                        <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">
+                                        <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
                                             <Icon Name="trash" Size="15" /> Delete
                                         </button>
                                     </div>
@@ -114,15 +116,15 @@
                                 </div>
                                 <span>@FormatBytes(backup.Bytes)</span>
                             </div>
-                            <div class="backup-card__meta">@backup.CreatedUtc.ToString("u")</div>
+                            <div class="backup-card__meta">@FormatCreated(backup.CreatedUtc)</div>
                             <div class="backup-actions">
                                 <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
                                     <Icon Name="file" Size="15" /> Download
                                 </a>
-                                <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RestoreBackupAsync(backup)" disabled="@_isBusy">
+                                <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
                                     <Icon Name="refresh" Size="15" /> Restore
                                 </button>
-                                <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => DeleteBackupAsync(backup)" disabled="@_isBusy">
+                                <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
                                     <Icon Name="trash" Size="15" /> Delete
                                 </button>
                             </div>
@@ -170,15 +172,29 @@
     </section>
 </div>
 
+<ConfirmDialog Visible="@(_pendingRestore is not null)"
+               Title="Restore settings backup"
+               Message="@GetRestoreMessage()"
+               ConfirmLabel="Create safety backup and restore"
+               OnConfirm="ConfirmRestoreBackupAsync"
+               OnCancel="CancelBackupAction" />
+
+<ConfirmDialog Visible="@(_pendingDelete is not null)"
+               Title="Delete backup"
+               Message="@($"Delete '{_pendingDelete?.FileName}'? This backup cannot be recovered.")"
+               ConfirmLabel="Delete backup"
+               Dangerous="true"
+               OnConfirm="ConfirmDeleteBackupAsync"
+               OnCancel="CancelBackupAction" />
+
 @code {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    private static string DataDirectory => Path.Combine(AppContext.BaseDirectory, "Data");
-    private static string ConfigPath => Path.Combine(DataDirectory, "config.json");
-    private static string BackupDirectory => Path.Combine(DataDirectory, "backups");
+    private string DataDirectory => Path.Combine(Environment.ContentRootPath, "Data");
+    private string BackupDirectory => Path.Combine(DataDirectory, "backups");
 
     private sealed record BackupFileEntry(string FileName, DateTime CreatedUtc, long Bytes);
 
@@ -188,6 +204,8 @@
     private bool _isBusy;
     private string? _statusMessage;
     private bool _statusIsError;
+    private BackupFileEntry? _pendingRestore;
+    private BackupFileEntry? _pendingDelete;
 
     protected override async Task OnInitializedAsync()
     {
@@ -235,7 +253,12 @@
         _isBusy = true;
         try
         {
-            var fileName = CreateBackupFileCore();
+            var fileName = await _uow.ISettingsRepo.CreateVersionedBackupAsync("manual");
+            if (fileName is null)
+            {
+                throw new FileNotFoundException("config.json was not found.");
+            }
+
             await RefreshBackupsAsyncInternal(manageBusy: false);
             ShowStatus($"Backup created: {fileName}");
         }
@@ -249,10 +272,36 @@
         }
     }
 
-    private async Task RestoreBackupAsync(BackupFileEntry backup)
+    private void RequestRestoreBackup(BackupFileEntry backup)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Restore backup '{backup.FileName}'?");
-        if (!confirmed)
+        _pendingRestore = backup;
+        _pendingDelete = null;
+    }
+
+    private void RequestDeleteBackup(BackupFileEntry backup)
+    {
+        _pendingDelete = backup;
+        _pendingRestore = null;
+    }
+
+    private void CancelBackupAction()
+    {
+        _pendingRestore = null;
+        _pendingDelete = null;
+    }
+
+    private string GetRestoreMessage()
+    {
+        return _pendingRestore is null
+            ? string.Empty
+            : $"Restore '{_pendingRestore.FileName}' from {FormatCreated(_pendingRestore.CreatedUtc)}? The current configuration will first be saved as a new safety backup.";
+    }
+
+    private async Task ConfirmRestoreBackupAsync()
+    {
+        var backup = _pendingRestore;
+        CancelBackupAction();
+        if (backup is null)
         {
             return;
         }
@@ -275,8 +324,10 @@
                 return;
             }
 
+            var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync("pre-restore");
             await _uow.ISettingsRepo.WriteSettings(importedSettings);
-            ShowStatus($"Restored backup: {backup.FileName}");
+            await RefreshBackupsAsyncInternal(manageBusy: false);
+            ShowStatus($"Restored {backup.FileName}. Safety backup: {safetyBackup}.");
         }
         catch (Exception ex)
         {
@@ -288,10 +339,11 @@
         }
     }
 
-    private async Task DeleteBackupAsync(BackupFileEntry backup)
+    private async Task ConfirmDeleteBackupAsync()
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete backup '{backup.FileName}'?");
-        if (!confirmed)
+        var backup = _pendingDelete;
+        CancelBackupAction();
+        if (backup is null)
         {
             return;
         }
@@ -342,8 +394,6 @@
                 return;
             }
 
-            _ = CreateBackupFileCore();
-
             await using var stream = _selectedImportFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
             using var reader = new StreamReader(stream);
             var rawJson = await reader.ReadToEndAsync();
@@ -355,6 +405,7 @@
                 return;
             }
 
+            await _uow.ISettingsRepo.CreateVersionedBackupAsync("pre-import");
             await _uow.ISettingsRepo.WriteSettings(importedSettings);
 
             _selectedImportFile = null;
@@ -387,10 +438,12 @@
         return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
+    private string FormatCreated(DateTime createdUtc) => AppTimeZone.Format(createdUtc);
+
     private string GetLatestBackupLabel()
     {
         var latest = _backups.FirstOrDefault();
-        return latest is null ? "None" : latest.CreatedUtc.ToLocalTime().ToString("dd.MM");
+        return latest is null ? "None" : FormatCreated(latest.CreatedUtc)[..5];
     }
 
     private void ShowStatus(string message, bool isError = false)
@@ -399,17 +452,4 @@
         _statusIsError = isError;
     }
 
-    private static string CreateBackupFileCore()
-    {
-        if (!File.Exists(ConfigPath))
-        {
-            throw new FileNotFoundException("config.json was not found.", ConfigPath);
-        }
-
-        Directory.CreateDirectory(BackupDirectory);
-        var fileName = $"config-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json";
-        var targetPath = Path.Combine(BackupDirectory, fileName);
-        File.Copy(ConfigPath, targetPath, overwrite: false);
-        return fileName;
-    }
 }

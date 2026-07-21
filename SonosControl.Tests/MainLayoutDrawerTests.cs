@@ -36,7 +36,7 @@ public class MainLayoutDrawerTests
     }
 
     [Fact]
-    public void NavMenu_GroupsLinksIntoPlaybackAutomationAndSystemSections()
+    public void NavMenu_GroupsLinksIntoMainAdministrationAndThemeSections()
     {
         using var ctx = new TestContext();
         ConfigureAuthAndTheme(ctx);
@@ -44,7 +44,7 @@ public class MainLayoutDrawerTests
         var cut = ctx.RenderComponent<NavMenu>();
 
         var labels = cut.FindAll(".nav-section-label").Select(label => label.TextContent.Trim()).ToList();
-        Assert.Equal(new[] { "Playback", "Automation", "System" }, labels);
+        Assert.Equal(new[] { "Main", "Administration", "Theme" }, labels);
     }
 
     [Fact]
@@ -105,7 +105,26 @@ public class MainLayoutDrawerTests
         Assert.Equal("Close navigation menu", closeButton.GetAttribute("title"));
     }
 
-    private static void ConfigureAuthAndTheme(TestContext ctx)
+    [Theory]
+    [InlineData("operator", false)]
+    [InlineData("admin", true)]
+    [InlineData("superadmin", true)]
+    public void NavMenu_OnlyShowsAdministrationToAdministrativeRoles(string role, bool expectsAdministration)
+    {
+        using var ctx = new TestContext();
+        ConfigureAuthAndTheme(ctx, role);
+
+        var cut = ctx.RenderComponent<NavMenu>();
+        var links = cut.FindAll("a.nav-link").Select(link => link.TextContent.Trim()).ToList();
+
+        Assert.Contains("Home", links);
+        Assert.Contains("Library", links);
+        Assert.Contains("Automation", links);
+        Assert.Contains("Insights", links);
+        Assert.Equal(expectsAdministration, links.Contains("Administration"));
+    }
+
+    private static void ConfigureAuthAndTheme(TestContext ctx, params string[] roles)
     {
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo
@@ -123,6 +142,7 @@ public class MainLayoutDrawerTests
         ctx.Services.AddSingleton(unitOfWork.Object);
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var userStore = new Mock<IUserStore<ApplicationUser>>();
@@ -146,6 +166,6 @@ public class MainLayoutDrawerTests
 
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
-        auth.SetRoles("admin");
+        auth.SetRoles(roles.Length == 0 ? ["admin"] : roles);
     }
 }

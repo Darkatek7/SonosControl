@@ -9,12 +9,20 @@ public enum SceneSourceType
     YouTube = 4
 }
 
+public enum SceneSourceSelectionMode
+{
+    Specific = 0,
+    Resume = 1,
+    Random = 2
+}
+
 public class Scene
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "New Scene";
     public string? Description { get; set; }
     public bool Enabled { get; set; } = true;
+    public SceneSourceSelectionMode SourceSelectionMode { get; set; } = SceneSourceSelectionMode.Specific;
     public SceneSourceType SourceType { get; set; } = SceneSourceType.None;
     public string? SourceUrl { get; set; }
     public bool IsSyncedPlayback { get; set; } = true;

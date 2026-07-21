@@ -1,279 +1,133 @@
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Antiforgery
-@using Microsoft.AspNetCore.Http
 @using Microsoft.JSInterop
 @using SonosControl.Web.Models
-@using SonosControl.Web.Shared
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject SonosControl.Web.Services.ThemeService ThemeService
 @inject IJSRuntime JSRuntime
 
 <div class="nav-shell">
     <div class="nav-brand-row px-3">
-        <div class="nav-brand-mark">SC</div>
+        <div class="nav-brand-mark" aria-hidden="true">SC</div>
         <div class="nav-brand-text">
             <span class="nav-brand-title">SonosControl</span>
-            <span class="nav-brand-subtitle">Command center</span>
+            <span class="nav-brand-subtitle">Every room, one place</span>
         </div>
-        <button type="button"
-                class="nav-drawer-close d-lg-none"
-                title="Close navigation menu"
-                aria-label="Close navigation menu"
-                @onclick="HandleNavigate">
-            <Icon Name="x" Size="16" Class="nav-icon" />
+        <button type="button" class="nav-drawer-close d-lg-none" title="Close navigation menu" aria-label="Close navigation menu" @onclick="HandleNavigate">
+            <Icon Name="x" Size="18" Class="nav-icon" />
         </button>
     </div>
 
     <div class="nav-scrollable px-3" data-drawer-open="@(IsDrawerOpen ? "true" : "false")">
-        <nav class="nav-links">
-            <section class="nav-section" aria-labelledby="nav-playback-label">
-                <span id="nav-playback-label" class="nav-section-label">Playback</span>
+        <nav class="nav-links" aria-label="Primary navigation">
+            <section class="nav-section" aria-labelledby="nav-main-label">
+                <span id="nav-main-label" class="nav-section-label">Main</span>
                 <div class="nav-section__links">
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate">
-                            <Icon Name="home" Size="16" Class="nav-icon" />
-                            <span>Home</span>
-                        </NavLink>
-                    </div>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="lookup" @onclick="HandleNavigate">
-                            <Icon Name="search" Size="16" Class="nav-icon" />
-                            <span>Station Lookup</span>
-                        </NavLink>
-                    </div>
-                    <AuthorizeView Roles="admin,operator,superadmin">
-                        <Authorized>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="stats" @onclick="HandleNavigate">
-                                    <Icon Name="graph" Size="16" Class="nav-icon" />
-                                    <span>Statistics</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="scenes" @onclick="HandleNavigate">
-                                    <Icon Name="layers" Size="16" Class="nav-icon" />
-                                    <span>Scenes</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="recommendations" @onclick="HandleNavigate">
-                                    <Icon Name="star" Size="16" Class="nav-icon" />
-                                    <span>Recommendations</span>
-                                </NavLink>
-                            </div>
-                        </Authorized>
-                    </AuthorizeView>
+                    <div class="nav-item"><NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNavigate"><Icon Name="home" Size="18" Class="nav-icon" /><span>Home</span></NavLink></div>
+                    <div class="nav-item"><NavLink class="nav-link" href="library" @onclick="HandleNavigate"><Icon Name="music" Size="18" Class="nav-icon" /><span>Library</span></NavLink></div>
+                    <div class="nav-item"><NavLink class="nav-link" href="automation" @onclick="HandleNavigate"><Icon Name="schedule" Size="18" Class="nav-icon" /><span>Automation</span></NavLink></div>
+                    <div class="nav-item"><NavLink class="nav-link" href="insights" @onclick="HandleNavigate"><Icon Name="graph" Size="18" Class="nav-icon" /><span>Insights</span></NavLink></div>
                 </div>
             </section>
 
             <AuthorizeView Roles="admin,superadmin">
                 <Authorized>
-                    <section class="nav-section" aria-labelledby="nav-automation-label">
-                        <span id="nav-automation-label" class="nav-section-label">Automation</span>
+                    <section class="nav-section" aria-labelledby="nav-admin-label">
+                        <span id="nav-admin-label" class="nav-section-label">Administration</span>
                         <div class="nav-section__links">
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="schedule-windows" @onclick="HandleNavigate">
-                                    <Icon Name="calendar" Size="16" Class="nav-icon" />
-                                    <span>Schedule Windows</span>
-                                </NavLink>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="nav-section" aria-labelledby="nav-system-label">
-                        <span id="nav-system-label" class="nav-section-label">System</span>
-                        <div class="nav-section__links">
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="devices" @onclick="HandleNavigate">
-                                    <Icon Name="rss" Size="16" Class="nav-icon" />
-                                    <span>Device Ops</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="config" @onclick="HandleNavigate">
-                                    <Icon Name="cog" Size="16" Class="nav-icon" />
-                                    <span>Sonos Config</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="admin/users" @onclick="HandleNavigate">
-                                    <Icon Name="person" Size="16" Class="nav-icon" />
-                                    <span>User Management</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="logs" @onclick="HandleNavigate">
-                                    <Icon Name="file" Size="16" Class="nav-icon" />
-                                    <span>Logs</span>
-                                </NavLink>
-                            </div>
-                            <div class="nav-item">
-                                <NavLink class="nav-link" href="settings-backups" @onclick="HandleNavigate">
-                                    <Icon Name="hard-drive" Size="16" Class="nav-icon" />
-                                    <span>Backups</span>
-                                </NavLink>
-                            </div>
+                            <div class="nav-item"><NavLink class="nav-link" href="administration" Match="NavLinkMatch.Prefix" @onclick="HandleNavigate"><Icon Name="settings" Size="18" Class="nav-icon" /><span>Administration</span></NavLink></div>
                         </div>
                     </section>
                 </Authorized>
             </AuthorizeView>
         </nav>
 
-    </div>
-
-    <div class="d-lg-none mt-auto px-3 pb-3 border-top pt-3">
-        <AuthorizeView>
-            <Authorized>
-                <div class="mb-4 px-1">
-                    <span class="text-muted small text-uppercase d-block mb-2 fw-bold nav-theme-label">Theme</span>
-                    <div class="btn-group w-100 shadow-sm" role="group" aria-label="Theme preference">
-                        @foreach (var mode in ThemeOptions)
+        <div class="drawer-account d-lg-none">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="drawer-account__section">
+                        <span class="nav-section-label">Theme</span>
+                        <div class="btn-group w-100" role="group" aria-label="Theme preference">
+                            @foreach (var mode in ThemeOptions)
+                            {
+                                <button type="button" class="@GetThemeButtonClasses(mode) flex-grow-1" aria-pressed="@(mode == _userThemePreference ? "true" : "false")" @onclick="() => ChangeThemeAsync(mode)">@GetThemeLabel(mode)</button>
+                            }
+                        </div>
+                    </div>
+                    <div class="drawer-account__actions">
+                        <a href="/account" class="btn btn-outline-secondary w-100" @onclick="HandleNavigate"><Icon Name="person" Size="16" /> Account</a>
+                        <form method="post" action="/auth/logout" class="w-100 m-0" @onsubmit="HandleNavigate">
+                            <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
+                            <button type="submit" class="btn btn-outline-danger w-100">Logout</button>
+                        </form>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <div class="drawer-account__actions">
+                        <a href="/auth/login" class="btn btn-outline-primary w-100" @onclick="HandleNavigate">Log in</a>
+                        @if (_allowRegistration)
                         {
-                            <button type="button"
-                                    class="@GetThemeButtonClasses(mode) flex-grow-1"
-                                    aria-pressed="@(mode == _userThemePreference ? "true" : "false")"
-                                    @onclick="() => ChangeThemeAsync(mode)">
-                                @GetThemeLabel(mode)
-                            </button>
+                            <a href="/register" class="btn btn-primary w-100" @onclick="HandleNavigate">Register</a>
                         }
                     </div>
-                </div>
-
-                <div class="px-1 d-flex flex-column gap-2">
-                    <div class="d-flex align-items-center gap-2 mb-2 px-1">
-                            <div class="d-flex align-items-center justify-content-center bg-light rounded-circle nav-user-avatar">
-                            <Icon Name="person" Size="16" Class="text-secondary nav-user-icon" />
-                            </div>
-                            <div class="d-flex flex-column nav-user-meta">
-                            <span class="fw-bold small">Signed in as</span>
-                            <span class="text-truncate nav-user-name">@context.User.Identity?.Name</span>
-                            </div>
-                    </div>
-
-                    <a href="/useredit"
-                       class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
-                       @onclick="HandleNavigate">
-                        <Icon Name="cog" Size="16" /> <span>Profile Settings</span>
-                    </a>
-
-                    <form method="post" action="/auth/logout" class="w-100 m-0" @onsubmit="HandleNavigate">
-                        <input type="hidden" name="__RequestVerificationToken" value="@AntiforgeryToken" />
-                        <button type="submit" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
-                                <span>Logout</span>
-                        </button>
-                    </form>
-                </div>
-            </Authorized>
-            <NotAuthorized>
-                <div class="d-flex flex-column gap-2 px-1">
-                    <a href="/auth/login" class="btn btn-outline-primary w-100" @onclick="HandleNavigate">Log In</a>
-                    <a href="/register" class="btn btn-primary w-100" @onclick="HandleNavigate">Register</a>
-                </div>
-            </NotAuthorized>
-        </AuthorizeView>
-    </div>
-
-    <div class="nav-footer px-3">
-        <span class="nav-footer-note">Syncing rooms in real time.</span>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
     </div>
 </div>
 
 @code {
-    [Parameter]
-    public string? AntiforgeryToken { get; set; }
+    [Parameter] public string? AntiforgeryToken { get; set; }
+    [Parameter] public bool IsDrawerOpen { get; set; }
+    [Parameter] public EventCallback OnNavigate { get; set; }
 
-    [Parameter]
-    public bool IsDrawerOpen { get; set; }
-
-    [Parameter]
-    public EventCallback OnNavigate { get; set; }
-
-    private bool isAuthenticated;
-
+    private bool _isAuthenticated;
+    private bool _allowRegistration = true;
     private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
-    private static readonly ThemePreferenceMode[] ThemeOptions = new[]
-    {
-        ThemePreferenceMode.System,
-        ThemePreferenceMode.Light,
-        ThemePreferenceMode.Dark
-    };
+    private static readonly ThemePreferenceMode[] ThemeOptions = [ThemePreferenceMode.System, ThemePreferenceMode.Light, ThemePreferenceMode.Dark];
     private bool _themeSubscriptionRegistered;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-
+        _isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
         _userThemePreference = ThemeService.CurrentPreference;
+        _allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
     }
 
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)
     {
-        if (!isAuthenticated || _userThemePreference == mode)
-        {
-            return;
-        }
-
+        if (!_isAuthenticated || _userThemePreference == mode) return;
         _userThemePreference = mode;
         await ThemeService.SetPreferenceAsync(mode);
     }
 
-    private static string GetThemeLabel(ThemePreferenceMode mode) => mode switch
-    {
-        ThemePreferenceMode.Light => "Light",
-        ThemePreferenceMode.Dark => "Dark",
-        _ => "System"
-    };
-
-    private string GetThemeButtonClasses(ThemePreferenceMode mode)
-        => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
-
-    private Task HandleNavigate()
-    {
-        return OnNavigate.InvokeAsync();
-    }
+    private static string GetThemeLabel(ThemePreferenceMode mode) => mode switch { ThemePreferenceMode.Light => "Light", ThemePreferenceMode.Dark => "Dark", _ => "System" };
+    private string GetThemeButtonClasses(ThemePreferenceMode mode) => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
+    private Task HandleNavigate() => OnNavigate.InvokeAsync();
 
     private async Task ApplyThemePreferenceAsync()
     {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("window.sonosTheme.apply", ThemeService.CurrentPreferenceIdentifier);
-        }
-        catch (JSException)
-        {
-            // Ignore
-        }
+        try { await JSRuntime.InvokeVoidAsync("window.sonosTheme.apply", ThemeService.CurrentPreferenceIdentifier); }
+        catch (JSException) { }
     }
 
     private void OnThemePreferenceChanged()
     {
-        _ = InvokeAsync(async () =>
-        {
-            _userThemePreference = ThemeService.CurrentPreference;
-            await ApplyThemePreferenceAsync();
-            StateHasChanged();
-        });
+        _ = InvokeAsync(async () => { _userThemePreference = ThemeService.CurrentPreference; await ApplyThemePreferenceAsync(); StateHasChanged(); });
     }
 
     protected override void OnAfterRender(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && !_themeSubscriptionRegistered)
         {
-            if (!_themeSubscriptionRegistered)
-            {
-                ThemeService.OnPreferenceChanged += OnThemePreferenceChanged;
-                _themeSubscriptionRegistered = true;
-            }
+            ThemeService.OnPreferenceChanged += OnThemePreferenceChanged;
+            _themeSubscriptionRegistered = true;
         }
     }
 
-    void IDisposable.Dispose()
+    public void Dispose()
     {
-        if (_themeSubscriptionRegistered)
-        {
-            ThemeService.OnPreferenceChanged -= OnThemePreferenceChanged;
-        }
+        if (_themeSubscriptionRegistered) ThemeService.OnPreferenceChanged -= OnThemePreferenceChanged;
     }
 }

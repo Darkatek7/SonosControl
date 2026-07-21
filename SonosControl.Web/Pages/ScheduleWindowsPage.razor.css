@@ -533,3 +533,31 @@ html:not([data-theme='dark']) .schedule-active-strip {
         width: 100%;
     }
 }
+.schedule-order-actions { display: flex; gap: 0.25rem; }
+.schedule-order-actions .btn { display: grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; padding: 0; }
+.schedule-editor-header-actions { display: flex; align-items: center; gap: 0.5rem; }
+.mobile-editor-close { display: none; min-width: 44px; min-height: 44px; place-items: center; color: var(--text-primary); }
+
+@media (max-width: 767.98px) {
+    .schedule-editor-panel:has(.schedule-editor-grid) {
+        position: fixed;
+        z-index: 1050;
+        inset: 0;
+        overflow-y: auto;
+        border-radius: 0;
+        padding: 1rem;
+        background: var(--surface-1);
+    }
+
+    .schedule-editor-panel:has(.schedule-editor-grid) > .schedule-panel__header {
+        position: sticky;
+        z-index: 2;
+        top: -1rem;
+        padding-block: 1rem;
+        background: var(--surface-1);
+    }
+
+    .mobile-editor-close {
+        display: grid;
+    }
+}

@@ -20,6 +20,7 @@ public class ScheduleWindow
     public List<DayOfWeek> DaysOfWeek { get; set; } = new();
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
+    public List<DateOnly> ExcludedDates { get; set; } = new();
     public string? SceneId { get; set; }
     public int FadeInSeconds { get; set; }
     public int FadeOutSeconds { get; set; }

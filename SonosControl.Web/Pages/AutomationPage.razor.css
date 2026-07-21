@@ -1,0 +1,21 @@
+.automation-health { display: flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; padding: 0.55rem 0.8rem; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-muted); font-weight: 700; }
+.automation-health__dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #f59e0b; }
+.automation-health.is-ready .automation-health__dot { background: #22c55e; box-shadow: 0 0 0 0.25rem rgba(34, 197, 94, 0.12); }
+.automation-health.is-error .automation-health__dot { background: #ef4444; }
+.automation-warning summary { cursor: pointer; font-weight: 700; }
+.automation-warning ul { margin: 0.75rem 0 0; }
+.automation-live-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.automation-live-strip > div { display: grid; gap: 0.15rem; padding: 0.8rem 1rem; border: 1px solid var(--border-color); border-radius: 0.85rem; background: var(--surface-elevated); }
+.automation-live-strip span { color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.exception-panel { padding: 1rem; border: 1px solid var(--border-color); border-radius: 1rem; background: var(--surface-elevated); }
+.exception-panel__header h2 { margin: 0; font-size: 1.15rem; }
+.exception-panel__header p { margin: 0.25rem 0 0; color: var(--text-muted); }
+.exception-editor { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 0.7fr) auto; align-items: end; gap: 0.75rem; margin: 1rem 0; }
+.exception-editor .btn { min-height: 2.75rem; }
+.exception-readonly-note { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); }
+.exception-list { display: grid; gap: 0.55rem; }
+.exception-card { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.75rem; }
+.exception-card > div { display: grid; }
+.exception-card span { color: var(--text-muted); font-size: 0.78rem; }
+.exception-card .btn { min-height: 2.75rem; }
+@media (max-width: 767.98px) { .automation-live-strip, .exception-editor { grid-template-columns: 1fr; } .automation-health { align-self: flex-start; } }

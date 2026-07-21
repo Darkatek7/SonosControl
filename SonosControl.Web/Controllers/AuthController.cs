@@ -18,9 +18,12 @@ namespace SonosControl.Web.Controllers
         }
 
         [HttpGet("login")]
-        public IActionResult Login(string? error = null)
+        public async Task<IActionResult> Login(string? error = null, string? registered = null)
         {
             ViewBag.Error = error == "1" ? "Invalid username or password." : null;
+            ViewBag.Registered = registered == "1";
+            var settings = await _uow.ISettingsRepo.GetSettings();
+            ViewBag.AllowRegistration = settings?.AllowUserRegistration ?? true;
             return View();
         }
 

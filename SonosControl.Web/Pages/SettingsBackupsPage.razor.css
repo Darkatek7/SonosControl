@@ -398,6 +398,12 @@
 
     .backups-actions-panel .btn {
         width: 100%;
+        min-height: 44px;
+    }
+
+    .backup-file-button,
+    .backups-import-btn {
+        min-height: 44px;
     }
 
     .backups-table-wrapper {
@@ -421,6 +427,7 @@
 
     .backup-card .backup-action-btn {
         flex: 1 1 calc(50% - 0.45rem);
+        min-height: 44px;
     }
 }
 

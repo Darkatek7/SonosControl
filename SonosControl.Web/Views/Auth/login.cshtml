@@ -35,6 +35,10 @@
         {
             <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.Error</div>
         }
+        @if (ViewBag.Registered == true)
+        {
+            <div class="alert alert-success text-center py-2" role="status">Account created. You can now sign in.</div>
+        }
         @if (Context.Request.Query["error"] == "lockedout")
         {
              <div class="alert alert-warning text-center py-2" role="alert">
@@ -68,9 +72,12 @@
             </span>
         </button>
 
-        <div class="auth-console-card__footer">
-            <a href="/register" class="auth-link text-decoration-none">Don’t have an account? <span class="auth-link-highlight">Register</span></a>
-        </div>
+        @if (ViewBag.AllowRegistration == true)
+        {
+            <div class="auth-console-card__footer">
+                <a href="/register" class="auth-link text-decoration-none">Don’t have an account? <span class="auth-link-highlight">Register</span></a>
+            </div>
+        }
     </form>
 </div>
 

@@ -55,6 +55,7 @@ namespace SonosControl.Tests
             Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
             Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
             Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+            Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
             Services.AddScoped<PlaybackUiStateService>();
 
             var configuration = new ConfigurationBuilder()

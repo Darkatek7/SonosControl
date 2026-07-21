@@ -1,0 +1,101 @@
+@page "/administration"
+@page "/administration/devices"
+@page "/administration/settings"
+@page "/administration/users"
+@page "/administration/backups"
+@page "/devices"
+@page "/config"
+@page "/admin/users"
+@page "/settings-backups"
+@using SonosControl.Web.Services
+@attribute [Authorize(Roles = "admin,superadmin")]
+@inject NavigationManager Navigation
+@inject AutomationRuntimeStatus RuntimeStatus
+
+<PageTitle>Administration - SonosControl</PageTitle>
+
+<div class="workspace-page administration-page" data-qa="administration-page">
+    <header class="workspace-header">
+        <div>
+            <span class="workspace-eyebrow">Admin only</span>
+            <h1>Administration</h1>
+            <p>Manage devices, system defaults, users, and recovery points.</p>
+        </div>
+    </header>
+
+    <nav class="workspace-tabs" aria-label="Administration sections">
+        <button type="button" class="@GetTabClass("devices")" aria-current="@GetAriaCurrent("devices")" @onclick='() => SelectTab("devices")'>Devices</button>
+        <button type="button" class="@GetTabClass("settings")" aria-current="@GetAriaCurrent("settings")" @onclick='() => SelectTab("settings")'>System settings</button>
+        <button type="button" class="@GetTabClass("users")" aria-current="@GetAriaCurrent("users")" @onclick='() => SelectTab("users")'>Users</button>
+        <button type="button" class="@GetTabClass("backups")" aria-current="@GetAriaCurrent("backups")" @onclick='() => SelectTab("backups")'>Backups</button>
+    </nav>
+
+    @if (_activeTab == "settings")
+    {
+        var automation = RuntimeStatus.Snapshot;
+        @if (automation.Phase == AutomationRuntimePhase.Failed)
+        {
+            <div class="alert alert-danger" role="alert">
+                <strong>Automation migration failed.</strong> @automation.Error Time-based playback remains disabled; the original configuration was retained.
+            </div>
+        }
+        else if (automation.Warnings.Count > 0)
+        {
+            <div class="alert alert-warning" role="status">Automation is running with @automation.Warnings.Count configuration warning(s). Review Automation for details.</div>
+        }
+        <ConfigPage SystemSettingsOnly="true" />
+    }
+    else if (_activeTab == "users")
+    {
+        <UserManagement />
+    }
+    else if (_activeTab == "backups")
+    {
+        <SettingsBackupsPage />
+    }
+    else
+    {
+        <DevicesPage />
+    }
+</div>
+
+@code {
+    private string _activeTab = "devices";
+    private bool _redirectedAlias;
+
+    protected override void OnParametersSet()
+    {
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _activeTab = route switch
+        {
+            "administration/settings" or "config" => "settings",
+            "administration/users" or "admin/users" => "users",
+            "administration/backups" or "settings-backups" => "backups",
+            _ => "devices"
+        };
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _redirectedAlias) return;
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        var target = route switch
+        {
+            "administration" => "/administration/devices",
+            "devices" => "/administration/devices",
+            "config" => "/administration/settings",
+            "admin/users" => "/administration/users",
+            "settings-backups" => "/administration/backups",
+            _ => null
+        };
+        if (target is not null)
+        {
+            _redirectedAlias = true;
+            Navigation.NavigateTo(target, replace: true);
+        }
+    }
+
+    private void SelectTab(string tab) => Navigation.NavigateTo($"/administration/{tab}");
+    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
+    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+}

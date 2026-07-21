@@ -9,7 +9,6 @@ This document tracks the post-stability warning cleanup batches.
 - `SonosControl.Web/Pages/IndexPage.razor`
 - `SonosControl.Web/Pages/UserEdit.razor`
 - `SonosControl.Web/Pages/ConfigPage.razor`
-- `SonosControl.Web/Services/SonosControlService.cs`
 
 ## Batch C: Non-nullable Initialization (`CS8618`)
 - `SonosControl.Web/Models/ApplicationUser.cs`

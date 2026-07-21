@@ -1,9 +1,8 @@
-@page "/scenes"
+@* Routed through AutomationPage. *@
 @using System.Globalization
 @using SonosControl.Web.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISceneOrchestrationService SceneOrchestrationService
-@inject IJSRuntime JS
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Scenes - Sonos Control</PageTitle>
@@ -64,7 +63,7 @@
                                     <span class="scene-card__icon"><Icon Name="scenes" Size="18" /></span>
                                     <span class="scene-card__copy">
                                         <span class="scene-card__title">@scene.Name</span>
-                                        <span class="scene-card__meta">@GetSourceLabel(scene.SourceType) · @GetSpeakerCount(scene) speakers</span>
+                                        <span class="scene-card__meta">@GetSourceLabel(scene) · @GetSpeakerCount(scene) speakers</span>
                                         @if (!scene.Enabled)
                                         {
                                             <span class="scene-card__status scene-card__status--disabled">Disabled</span>
@@ -77,7 +76,7 @@
                                     </button>
                                     @if (_canManage)
                                     {
-                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteScene(scene)" disabled="@_isSaving" aria-label="@($"Delete {scene.Name}")" title="@($"Delete {scene.Name}")">
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteScene(scene)" disabled="@_isSaving" aria-label="@($"Delete {scene.Name}")" title="@($"Delete {scene.Name}")">
                                             <Icon Name="trash" Size="15" />
                                         </button>
                                     }
@@ -104,7 +103,12 @@
                     </div>
                     @if (_editingScene is not null)
                     {
-                        <span class="scenes-editor-state">@(_editingScene.Enabled ? "Enabled" : "Disabled")</span>
+                        <div class="scenes-editor-header-actions">
+                            <span class="scenes-editor-state">@(_editingScene.Enabled ? "Enabled" : "Disabled")</span>
+                            <button type="button" class="btn mobile-editor-close" @onclick="CloseEditor" aria-label="Close scene editor">
+                                <Icon Name="x" Size="18" />
+                            </button>
+                        </div>
                     }
                 </div>
 
@@ -147,8 +151,16 @@
                             </div>
                             <div class="scenes-form-grid">
                                 <div class="scenes-field">
-                                    <label class="form-label">Source Type</label>
-                                    <select class="form-select" @bind="SceneSourceTypeValue" disabled="@(!_canManage)">
+                                    <label class="form-label" for="scene-source-mode">Selection</label>
+                                    <select id="scene-source-mode" class="form-select" @bind="_editingScene.SourceSelectionMode" disabled="@(!_canManage)">
+                                        <option value="@SceneSourceSelectionMode.Resume">Resume current source</option>
+                                        <option value="@SceneSourceSelectionMode.Specific">Specific source</option>
+                                        <option value="@SceneSourceSelectionMode.Random">Random by type</option>
+                                    </select>
+                                </div>
+                                <div class="scenes-field">
+                                    <label class="form-label" for="scene-source-type">Source type</label>
+                                    <select id="scene-source-type" class="form-select" @bind="SceneSourceTypeValue" disabled="@(!_canManage || _editingScene.SourceSelectionMode == SceneSourceSelectionMode.Resume)">
                                         <option value="@SceneSourceType.None">None</option>
                                         <option value="@SceneSourceType.Station">Station</option>
                                         <option value="@SceneSourceType.Spotify">Spotify</option>
@@ -157,8 +169,8 @@
                                     </select>
                                 </div>
                                 <div class="scenes-field">
-                                    <label class="form-label">Source Item</label>
-                                    <select class="form-select" @bind="SelectedSourceItemValue" disabled="@(!_canManage || _editingScene.SourceType == SceneSourceType.None)">
+                                    <label class="form-label" for="scene-source-item">Source item</label>
+                                    <select id="scene-source-item" class="form-select" @bind="SelectedSourceItemValue" disabled="@(!_canManage || _editingScene.SourceSelectionMode != SceneSourceSelectionMode.Specific || _editingScene.SourceType == SceneSourceType.None)">
                                         <option value="@CustomSourceItemValue">Custom URL</option>
                                         @foreach (var option in GetSourceCatalogOptions())
                                         {
@@ -167,11 +179,11 @@
                                     </select>
                                 </div>
                                 <div class="scenes-field scenes-field--full">
-                                    <label class="form-label">Source URL</label>
-                                    <input class="form-control"
+                                    <label class="form-label" for="scene-source-url">Source URL</label>
+                                    <input id="scene-source-url" class="form-control"
                                            @bind="_editingScene.SourceUrl"
                                            @bind:after="HandleSourceUrlChanged"
-                                           disabled="@(!_canManage || _editingScene.SourceType == SceneSourceType.None)" />
+                                           disabled="@(!_canManage || _editingScene.SourceSelectionMode != SceneSourceSelectionMode.Specific || _editingScene.SourceType == SceneSourceType.None)" />
                                 </div>
                             </div>
                         </section>
@@ -283,9 +295,18 @@
     }
 </div>
 
+<ConfirmDialog Visible="@(_scenePendingDelete is not null)"
+               Title="Delete scene"
+               Message="@($"Delete '{_scenePendingDelete?.Name}'? Schedules using this scene will be disabled.")"
+               ConfirmLabel="Delete scene"
+               Dangerous="true"
+               OnConfirm="ConfirmDeleteSceneAsync"
+               OnCancel="CancelDeleteScene" />
+
 @code {
     private SonosSettings? _settings;
     private Scene? _editingScene;
+    private Scene? _scenePendingDelete;
     private string? _selectedSceneId;
     private string? _statusMessage;
     private bool _statusIsError;
@@ -298,7 +319,7 @@
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _canManage = authState.User.IsInRole("admin") || authState.User.IsInRole("superadmin");
+        _canManage = authState.User.IsInRole("admin") || authState.User.IsInRole("operator") || authState.User.IsInRole("superadmin");
         await LoadSettingsAsync();
     }
 
@@ -331,14 +352,12 @@
         };
     }
 
-    private static string GetSourceLabel(SceneSourceType sourceType) => sourceType switch
+    private static string GetSourceLabel(Scene scene)
     {
-        SceneSourceType.Station => "Station",
-        SceneSourceType.Spotify => "Spotify",
-        SceneSourceType.YouTube => "YouTube",
-        SceneSourceType.YouTubeMusic => "YouTube Music",
-        _ => "None"
-    };
+        if (scene.SourceSelectionMode == SceneSourceSelectionMode.Resume || scene.SourceType == SceneSourceType.None) return "Resume";
+        var type = scene.SourceType switch { SceneSourceType.Station => "Station", SceneSourceType.Spotify => "Spotify", SceneSourceType.YouTube => "YouTube", SceneSourceType.YouTubeMusic => "YouTube Music", _ => "Source" };
+        return scene.SourceSelectionMode == SceneSourceSelectionMode.Random ? $"Random {type}" : type;
+    }
 
     private int GetSpeakerCount(Scene scene)
     {
@@ -369,6 +388,7 @@
             Name = $"Scene {_settings.Scenes.Count + 1}",
             Enabled = true,
             IsSyncedPlayback = true,
+            SourceSelectionMode = SceneSourceSelectionMode.Resume,
             SourceType = SceneSourceType.None,
             TimerMinutes = null,
             Actions = _settings.Speakers
@@ -408,7 +428,16 @@
             return;
         }
 
-        if (_editingScene.SourceType != SceneSourceType.None && string.IsNullOrWhiteSpace(_editingScene.SourceUrl))
+        if (_editingScene.SourceSelectionMode != SceneSourceSelectionMode.Resume
+            && _editingScene.SourceType == SceneSourceType.None)
+        {
+            ShowStatus("Choose a source type or use Resume current source.", true);
+            return;
+        }
+
+        if (_editingScene.SourceSelectionMode == SceneSourceSelectionMode.Specific
+            && _editingScene.SourceType != SceneSourceType.None
+            && string.IsNullOrWhiteSpace(_editingScene.SourceUrl))
         {
             ShowStatus("Source URL is required for non-empty source type.", true);
             return;
@@ -417,6 +446,16 @@
         _isSaving = true;
         try
         {
+            if (_editingScene.SourceSelectionMode == SceneSourceSelectionMode.Resume)
+            {
+                _editingScene.SourceType = SceneSourceType.None;
+                _editingScene.SourceUrl = null;
+            }
+            else if (_editingScene.SourceSelectionMode == SceneSourceSelectionMode.Random)
+            {
+                _editingScene.SourceUrl = null;
+            }
+
             _editingScene.Actions = _editingScene.Actions
                 .Where(a => !string.IsNullOrWhiteSpace(a.SpeakerIp))
                 .GroupBy(a => a.SpeakerIp, StringComparer.OrdinalIgnoreCase)
@@ -467,22 +506,38 @@
         }
     }
 
-    private async Task DeleteScene(Scene scene)
+    private void RequestDeleteScene(Scene scene)
     {
-        if (!_canManage || _settings is null)
+        if (_canManage)
         {
-            return;
+            _scenePendingDelete = scene;
         }
+    }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete scene '{scene.Name}'?");
-        if (!confirmed)
+    private void CancelDeleteScene() => _scenePendingDelete = null;
+
+    private void CloseEditor()
+    {
+        _editingScene = null;
+        _selectedSceneId = null;
+    }
+
+    private async Task ConfirmDeleteSceneAsync()
+    {
+        var scene = _scenePendingDelete;
+        _scenePendingDelete = null;
+        if (!_canManage || _settings is null || scene is null)
         {
             return;
         }
 
         _settings.Scenes.RemoveAll(s => string.Equals(s.Id, scene.Id, StringComparison.OrdinalIgnoreCase));
+        foreach (var window in _settings.ScheduleWindows.Where(window => string.Equals(window.SceneId, scene.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            window.IsEnabled = false;
+        }
         await _uow.ISettingsRepo.WriteSettings(_settings);
-        ShowStatus("Scene deleted.");
+        ShowStatus("Scene deleted. Linked schedules were disabled.");
 
         if (string.Equals(_selectedSceneId, scene.Id, StringComparison.OrdinalIgnoreCase))
         {
@@ -774,6 +829,7 @@
             Name = source.Name,
             Description = source.Description,
             Enabled = source.Enabled,
+            SourceSelectionMode = source.SourceType == SceneSourceType.None ? SceneSourceSelectionMode.Resume : source.SourceSelectionMode,
             SourceType = source.SourceType,
             SourceUrl = source.SourceUrl,
             IsSyncedPlayback = source.IsSyncedPlayback,

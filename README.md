@@ -1,7 +1,7 @@
 # SonosControl - Self-Hosted Sonos Automation Dashboard
 [![Dockerhub](https://github.com/Darkatek7/SonosControl/actions/workflows/dockerhubpush.yml/badge.svg)](https://github.com/Darkatek7/SonosControl/actions/workflows/dockerhubpush.yml)
 
-SonosControl is a deployer-friendly Blazor control center for automating Sonos playback, scheduling start/stop windows, and managing stations and users from one self-hosted app.
+SonosControl is a deployer-friendly Blazor control centre organised around everyday playback, a unified source library, scene-based automation, listening insights, and role-aware administration.
 
 ![SonosControl dashboard hero](docs/assets/readme/images/desktop-home.png)
 
@@ -61,21 +61,25 @@ Then open `http://localhost:5107`.
 ## Screenshot Gallery
 
 ### Desktop
-| Home | Config | Statistics | User Management | Logs |
+
+| Home | Library | Automation | Insights | Administration |
 |---|---|---|---|---|
-| ![Desktop home](docs/assets/readme/images/desktop-home.png) | ![Desktop config](docs/assets/readme/images/desktop-config.png) | ![Desktop statistics](docs/assets/readme/images/desktop-stats.png) | ![Desktop users](docs/assets/readme/images/desktop-users.png) | ![Desktop logs](docs/assets/readme/images/desktop-logs.png) |
+| ![Desktop home](docs/assets/readme/images/desktop-home.png) | ![Desktop library](docs/assets/readme/images/desktop-library.png) | ![Desktop automation](docs/assets/readme/images/desktop-automation.png) | ![Desktop insights](docs/assets/readme/images/desktop-insights.png) | ![Desktop administration](docs/assets/readme/images/desktop-administration.png) |
 
 ### Mobile
-| Home | Config | Statistics | User Management | Logs |
+
+| Home | Library | Automation | Insights | Administration |
 |---|---|---|---|---|
-| ![Mobile home](docs/assets/readme/images/mobile-home.png) | ![Mobile config](docs/assets/readme/images/mobile-config.png) | ![Mobile statistics](docs/assets/readme/images/mobile-stats.png) | ![Mobile users](docs/assets/readme/images/mobile-users.png) | ![Mobile logs](docs/assets/readme/images/mobile-logs.png) |
+| ![Mobile home](docs/assets/readme/images/mobile-home.png) | ![Mobile library](docs/assets/readme/images/mobile-library.png) | ![Mobile automation](docs/assets/readme/images/mobile-automation.png) | ![Mobile insights](docs/assets/readme/images/mobile-insights.png) | ![Mobile administration](docs/assets/readme/images/mobile-administration.png) |
 
 ## Feature Highlights
-- Real-time Sonos dashboard with playback, queue, group, and volume controls.
-- Day-based automation with start/stop windows and optional random media selection.
-- TuneIn, Spotify, YouTube, and YouTube Music source management from a single UI.
+
+- Expanded Home player plus a compact sticky mini-player with queue, room, group, sync, timer, and coalesced volume controls.
+- One Library for saved TuneIn, Spotify, YouTube, and YouTube Music sources, Radio Browser discovery, and recommendations.
+- Reusable scenes, ordered recurring schedules, date exceptions, fades, and migration from legacy day-based automation.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
-- Searchable audit logs for operational traceability.
+- Responsive listening statistics and a searchable read-only activity trail.
+- Separate administration areas for devices, system settings, users, and recoverable configuration backups.
 - Health and metrics endpoints (`/healthz`, `/metricsz`) for basic monitoring.
 - Docker image includes `ffmpeg` and `yt-dlp` for YouTube audio playback without extra sidecars.
 

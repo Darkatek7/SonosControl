@@ -33,7 +33,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("{speakerIp}/remove/{index:int}")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> RemoveQueueItem(string speakerIp, int index, CancellationToken cancellationToken)
     {
         if (index < 0)
@@ -55,7 +55,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("{speakerIp}/move")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> MoveQueueItem(string speakerIp, [FromBody] QueueMoveRequest request, CancellationToken cancellationToken)
     {
         if (request is null)
@@ -93,7 +93,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("snapshots")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<ActionResult<QueueSnapshot>> SaveSnapshot([FromBody] SaveQueueSnapshotRequest request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.SpeakerIp))
@@ -131,7 +131,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpPost("snapshots/{id}/restore")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> RestoreSnapshot(string id, [FromBody] RestoreQueueSnapshotRequest request, CancellationToken cancellationToken)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.SpeakerIp))
@@ -164,7 +164,7 @@ public sealed class QueueController : ControllerBase
     }
 
     [HttpDelete("snapshots/{id}")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> DeleteSnapshot(string id)
     {
         var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();

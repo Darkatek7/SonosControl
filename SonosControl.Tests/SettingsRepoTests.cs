@@ -7,17 +7,38 @@ namespace SonosControl.Tests;
 public class SettingsRepoTests
 {
     [Fact]
-    public async Task WriteAndReadSettings_ReturnsPersistedValues()
+    public async Task CreateVersionedBackup_UsesConfiguredDataDirectory()
     {
-        var repo = new SettingsRepo();
-
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        var originalDir = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(tempDir);
 
         try
         {
+            using var repo = new SettingsRepo(tempDir);
+            await repo.WriteSettings(new SonosSettings { Volume = 37 });
+
+            var fileName = await repo.CreateVersionedBackupAsync("pre-restore");
+
+            Assert.NotNull(fileName);
+            Assert.StartsWith("config-pre-restore-", fileName, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(tempDir, "backups", fileName!)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task WriteAndReadSettings_ReturnsPersistedValues()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+
+        try
+        {
+            using var repo = new SettingsRepo(Path.Combine(tempDir, "Data"));
             var settings = new SonosSettings { IP_Adress = "1.2.3.4", Volume = 42 };
             await repo.WriteSettings(settings);
 
@@ -29,24 +50,19 @@ public class SettingsRepoTests
         }
         finally
         {
-            Directory.SetCurrentDirectory(originalDir);
-            Directory.Delete(tempDir, true);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
     }
 
     [Fact]
     public async Task GetSettings_EnsuresDailySchedulesValuesInitialized()
     {
-        var repo = new SettingsRepo();
-
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        var originalDir = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(tempDir);
 
         try
         {
             var dataDir = Path.Combine(tempDir, "Data");
+            using var repo = new SettingsRepo(dataDir);
             Directory.CreateDirectory(dataDir);
             var configPath = Path.Combine(dataDir, "config.json");
             // Create a config with a null value for a key in DailySchedules
@@ -60,23 +76,18 @@ public class SettingsRepoTests
         }
         finally
         {
-            Directory.SetCurrentDirectory(originalDir);
-            Directory.Delete(tempDir, true);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
     }
 
     [Fact]
     public async Task ConcurrentReadsAndWrites_DoNotCorruptSettings()
     {
-        var repo = new SettingsRepo();
-
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        var originalDir = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(tempDir);
 
         try
         {
+            using var repo = new SettingsRepo(Path.Combine(tempDir, "Data"));
             var tasks = new List<Task>();
 
             for (int i = 0; i < 20; i++)
@@ -102,23 +113,18 @@ public class SettingsRepoTests
         }
         finally
         {
-            Directory.SetCurrentDirectory(originalDir);
-            Directory.Delete(tempDir, true);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
     }
 
     [Fact]
     public async Task GetSettings_ReturnsNewWhenFileMissing()
     {
-        var repo = new SettingsRepo();
-
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        var originalDir = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(tempDir);
 
         try
         {
+            using var repo = new SettingsRepo(Path.Combine(tempDir, "Data"));
             var result = await repo.GetSettings();
 
             Assert.NotNull(result);
@@ -127,24 +133,19 @@ public class SettingsRepoTests
         }
         finally
         {
-            Directory.SetCurrentDirectory(originalDir);
-            Directory.Delete(tempDir, true);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
     }
 
     [Fact]
     public async Task GetSettings_ReturnsNewWhenJsonCorrupted()
     {
-        var repo = new SettingsRepo();
-
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(tempDir);
-        var originalDir = Directory.GetCurrentDirectory();
-        Directory.SetCurrentDirectory(tempDir);
 
         try
         {
             var dataDir = Path.Combine(tempDir, "Data");
+            using var repo = new SettingsRepo(dataDir);
             Directory.CreateDirectory(dataDir);
             var configPath = Path.Combine(dataDir, "config.json");
             await File.WriteAllTextAsync(configPath, "{ invalid json }");
@@ -157,8 +158,7 @@ public class SettingsRepoTests
         }
         finally
         {
-            Directory.SetCurrentDirectory(originalDir);
-            Directory.Delete(tempDir, true);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
         }
     }
 }

@@ -1,8 +1,8 @@
-@page "/schedule-windows"
+@* Routed through AutomationPage. *@
 @using SonosControl.Web.Services
-@inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@attribute [Authorize(Roles = "admin,superadmin")]
+@inject ConfiguredTimeZoneService AppTimeZone
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Schedule Windows - Sonos Control</PageTitle>
 
@@ -11,7 +11,7 @@
         <div class="schedule-hero__copy">
             <span class="spotify-eyebrow">Automation</span>
             <h1 id="schedule-windows-heading">Schedule Windows</h1>
-            <p>Define recurring playback windows with deterministic priority, scene handoffs, and optional fades.</p>
+            <p>Define recurring playback windows with a clear run order, scene handoffs, and optional fades.</p>
         </div>
         <div class="schedule-hero__actions">
             <div class="schedule-hero__stat">
@@ -22,7 +22,10 @@
                 <span><Icon Name="check" Size="16" /> Enabled</span>
                 <strong>@GetEnabledWindowCount()</strong>
             </div>
-            <button class="btn btn-primary schedule-new-button" @onclick="CreateNewWindow"><Icon Name="plus" Size="16" /> New Window</button>
+            @if (_canManage)
+            {
+                <button class="btn btn-primary schedule-new-button" @onclick="CreateNewWindow"><Icon Name="plus" Size="16" /> New schedule</button>
+            }
         </div>
     </section>
 
@@ -40,7 +43,7 @@
     }
     else
     {
-        var now = DateTimeOffset.Now;
+        var now = AppTimeZone.Now;
         var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now);
 
         <section class="schedule-active-strip schedule-active-alert" aria-label="Active schedule window">
@@ -49,7 +52,7 @@
                 <strong>Active window: @(active?.Name ?? "None")</strong>
             </div>
             <div class="schedule-active-strip__meta">
-                <span class="schedule-now-label"><Icon Name="clock" Size="15" /> @now.LocalDateTime.ToString("f")</span>
+                <span class="schedule-now-label"><Icon Name="clock" Size="15" /> @AppTimeZone.Format(now, "ddd, dd/MM/yyyy HH:mm")</span>
                 <span><Icon Name="scenes" Size="15" /> Scene: @(active is null ? "None" : GetSceneName(active.SceneId))</span>
             </div>
         </section>
@@ -58,7 +61,7 @@
             <aside class="schedule-panel schedule-list-panel" aria-label="Configured schedule windows">
                 <div class="schedule-panel__header">
                     <div>
-                        <span class="spotify-eyebrow">Priority queue</span>
+                        <span class="spotify-eyebrow">Run order</span>
                         <h2><Icon Name="schedule" Size="18" /> Window library</h2>
                     </div>
                 </div>
@@ -80,11 +83,18 @@
                                     </span>
                                 </button>
                                 <div class="schedule-window-card__side">
-                                    <span class="schedule-priority-pill">P@window.Priority</span>
+                                    <span class="schedule-priority-pill">@GetOrderLabel(window)</span>
                                     <span class="schedule-state-pill @(window.IsEnabled ? "is-enabled" : "is-disabled")">@(window.IsEnabled ? "On" : "Off")</span>
-                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteWindow(window)" disabled="@_isSaving" aria-label="@($"Delete {window.Name}")" title="@($"Delete {window.Name}")">
-                                        <Icon Name="trash" Size="15" />
-                                    </button>
+                                    @if (_canManage)
+                                    {
+                                        <div class="schedule-order-actions" aria-label="@($"Reorder {window.Name}")">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => MoveWindowAsync(window, -1)" disabled="@(GetHumanOrder(window) == 1 || _isSaving)" aria-label="@($"Move {window.Name} earlier")"><Icon Name="chevron-up" Size="14" /></button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => MoveWindowAsync(window, 1)" disabled="@(GetHumanOrder(window) == _settings.ScheduleWindows.Count || _isSaving)" aria-label="@($"Move {window.Name} later")"><Icon Name="chevron-down" Size="14" /></button>
+                                        </div>
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteWindow(window)" disabled="@_isSaving" aria-label="@($"Delete {window.Name}")" title="@($"Delete {window.Name}")">
+                                            <Icon Name="trash" Size="15" />
+                                        </button>
+                                    }
                                 </div>
                             </article>
                         }
@@ -108,7 +118,12 @@
                     </div>
                     @if (_editingWindow is not null)
                     {
-                        <span class="schedule-editor-state">@(_editingWindow.IsEnabled ? "Enabled" : "Disabled")</span>
+                        <div class="schedule-editor-header-actions">
+                            <span class="schedule-editor-state">@(_editingWindow.IsEnabled ? "Enabled" : "Disabled")</span>
+                            <button type="button" class="btn mobile-editor-close" @onclick="CloseEditor" aria-label="Close schedule editor">
+                                <Icon Name="x" Size="18" />
+                            </button>
+                        </div>
                     }
                 </div>
 
@@ -130,17 +145,13 @@
                             <div class="schedule-form-grid">
                                 <div class="schedule-field schedule-field--wide">
                                     <label class="form-label">Name</label>
-                                    <input class="form-control" @bind="_editingWindow.Name" />
+                                    <input class="form-control" @bind="_editingWindow.Name" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Enabled</label>
                                     <div class="form-check form-switch schedule-switch">
-                                        <input class="form-check-input" type="checkbox" @bind="_editingWindow.IsEnabled" />
+                                        <input class="form-check-input" type="checkbox" @bind="_editingWindow.IsEnabled" disabled="@(!_canManage)" />
                                     </div>
-                                </div>
-                                <div class="schedule-field">
-                                    <label class="form-label">Priority</label>
-                                    <input class="form-control" type="number" min="0" max="1000" @bind="_editingWindow.Priority" />
                                 </div>
                             </div>
                         </section>
@@ -153,15 +164,15 @@
                             <div class="schedule-form-grid">
                                 <div class="schedule-field">
                                     <label class="form-label">Start</label>
-                                    <input class="form-control" type="time" value="@_editingWindow.StartTime.ToString("HH\\:mm")" @onchange="e => SetStartTime(e.Value)" />
+                                    <input class="form-control" type="time" value="@_editingWindow.StartTime.ToString("HH\\:mm")" @onchange="e => SetStartTime(e.Value)" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Stop</label>
-                                    <input class="form-control" type="time" value="@_editingWindow.StopTime.ToString("HH\\:mm")" @onchange="e => SetStopTime(e.Value)" />
+                                    <input class="form-control" type="time" value="@_editingWindow.StopTime.ToString("HH\\:mm")" @onchange="e => SetStopTime(e.Value)" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Recurrence</label>
-                                    <select class="form-select" @bind="_editingWindow.RecurrenceType">
+                                    <select class="form-select" @bind="_editingWindow.RecurrenceType" disabled="@(!_canManage)">
                                         <option value="@ScheduleRecurrenceType.Daily">Daily</option>
                                         <option value="@ScheduleRecurrenceType.Weekdays">Weekdays</option>
                                         <option value="@ScheduleRecurrenceType.Weekends">Weekends</option>
@@ -170,11 +181,11 @@
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Start Date (optional)</label>
-                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.StartDate)" @onchange="e => SetStartDate(e.Value)" />
+                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.StartDate)" @onchange="e => SetStartDate(e.Value)" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">End Date (optional)</label>
-                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.EndDate)" @onchange="e => SetEndDate(e.Value)" />
+                                    <input class="form-control" type="date" value="@DateOnlyToDateInput(_editingWindow.EndDate)" @onchange="e => SetEndDate(e.Value)" disabled="@(!_canManage)" />
                                 </div>
                             </div>
 
@@ -189,6 +200,7 @@
                                                 <input class="form-check-input"
                                                        type="checkbox"
                                                        checked="@_editingWindow.DaysOfWeek.Contains(day)"
+                                                       disabled="@(!_canManage)"
                                                        @onchange="e => ToggleCustomDay(day, e.Value)" />
                                                 @day.ToString()[..3]
                                             </label>
@@ -205,8 +217,8 @@
                             <div class="schedule-form-grid">
                                 <div class="schedule-field schedule-field--wide">
                                     <label class="form-label">Scene</label>
-                                    <select class="form-select" @bind="_editingWindow.SceneId">
-                                        <option value="">None</option>
+                                    <select class="form-select" @bind="_editingWindow.SceneId" disabled="@(!_canManage)">
+                                        <option value="">Choose a scene</option>
                                         @foreach (var scene in _settings.Scenes.OrderBy(s => s.Name))
                                         {
                                             <option value="@scene.Id">@scene.Name</option>
@@ -215,20 +227,23 @@
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Fade In (sec)</label>
-                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeInSeconds" />
+                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeInSeconds" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="schedule-field">
                                     <label class="form-label">Fade Out (sec)</label>
-                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeOutSeconds" />
+                                    <input class="form-control" type="number" min="0" max="600" @bind="_editingWindow.FadeOutSeconds" disabled="@(!_canManage)" />
                                 </div>
                             </div>
                         </section>
 
-                        <div class="schedule-editor-actions">
-                            <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">
-                                <Icon Name="check" Size="16" /> Save Window
-                            </button>
-                        </div>
+                        @if (_canManage)
+                        {
+                            <div class="schedule-editor-actions">
+                                <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">
+                                    <Icon Name="check" Size="16" /> Save schedule
+                                </button>
+                            </div>
+                        }
                     </div>
                 }
             </main>
@@ -236,13 +251,23 @@
     }
 </div>
 
+<ConfirmDialog Visible="@(_windowPendingDelete is not null)"
+               Title="Delete schedule"
+               Message="@($"Delete '{_windowPendingDelete?.Name}'? This cannot be undone.")"
+               ConfirmLabel="Delete schedule"
+               Dangerous="true"
+               OnConfirm="ConfirmDeleteWindowAsync"
+               OnCancel="CancelDeleteWindow" />
+
 @code {
     private SonosSettings? _settings;
     private ScheduleWindow? _editingWindow;
+    private ScheduleWindow? _windowPendingDelete;
     private string? _selectedWindowId;
     private string? _statusMessage;
     private bool _statusIsError;
     private bool _isSaving;
+    private bool _canManage;
 
     private int GetEnabledWindowCount() => _settings?.ScheduleWindows?.Count(window => window.IsEnabled) ?? 0;
 
@@ -253,7 +278,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var _ = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canManage = auth.User.IsInRole("admin") || auth.User.IsInRole("superadmin");
         await LoadSettingsAsync();
     }
 
@@ -262,10 +288,16 @@
         _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         _settings.ScheduleWindows ??= new();
         _settings.Scenes ??= new();
+        foreach (var window in _settings.ScheduleWindows)
+        {
+            window.DaysOfWeek ??= new();
+            window.ExcludedDates ??= new();
+        }
     }
 
     private void CreateNewWindow()
     {
+        if (!_canManage) return;
         _editingWindow = new ScheduleWindow
         {
             Name = $"Window {(_settings?.ScheduleWindows.Count ?? 0) + 1}",
@@ -275,6 +307,7 @@
             StopTime = new TimeOnly(18, 0),
             RecurrenceType = ScheduleRecurrenceType.Weekdays,
             DaysOfWeek = new(),
+            ExcludedDates = new(),
             FadeInSeconds = 0,
             FadeOutSeconds = 0
         };
@@ -290,7 +323,7 @@
 
     private async Task SaveWindow()
     {
-        if (_settings is null || _editingWindow is null)
+        if (!_canManage || _settings is null || _editingWindow is null)
         {
             return;
         }
@@ -310,6 +343,14 @@
         if (_editingWindow.StartDate.HasValue && _editingWindow.EndDate.HasValue && _editingWindow.EndDate < _editingWindow.StartDate)
         {
             ShowStatus("End date must be on or after start date.", true);
+            return;
+        }
+
+        if (_editingWindow.IsEnabled
+            && (string.IsNullOrWhiteSpace(_editingWindow.SceneId)
+                || !_settings.Scenes.Any(scene => scene.Enabled && scene.Id == _editingWindow.SceneId)))
+        {
+            ShowStatus("An enabled schedule must reference an enabled scene.", true);
             return;
         }
 
@@ -358,15 +399,27 @@
         }
     }
 
-    private async Task DeleteWindow(ScheduleWindow window)
+    private void RequestDeleteWindow(ScheduleWindow window)
     {
-        if (_settings is null)
+        if (_canManage)
         {
-            return;
+            _windowPendingDelete = window;
         }
+    }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete window '{window.Name}'?");
-        if (!confirmed)
+    private void CancelDeleteWindow() => _windowPendingDelete = null;
+
+    private void CloseEditor()
+    {
+        _editingWindow = null;
+        _selectedWindowId = null;
+    }
+
+    private async Task ConfirmDeleteWindowAsync()
+    {
+        var window = _windowPendingDelete;
+        _windowPendingDelete = null;
+        if (!_canManage || _settings is null || window is null)
         {
             return;
         }
@@ -397,6 +450,54 @@
         return string.Equals(window.Id, _selectedWindowId, StringComparison.OrdinalIgnoreCase)
             ? "window-selected-row"
             : string.Empty;
+    }
+
+    private int GetHumanOrder(ScheduleWindow window)
+    {
+        if (_settings is null) return 0;
+        return _settings.ScheduleWindows
+            .OrderBy(item => item.Priority)
+            .ThenBy(item => item.Name)
+            .ToList()
+            .FindIndex(item => item.Id == window.Id) + 1;
+    }
+
+    private string GetOrderLabel(ScheduleWindow window)
+    {
+        return GetHumanOrder(window) switch
+        {
+            1 => "First",
+            2 => "Second",
+            3 => "Third",
+            4 => "Fourth",
+            5 => "Fifth",
+            6 => "Sixth",
+            7 => "Seventh",
+            8 => "Eighth",
+            9 => "Ninth",
+            10 => "Tenth",
+            var order => $"Order {order}"
+        };
+    }
+
+    private async Task MoveWindowAsync(ScheduleWindow window, int direction)
+    {
+        if (!_canManage || _settings is null || _isSaving) return;
+        var ordered = _settings.ScheduleWindows.OrderBy(item => item.Priority).ThenBy(item => item.Name).ToList();
+        var currentIndex = ordered.FindIndex(item => item.Id == window.Id);
+        var targetIndex = currentIndex + direction;
+        if (currentIndex < 0 || targetIndex < 0 || targetIndex >= ordered.Count) return;
+
+        (ordered[currentIndex], ordered[targetIndex]) = (ordered[targetIndex], ordered[currentIndex]);
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            ordered[index].Priority = (index + 1) * 100;
+            ordered[index].LastModifiedUtc = DateTime.UtcNow;
+        }
+
+        _settings.ScheduleWindows = ordered;
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowStatus($"{window.Name} moved to position {targetIndex + 1}.");
     }
 
     private string GetCustomDayButtonClass(DayOfWeek day)
@@ -493,6 +594,7 @@
             DaysOfWeek = source.DaysOfWeek?.ToList() ?? new(),
             StartDate = source.StartDate,
             EndDate = source.EndDate,
+            ExcludedDates = source.ExcludedDates?.ToList() ?? new(),
             SceneId = source.SceneId,
             FadeInSeconds = source.FadeInSeconds,
             FadeOutSeconds = source.FadeOutSeconds,

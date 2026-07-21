@@ -21,16 +21,19 @@ MAX_LOGIN_ATTEMPTS = int(os.getenv("MOBILE_SMOKE_MAX_LOGIN_ATTEMPTS", "4"))
 CHROME_PATH = os.getenv("PLAYWRIGHT_CHROME_PATH")
 VIEWPORTS = [
     ("mobile", 390, 844),
-    ("tablet", 992, 900),
-    ("laptop", 1366, 900),
-    ("desktop", 1920, 1080),
+    ("tablet", 768, 900),
+    ("desktop", 1280, 900),
 ]
 
 ROUTES = [
-    ("/", "home", "All sources"),
-    ("/admin/users", "users", "User Management"),
-    ("/config", "config", "System Configuration"),
-    ("/logs", "logs", "System Logs"),
+    ("/", "home", "Saved sources"),
+    ("/library", "library", "Library"),
+    ("/automation", "automation", "Automation"),
+    ("/insights", "insights", "Insights"),
+    ("/administration/devices", "devices", "Devices"),
+    ("/administration/settings", "settings", "System settings"),
+    ("/administration/users", "users", "Accounts"),
+    ("/administration/backups", "backups", "Backups"),
 ]
 
 
@@ -67,6 +70,7 @@ def start_local_server():
         shell=False,
         env={
             **os.environ,
+            "BackgroundServices__Enabled": os.getenv("BackgroundServices__Enabled", "false"),
             "DataProtection__KeysDirectory": os.getenv(
                 "DataProtection__KeysDirectory",
                 str((Path(__file__).resolve().parent / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
@@ -89,10 +93,19 @@ def stop_local_server(process, log_stream):
 
 
 def assert_no_horizontal_overflow(page):
-    has_overflow = page.evaluate(
-        "document.documentElement.scrollWidth > window.innerWidth"
+    dimensions = page.evaluate(
+        """
+        () => ({
+            viewportWidth: window.innerWidth,
+            documentWidth: document.documentElement.scrollWidth,
+            bodyWidth: document.body.scrollWidth,
+        })
+        """
     )
-    assert not has_overflow, "Page has horizontal overflow on mobile viewport."
+    assert dimensions["documentWidth"] <= dimensions["viewportWidth"], (
+        f"{page.url} has horizontal overflow: viewport={dimensions['viewportWidth']}px, "
+        f"document={dimensions['documentWidth']}px, body={dimensions['bodyWidth']}px."
+    )
 
 
 def resolve_chrome_path():
@@ -131,29 +144,32 @@ def assert_bottom_player_does_not_cover_content(page):
             const content = document.querySelector('article.content');
             if (!player || !content) return null;
             const playerRect = player.getBoundingClientRect();
+            const playerStyle = window.getComputedStyle(player);
             const paddingBottom = Number.parseFloat(window.getComputedStyle(content).paddingBottom) || 0;
-            return { paddingBottom, playerHeight: playerRect.height };
+            return { paddingBottom, playerHeight: playerRect.height, position: playerStyle.position };
         }
         """
     )
     assert spacing is not None, "Global bottom player or content region missing."
-    assert (
-        spacing["paddingBottom"] + 4 >= spacing["playerHeight"]
-    ), "Main content does not reserve enough space for the global bottom player."
+    if spacing["position"] == "fixed":
+        assert (
+            spacing["paddingBottom"] + 4 >= spacing["playerHeight"]
+        ), "Main content does not reserve enough space for the global bottom player."
 
 
 def assert_home_dashboard_layout(page):
     expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="All sources")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Saved sources")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Recent Activity")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Device warnings")).to_be_visible(timeout=10000)
     expect(page.locator(".spotify-library")).to_have_count(0)
     expect(page.locator(".spotify-home-context")).to_have_count(0)
     expect(page.locator(".spotify-room-picker")).to_have_count(0)
-    expect(page.locator("[data-qa='global-player-sync']")).to_be_visible(timeout=10000)
-    # Hero and rooms only render when speakers are configured.
+    expect(page.locator("[data-qa='global-player-sync']")).to_have_count(1)
+    assert page.locator(".home-quick-library .library__item").count() <= 6
+    # Expanded player and rooms only render when speakers are configured.
     if page.locator("[data-qa='room-card']").count() > 0:
-        expect(page.locator("[data-qa='now-playing-hero']")).to_be_visible(timeout=10000)
+        expect(page.locator("[data-qa='global-player-bar'].player-surface--expanded")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Speakers")).to_be_visible(timeout=10000)
 
 
@@ -163,13 +179,20 @@ def verify_responsive_home(page, output_dir):
         page.goto(f"{BASE_URL}/", wait_until="networkidle")
         assert_global_player_visible(page)
         assert_home_dashboard_layout(page)
+        if width <= 767:
+            page.get_by_role("button", name="Open expanded player").click()
+            sheet = page.get_by_role("dialog", name="Now playing")
+            expect(sheet).to_be_visible(timeout=10000)
+            expect(sheet.get_by_label("Room")).to_be_visible()
+            expect(sheet.get_by_role("button", name="Sync", exact=True)).to_be_visible()
+            expect(sheet.get_by_role("heading", name="Queue")).to_be_visible()
+            sheet.get_by_role("button", name="Close expanded player").click()
         assert_no_horizontal_overflow(page)
         assert_bottom_player_does_not_cover_content(page)
         page.screenshot(path=str(output_dir / f"home_{slug}.png"), full_page=True)
 
 
 def verify_drawer(page):
-    page.set_viewport_size({"width": 390, "height": 844})
     menu_button = page.locator("button.app-mobile-menu-button")
     if menu_button.count() == 0:
         return
@@ -177,7 +200,12 @@ def verify_drawer(page):
     expect(menu_button.first).to_be_visible(timeout=5000)
     menu_button.first.click(force=True)
     page.wait_for_timeout(150)
-    menu_button.first.click(force=True)
+    expect(page.locator(".nav-scrollable")).to_be_visible(timeout=5000)
+    expect(page.get_by_role("link", name="Home", exact=True)).to_be_visible(timeout=5000)
+    expect(page.get_by_role("link", name="Library", exact=True)).to_be_visible(timeout=5000)
+    expect(page.get_by_role("link", name="Automation", exact=True)).to_be_visible(timeout=5000)
+    expect(page.get_by_role("link", name="Insights", exact=True)).to_be_visible(timeout=5000)
+    page.locator("button.nav-drawer-close").click()
     page.wait_for_timeout(150)
 
 
@@ -311,16 +339,20 @@ def run():
 
             verify_responsive_home(page, output_dir)
 
-            for route, slug, expected_text in ROUTES:
-                page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
-                main_content = page.locator("article.content")
-                expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
+            for viewport_slug, width, height in VIEWPORTS:
+                page.set_viewport_size({"width": width, "height": height})
+                for route, slug, expected_text in ROUTES:
+                    page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
+                    main_content = page.locator("article.content")
+                    expect(main_content.get_by_text(expected_text, exact=True).first).to_be_visible(timeout=10000)
 
-                assert_global_player_visible(page)
-                verify_drawer(page)
-                assert_no_horizontal_overflow(page)
+                    assert_global_player_visible(page)
+                    if width < 992:
+                        verify_drawer(page)
+                    assert_no_horizontal_overflow(page)
+                    assert_bottom_player_does_not_cover_content(page)
 
-                page.screenshot(path=str(output_dir / f"mobile_{slug}.png"), full_page=True)
+                    page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}.png"), full_page=True)
 
             context.close()
             browser.close()
