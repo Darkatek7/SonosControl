@@ -107,9 +107,8 @@
     color: var(--text-secondary);
 }
 
-.room-card__volume input[type="range"] {
+.room-card__volume ::deep .volume-control {
     flex: 1 1 auto;
-    accent-color: var(--brand-primary);
 }
 
 .room-card.is-offline .room-card__volume,

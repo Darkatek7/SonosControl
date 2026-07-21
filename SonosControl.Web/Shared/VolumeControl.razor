@@ -1,0 +1,53 @@
+@using System.Globalization
+
+<div class="volume-control" role="group" aria-label="@Label" data-qa="volume-control">
+    <label class="visually-hidden" for="@SliderId">@Label slider</label>
+    <input id="@SliderId"
+           class="volume-control__range"
+           type="range"
+           min="0"
+           max="@SafeMaxVolume"
+           step="1"
+           value="@ClampedValue"
+           @oninput="HandleInput" />
+
+    <span class="volume-control__number-wrap">
+        <label class="visually-hidden" for="@NumberId">@Label percentage</label>
+        <input id="@NumberId"
+               class="form-control form-control-sm volume-control__number"
+               data-qa="volume-number-input"
+               type="number"
+               inputmode="numeric"
+               min="0"
+               max="@SafeMaxVolume"
+               step="1"
+               value="@ClampedValue"
+               @oninput="HandleInput" />
+        <span class="volume-control__unit" aria-hidden="true">%</span>
+    </span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Value { get; set; }
+    [Parameter, EditorRequired] public int MaxVolume { get; set; }
+    [Parameter, EditorRequired] public EventCallback<int> ValueChanged { get; set; }
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "volume";
+    [Parameter, EditorRequired] public string Label { get; set; } = "Volume";
+
+    private int SafeMaxVolume => Math.Max(0, MaxVolume);
+    private int ClampedValue => Math.Clamp(Value, 0, SafeMaxVolume);
+    private string SliderId => $"{IdPrefix}-slider";
+    private string NumberId => $"{IdPrefix}-number";
+
+    private Task HandleInput(ChangeEventArgs args)
+    {
+        var raw = Convert.ToString(args.Value, CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(raw)
+            || !int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+        {
+            return Task.CompletedTask;
+        }
+
+        return ValueChanged.InvokeAsync(Math.Clamp(value, 0, SafeMaxVolume));
+    }
+}

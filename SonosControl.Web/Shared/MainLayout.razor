@@ -120,7 +120,7 @@
             </article>
         </section>
 
-        @if (isAuthenticated && !IsHomeRoute)
+        @if (isAuthenticated)
         {
             <GlobalPlayerBar />
         }
@@ -168,8 +168,6 @@
             };
         }
     }
-
-    private bool IsHomeRoute => string.IsNullOrWhiteSpace(Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/'));
 
     protected override async Task OnInitializedAsync()
     {

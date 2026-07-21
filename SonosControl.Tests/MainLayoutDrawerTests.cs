@@ -33,6 +33,7 @@ public class MainLayoutDrawerTests
         Assert.NotEmpty(cut.FindAll("details.top-bar-profile"));
         Assert.Empty(cut.FindAll(".top-bar-greeting"));
         Assert.Empty(cut.FindAll(".app-top-bar .theme-toggle"));
+        Assert.Single(cut.FindAll("[data-qa='global-player-bar'].player-surface--compact"));
     }
 
     [Fact]

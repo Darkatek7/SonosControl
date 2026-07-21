@@ -24,7 +24,7 @@ namespace SonosControl.Tests;
 public class IndexPageUXTests
 {
     [Fact]
-    public void IndexPage_RendersEverydayHierarchy_WithExpandedPlayerRoomsQuickLibraryAndFooter()
+    public void IndexPage_RendersEverydayHierarchy_WithoutEmbeddedPlayer()
     {
         using var ctx = new TestContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
@@ -34,7 +34,7 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
-            Assert.Single(cut.FindAll("[data-qa='global-player-bar'].player-surface--expanded"));
+            Assert.Empty(cut.FindAll("[data-qa='global-player-bar']"));
             Assert.NotEmpty(cut.FindAll("[data-qa='room-card']"));
             Assert.Single(cut.FindAll(".home-quick-library"));
             Assert.Equal("/library", cut.Find(".home-quick-library a").GetAttribute("href"));
@@ -97,39 +97,6 @@ public class IndexPageUXTests
         {
             Assert.Contains("Workout Collection", cut.Markup);
             Assert.DoesNotContain("Live Set", cut.Markup);
-        });
-    }
-
-    [Fact]
-    public void IndexPage_ExpandedPlayerSheet_UsesPlaybackStateActiveSpeaker()
-    {
-        using var ctx = new TestContext();
-        var settings = new SonosSettings
-        {
-            IP_Adress = "10.0.0.2",
-            Speakers =
-            [
-                new SonosSpeaker { IpAddress = "10.0.0.1", Name = "Kitchen" },
-                new SonosSpeaker { IpAddress = "10.0.0.2", Name = "Office" }
-            ]
-        };
-        using var resources = ConfigureServices(
-            ctx,
-            new List<TuneInStation>(),
-            new List<SpotifyObject>(),
-            new List<YouTubeMusicObject>(),
-            settingsOverride: settings);
-
-        var cut = ctx.RenderComponent<IndexPage>();
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("button[aria-label='Open queue and room controls']")));
-
-        cut.Find("button[aria-label='Open queue and room controls']").Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Single(cut.FindAll(".player-sheet[role='dialog']"));
-            Assert.Equal("10.0.0.2", cut.Find("#player-sheet-room").GetAttribute("value"));
-            Assert.Contains("Office", cut.Find(".player-sheet__header").TextContent);
         });
     }
 
