@@ -318,6 +318,11 @@
     text-overflow: ellipsis;
 }
 
+.library__item-meta .library__suggested {
+    color: var(--brand-primary);
+    font-weight: 650;
+}
+
 .library__yt-mode {
     max-width: 9rem;
 }

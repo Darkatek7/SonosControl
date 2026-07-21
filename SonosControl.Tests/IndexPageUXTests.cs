@@ -139,7 +139,11 @@ public class IndexPageUXTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         var dbContext = new ApplicationDbContext(options);
+        dbContext.Users.Add(new ApplicationUser { Id = "test-user", UserName = "tester", NormalizedUserName = "TESTER", FirstName = string.Empty, LastName = string.Empty });
+        dbContext.SaveChanges();
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
+        ctx.Services.AddScoped<UserFavouriteSourceService>();
+        ctx.Services.AddScoped<HomeLibraryService>();
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
@@ -211,7 +215,11 @@ public class IndexPageUXTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         var dbContext = new ApplicationDbContext(options);
+        dbContext.Users.Add(new ApplicationUser { Id = "test-user", UserName = "tester", NormalizedUserName = "TESTER", FirstName = string.Empty, LastName = string.Empty });
+        dbContext.SaveChanges();
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
+        ctx.Services.AddScoped<UserFavouriteSourceService>();
+        ctx.Services.AddScoped<HomeLibraryService>();
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
@@ -282,6 +290,71 @@ public class IndexPageUXTests
             Assert.Single(cut.FindAll(".app-dialog[role='dialog']"));
             Assert.NotNull(cut.Find("#source-type"));
             Assert.Equal(4, cut.FindAll("#source-type option").Count);
+        });
+    }
+
+    [Fact]
+    public void LibraryPage_TogglesFavourite_WithAccessibleHeartButton()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>
+            {
+                new() { Name = "Favourite Radio", Url = "https://radio.example/live" }
+            },
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<LibraryPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var addButton = cut.Find("button[aria-label='Add Favourite Radio to favourites']");
+            Assert.Equal("false", addButton.GetAttribute("aria-pressed"));
+        });
+
+        cut.Find("button[aria-label='Add Favourite Radio to favourites']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var removeButton = cut.Find("button[aria-label='Remove Favourite Radio from favourites']");
+            Assert.Equal("true", removeButton.GetAttribute("aria-pressed"));
+            Assert.Single(resources.DbContext.UserFavouriteSources);
+        });
+
+        cut.Find("button[aria-label='Remove Favourite Radio from favourites']").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotNull(cut.Find("button[aria-label='Add Favourite Radio to favourites']"));
+            Assert.Empty(resources.DbContext.UserFavouriteSources);
+        });
+    }
+
+    [Fact]
+    public void LibraryPage_ShowsFavouriteError_WhenCurrentUserCannotBeResolved()
+    {
+        using var ctx = new TestContext();
+        using var resources = ConfigureServices(
+            ctx,
+            new List<TuneInStation>
+            {
+                new() { Name = "Unavailable Favourite", Url = "https://radio.example/error" }
+            },
+            new List<SpotifyObject>(),
+            new List<YouTubeMusicObject>());
+
+        var cut = ctx.RenderComponent<LibraryPage>();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add Unavailable Favourite to favourites']")));
+        resources.DbContext.Users.Remove(resources.DbContext.Users.Single());
+        resources.DbContext.SaveChanges();
+
+        cut.Find("button[aria-label='Add Unavailable Favourite to favourites']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Favourite could not be updated", cut.Markup);
+            Assert.Empty(resources.DbContext.UserFavouriteSources);
         });
     }
 
@@ -384,7 +457,7 @@ public class IndexPageUXTests
             Assert.Contains("Morning Radio", cut.Markup);
             Assert.Contains("Scene: Morning Radio", cut.Markup);
             Assert.Contains("Speakers", cut.Markup);
-            Assert.Contains("Saved sources", cut.Markup);
+            Assert.Contains("Favourites", cut.Markup);
             Assert.Contains("View library", cut.Markup);
             Assert.Contains("Online", cut.Markup);
             Assert.Contains("Offline", cut.Markup);
@@ -568,7 +641,11 @@ public class IndexPageUXTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         var dbContext = new ApplicationDbContext(options);
+        dbContext.Users.Add(new ApplicationUser { Id = "test-user", UserName = "tester", NormalizedUserName = "TESTER", FirstName = string.Empty, LastName = string.Empty });
+        dbContext.SaveChanges();
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
+        ctx.Services.AddScoped<UserFavouriteSourceService>();
+        ctx.Services.AddScoped<HomeLibraryService>();
 
         var settings = settingsOverride ?? new SonosSettings
         {

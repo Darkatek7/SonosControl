@@ -14,6 +14,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<LogEntry> Logs { get; set; }
     public DbSet<PlaybackHistory> PlaybackStats { get; set; }
+    public DbSet<UserFavouriteSource> UserFavouriteSources { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -42,6 +43,22 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<PlaybackHistory>(entity =>
         {
             entity.HasIndex(p => new { p.StartTime, p.MediaType });
+        });
+
+        builder.Entity<UserFavouriteSource>(entity =>
+        {
+            entity.Property(favourite => favourite.SourceType)
+                .HasMaxLength(32)
+                .IsRequired();
+            entity.Property(favourite => favourite.SourceUrl)
+                .HasMaxLength(2048)
+                .IsRequired();
+            entity.HasIndex(favourite => new { favourite.UserId, favourite.SourceType, favourite.SourceUrl })
+                .IsUnique();
+            entity.HasOne(favourite => favourite.User)
+                .WithMany()
+                .HasForeignKey(favourite => favourite.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // You may need to adjust other Identity entities similarly if errors come up

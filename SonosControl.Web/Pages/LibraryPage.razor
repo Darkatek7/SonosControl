@@ -6,6 +6,7 @@
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject NavigationManager Navigation
 @inject PlaybackUiStateService PlaybackState
+@inject UserFavouriteSourceService FavouriteSources
 
 <PageTitle>Library - SonosControl</PageTitle>
 
@@ -84,6 +85,14 @@
                             <h2>@source.Name</h2>
                             <p title="@source.Url">@source.Url</p>
                         </div>
+                        <button type="button"
+                                class="source-card__favourite @(IsFavourite(source) ? "is-active" : null)"
+                                @onclick="() => ToggleFavouriteAsync(source)"
+                                disabled="@_busyFavouriteKeys.Contains(source.Key)"
+                                aria-pressed="@(IsFavourite(source) ? "true" : "false")"
+                                aria-label="@FavouriteAriaLabel(source)">
+                            <Icon Name="heart" Size="20" />
+                        </button>
                         <div class="source-card__actions">
                             <button type="button" class="btn btn-primary" @onclick="() => PlaySourceAsync(source)" disabled="@(_busyKey == source.Key)" aria-label="@($"Play {source.Name}")">
                                 <Icon Name="play" Size="15" /> Play
@@ -185,6 +194,8 @@
     private string? _statusMessage;
     private bool _statusIsError;
     private string? _busyKey;
+    private readonly HashSet<string> _busyFavouriteKeys = new(StringComparer.Ordinal);
+    private HashSet<string> _favouriteKeys = new(StringComparer.Ordinal);
     private bool _showEditor;
     private bool _isSaving;
     private string? _editingKey;
@@ -237,6 +248,15 @@
         _settings.YouTubeCollections ??= new();
         _settings.YouTubeMusicCollections ??= new();
         _settings.Speakers ??= new();
+        await LoadFavouritesAsync();
+    }
+
+    private async Task LoadFavouritesAsync()
+    {
+        var favourites = await FavouriteSources.GetCurrentUserFavouritesAsync();
+        _favouriteKeys = favourites
+            .Select(favourite => FavouriteSourceIdentity.CreateKey(favourite.SourceType, favourite.SourceUrl))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private IEnumerable<LibrarySource> FilteredSources
@@ -282,7 +302,7 @@
     {
         var safeUrl = url?.Trim() ?? string.Empty;
         return new LibrarySource(
-            $"{TypeKey(type)}|{safeUrl}",
+            FavouriteSourceIdentity.CreateKey(TypeKey(type), safeUrl),
             type,
             name?.Trim() ?? "Untitled source",
             safeUrl,
@@ -339,12 +359,33 @@
         _isSaving = true;
         try
         {
+            var originalSource = _editingKey is null
+                ? null
+                : AllSources.FirstOrDefault(source => source.Key == _editingKey);
             if (_editingKey is not null) RemoveByKey(_editingKey);
             AddDraft(_draft);
             await _uow.ISettingsRepo.WriteSettings(_settings);
+            string? favouriteWarning = null;
+            if (originalSource is not null)
+            {
+                try
+                {
+                    await FavouriteSources.MoveSourceAsync(
+                        TypeKey(originalSource.Type),
+                        originalSource.Url,
+                        TypeKey(_draft.Type),
+                        _draft.Url);
+                }
+                catch (Exception ex)
+                {
+                    favouriteWarning = $"Source saved, but favourites could not be updated: {ex.Message}";
+                }
+            }
             await LoadSettingsAsync();
             _showEditor = false;
-            ShowStatus(_editingKey is null ? "Source added." : "Source updated.");
+            ShowStatus(
+                favouriteWarning ?? (_editingKey is null ? "Source added." : "Source updated."),
+                favouriteWarning is not null);
         }
         catch (Exception ex)
         {
@@ -383,12 +424,22 @@
     private async Task DeleteSourceAsync()
     {
         if (_settings is null || _pendingDelete is null) return;
-        var name = _pendingDelete.Name;
-        RemoveByKey(_pendingDelete.Key);
+        var source = _pendingDelete;
+        var name = source.Name;
+        RemoveByKey(source.Key);
         await _uow.ISettingsRepo.WriteSettings(_settings);
+        string? favouriteWarning = null;
+        try
+        {
+            await FavouriteSources.RemoveSourceAsync(TypeKey(source.Type), source.Url);
+        }
+        catch (Exception ex)
+        {
+            favouriteWarning = $"Source deleted, but favourite references could not be removed: {ex.Message}";
+        }
         _pendingDelete = null;
         await LoadSettingsAsync();
-        ShowStatus($"{name} was deleted.");
+        ShowStatus(favouriteWarning ?? $"{name} was deleted.", favouriteWarning is not null);
     }
 
     private void RemoveByKey(string key)
@@ -444,6 +495,42 @@
         finally
         {
             _busyKey = null;
+        }
+    }
+
+    private bool IsFavourite(LibrarySource source) => _favouriteKeys.Contains(source.Key);
+
+    private string FavouriteAriaLabel(LibrarySource source) =>
+        $"{(IsFavourite(source) ? "Remove" : "Add")} {source.Name} {(IsFavourite(source) ? "from" : "to")} favourites";
+
+    private async Task ToggleFavouriteAsync(LibrarySource source)
+    {
+        if (!_busyFavouriteKeys.Add(source.Key))
+        {
+            return;
+        }
+
+        try
+        {
+            var isFavourite = await FavouriteSources.ToggleCurrentUserAsync(TypeKey(source.Type), source.Url);
+            if (isFavourite)
+            {
+                _favouriteKeys.Add(source.Key);
+                ShowStatus($"{source.Name} added to favourites.");
+            }
+            else
+            {
+                _favouriteKeys.Remove(source.Key);
+                ShowStatus($"{source.Name} removed from favourites.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Favourite could not be updated: {ex.Message}", true);
+        }
+        finally
+        {
+            _busyFavouriteKeys.Remove(source.Key);
         }
     }
 
