@@ -43,11 +43,6 @@
             </div>
         }
 
-        @if (_settings.Speakers.Any())
-        {
-            <GlobalPlayerBar Expanded="true" />
-        }
-
         <header class="home-intro">
             <div>
                 <span class="home-eyebrow">Today</span>
@@ -87,6 +82,8 @@
                         <RoomCard Speaker="speaker"
                                   Health="status"
                                   IsActive="isActive"
+                                  ActiveVolume="@PlaybackState.Volume"
+                                  MaxVolume="@PlaybackState.MaxVolume"
                                   IsPlaybackLoading="PlaybackState.IsLoading"
                                   OnSetActive="@(() => SetActiveSpeaker(speaker.IpAddress))"
                                   OnVolumeChanged="SetActiveVolume"

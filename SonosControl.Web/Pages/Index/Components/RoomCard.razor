@@ -20,11 +20,11 @@
     {
         <div class="room-card__volume">
             <Icon Name="volume" Size="14" />
-            <input type="range" min="0" max="100"
-                   value="@(Health?.CurrentVolume ?? 0)"
-                   aria-label="@($"Volume for {Speaker.Name}")"
-                   @onchange="HandleVolume" />
-            <span class="room-card__volume-value">@(Health?.CurrentVolume ?? 0)%</span>
+            <VolumeControl Value="@ActiveVolume"
+                           MaxVolume="@MaxVolume"
+                           ValueChanged="OnVolumeChanged"
+                           IdPrefix="@VolumeIdPrefix"
+                           Label="@($"Volume for {Speaker.Name}")" />
         </div>
     }
     else if (Health?.CurrentVolume is int v)
@@ -68,6 +68,8 @@
     [Parameter, EditorRequired] public SonosSpeaker Speaker { get; set; } = default!;
     [Parameter] public DeviceHealthStatus? Health { get; set; }
     [Parameter] public bool IsActive { get; set; }
+    [Parameter] public int ActiveVolume { get; set; }
+    [Parameter] public int MaxVolume { get; set; } = 100;
     [Parameter] public bool IsPlaybackLoading { get; set; }
     [Parameter] public EventCallback OnSetActive { get; set; }
     [Parameter] public EventCallback<int> OnVolumeChanged { get; set; }
@@ -75,6 +77,7 @@
 
     private bool IsOnline => Health?.IsOnline == true;
     private bool IsPlaying => Health?.IsPlaying == true;
+    private string VolumeIdPrefix => $"room-{SanitizeId(Speaker.IpAddress)}-volume";
 
     private string StatusClass => Health switch
     {
@@ -94,12 +97,6 @@
     private Task Activate() => OnSetActive.InvokeAsync();
     private Task TogglePlayback() => OnTogglePlayback.InvokeAsync();
 
-    private Task HandleVolume(ChangeEventArgs e)
-    {
-        if (IsActive && e.Value is string s && int.TryParse(s, out var v))
-        {
-            return OnVolumeChanged.InvokeAsync(v);
-        }
-        return Task.CompletedTask;
-    }
+    private static string SanitizeId(string value)
+        => new(value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray());
 }

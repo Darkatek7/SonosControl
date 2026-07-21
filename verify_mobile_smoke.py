@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import sqlite3
 import subprocess
 import time
@@ -133,7 +134,9 @@ def launch_chromium(playwright):
 
 def assert_global_player_visible(page):
     player = page.locator("[data-qa='global-player-bar']")
+    expect(player).to_have_count(1)
     expect(player).to_be_visible(timeout=10000)
+    expect(player).to_have_class(re.compile(r"\bplayer-surface--compact\b"))
 
 
 def assert_bottom_player_does_not_cover_content(page):
@@ -146,11 +149,17 @@ def assert_bottom_player_does_not_cover_content(page):
             const playerRect = player.getBoundingClientRect();
             const playerStyle = window.getComputedStyle(player);
             const paddingBottom = Number.parseFloat(window.getComputedStyle(content).paddingBottom) || 0;
-            return { paddingBottom, playerHeight: playerRect.height, position: playerStyle.position };
+            return {
+                bottomGap: Math.abs(window.innerHeight - playerRect.bottom),
+                paddingBottom,
+                playerHeight: playerRect.height,
+                position: playerStyle.position
+            };
         }
         """
     )
     assert spacing is not None, "Global bottom player or content region missing."
+    assert spacing["bottomGap"] <= 2, "Global player is not anchored to the bottom viewport edge."
     if spacing["position"] == "fixed":
         assert (
             spacing["paddingBottom"] + 4 >= spacing["playerHeight"]
@@ -165,11 +174,10 @@ def assert_home_dashboard_layout(page):
     expect(page.locator(".spotify-library")).to_have_count(0)
     expect(page.locator(".spotify-home-context")).to_have_count(0)
     expect(page.locator(".spotify-room-picker")).to_have_count(0)
+    expect(page.locator(".player-surface--expanded")).to_have_count(0)
     expect(page.locator("[data-qa='global-player-sync']")).to_have_count(1)
     assert page.locator(".home-quick-library .library__item").count() <= 6
-    # Expanded player and rooms only render when speakers are configured.
     if page.locator("[data-qa='room-card']").count() > 0:
-        expect(page.locator("[data-qa='global-player-bar'].player-surface--expanded")).to_be_visible(timeout=10000)
         expect(page.get_by_role("heading", name="Speakers")).to_be_visible(timeout=10000)
 
 
@@ -179,11 +187,14 @@ def verify_responsive_home(page, output_dir):
         page.goto(f"{BASE_URL}/", wait_until="networkidle")
         assert_global_player_visible(page)
         assert_home_dashboard_layout(page)
-        if width <= 767:
+        if width >= 1200:
+            expect(page.locator("#global-player-volume-number")).to_be_visible(timeout=10000)
+        if width <= 768:
             page.get_by_role("button", name="Open expanded player").click()
             sheet = page.get_by_role("dialog", name="Now playing")
             expect(sheet).to_be_visible(timeout=10000)
-            expect(sheet.get_by_label("Room")).to_be_visible()
+            expect(sheet.get_by_label("Room", exact=True)).to_be_visible()
+            expect(sheet.get_by_label("Volume for active room percentage")).to_be_visible()
             expect(sheet.get_by_role("button", name="Sync", exact=True)).to_be_visible()
             expect(sheet.get_by_role("heading", name="Queue")).to_be_visible()
             sheet.get_by_role("button", name="Close expanded player").click()

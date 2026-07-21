@@ -3,7 +3,7 @@
 @inject PlaybackUiStateService PlaybackState
 @inject ConfiguredTimeZoneService AppTimeZone
 
-<aside class="global-player-bar player-surface @(Expanded ? "player-surface--expanded" : "player-surface--compact")" data-qa="global-player-bar" aria-label="Playback controls">
+<aside class="global-player-bar player-surface player-surface--compact" data-qa="global-player-bar" aria-label="Playback controls">
     <button type="button" class="player-surface__open" @onclick="OpenPanelAsync" aria-label="Open expanded player" aria-expanded="@_isPanelOpen">
         <span class="global-player-bar__art" aria-hidden="true">
             @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
@@ -53,22 +53,15 @@
         </select>
         <div class="global-player-bar__volume">
             <Icon Name="volume" Size="16" />
-            <input type="range" min="0" max="@PlaybackState.MaxVolume" value="@PlaybackState.Volume" @oninput="HandleVolumeChanged" aria-label="Volume" />
-            <span>@PlaybackState.Volume%</span>
+            <VolumeControl Value="@PlaybackState.Volume"
+                           MaxVolume="@PlaybackState.MaxVolume"
+                           ValueChanged="PlaybackState.SetVolumeAsync"
+                           IdPrefix="global-player-volume"
+                           Label="Volume for active room" />
         </div>
         <button type="button" class="global-player-bar__more" @onclick="OpenPanelAsync" aria-label="Open queue and room controls"><Icon Name="menu" Size="17" /></button>
         @if (PlaybackState.IsStale) { <span class="global-player-bar__stale" title="Playback state may be stale">Stale</span> }
     </div>
-
-    @if (Expanded)
-    {
-        <div class="player-expanded-tools">
-            <button type="button" class="btn btn-outline-secondary" @onclick="OpenPanelAsync"><Icon Name="music" Size="15" /> Queue</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="GroupAllAsync" disabled="@_isCommandBusy"><Icon Name="group" Size="15" /> Group all</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="UngroupAsync" disabled="@_isCommandBusy"><Icon Name="ungroup" Size="15" /> Ungroup room</button>
-            <button type="button" class="btn btn-outline-secondary" @onclick="OpenPanelAsync"><Icon Name="timer" Size="15" /> Timer</button>
-        </div>
-    }
 </aside>
 
 @if (_isPanelOpen)
@@ -105,8 +98,12 @@
                     </select>
                 </div>
                 <div>
-                    <label for="player-sheet-volume" class="form-label">Volume · @PlaybackState.Volume%</label>
-                    <input id="player-sheet-volume" class="form-range" type="range" min="0" max="@PlaybackState.MaxVolume" value="@PlaybackState.Volume" @oninput="HandleVolumeChanged" />
+                    <span class="form-label d-block">Volume</span>
+                    <VolumeControl Value="@PlaybackState.Volume"
+                                   MaxVolume="@PlaybackState.MaxVolume"
+                                   ValueChanged="PlaybackState.SetVolumeAsync"
+                                   IdPrefix="player-sheet-volume"
+                                   Label="Volume for active room" />
                 </div>
             </div>
 
@@ -159,8 +156,6 @@
 }
 
 @code {
-    [Parameter] public bool Expanded { get; set; }
-
     private const int QueuePageSize = 30;
     private bool _isPanelOpen;
     private bool _isCommandBusy;
@@ -172,7 +167,7 @@
     private DateTime? _timerEndsUtc;
     private CancellationTokenSource? _timerCts;
 
-    private string SpeakerSelectId => Expanded ? "home-player-speaker" : "global-player-speaker";
+    private const string SpeakerSelectId = "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
     private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
     private string TimerStatus => _timerEndsUtc.HasValue ? $"Pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
@@ -194,9 +189,6 @@
         await PlaybackState.SetActiveSpeakerAsync(speakerIp);
         if (_isPanelOpen) await LoadQueueAsync(true);
     }
-
-    private Task HandleVolumeChanged(ChangeEventArgs args)
-        => args.Value is string raw && int.TryParse(raw, out var volume) ? PlaybackState.SetVolumeAsync(volume) : Task.CompletedTask;
 
     private async Task OpenPanelAsync()
     {
