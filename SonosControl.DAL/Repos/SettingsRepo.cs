@@ -9,8 +9,6 @@ namespace SonosControl.DAL.Repos
 {
     public class SettingsRepo : ISettingsRepo, IDisposable
     {
-        private const string DirectoryPath = "./Data";
-        private const string FilePath = "./Data/config.json";
         private static readonly SemaphoreSlim _semaphore = new(1, 1);
         private static readonly JsonSerializerSettings SerializerSettings = new()
         {
@@ -22,19 +20,24 @@ namespace SonosControl.DAL.Repos
         private volatile string? _cachedJson;
         private FileSystemWatcher? _watcher;
         private readonly bool _cachingEnabled = false;
+        private readonly string _directoryPath;
+        private readonly string _filePath;
 
-        public SettingsRepo()
+        public SettingsRepo(string? directoryPath = null)
         {
+            _directoryPath = Path.GetFullPath(
+                string.IsNullOrWhiteSpace(directoryPath) ? "./Data" : directoryPath);
+            _filePath = Path.Combine(_directoryPath, "config.json");
+
             // Ensure directory exists
-            if (!Directory.Exists(DirectoryPath))
+            if (!Directory.Exists(_directoryPath))
             {
-                Directory.CreateDirectory(DirectoryPath);
+                Directory.CreateDirectory(_directoryPath);
             }
 
             try
             {
-                var fullPath = Path.GetFullPath(DirectoryPath);
-                _watcher = new FileSystemWatcher(fullPath);
+                _watcher = new FileSystemWatcher(_directoryPath);
                 _watcher.Filter = "config.json";
                 _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
                 _watcher.Changed += OnChanged;
@@ -64,8 +67,8 @@ namespace SonosControl.DAL.Repos
             await _semaphore.WaitAsync();
             try
             {
-                if (!Directory.Exists(DirectoryPath))
-                    Directory.CreateDirectory(DirectoryPath);
+                if (!Directory.Exists(_directoryPath))
+                    Directory.CreateDirectory(_directoryPath);
 
                 string jsonString;
                 try
@@ -81,7 +84,7 @@ namespace SonosControl.DAL.Repos
 
                 var tempFile = Path.GetTempFileName();
                 await File.WriteAllTextAsync(tempFile, jsonString);
-                await ReplaceFileWithRetryAsync(tempFile, FilePath);
+                await ReplaceFileWithRetryAsync(tempFile, _filePath);
 
                 // Update cache only if caching is enabled
                 if (_cachingEnabled)
@@ -95,20 +98,42 @@ namespace SonosControl.DAL.Repos
             }
         }
 
-        private static void CreateVersionedBackupIfPresent()
+        public async Task<string?> CreateVersionedBackupAsync(
+            string label,
+            CancellationToken cancellationToken = default)
         {
-            if (!File.Exists(FilePath))
+            await _semaphore.WaitAsync(cancellationToken);
+            try
             {
-                return;
+                return CreateVersionedBackupIfPresent(label, throwOnFailure: true);
+            }
+            finally
+            {
+                _semaphore.Release();
+            }
+        }
+
+        private string? CreateVersionedBackupIfPresent(string? label = null, bool throwOnFailure = false)
+        {
+            if (!File.Exists(_filePath))
+            {
+                return null;
             }
 
             try
             {
-                var backupDirectory = Path.Combine(DirectoryPath, "backups");
+                var backupDirectory = Path.Combine(_directoryPath, "backups");
                 Directory.CreateDirectory(backupDirectory);
 
-                var backupFile = Path.Combine(backupDirectory, $"config-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json");
-                File.Copy(FilePath, backupFile, overwrite: false);
+                var safeLabel = string.IsNullOrWhiteSpace(label)
+                    ? null
+                    : string.Concat(label.Trim().ToLowerInvariant().Select(character =>
+                        char.IsLetterOrDigit(character) || character == '-' ? character : '-')).Trim('-');
+                var labelSegment = string.IsNullOrWhiteSpace(safeLabel) ? string.Empty : $"{safeLabel}-";
+                var backupFile = Path.Combine(
+                    backupDirectory,
+                    $"config-{labelSegment}{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json");
+                File.Copy(_filePath, backupFile, overwrite: false);
 
                 var existingBackups = Directory.GetFiles(backupDirectory, "config-*.json")
                     .Select(path => new FileInfo(path))
@@ -126,10 +151,13 @@ namespace SonosControl.DAL.Repos
                         // Keep write path resilient; stale backup cleanup is best effort.
                     }
                 }
+
+                return Path.GetFileName(backupFile);
             }
-            catch
+            catch when (!throwOnFailure)
             {
                 // Backup/versioning is best effort and must not block settings writes.
+                return null;
             }
         }
 
@@ -175,7 +203,7 @@ namespace SonosControl.DAL.Repos
                     else
                     {
                         bool success = false;
-                        if (!File.Exists(FilePath))
+                        if (!File.Exists(_filePath))
                         {
                             jsonToUse = "{}";
                             // If file doesn't exist, we can cache the empty state.
@@ -186,7 +214,7 @@ namespace SonosControl.DAL.Repos
                         {
                             try
                             {
-                                jsonToUse = await File.ReadAllTextAsync(FilePath);
+                                jsonToUse = await File.ReadAllTextAsync(_filePath);
                                 success = true;
                             }
                             catch (IOException)
@@ -239,6 +267,18 @@ namespace SonosControl.DAL.Repos
                 foreach (var key in settings.DailySchedules.Keys)
                 {
                     settings.DailySchedules[key] ??= new DaySchedule();
+                }
+
+                foreach (var window in settings.ScheduleWindows)
+                {
+                    window.DaysOfWeek ??= new();
+                    window.ExcludedDates ??= new();
+                }
+
+                foreach (var scene in settings.Scenes)
+                {
+                    scene.SpeakerIps ??= new();
+                    scene.Actions ??= new();
                 }
 
                 return settings;

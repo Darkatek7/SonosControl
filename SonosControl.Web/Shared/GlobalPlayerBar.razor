@@ -1,10 +1,11 @@
 @implements IDisposable
 @using SonosControl.Web.Services
 @inject PlaybackUiStateService PlaybackState
+@inject ConfiguredTimeZoneService AppTimeZone
 
-<aside class="global-player-bar" data-qa="global-player-bar" aria-label="Global playback controls">
-    <div class="global-player-bar__now">
-        <div class="global-player-bar__art" aria-hidden="true">
+<aside class="global-player-bar player-surface @(Expanded ? "player-surface--expanded" : "player-surface--compact")" data-qa="global-player-bar" aria-label="Playback controls">
+    <button type="button" class="player-surface__open" @onclick="OpenPanelAsync" aria-label="Open expanded player" aria-expanded="@_isPanelOpen">
+        <span class="global-player-bar__art" aria-hidden="true">
             @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
             {
                 <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
@@ -13,29 +14,19 @@
             {
                 <Icon Name="music" Size="22" />
             }
-        </div>
-        <div class="global-player-bar__meta">
-            <span class="global-player-bar__eyebrow" role="heading" aria-level="2">Now Playing</span>
+        </span>
+        <span class="global-player-bar__meta">
+            <span class="global-player-bar__eyebrow" role="heading" aria-level="2">Now playing</span>
             <strong title="@PlaybackState.CurrentTrack">@PlaybackState.CurrentTrack</strong>
-            <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay</span>
-        </div>
-    </div>
+            <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay · @PlaybackState.ActiveSpeakerName</span>
+        </span>
+    </button>
 
     <div class="global-player-bar__center">
-        <button type="button"
-                class="global-player-bar__control"
-                @onclick="RefreshAsync"
-                title="Refresh playback state"
-                aria-label="Refresh playback state"
-                disabled="@PlaybackState.IsLoading">
+        <button type="button" class="global-player-bar__control" @onclick="RefreshAsync" title="Refresh playback state" aria-label="Refresh playback state" disabled="@PlaybackState.IsLoading">
             <Icon Name="refresh" Size="16" Class="@(PlaybackState.IsLoading ? "icon-spin" : "")" />
         </button>
-        <button type="button"
-                class="global-player-bar__play"
-                @onclick="TogglePlaybackAsync"
-                title="@PlayToggleLabel"
-                aria-label="@PlayToggleLabel"
-                disabled="@PlaybackState.IsLoading">
+        <button type="button" class="global-player-bar__play" @onclick="TogglePlaybackAsync" title="@PlayToggleLabel" aria-label="@PlayToggleLabel" disabled="@PlaybackState.IsLoading">
             @if (PlaybackState.IsLoading)
             {
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -45,76 +36,146 @@
                 <Icon Name="@PlayToggleIcon" Size="18" />
             }
         </button>
-        <button type="button"
-                class="global-player-bar__control"
-                @onclick="SkipNextAsync"
-                title="Next track"
-                aria-label="Next track"
-                data-qa="global-player-next"
-                disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping || string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp))">
-            @if (PlaybackState.IsSkipping)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            }
-            else
-            {
-                <Icon Name="forward" Size="16" />
-            }
+        <button type="button" class="global-player-bar__control" @onclick="SkipNextAsync" title="Next track" aria-label="Next track" data-qa="global-player-next" disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping || string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp))">
+            @if (PlaybackState.IsSkipping) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
+            else { <Icon Name="forward" Size="16" /> }
         </button>
     </div>
 
     <div class="global-player-bar__room">
-        <button type="button"
-                class="global-player-bar__sync"
-                @onclick="SyncPlayAsync"
-                title="Sync current playback to all speakers"
-                aria-label="Sync current playback to all speakers"
-                data-qa="global-player-sync"
-                disabled="@(PlaybackState.IsLoading || PlaybackState.IsSyncing)">
-            @if (PlaybackState.IsSyncing)
-            {
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            }
-            else
-            {
-                <Icon Name="refresh" Size="14" />
-                <span>Sync Play</span>
-            }
+        <button type="button" class="global-player-bar__sync" @onclick="SyncPlayAsync" title="Sync current playback to all speakers" aria-label="Sync current playback to all speakers" data-qa="global-player-sync" disabled="@(PlaybackState.IsLoading || PlaybackState.IsSyncing)">
+            @if (PlaybackState.IsSyncing) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
+            else { <Icon Name="sync" Size="14" /><span>Sync</span> }
         </button>
-
-        <label class="visually-hidden" for="global-player-speaker">Active speaker</label>
-        <select id="global-player-speaker"
-                class="form-select form-select-sm global-player-bar__speaker"
-                value="@PlaybackState.ActiveSpeakerIp"
-                @onchange="HandleSpeakerChanged"
-                aria-label="Active speaker">
-            @foreach (var speaker in PlaybackState.Speakers)
-            {
-                <option value="@speaker.IpAddress">@speaker.Name</option>
-            }
+        <label class="visually-hidden" for="@SpeakerSelectId">Active speaker</label>
+        <select id="@SpeakerSelectId" class="form-select form-select-sm global-player-bar__speaker" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" aria-label="Active speaker">
+            @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
         </select>
-
         <div class="global-player-bar__volume">
             <Icon Name="volume" Size="16" />
-            <input type="range"
-                   min="0"
-                   max="@PlaybackState.MaxVolume"
-                   value="@PlaybackState.Volume"
-                   @oninput="HandleVolumeChanged"
-                   aria-label="Volume" />
+            <input type="range" min="0" max="@PlaybackState.MaxVolume" value="@PlaybackState.Volume" @oninput="HandleVolumeChanged" aria-label="Volume" />
             <span>@PlaybackState.Volume%</span>
         </div>
-
-        @if (PlaybackState.IsStale)
-        {
-            <span class="global-player-bar__stale" title="Playback state may be stale">Stale</span>
-        }
+        <button type="button" class="global-player-bar__more" @onclick="OpenPanelAsync" aria-label="Open queue and room controls"><Icon Name="menu" Size="17" /></button>
+        @if (PlaybackState.IsStale) { <span class="global-player-bar__stale" title="Playback state may be stale">Stale</span> }
     </div>
+
+    @if (Expanded)
+    {
+        <div class="player-expanded-tools">
+            <button type="button" class="btn btn-outline-secondary" @onclick="OpenPanelAsync"><Icon Name="music" Size="15" /> Queue</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="GroupAllAsync" disabled="@_isCommandBusy"><Icon Name="group" Size="15" /> Group all</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="UngroupAsync" disabled="@_isCommandBusy"><Icon Name="ungroup" Size="15" /> Ungroup room</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="OpenPanelAsync"><Icon Name="timer" Size="15" /> Timer</button>
+        </div>
+    }
 </aside>
 
+@if (_isPanelOpen)
+{
+    <div class="player-sheet-backdrop" @onclick="ClosePanel">
+        <section class="player-sheet" role="dialog" aria-modal="true" aria-labelledby="player-sheet-title" @onclick:stopPropagation="true">
+            <header class="player-sheet__header">
+                <div>
+                    <span class="workspace-eyebrow">@PlaybackState.ActiveSpeakerName</span>
+                    <h2 id="player-sheet-title">Now playing</h2>
+                </div>
+                <button type="button" class="app-dialog__close" @onclick="ClosePanel" aria-label="Close expanded player"><Icon Name="x" Size="18" /></button>
+            </header>
+
+            <div class="player-sheet__now">
+                <span class="global-player-bar__art" aria-hidden="true">
+                    @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl)) { <img src="@PlaybackState.CurrentTrackArtUrl" alt="" /> }
+                    else { <Icon Name="music" Size="28" /> }
+                </span>
+                <div><strong>@PlaybackState.CurrentTrack</strong><span>@PlaybackState.CurrentStationDisplay</span></div>
+            </div>
+
+            <div class="player-sheet__transport" aria-label="Transport controls">
+                <button type="button" class="btn btn-outline-secondary" @onclick="RefreshAsync" aria-label="Refresh"><Icon Name="refresh" Size="17" /></button>
+                <button type="button" class="btn btn-primary player-sheet__play" @onclick="TogglePlaybackAsync" aria-label="@PlayToggleLabel"><Icon Name="@PlayToggleIcon" Size="20" /></button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="SkipNextAsync" aria-label="Next track"><Icon Name="forward" Size="17" /></button>
+            </div>
+
+            <div class="player-sheet__controls">
+                <div>
+                    <label for="player-sheet-room" class="form-label">Room</label>
+                    <select id="player-sheet-room" class="form-select" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged">
+                        @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
+                    </select>
+                </div>
+                <div>
+                    <label for="player-sheet-volume" class="form-label">Volume · @PlaybackState.Volume%</label>
+                    <input id="player-sheet-volume" class="form-range" type="range" min="0" max="@PlaybackState.MaxVolume" value="@PlaybackState.Volume" @oninput="HandleVolumeChanged" />
+                </div>
+            </div>
+
+            <div class="player-sheet__actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="SyncPlayAsync" disabled="@_isCommandBusy"><Icon Name="sync" Size="15" /> Sync</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="GroupAllAsync" disabled="@_isCommandBusy"><Icon Name="group" Size="15" /> Group all</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="UngroupAsync" disabled="@_isCommandBusy"><Icon Name="ungroup" Size="15" /> Ungroup</button>
+            </div>
+
+            <section class="player-sheet__timer" aria-labelledby="timer-heading">
+                <div><h3 id="timer-heading">Sleep timer</h3><span>@TimerStatus</span></div>
+                <div class="input-group">
+                    <label class="visually-hidden" for="player-timer-minutes">Timer minutes</label>
+                    <input id="player-timer-minutes" class="form-control" type="number" min="1" max="720" @bind="_timerMinutes" />
+                    <button type="button" class="btn btn-outline-secondary" @onclick="StartTimer">Start</button>
+                    @if (_timerEndsUtc.HasValue) { <button type="button" class="btn btn-outline-danger" @onclick="CancelTimer">Cancel</button> }
+                </div>
+            </section>
+
+            <section class="player-sheet__queue" aria-labelledby="queue-heading">
+                <header>
+                    <div><h3 id="queue-heading">Queue</h3><span>@_queueTotal item(s)</span></div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => LoadQueueAsync(true)" disabled="@_isQueueLoading"><Icon Name="refresh" Size="14" /> Refresh</button>
+                </header>
+                @if (!string.IsNullOrWhiteSpace(_queueError))
+                {
+                    <div class="alert alert-warning" role="status">@_queueError</div>
+                }
+                else if (_isQueueLoading && _queueItems.Count == 0)
+                {
+                    <div class="workspace-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading queue…</div>
+                }
+                else if (_queueItems.Count == 0)
+                {
+                    <p class="player-sheet__empty">The current room has no readable queue.</p>
+                }
+                else
+                {
+                    <ol class="player-queue-list" start="1">
+                        @foreach (var item in _queueItems) { <li><span>@(item.Index + 1)</span><div><strong>@item.DisplayTitle</strong>@if (!string.IsNullOrWhiteSpace(item.Album)) { <small>@item.Album</small> }</div></li> }
+                    </ol>
+                    @if (_queueItems.Count < _queueTotal)
+                    {
+                        <button type="button" class="btn btn-outline-secondary w-100" @onclick="() => LoadQueueAsync(false)" disabled="@_isQueueLoading">Load more</button>
+                    }
+                }
+            </section>
+        </section>
+    </div>
+}
+
 @code {
+    [Parameter] public bool Expanded { get; set; }
+
+    private const int QueuePageSize = 30;
+    private bool _isPanelOpen;
+    private bool _isCommandBusy;
+    private bool _isQueueLoading;
+    private string? _queueError;
+    private List<SonosQueueItem> _queueItems = new();
+    private int _queueTotal;
+    private int _timerMinutes = 60;
+    private DateTime? _timerEndsUtc;
+    private CancellationTokenSource? _timerCts;
+
+    private string SpeakerSelectId => Expanded ? "home-player-speaker" : "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
     private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
+    private string TimerStatus => _timerEndsUtc.HasValue ? $"Pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
 
     protected override async Task OnInitializedAsync()
     {
@@ -122,49 +183,105 @@
         await PlaybackState.InitializeAsync();
     }
 
-    private Task TogglePlaybackAsync()
-    {
-        return PlaybackState.TogglePlaybackAsync();
-    }
-
-    private Task RefreshAsync()
-    {
-        return PlaybackState.RefreshAsync();
-    }
-
-    private Task SkipNextAsync()
-    {
-        return PlaybackState.SkipNextAsync();
-    }
-
-    private async Task SyncPlayAsync()
-    {
-        await PlaybackState.SyncPlayAsync();
-    }
+    private Task TogglePlaybackAsync() => PlaybackState.TogglePlaybackAsync();
+    private Task RefreshAsync() => PlaybackState.RefreshAsync();
+    private Task SkipNextAsync() => PlaybackState.SkipNextAsync();
+    private Task SyncPlayAsync() => PlaybackState.SyncPlayAsync();
 
     private async Task HandleSpeakerChanged(ChangeEventArgs args)
     {
-        if (args.Value is string speakerIp)
+        if (args.Value is not string speakerIp) return;
+        await PlaybackState.SetActiveSpeakerAsync(speakerIp);
+        if (_isPanelOpen) await LoadQueueAsync(true);
+    }
+
+    private Task HandleVolumeChanged(ChangeEventArgs args)
+        => args.Value is string raw && int.TryParse(raw, out var volume) ? PlaybackState.SetVolumeAsync(volume) : Task.CompletedTask;
+
+    private async Task OpenPanelAsync()
+    {
+        _isPanelOpen = true;
+        await LoadQueueAsync(true);
+    }
+
+    private void ClosePanel() => _isPanelOpen = false;
+
+    private async Task LoadQueueAsync(bool reset)
+    {
+        if (_isQueueLoading || string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        _isQueueLoading = true;
+        _queueError = null;
+        try
         {
-            await PlaybackState.SetActiveSpeakerAsync(speakerIp);
+            var start = reset ? 0 : _queueItems.Count;
+            var page = await _uow.ISonosConnectorRepo.GetQueue(PlaybackState.ActiveSpeakerIp, start, QueuePageSize);
+            if (reset) _queueItems.Clear();
+            _queueItems.AddRange(page.Items);
+            _queueTotal = page.TotalMatches;
+        }
+        catch (Exception ex)
+        {
+            _queueError = $"Queue could not be loaded: {ex.Message}";
+        }
+        finally
+        {
+            _isQueueLoading = false;
         }
     }
 
-    private async Task HandleVolumeChanged(ChangeEventArgs args)
+    private async Task GroupAllAsync()
     {
-        if (args.Value is string raw && int.TryParse(raw, out var volume))
+        if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        _isCommandBusy = true;
+        try
         {
-            await PlaybackState.SetVolumeAsync(volume);
+            var slaves = PlaybackState.Speakers.Where(speaker => speaker.IpAddress != PlaybackState.ActiveSpeakerIp).Select(speaker => speaker.IpAddress);
+            await _uow.ISonosConnectorRepo.CreateGroup(PlaybackState.ActiveSpeakerIp, slaves);
+            await PlaybackState.RefreshAsync();
         }
+        finally { _isCommandBusy = false; }
     }
 
-    private void HandlePlaybackStateChanged()
+    private async Task UngroupAsync()
     {
-        _ = InvokeAsync(StateHasChanged);
+        if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        _isCommandBusy = true;
+        try { await _uow.ISonosConnectorRepo.UngroupSpeaker(PlaybackState.ActiveSpeakerIp); await PlaybackState.RefreshAsync(); }
+        finally { _isCommandBusy = false; }
     }
+
+    private void StartTimer()
+    {
+        CancelTimer();
+        var minutes = Math.Clamp(_timerMinutes, 1, 720);
+        _timerEndsUtc = DateTime.UtcNow.AddMinutes(minutes);
+        _timerCts = new CancellationTokenSource();
+        var token = _timerCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(minutes), token);
+                if (!string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) await _uow.ISonosConnectorRepo.PausePlaying(PlaybackState.ActiveSpeakerIp);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            finally { await InvokeAsync(() => { _timerEndsUtc = null; StateHasChanged(); }); }
+        }, token);
+    }
+
+    private void CancelTimer()
+    {
+        _timerCts?.Cancel();
+        _timerCts?.Dispose();
+        _timerCts = null;
+        _timerEndsUtc = null;
+    }
+
+    private void HandlePlaybackStateChanged() => _ = InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
         PlaybackState.StateChanged -= HandlePlaybackStateChanged;
+        CancelTimer();
     }
 }

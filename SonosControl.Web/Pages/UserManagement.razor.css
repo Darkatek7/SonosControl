@@ -10,6 +10,8 @@
 .users-hero,
 .users-registration-panel,
 .users-panel {
+    min-width: 0;
+    max-width: 100%;
     border: 1px solid rgba(13, 148, 136, 0.22);
     border-radius: 14px;
     background:
@@ -165,6 +167,7 @@
 }
 
 .users-table-wrapper {
+    max-width: 100%;
     overflow-x: auto;
     border: 1px solid rgba(148, 163, 184, 0.3);
     border-radius: 12px;

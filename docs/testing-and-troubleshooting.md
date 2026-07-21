@@ -11,7 +11,7 @@ dotnet test SonosControl.sln --no-build
 
 ### Targeted service tests
 ```bash
-dotnet test SonosControl.Tests/SonosControl.Tests.csproj --no-build --filter "FullyQualifiedName~SonosControlServiceTests"
+dotnet test SonosControl.Tests/SonosControl.Tests.csproj --no-build --filter "FullyQualifiedName~AutomationSchedulerServiceTests|FullyQualifiedName~SettingsSchemaMigrationServiceTests"
 ```
 
 ## UI Smoke Checks
@@ -59,7 +59,7 @@ Optional:
 | Symptom | Likely cause | Resolution |
 |---|---|---|
 | Login fails on first run | Missing `ADMIN_*` values | Set all three admin variables and restart the app |
-| App runs but no playback starts | Wrong speaker IP or inactive day | Check Config page speaker IP, active days, and schedule window |
+| App runs but no playback starts | Wrong speaker IP, inactive schedule, or invalid scene | Check Administration > Devices and the scene/schedule status in Automation |
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
 | Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |

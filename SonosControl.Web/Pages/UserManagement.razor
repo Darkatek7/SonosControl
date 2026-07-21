@@ -1,4 +1,4 @@
-﻿@page "/admin/users"
+﻿@* Routed through AdministrationPage. *@
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @using SonosControl.Web.Shared
@@ -8,9 +8,8 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
-@inject IJSRuntime JS
 @inject IUnitOfWork _uow
-@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@attribute [Authorize(Roles = "admin,superadmin")]
 
 <PageTitle>User Management</PageTitle>
 
@@ -141,7 +140,7 @@
                                     <button type="button"
                                             class="btn user-action-btn @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
                                             @onclick='() => ToggleUserActivation(user)'
-                                            disabled="@(IsCurrentUser(user) || IsLoading($"activation-{user.Id}"))"
+                                            disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"activation-{user.Id}"))"
                                             aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
                                         @if (IsLoading($"activation-{user.Id}"))
                                         {
@@ -156,7 +155,7 @@
 
                                     <button type="button"
                                             class="btn btn-outline-danger user-action-btn"
-                                            @onclick="() => DeleteUser(user)"
+                                            @onclick="() => RequestDeleteUser(user)"
                                             disabled="@(IsCurrentUser(user) || (!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
                                             aria-label="@($"Delete user {user.UserName}")">
                                         @if (IsLoading($"delete-{user.Id}"))
@@ -229,7 +228,7 @@
                                 <button type="button"
                                         class="btn user-action-btn @(IsUserActive(user) ? "btn-outline-warning" : "btn-outline-success")"
                                         @onclick='() => ToggleUserActivation(user)'
-                                        disabled="@IsLoading($"activation-{user.Id}")"
+                                        disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"activation-{user.Id}"))"
                                         aria-label="@($"{(IsUserActive(user) ? "Deactivate" : "Activate")} user {user.UserName}")">
                                     @if (IsLoading($"activation-{user.Id}"))
                                     {
@@ -244,7 +243,7 @@
 
                                 <button type="button"
                                         class="btn btn-outline-danger user-action-btn"
-                                        @onclick="() => DeleteUser(user)"
+                                        @onclick="() => RequestDeleteUser(user)"
                                         disabled="@((!isSuperAdmin && userRoles[user.Id].Contains("superadmin")) || IsLoading($"delete-{user.Id}"))"
                                         aria-label="@($"Delete user {user.UserName}")">
                                     @if (IsLoading($"delete-{user.Id}"))
@@ -266,6 +265,14 @@
     }
 </div>
 
+<ConfirmDialog Visible="@(userPendingDelete is not null)"
+               Title="Delete user"
+               Message="@($"Delete the account '{userPendingDelete?.UserName}'? This action cannot be undone.")"
+               ConfirmLabel="Delete user"
+               Dangerous="true"
+               OnConfirm="ConfirmDeleteUserAsync"
+               OnCancel="CancelDeleteUser" />
+
 @code {
     private List<ApplicationUser> users = new();
     private Dictionary<string, IList<string>> userRoles = new();
@@ -276,6 +283,7 @@
     private bool isAdmin;
     private bool allowUserRegistration;
     private SonosSettings? _settings;
+    private ApplicationUser? userPendingDelete;
     private readonly string RegistrationSwitchId = $"allowRegistrationSwitch_{System.Guid.NewGuid():N}";
 
     private HashSet<string> _loadingStates = new();
@@ -339,6 +347,12 @@
 
     private async Task ToggleRegistration(ChangeEventArgs e)
     {
+        if (!isAdmin)
+        {
+            errorMessage = "Administrator access is required.";
+            return;
+        }
+
         allowUserRegistration = e.Value is bool b && b;
         if (_settings is not null)
         {
@@ -348,8 +362,14 @@
         }
     }
 
-    private async Task DeleteUser(ApplicationUser user)
+    private void RequestDeleteUser(ApplicationUser user)
     {
+        if (!isAdmin)
+        {
+            errorMessage = "Administrator access is required.";
+            return;
+        }
+
         if (IsCurrentUser(user))
         {
             errorMessage = "You cannot delete your own user account.";
@@ -362,8 +382,25 @@
             return;
         }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete user '{user.UserName}'?");
-        if (!confirmed) return;
+        userPendingDelete = user;
+    }
+
+    private void CancelDeleteUser() => userPendingDelete = null;
+
+    private async Task ConfirmDeleteUserAsync()
+    {
+        var user = userPendingDelete;
+        userPendingDelete = null;
+        if (!isAdmin || user is null || IsCurrentUser(user))
+        {
+            return;
+        }
+
+        if (userRoles[user.Id].Contains("superadmin") && !isSuperAdmin)
+        {
+            errorMessage = "You cannot delete a super administrator.";
+            return;
+        }
 
         var key = $"delete-{user.Id}";
         if (_loadingStates.Contains(key)) return;
@@ -378,7 +415,7 @@
                 users.Remove(user);
                 userRoles.Remove(user.Id);
                 errorMessage = null;
-                AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
+                await AddLog("User deleted", $"user: {user.UserName}, {user.FirstName}, {user.LastName}, {user.Email}");
             }
             else
             {
@@ -407,9 +444,21 @@
 
     private async Task ToggleUserActivation(ApplicationUser user)
     {
+        if (!isAdmin)
+        {
+            errorMessage = "Administrator access is required.";
+            return;
+        }
+
         if (IsCurrentUser(user))
         {
             errorMessage = "You cannot deactivate/reactivate your own user account.";
+            return;
+        }
+
+        if (!isSuperAdmin && userRoles[user.Id].Contains("superadmin"))
+        {
+            errorMessage = "Only a super administrator can change a protected account.";
             return;
         }
 

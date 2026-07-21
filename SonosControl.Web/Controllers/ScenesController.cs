@@ -49,7 +49,7 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<ActionResult<Scene>> Create([FromBody] Scene scene)
     {
         if (scene is null)
@@ -81,7 +81,7 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<ActionResult<Scene>> Update(string id, [FromBody] Scene scene)
     {
         if (scene is null)
@@ -109,6 +109,7 @@ public sealed class ScenesController : ControllerBase
         existing.Name = scene.Name;
         existing.Description = scene.Description;
         existing.Enabled = scene.Enabled;
+        existing.SourceSelectionMode = scene.SourceSelectionMode;
         existing.SourceType = scene.SourceType;
         existing.SourceUrl = scene.SourceUrl;
         existing.IsSyncedPlayback = scene.IsSyncedPlayback;
@@ -125,7 +126,7 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "admin,superadmin")]
+    [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> Delete(string id)
     {
         var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
@@ -143,6 +144,7 @@ public sealed class ScenesController : ControllerBase
         foreach (var window in settings.ScheduleWindows.Where(w => string.Equals(w.SceneId, id, StringComparison.OrdinalIgnoreCase)))
         {
             window.SceneId = null;
+            window.IsEnabled = false;
             window.LastModifiedUtc = DateTime.UtcNow;
         }
 

@@ -266,6 +266,52 @@ html:not([data-theme='dark']) .recommendations-hero {
     border-radius: 0.75rem;
 }
 
+.recommendations-time-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    gap: 0.65rem;
+}
+
+.recommendations-time-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-width: 0;
+    padding: 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: 0.8rem;
+    background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+}
+
+.recommendations-time-card > div {
+    display: grid;
+    min-width: 0;
+}
+
+.recommendations-time-card > div strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recommendations-time-card > div span,
+.recommendations-time-card__metric {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+}
+
+.recommendations-time-card__metric {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.recommendations-time-card__metric strong {
+    display: block;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
 .recommendations-table-wrap {
     overflow-x: auto;
     border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);

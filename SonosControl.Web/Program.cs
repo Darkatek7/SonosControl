@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using System.IO;
+using System.Globalization;
 
 using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
@@ -34,11 +35,11 @@ builder.Services.AddHttpClient(nameof(SonosDeviceDiscoveryService), client =>
 {
     client.Timeout = TimeSpan.FromSeconds(5);
 });
-builder.Services.AddSingleton<ISettingsRepo, SettingsRepo>(); // Register ISettingsRepo
+var settingsDataDirectory = Path.Combine(builder.Environment.ContentRootPath, "Data");
+builder.Services.AddSingleton<ISettingsRepo>(_ => new SettingsRepo(settingsDataDirectory));
 builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSection("Playback"));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
-builder.Services.AddSingleton<ISchedulePriorityCoordinator, SchedulePriorityCoordinator>();
 builder.Services.AddSingleton<IYouTubeToolRunner, YouTubeToolRunner>();
 builder.Services.AddSingleton<YouTubePlaybackService>();
 builder.Services.AddSingleton<IYouTubePlaybackService>(sp => sp.GetRequiredService<YouTubePlaybackService>());
@@ -47,24 +48,40 @@ builder.Services.AddScoped<ICollaborativeJukeboxService, CollaborativeJukeboxSer
 builder.Services.AddSingleton<ISonosDeviceDiscoveryService, SonosDeviceDiscoveryService>();
 builder.Services.AddSingleton<IDeviceHealthSnapshotStore, DeviceHealthSnapshotStore>();
 
-builder.Services.AddHostedService<SonosControlService>();
-builder.Services.AddHostedService<PlaybackMonitorService>();
-builder.Services.AddHostedService<ScheduleWindowAutomationService>();
-builder.Services.AddHostedService<DeviceHealthMonitorService>();
-builder.Services.AddHostedService<YouTubePlaybackMaintenanceService>();
-builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
-// builder.Services.AddSingleton<SonosControlService>(); // Removed redundant registration
+builder.Services.AddSingleton<AutomationRuntimeStatus>();
+builder.Services.AddSingleton<ConfiguredTimeZoneService>();
+builder.Services.AddSingleton<ISettingsSchemaMigrationService, SettingsSchemaMigrationService>();
+builder.Services.AddSingleton<AutomationSchedulerService>();
+builder.Services.AddSingleton<IAutomationScheduler>(sp => sp.GetRequiredService<AutomationSchedulerService>());
+if (builder.Configuration.GetValue("BackgroundServices:Enabled", true))
+{
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<AutomationSchedulerService>());
+    builder.Services.AddHostedService<PlaybackMonitorService>();
+    builder.Services.AddHostedService<DeviceHealthMonitorService>();
+    builder.Services.AddHostedService<YouTubePlaybackMaintenanceService>();
+    builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
+}
 builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
 builder.Services.AddScoped<SonosControl.Web.Services.ThemeService>();
 builder.Services.AddScoped<PlaybackUiStateService>();
+builder.Services.AddScoped<SettingsAutosaveCoordinator>();
 builder.Services.AddScoped<INotifier, DiscordNotificationService>();
 builder.Services.AddScoped<INotifier, TeamsNotificationService>();
 builder.Services.AddScoped<INotificationService, AggregateNotificationService>();
 
 builder.Services.AddLocalization();
+var enGbCulture = CultureInfo.GetCultureInfo("en-GB");
+CultureInfo.DefaultThreadCurrentCulture = enGbCulture;
+CultureInfo.DefaultThreadCurrentUICulture = enGbCulture;
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    options.DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(enGbCulture);
+    options.SupportedCultures = new[] { enGbCulture };
+    options.SupportedUICultures = new[] { enGbCulture };
+});
 builder.Services.AddControllersWithViews();
 builder.Services.AddAntiforgery();
 
@@ -73,7 +90,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database")
-    .AddCheck<SettingsHealthCheck>("settings");
+    .AddCheck<SettingsHealthCheck>("settings")
+    .AddCheck<AutomationHealthCheck>("automation");
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
@@ -146,6 +164,8 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
+app.UseRequestLocalization();
+
 app.UseRouting();
 
 app.UseAuthentication();
@@ -167,10 +187,5 @@ app.UseEndpoints(endpoints =>
     });
     endpoints.MapFallbackToPage("/_Host"); // only here once
 });
-
-app.UseRequestLocalization(new RequestLocalizationOptions()
-    .AddSupportedCultures(new[] { "de-AT", "de-DE", "de", "en-US", "en-GB", "en", "fr-FR", "fr", "es-ES", "es", "it-IT", "it", "nl-NL", "nl" })
-    .AddSupportedUICultures(new[] { "de-AT", "de-DE", "de", "en-US", "en-GB", "en", "fr-FR", "fr", "es-ES", "es", "it-IT", "it", "nl-NL", "nl" })
-    .SetDefaultCulture("de-AT"));
 
 app.Run();

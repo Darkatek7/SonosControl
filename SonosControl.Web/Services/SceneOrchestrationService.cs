@@ -326,30 +326,50 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             return;
         }
 
+        var selectionMode = scene.SourceType == SceneSourceType.None
+            ? SceneSourceSelectionMode.Resume
+            : scene.SourceSelectionMode;
+
+        if (selectionMode == SceneSourceSelectionMode.Resume)
+        {
+            await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
+            return;
+        }
+
+        var sourceUrl = selectionMode == SceneSourceSelectionMode.Random
+            ? SelectRandomSourceUrl(scene.SourceType, settings)
+            : scene.SourceUrl;
+
+        if (selectionMode == SceneSourceSelectionMode.Random && string.IsNullOrWhiteSpace(sourceUrl))
+        {
+            await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
+            return;
+        }
+
         switch (scene.SourceType)
         {
             case SceneSourceType.None:
                 await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
                 return;
             case SceneSourceType.Station:
-                EnsureSourceUrl(scene);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, scene.SourceUrl!, cancellationToken)));
+                EnsureSourceUrl(scene, sourceUrl);
+                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, sourceUrl!, cancellationToken)));
                 return;
             case SceneSourceType.Spotify:
-                EnsureSourceUrl(scene);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, scene.SourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
+                EnsureSourceUrl(scene, sourceUrl);
+                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
                 return;
             case SceneSourceType.YouTubeMusic:
-                EnsureSourceUrl(scene);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, scene.SourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
+                EnsureSourceUrl(scene, sourceUrl);
+                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
                 return;
             case SceneSourceType.YouTube:
-                EnsureSourceUrl(scene);
+                EnsureSourceUrl(scene, sourceUrl);
                 var youTubeEntry = settings.YouTubeCollections
-                    .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), scene.SourceUrl!.Trim(), StringComparison.OrdinalIgnoreCase));
-                var playbackMode = YouTubePlaybackModeResolver.GetEffectiveMode(scene.SourceUrl, youTubeEntry?.PlaybackMode);
+                    .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), sourceUrl!.Trim(), StringComparison.OrdinalIgnoreCase));
+                var playbackMode = YouTubePlaybackModeResolver.GetEffectiveMode(sourceUrl, youTubeEntry?.PlaybackMode);
                 var preferredQueueLength = YouTubePlaybackModeResolver.GetEffectiveQueueLength(youTubeEntry?.PreferredQueueLength);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, scene.SourceUrl!, playbackMode, preferredQueueLength, cancellationToken)));
+                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, sourceUrl!, playbackMode, preferredQueueLength, cancellationToken)));
                 return;
             default:
                 throw new InvalidOperationException($"Unsupported source type '{scene.SourceType}'.");
@@ -412,6 +432,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 {
                     Id = $"fallback-{Guid.NewGuid():N}",
                     Name = "Fallback Recovery",
+                    SourceSelectionMode = SceneSourceSelectionMode.Specific,
                     SourceType = recoveryRule.FallbackSourceType,
                     SourceUrl = recoveryRule.FallbackUrl,
                     IsSyncedPlayback = scene.IsSyncedPlayback,
@@ -427,9 +448,28 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
     }
 
-    private static void EnsureSourceUrl(Scene scene)
+    private static string? SelectRandomSourceUrl(SceneSourceType sourceType, SonosSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(scene.SourceUrl))
+        var candidates = sourceType switch
+        {
+            SceneSourceType.Station => settings.Stations?.Select(item => item.Url),
+            SceneSourceType.Spotify => settings.SpotifyTracks?.Select(item => item.Url),
+            SceneSourceType.YouTubeMusic => settings.YouTubeMusicCollections?.Select(item => item.Url),
+            SceneSourceType.YouTube => settings.YouTubeCollections?.Select(item => item.Url),
+            _ => Enumerable.Empty<string?>()
+        };
+
+        var available = candidates?
+            .Where(url => !string.IsNullOrWhiteSpace(url))
+            .Select(url => url!.Trim())
+            .ToList() ?? new List<string>();
+
+        return available.Count == 0 ? null : available[Random.Shared.Next(available.Count)];
+    }
+
+    private static void EnsureSourceUrl(Scene scene, string? sourceUrl)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUrl))
         {
             throw new InvalidOperationException($"Scene '{scene.Name}' requires a source URL.");
         }

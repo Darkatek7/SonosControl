@@ -1,6 +1,6 @@
-@page "/config"
+@* Routed through AdministrationPage. *@
+@implements IDisposable
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject IJSRuntime JS
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
 @using SonosControl.Web.Models
@@ -9,6 +9,7 @@
 @using System.Globalization
 @using System;
 @using System.Net
+@inject IServiceProvider Services
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 @if (_settings is null)
@@ -17,16 +18,20 @@
 }
 else
 {
-    <div class="config-console-shell">
+    <div class="config-console-shell @(SystemSettingsOnly ? "system-settings-only" : string.Empty)">
         <header class="config-console-hero">
             <div class="config-console-hero__copy">
                 <span class="spotify-eyebrow mb-0">SonosControl</span>
-                <h1>System Configuration.</h1>
-                <p>Fine-tune playback behavior, schedule automation, and one-off overrides from a compact admin console.</p>
+                <h1>System settings</h1>
+                <p>Configure playback defaults, notifications, appearance, and account registration.</p>
             </div>
-            <div class="config-console-hero__status" aria-label="Configuration save status">
-                <Icon Name="check" Size="18" />
-                <span>Changes save automatically</span>
+            <div class="config-console-hero__status" aria-label="Configuration save status" role="status">
+                <Icon Name="@SaveStateIcon" Size="18" />
+                <span>@SaveStateLabel</span>
+                @if (_autosave?.State == SettingsSaveState.Error)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="RetrySaveAsync">Retry</button>
+                }
             </div>
         </header>
 
@@ -41,6 +46,8 @@ else
                         <small>Speakers and defaults</small>
                     </span>
                 </button>
+                @if (!SystemSettingsOnly)
+                {
                 <button type="button"
                         class="config-rail__button @(_activeTab == "schedules" ? "active" : "")"
                         @onclick="@(() => _activeTab = "schedules")">
@@ -59,6 +66,7 @@ else
                         <small>Date overrides</small>
                     </span>
                 </button>
+                }
             </aside>
 
             <main class="config-workspace">
@@ -67,8 +75,8 @@ else
                 <section class="config-panel" aria-labelledby="config-device-heading">
                     <div class="config-panel__header">
                         <div>
-                            <span class="spotify-eyebrow">Device</span>
-                            <h2 id="config-device-heading">Speakers and playback defaults</h2>
+                            <span class="spotify-eyebrow">Settings</span>
+                            <h2 id="config-device-heading">Playback and application defaults</h2>
                         </div>
                         <span class="config-panel__meta">@_settings.Speakers.Count speaker@(_settings.Speakers.Count == 1 ? "" : "s") configured</span>
                     </div>
@@ -97,7 +105,7 @@ else
                                                        placeholder="@_settings.Volume"
                                                        aria-label="@($"Startup Volume for {speaker.Name}")" />
                                             </div>
-                                            <button class="btn btn-sm btn-outline-danger config-icon-button" @onclick="() => RemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="@($"Remove speaker {speaker.Name}")" title="Remove speaker">
+                                            <button class="btn btn-sm btn-outline-danger config-icon-button" @onclick="() => RequestRemoveSpeaker(speaker)" disabled="@(!canEditIp)" aria-label="@($"Remove speaker {speaker.Name}")" title="Remove speaker">
                                                 <Icon Name="trash" Size="15" />
                                             </button>
                                         </div>
@@ -613,7 +621,7 @@ else
                                         <InputCheckbox @bind-Value="holiday.IsSyncedPlayback" @bind-Value:after="SaveSettings" aria-label="@($"Synced Playback for {holiday.Name}")" />
                                     </td>
                                     <td class="text-end">
-                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
+                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="() => RequestRemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
                                             <Icon Name="trash" Size="15" />
                                         </button>
                                     </td>
@@ -722,7 +730,7 @@ else
                                                    aria-label="@($"Synced Playback for {holiday.Name}")" />
                                             <label class="form-check-label">Synced playback</label>
                                         </div>
-                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="async () => await RemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
+                                        <button type="button" class="btn btn-outline-danger btn-sm config-icon-button" @onclick="() => RequestRemoveHoliday(holiday)" aria-label="@($"Remove {holiday.Name}")" title="Remove holiday">
                                             <Icon Name="trash" Size="15" />
                                         </button>
                                     </div>
@@ -743,7 +751,29 @@ else
     }
 }
 
+<ConfirmDialog Visible="@(_holidayPendingRemoval is not null)"
+               Title="Remove date override"
+               Message="@($"Remove the date override for '{_holidayPendingRemoval?.Name}'?")"
+               ConfirmLabel="Remove override"
+               Dangerous="true"
+               OnConfirm="ConfirmRemoveHolidayAsync"
+               OnCancel="CancelRemoval" />
+
+<ConfirmDialog Visible="@(_speakerPendingRemoval is not null)"
+               Title="Remove speaker"
+               Message="@($"Remove '{_speakerPendingRemoval?.Name}' from the configured devices?")"
+               ConfirmLabel="Remove speaker"
+               Dangerous="true"
+               OnConfirm="ConfirmRemoveSpeakerAsync"
+               OnCancel="CancelRemoval" />
+
 @code {
+    [Parameter]
+    public bool SystemSettingsOnly { get; set; }
+
+    private SettingsAutosaveCoordinator? _autosave;
+    private HolidaySchedule? _holidayPendingRemoval;
+    private SonosSpeaker? _speakerPendingRemoval;
 
     private string _activeTab = "device";
 
@@ -819,6 +849,12 @@ else
     {
 
         await base.OnInitializedAsync();
+
+        _autosave = Services.GetService(typeof(SettingsAutosaveCoordinator)) as SettingsAutosaveCoordinator;
+        if (_autosave is not null)
+        {
+            _autosave.StateChanged += OnAutosaveStateChanged;
+        }
 
 
 
@@ -1253,8 +1289,38 @@ else
 
 
 
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        if (_autosave is not null)
+        {
+            await _autosave.QueueSaveAsync(_settings);
+        }
+        else
+        {
+            await _uow.ISettingsRepo.WriteSettings(_settings);
+        }
 
+    }
+
+    private string SaveStateLabel => _autosave?.State switch
+    {
+        SettingsSaveState.Saving => "Saving…",
+        SettingsSaveState.Error => $"Save failed: {_autosave.ErrorMessage}",
+        _ => "Saved"
+    };
+
+    private string SaveStateIcon => _autosave?.State == SettingsSaveState.Error
+        ? "alert"
+        : _autosave?.State == SettingsSaveState.Saving ? "refresh" : "check";
+
+    private Task RetrySaveAsync() => _autosave?.RetryAsync() ?? Task.CompletedTask;
+
+    private void OnAutosaveStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        if (_autosave is not null)
+        {
+            _autosave.StateChanged -= OnAutosaveStateChanged;
+        }
     }
 
     private static string GetYouTubePlaybackModeValue(YouTubeObject video)
@@ -1706,18 +1772,26 @@ else
 
 
 
-    private async Task RemoveHoliday(HolidaySchedule holiday)
+    private void RequestRemoveHoliday(HolidaySchedule holiday)
+    {
+        _holidayPendingRemoval = holiday;
+        _speakerPendingRemoval = null;
+    }
+
+    private void CancelRemoval()
+    {
+        _holidayPendingRemoval = null;
+        _speakerPendingRemoval = null;
+    }
+
+    private async Task ConfirmRemoveHolidayAsync()
 
     {
-
-        if (_settings?.HolidaySchedules == null)
+        var holiday = _holidayPendingRemoval;
+        CancelRemoval();
+        if (_settings?.HolidaySchedules == null || holiday is null)
 
             return;
-
-
-
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to remove the holiday schedule for '{holiday.Name}'?");
-        if (!confirmed) return;
 
         _settings.HolidaySchedules.Remove(holiday);
         await SaveSettings();
@@ -1859,12 +1933,17 @@ else
         }
     }
 
-    private async Task RemoveSpeaker(SonosSpeaker speaker)
+    private void RequestRemoveSpeaker(SonosSpeaker speaker)
     {
-        if (_settings is null) return;
+        _speakerPendingRemoval = speaker;
+        _holidayPendingRemoval = null;
+    }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to remove speaker '{speaker.Name}'?");
-        if (!confirmed) return;
+    private async Task ConfirmRemoveSpeakerAsync()
+    {
+        var speaker = _speakerPendingRemoval;
+        CancelRemoval();
+        if (_settings is null || speaker is null) return;
 
         _settings.Speakers.Remove(speaker);
         await SaveSettings();

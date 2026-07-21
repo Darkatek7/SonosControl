@@ -72,6 +72,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()
@@ -143,6 +144,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var configuration = new ConfigurationBuilder()

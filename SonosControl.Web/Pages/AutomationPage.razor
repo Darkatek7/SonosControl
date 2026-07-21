@@ -1,0 +1,231 @@
+@page "/automation"
+@page "/scenes"
+@page "/schedule-windows"
+@using SonosControl.Web.Services
+@implements IDisposable
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject AutomationRuntimeStatus RuntimeStatus
+@inject ConfiguredTimeZoneService AppTimeZone
+
+<PageTitle>Automation - SonosControl</PageTitle>
+
+<div class="workspace-page automation-page" data-qa="automation-page">
+    <header class="workspace-header">
+        <div>
+            <span class="workspace-eyebrow">Scenes and schedules</span>
+            <h1>Automation</h1>
+            <p>Build reusable room scenes, arrange schedules, and exclude individual dates.</p>
+        </div>
+        <div class="automation-health @GetHealthClass()" role="status">
+            <span class="automation-health__dot" aria-hidden="true"></span>
+            <span>@GetHealthLabel()</span>
+        </div>
+    </header>
+
+    @if (Snapshot.Phase == AutomationRuntimePhase.Failed)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Automation is paused.</strong> @Snapshot.Error
+        </div>
+    }
+    else if (Snapshot.Warnings.Count > 0)
+    {
+        <details class="alert alert-warning automation-warning">
+            <summary>@Snapshot.Warnings.Count configuration warning(s)</summary>
+            <ul>@foreach (var warning in Snapshot.Warnings) { <li>@warning</li> }</ul>
+        </details>
+    }
+
+    <section class="automation-live-strip" aria-label="Live automation status">
+        <div><span>Live now</span><strong>@(Snapshot.ActiveScheduleName ?? "Manual control")</strong></div>
+        <div><span>Last checked</span><strong>@FormatEvaluationTime()</strong></div>
+    </section>
+
+    <nav class="workspace-tabs" aria-label="Automation sections">
+        <button type="button" class="@GetTabClass("scenes")" aria-current="@GetAriaCurrent("scenes")" @onclick='() => SelectTab("scenes")'>Scenes</button>
+        <button type="button" class="@GetTabClass("schedules")" aria-current="@GetAriaCurrent("schedules")" @onclick='() => SelectTab("schedules")'>Schedules</button>
+        <button type="button" class="@GetTabClass("exceptions")" aria-current="@GetAriaCurrent("exceptions")" @onclick='() => SelectTab("exceptions")'>Date exceptions</button>
+    </nav>
+
+    @if (_activeTab == "schedules")
+    {
+        <ScheduleWindowsPage />
+    }
+    else if (_activeTab == "exceptions")
+    {
+        <section class="exception-panel">
+            @if (_settings is null)
+            {
+                <div class="workspace-loading" role="status">Loading exceptions…</div>
+            }
+            else if (_settings.ScheduleWindows.Count == 0)
+            {
+                <EmptyState IconName="calendar" Title="No schedules yet" Description="Create a schedule before adding a date exception." />
+            }
+            else
+            {
+                <header class="exception-panel__header">
+                    <div>
+                        <h2>Excluded dates</h2>
+                        <p>An excluded date skips only the selected schedule. Other matching schedules can still run.</p>
+                    </div>
+                </header>
+
+                <div class="exception-editor">
+                    <div>
+                        <label for="exception-schedule" class="form-label">Schedule</label>
+                        <select id="exception-schedule" class="form-select" @bind="_selectedWindowId">
+                            @foreach (var window in OrderedWindows)
+                            {
+                                <option value="@window.Id">@window.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="exception-date" class="form-label">Date (DD/MM/YYYY)</label>
+                        <input id="exception-date" class="form-control" type="date" @bind="_newExceptionDate" disabled="@(!_canEditSchedules)" />
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="AddExceptionAsync" disabled="@(!_canEditSchedules || !_newExceptionDate.HasValue)">
+                        <Icon Name="plus" Size="15" /> Add exception
+                    </button>
+                </div>
+
+                @if (!_canEditSchedules)
+                {
+                    <p class="exception-readonly-note"><Icon Name="lock" Size="14" /> Operators can view date exceptions; an admin must change them.</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_exceptionStatus))
+                {
+                    <div class="alert @(_exceptionError ? "alert-danger" : "alert-success")" role="status">@_exceptionStatus</div>
+                }
+
+                var selected = SelectedWindow;
+                @if (selected is not null && selected.ExcludedDates.Count > 0)
+                {
+                    <div class="exception-list" aria-label="Excluded dates">
+                        @foreach (var date in selected.ExcludedDates.OrderBy(date => date))
+                        {
+                            <article class="exception-card">
+                                <div>
+                                    <strong>@date.ToString("dd/MM/yyyy")</strong>
+                                    <span>@date.DayOfWeek</span>
+                                </div>
+                                @if (_canEditSchedules)
+                                {
+                                    <button type="button" class="btn btn-outline-danger" @onclick="() => RemoveExceptionAsync(date)" aria-label="@($"Remove exception {date:dd/MM/yyyy}")">
+                                        <Icon Name="trash" Size="15" /> Remove
+                                    </button>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <EmptyState IconName="calendar" Title="No excluded dates" Description="This schedule currently runs on every matching recurrence date." />
+                }
+            }
+        </section>
+    }
+    else
+    {
+        <ScenesPage />
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? RequestedTab { get; set; }
+
+    private string _activeTab = "scenes";
+    private SonosSettings? _settings;
+    private string? _selectedWindowId;
+    private DateTime? _newExceptionDate;
+    private string? _exceptionStatus;
+    private bool _exceptionError;
+    private bool _canEditSchedules;
+    private bool _redirectedAlias;
+    private AutomationRuntimeSnapshot Snapshot => RuntimeStatus.Snapshot;
+
+    protected override async Task OnInitializedAsync()
+    {
+        RuntimeStatus.Changed += OnRuntimeStatusChanged;
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _canEditSchedules = auth.User.IsInRole("admin") || auth.User.IsInRole("superadmin");
+        await LoadSettingsAsync();
+        ApplyRequestedTab();
+    }
+
+    protected override void OnParametersSet() => ApplyRequestedTab();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _redirectedAlias) return;
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        if (route is "scenes" or "schedule-windows")
+        {
+            _redirectedAlias = true;
+            var tab = route == "scenes" ? "scenes" : "schedules";
+            Navigation.NavigateTo($"/automation?tab={tab}", replace: true);
+        }
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.ScheduleWindows ??= new();
+        foreach (var window in _settings.ScheduleWindows) window.ExcludedDates ??= new();
+        _selectedWindowId ??= OrderedWindows.FirstOrDefault()?.Id;
+    }
+
+    private IEnumerable<ScheduleWindow> OrderedWindows => _settings?.ScheduleWindows.OrderBy(window => window.Priority).ThenBy(window => window.Name) ?? Enumerable.Empty<ScheduleWindow>();
+    private ScheduleWindow? SelectedWindow => _settings?.ScheduleWindows.FirstOrDefault(window => window.Id == _selectedWindowId);
+
+    private async Task AddExceptionAsync()
+    {
+        var window = SelectedWindow;
+        if (!_canEditSchedules || window is null || !_newExceptionDate.HasValue || _settings is null) return;
+        var date = DateOnly.FromDateTime(_newExceptionDate.Value);
+        window.ExcludedDates ??= new();
+        if (window.ExcludedDates.Contains(date))
+        {
+            ShowExceptionStatus("That date is already excluded.", true);
+            return;
+        }
+        window.ExcludedDates.Add(date);
+        window.LastModifiedUtc = DateTime.UtcNow;
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _newExceptionDate = null;
+        ShowExceptionStatus($"{date:dd/MM/yyyy} was excluded from {window.Name}.");
+    }
+
+    private async Task RemoveExceptionAsync(DateOnly date)
+    {
+        var window = SelectedWindow;
+        if (!_canEditSchedules || window is null || _settings is null) return;
+        window.ExcludedDates.Remove(date);
+        window.LastModifiedUtc = DateTime.UtcNow;
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowExceptionStatus($"{date:dd/MM/yyyy} can run again.");
+    }
+
+    private void ApplyRequestedTab()
+    {
+        if (RequestedTab is "scenes" or "schedules" or "exceptions") { _activeTab = RequestedTab; return; }
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _activeTab = route == "schedule-windows" ? "schedules" : "scenes";
+    }
+
+    private void SelectTab(string tab) => Navigation.NavigateTo($"/automation?tab={tab}");
+    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
+    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+    private string GetHealthClass() => Snapshot.Phase == AutomationRuntimePhase.Failed ? "is-error" : Snapshot.Phase == AutomationRuntimePhase.Ready ? "is-ready" : "is-pending";
+    private string GetHealthLabel() => Snapshot.Phase == AutomationRuntimePhase.Failed ? "Automation paused" : Snapshot.Phase == AutomationRuntimePhase.Ready ? "Scheduler ready" : "Preparing automation";
+    private string FormatEvaluationTime() => Snapshot.LastEvaluationUtc is { } value ? AppTimeZone.Format(value, "HH:mm:ss") : "Not yet";
+    private void ShowExceptionStatus(string message, bool error = false) { _exceptionStatus = message; _exceptionError = error; }
+    private void OnRuntimeStatusChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => RuntimeStatus.Changed -= OnRuntimeStatusChanged;
+}

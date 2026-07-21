@@ -418,6 +418,20 @@ html:not([data-theme='dark']) .scenes-hero {
     font-weight: 900;
 }
 
+.scenes-editor-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mobile-editor-close {
+    display: none;
+    min-width: 44px;
+    min-height: 44px;
+    place-items: center;
+    color: var(--text-primary);
+}
+
 @media (max-width: 1199.98px) {
     .scenes-workspace {
         grid-template-columns: 1fr;
@@ -470,5 +484,27 @@ html:not([data-theme='dark']) .scenes-hero {
     .scene-card__actions .btn,
     .scenes-editor-actions .btn {
         width: 100%;
+    }
+
+    .scenes-editor-panel:has(.scenes-editor-grid) {
+        position: fixed;
+        z-index: 1050;
+        inset: 0;
+        overflow-y: auto;
+        border-radius: 0;
+        padding: 1rem;
+        background: var(--surface-1);
+    }
+
+    .scenes-editor-panel:has(.scenes-editor-grid) > .scenes-panel__header {
+        position: sticky;
+        z-index: 2;
+        top: -1rem;
+        padding-block: 1rem;
+        background: var(--surface-1);
+    }
+
+    .mobile-editor-close {
+        display: grid;
     }
 }

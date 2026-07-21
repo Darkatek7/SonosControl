@@ -138,6 +138,7 @@ public class GlobalPlayerBarTests
         ctx.Services.AddSingleton(unitOfWork.Object);
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
+        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         return connectorRepo;

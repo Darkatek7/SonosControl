@@ -14,6 +14,10 @@ public sealed class PlaybackUiStateService
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly INotificationService _notificationService;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private readonly SemaphoreSlim _volumeUpdateLock = new(1, 1);
+    private readonly object _volumeSync = new();
+    private CancellationTokenSource? _volumeDebounceCts;
+    private long _volumeGeneration;
 
     private SonosSettings? _settings;
 
@@ -65,8 +69,8 @@ public sealed class PlaybackUiStateService
             _settings.IP_Adress = activeSpeaker.IpAddress;
         }
 
-        Volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
         MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
+        Volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
         await RefreshAsync();
     }
 
@@ -77,6 +81,7 @@ public sealed class PlaybackUiStateService
             return;
         }
 
+        CancelPendingVolumeUpdate();
         _settings ??= await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         var speaker = _settings.Speakers.FirstOrDefault(s => s.IpAddress == speakerIp);
         ActiveSpeakerIp = speakerIp;
@@ -134,20 +139,69 @@ public sealed class PlaybackUiStateService
 
         var clamped = Math.Clamp(volume, 0, MaxVolume);
         Volume = clamped;
-        _settings.Volume = clamped;
         NotifyStateChanged();
+
+        CancellationToken token;
+        long generation;
+        string targetSpeakerIp;
+        lock (_volumeSync)
+        {
+            generation = ++_volumeGeneration;
+            targetSpeakerIp = ActiveSpeakerIp;
+            _volumeDebounceCts?.Cancel();
+            _volumeDebounceCts?.Dispose();
+            _volumeDebounceCts = new CancellationTokenSource();
+            token = _volumeDebounceCts.Token;
+        }
 
         try
         {
-            await _uow.ISonosConnectorRepo.SetVolume(ActiveSpeakerIp, clamped);
-            await _uow.ISettingsRepo.WriteSettings(_settings);
-            IsStale = false;
+            await Task.Delay(TimeSpan.FromMilliseconds(160), token);
+            await _volumeUpdateLock.WaitAsync(token);
+            try
+            {
+                if (generation != Interlocked.Read(ref _volumeGeneration)
+                    || !string.Equals(targetSpeakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var finalVolume = Volume;
+                await _uow.ISonosConnectorRepo.SetVolume(targetSpeakerIp, finalVolume);
+
+                if (generation == Interlocked.Read(ref _volumeGeneration)
+                    && string.Equals(targetSpeakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase))
+                {
+                    _settings.Volume = finalVolume;
+                    await _uow.ISettingsRepo.WriteSettings(_settings);
+                    IsStale = false;
+                }
+            }
+            finally
+            {
+                _volumeUpdateLock.Release();
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // A newer slider value superseded this device call.
         }
         catch (Exception ex)
         {
             IsStale = true;
             _logger.LogWarning(ex, "Failed to set volume for {SpeakerIp}", ActiveSpeakerIp);
             NotifyStateChanged();
+        }
+    }
+
+    private void CancelPendingVolumeUpdate()
+    {
+        lock (_volumeSync)
+        {
+            ++_volumeGeneration;
+            _volumeDebounceCts?.Cancel();
+            _volumeDebounceCts?.Dispose();
+            _volumeDebounceCts = null;
         }
     }
 

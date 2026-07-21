@@ -8,7 +8,7 @@ namespace SonosControl.Web.Controllers;
 
 [ApiController]
 [Route("api/devices")]
-[Authorize(Roles = "admin,operator,superadmin")]
+[Authorize(Roles = "admin,superadmin")]
 public sealed class DevicesController : ControllerBase
 {
     private readonly IUnitOfWork _uow;

@@ -35,7 +35,7 @@
         {
             <FormStatus StatusMessage="User registration is currently disabled." Severity="FormStatus.AlertSeverity.Warning" />
             <div class="auth-console-card__footer">
-                <a href="/auth/login?" class="auth-link text-decoration-none">Return to login</a>
+                <a href="/auth/login" class="auth-link text-decoration-none">Return to login</a>
             </div>
         }
         else
@@ -81,7 +81,7 @@
                 <button type="submit" class="btn btn-primary w-100 auth-submit mt-2">Create Account</button>
 
                 <div class="auth-console-card__footer">
-                    <a href="/auth/login?" class="auth-link text-decoration-none">Already have an account? <span class="auth-link-highlight">Sign in</span></a>
+                    <a href="/auth/login" class="auth-link text-decoration-none">Already have an account? <span class="auth-link-highlight">Sign in</span></a>
                 </div>
             </EditForm>
         }
@@ -101,6 +101,7 @@
     private async Task HandleRegister()
     {
         registerModel.statusMessage = "";
+        allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
         if (!allowRegistration)
         {
             registerModel.statusMessage = "Registration is disabled.";
@@ -131,7 +132,7 @@
         var result = await UserManager.CreateAsync(user, registerModel.Password);
         if (result.Succeeded)
         {
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo("/auth/login?registered=1");
         }
         else
         {

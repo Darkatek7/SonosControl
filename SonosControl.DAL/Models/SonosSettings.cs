@@ -4,9 +4,15 @@ namespace SonosControl.DAL.Models
 {
     public class SonosSettings
     {
+        public const int CurrentSettingsSchemaVersion = 2;
         public const string DefaultNowPlayingGradientStartColor = "#0f172a";
         public const string DefaultNowPlayingGradientMidColor = "#1e3a8a";
         public const string DefaultNowPlayingGradientEndColor = "#0f766e";
+
+        // A missing value identifies a pre-v2 settings document. Keep the legacy
+        // fields below serializable for one compatibility release; only v2
+        // Scenes and ScheduleWindows are consumed by the runtime scheduler.
+        public int SettingsSchemaVersion { get; set; }
 
         public int Volume { get; set; } = 10;
         public int MaxVolume { get; set; } = 100;

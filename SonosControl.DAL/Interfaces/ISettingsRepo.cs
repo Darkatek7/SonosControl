@@ -6,5 +6,6 @@ namespace SonosControl.DAL.Interfaces
     {
         Task<SonosSettings?> GetSettings();
         Task WriteSettings(SonosSettings? settings);
+        Task<string?> CreateVersionedBackupAsync(string label, CancellationToken cancellationToken = default);
     }
 }

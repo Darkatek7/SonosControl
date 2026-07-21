@@ -513,3 +513,11 @@
         transition: none;
     }
 }
+.home-quick-library .library__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; }
+.home-quick-library .library__item { min-width: 0; }
+.home-intro { margin-block: 0.75rem; }
+.home-intro h1 { font-size: clamp(1.5rem, 3vw, 2rem); }
+@media (max-width: 767.98px) {
+    .home-quick-library .library__list { grid-template-columns: 1fr; }
+    .home-intro { align-items: flex-start; }
+}

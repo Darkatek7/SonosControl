@@ -1,0 +1,61 @@
+@page "/insights"
+@page "/stats"
+@page "/logs"
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@inject NavigationManager Navigation
+
+<PageTitle>Insights - SonosControl</PageTitle>
+
+<div class="workspace-page insights-page" data-qa="insights-page">
+    <header class="workspace-header">
+        <div>
+            <span class="workspace-eyebrow">Listening and activity</span>
+            <h1>Insights</h1>
+            <p>Understand listening patterns and review the read-only activity trail.</p>
+        </div>
+    </header>
+
+    <nav class="workspace-tabs" aria-label="Insights sections">
+        <button type="button" class="@GetTabClass("listening")" aria-current="@GetAriaCurrent("listening")" @onclick='() => SelectTab("listening")'>Listening</button>
+        <button type="button" class="@GetTabClass("activity")" aria-current="@GetAriaCurrent("activity")" @onclick='() => SelectTab("activity")'>Activity</button>
+    </nav>
+
+    @if (_activeTab == "activity")
+    {
+        <Logs />
+    }
+    else
+    {
+        <StatsPage />
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? RequestedTab { get; set; }
+
+    private string _activeTab = "listening";
+    private bool _redirectedAlias;
+
+    protected override void OnParametersSet()
+    {
+        if (RequestedTab is "listening" or "activity") { _activeTab = RequestedTab; return; }
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _activeTab = route == "logs" ? "activity" : "listening";
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _redirectedAlias) return;
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        if (route is "stats" or "logs")
+        {
+            _redirectedAlias = true;
+            Navigation.NavigateTo($"/insights?tab={(route == "logs" ? "activity" : "listening")}", replace: true);
+        }
+    }
+
+    private void SelectTab(string tab) => Navigation.NavigateTo($"/insights?tab={tab}");
+    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
+    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+}

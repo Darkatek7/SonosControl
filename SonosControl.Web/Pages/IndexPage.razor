@@ -12,7 +12,6 @@
 @implements IAsyncDisposable
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject INotificationService NotificationService
 @inject IConfiguration Configuration
@@ -20,21 +19,21 @@
 @inject IMetricsCollector MetricsCollector
 @inject PlaybackUiStateService PlaybackState
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
+@inject ConfiguredTimeZoneService AppTimeZone
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
-<PageTitle>Sonos Control</PageTitle>
+<PageTitle>Home - SonosControl</PageTitle>
 
 @if (_settings is not null)
 {
     <div class="home-shell" data-qa="home-dashboard">
         @{
-            var nowLocal = DateTimeOffset.Now;
+            var nowLocal = AppTimeZone.Now;
             var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, nowLocal);
             var activeScene = GetScene(activeWindow?.SceneId);
             var nextWindow = GetNextScheduleWindow(nowLocal, activeWindow);
             var healthSummary = GetDeviceHealthSummary();
-            var libraryItems = GetActiveLibrarySources().ToList();
-            var recentActivity = GetRecentActivity().ToList();
+            var libraryItems = GetActiveLibrarySources().Take(6).ToList();
         }
 
         @if (!string.IsNullOrWhiteSpace(_commandStatusMessage))
@@ -46,21 +45,14 @@
 
         @if (_settings.Speakers.Any())
         {
-            <NowPlayingHero
-                TimerEndTimeUtc="_timerEndTimeUtc"
-                IsGrouping="_isGrouping"
-                IsUngrouping="_isUngrouping"
-                OnOpenTimer="OpenTimerModal"
-                OnCancelTimer="CancelTimedPlayback"
-                OnOpenGroup="OpenGroupModal"
-                OnUngroup="UngroupCurrent" />
+            <GlobalPlayerBar Expanded="true" />
         }
 
         <header class="home-intro">
             <div>
-                <span class="home-eyebrow">Home audio</span>
+                <span class="home-eyebrow">Today</span>
                 <h1>@Greeting</h1>
-                <p class="home-intro__sub">Control playback, switch sources, and keep every room in reach.</p>
+                <p class="home-intro__sub">Your rooms, favourite sources, and next automation at a glance.</p>
             </div>
             <div class="home-intro__status">
                 <span class="home-status-pill @(activeWindow is null ? "is-idle" : "is-active")">
@@ -82,7 +74,9 @@
                         <span class="rooms-stat is-online"><strong>@healthSummary.Online</strong> Online</span>
                         <span class="rooms-stat is-offline"><strong>@healthSummary.Offline</strong> Offline</span>
                         <span class="rooms-stat is-unknown"><strong>@healthSummary.Unknown</strong> Unknown</span>
-                        <a class="rooms-section__link" href="/devices">@_settings.Speakers.Count configured</a>
+                        <AuthorizeView Roles="admin,superadmin">
+                            <Authorized><a class="rooms-section__link" href="/administration/devices">@_settings.Speakers.Count configured</a></Authorized>
+                        </AuthorizeView>
                     </div>
                 </header>
                 <div class="room-grid">
@@ -119,39 +113,16 @@
             </section>
         }
 
-        <section class="library" aria-label="Media library">
+        <section class="library home-quick-library" aria-label="Favourite and recent sources">
             <header class="library__head">
                 <div>
-                    <span class="home-eyebrow">Library</span>
-                    <h2>All sources</h2>
+                    <span class="home-eyebrow">Quick access</span>
+                    <h2>Saved sources</h2>
                 </div>
-                <div class="library__head-actions">
-                    <button type="button" class="btn btn-sm btn-primary" @onclick="OpenActiveLibraryAddModal" aria-label="@GetActiveLibraryAddAriaLabel()">
-                        <Icon Name="plus" Size="14" /> <span>Add source</span>
-                    </button>
-                    <a class="btn btn-sm btn-outline-secondary" href="/recommendations">
-                        <Icon Name="settings" Size="14" /> <span>Manage</span>
-                    </a>
-                </div>
+                <a class="btn btn-sm btn-outline-secondary" href="/library">
+                    <span>View library</span>
+                </a>
             </header>
-
-            <div class="library__chips" role="group" aria-label="Filter sources">
-                <button type="button" class="library__chip @(IsLibraryTabActive("all") ? "is-active" : "")" aria-pressed="@IsLibraryTabActive("all").ToString().ToLowerInvariant()" @onclick='() => SetLibraryTab("all")'>All</button>
-                <button type="button" class="library__chip @(IsLibraryTabActive("stations") ? "is-active" : "")" aria-pressed="@IsLibraryTabActive("stations").ToString().ToLowerInvariant()" @onclick='() => SetLibraryTab("stations")'>Stations</button>
-                <button type="button" class="library__chip @(IsLibraryTabActive("spotify") ? "is-active" : "")" aria-pressed="@IsLibraryTabActive("spotify").ToString().ToLowerInvariant()" @onclick='() => SetLibraryTab("spotify")'>Spotify</button>
-                <button type="button" class="library__chip @(IsLibraryTabActive("youtube") ? "is-active" : "")" aria-pressed="@IsLibraryTabActive("youtube").ToString().ToLowerInvariant()" @onclick='() => SetLibraryTab("youtube")'>YouTube</button>
-                <button type="button" class="library__chip @(IsLibraryTabActive("youtubemusic") ? "is-active" : "")" aria-pressed="@IsLibraryTabActive("youtubemusic").ToString().ToLowerInvariant()" @onclick='() => SetLibraryTab("youtubemusic")'>YT Music</button>
-            </div>
-
-            <div class="library__search">
-                <Icon Name="search" Size="14" />
-                <input type="search"
-                       class="form-control form-control-sm"
-                       @bind-value="_librarySearch"
-                       @bind-value:event="oninput"
-                       placeholder="@GetLibrarySearchPlaceholder()"
-                       aria-label="Search media library" />
-            </div>
 
             <div class="library__list">
                 @if (libraryItems.Any())
@@ -162,46 +133,18 @@
                             <span class="library__item-icon"><Icon Name="@GetMediaIcon(item.MediaType)" Size="15" /></span>
                             <div class="library__item-meta">
                                 <strong title="@item.Name">@item.Name</strong>
-                                <span title="@item.Url">@FormatMediaTypeLabel(item.MediaType) · @item.Url</span>
+                                <span>@FormatMediaTypeLabel(item.MediaType)</span>
                             </div>
-                            @if (item.MediaType == "youtube")
-                            {
-                                var youTubeEntry = FindYouTubeEntry(item.Url);
-                                if (youTubeEntry is not null)
-                                {
-                                    <select class="form-select form-select-sm library__yt-mode"
-                                            value="@GetYouTubePlaybackModeValue(youTubeEntry)"
-                                            aria-label="@($"Playback mode for {item.Name}")"
-                                            @onchange="async e => await SetYouTubePlaybackModeAsync(youTubeEntry, e.Value?.ToString())">
-                                        <option value="@YouTubePlaybackMode.AutoQueueRelated">Auto Queue</option>
-                                        <option value="@YouTubePlaybackMode.Single">Single</option>
-                                        @if (YouTubePlaybackModeResolver.IsPlaylistLikeUrl(youTubeEntry.Url))
-                                        {
-                                            <option value="@YouTubePlaybackMode.PlaylistOrdered">Ordered</option>
-                                            <option value="@YouTubePlaybackMode.PlaylistShuffle">Shuffle</option>
-                                        }
-                                    </select>
-                                }
-                            }
-                            <button class="btn btn-sm btn-primary library__play"
-                                    @onclick="() => PlayMediaItem(item.Url, item.MediaType)"
-                                    aria-label="@($"Play {item.Name}")"
-                                    disabled="@(_loadingMediaUrl == item.Url)">
-                                @if (_loadingMediaUrl == item.Url)
-                                {
-                                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                }
-                                else
-                                {
-                                    <Icon Name="play" Size="13" />
-                                }
+                            <button class="btn btn-sm btn-primary library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" disabled="@(_loadingMediaUrl == item.Url)">
+                                @if (_loadingMediaUrl == item.Url) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
+                                else { <Icon Name="play" Size="13" /> }
                             </button>
                         </div>
                     }
                 }
                 else
                 {
-                    <div class="library__empty">@GetLibraryEmptyMessage()</div>
+                    <div class="library__empty">No saved sources yet. Add one in Library.</div>
                 }
             </div>
         </section>
@@ -209,7 +152,7 @@
         <div class="home-footer">
             <SectionCard Title="Active Automation" Eyebrow="Schedule" Icon="schedule" Id="home-automation-card">
                 <HeaderExtras>
-                    <a class="btn btn-sm btn-outline-secondary" href="/schedule-windows">Manage</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/automation?tab=schedules">View schedules</a>
                 </HeaderExtras>
                 <ChildContent>
                 <div class="home-window @(activeWindow is null ? "is-idle" : "")">
@@ -219,7 +162,6 @@
                         @if (activeWindow is not null)
                         {
                             <div class="home-chips">
-                                <span class="home-chip">Priority @activeWindow.Priority</span>
                                 <span class="home-chip">Scene: @(activeScene?.Name ?? "None")</span>
                                 <span class="home-chip">Fade @activeWindow.FadeOutSeconds</span>
                                 <span class="home-chip">@GetSpeakerTargetSummary(activeScene)</span>
@@ -245,58 +187,33 @@
                 </ChildContent>
             </SectionCard>
 
-            <SectionCard Title="Recent Activity" Eyebrow="Logs" Icon="file" Id="home-activity-card">
-                <HeaderExtras>
-                    <a class="btn btn-sm btn-outline-secondary" href="/logs">View all</a>
-                </HeaderExtras>
+            <SectionCard Title="Device warnings" Eyebrow="Rooms" Icon="alert" Id="home-device-warnings-card">
                 <ChildContent>
-                @if (recentActivity.Any())
+                @{ var deviceWarnings = _settings.Speakers.Where(speaker => !healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var state) || !state.IsOnline).ToList(); }
+                @if (deviceWarnings.Any())
                 {
                     <ul class="home-activity">
-                        @foreach (var log in recentActivity)
+                        @foreach (var speaker in deviceWarnings)
                         {
                             <li class="home-activity__row">
                                 <div>
-                                    <strong>@(!string.IsNullOrWhiteSpace(log.Details) ? log.Details : log.Action)</strong>
-                                    <span>@(log.PerformedBy ?? "System") · @log.Action</span>
+                                    <strong>@speaker.Name</strong>
+                                    <span>@(healthSummary.ByIp.ContainsKey(speaker.IpAddress) ? "Offline" : "No health snapshot") · @speaker.IpAddress</span>
                                 </div>
-                                <time>@log.Timestamp.ToLocalTime().ToString("t")</time>
+                                <Icon Name="alert" Size="17" />
                             </li>
                         }
                     </ul>
                 }
                 else
                 {
-                    <div class="library__empty">No recent activity recorded.</div>
+                    <div class="library__empty">All configured rooms are reporting normally.</div>
                 }
                 </ChildContent>
             </SectionCard>
         </div>
     </div>
 }
-
-<TimerModal
-    Show="isTimerModalOpen"
-    OnClose="CloseTimerModal"
-    OnStart="StartTimedPlayback"
-    TimerMinutes="timerMinutes"
-    TimerMinutesChanged="value => timerMinutes = value"
-    SelectedSource="timerSelection"
-    SelectedSourceChanged="value => timerSelection = value"
-    Stations="_stations"
-    SpotifyTracks="_tracks"
-    YouTubeVideos="_youTubeVideos"
-    YouTubeCollections="_youTubeCollections"
-    ErrorMessage="@timerErrorMessage" />
-
-<AddMediaItemModal @ref="_addMediaItemModal" OnSave="SaveNewMediaItem" ErrorMessage="@_addModalError" OnClose="() => _addModalError = null"/>
-
-<GroupSpeakersModal Show="isGroupModalOpen"
-                    Speakers="@(_settings?.Speakers ?? new())"
-                    MasterIp="@SelectedSpeakerIp"
-                    IsLoading="@_isGrouping"
-                    OnClose="CloseGroupModal"
-                    OnGroup="HandleCreateGroup" />
 
 @code {
     public class SpeakerStatusViewModel
@@ -356,7 +273,7 @@
 
     private string SelectedSpeakerIp => PlaybackState.ActiveSpeakerIp;
 
-    private string Greeting => DateTime.Now.Hour switch
+    private string Greeting => AppTimeZone.Now.Hour switch
     {
         >= 5 and < 12 => "Good morning",
         >= 12 and < 18 => "Good afternoon",
@@ -500,14 +417,14 @@
             return "Idle";
         }
 
-        var now = TimeOnly.FromDateTime(nowLocal.LocalDateTime);
+        var now = TimeOnly.FromDateTime(nowLocal.DateTime);
         var stopDateTime = nowLocal.Date + window.StopTime.ToTimeSpan();
         if (window.StopTime <= window.StartTime && now >= window.StartTime)
         {
             stopDateTime = stopDateTime.AddDays(1);
         }
 
-        var remaining = stopDateTime - nowLocal.LocalDateTime;
+        var remaining = stopDateTime - nowLocal.DateTime;
         if (remaining <= TimeSpan.Zero)
         {
             return "Soon";
@@ -539,12 +456,17 @@
             .FirstOrDefault();
     }
 
-    private static DateTimeOffset? GetNextStart(ScheduleWindow window, DateTimeOffset nowLocal)
+    private DateTimeOffset? GetNextStart(ScheduleWindow window, DateTimeOffset nowLocal)
     {
         for (var dayOffset = 0; dayOffset <= 7; dayOffset++)
         {
-            var date = DateOnly.FromDateTime(nowLocal.LocalDateTime.AddDays(dayOffset));
+            var date = DateOnly.FromDateTime(nowLocal.DateTime.AddDays(dayOffset));
             if (!IsDateAllowedForDashboard(window, date.DayOfWeek))
+            {
+                continue;
+            }
+
+            if (window.ExcludedDates?.Contains(date) == true)
             {
                 continue;
             }
@@ -560,9 +482,9 @@
             }
 
             var candidate = date.ToDateTime(window.StartTime);
-            if (candidate >= nowLocal.LocalDateTime)
+            if (candidate >= nowLocal.DateTime)
             {
-                return new DateTimeOffset(candidate, nowLocal.Offset);
+                return AppTimeZone.FromLocal(candidate);
             }
         }
 
@@ -1788,7 +1710,7 @@
 
         if (_timerEndTimeUtc is not null || _timerSelectionName is not null)
         {
-            var stopInfo = _timerEndTimeUtc?.ToLocalTime().ToString("t");
+            var stopInfo = _timerEndTimeUtc is { } timerEnd ? AppTimeZone.Format(timerEnd, "HH:mm") : null;
             var details = _timerSelectionName ?? "Timed playback";
             if (!string.IsNullOrEmpty(stopInfo))
             {
@@ -2152,62 +2074,6 @@
         await SaveSettings();
         await InvokeAsync(StateHasChanged);
         return true;
-    }
-
-    private async Task RemoveStation(TuneInStation station)
-    {
-        if (_settings?.Stations is null) return;
-
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete station '{station.Name}'?");
-        if (!confirmed) return;
-
-        _settings.Stations.Remove(station);
-        await SaveSettings();
-
-        await AddLog("Station Removed", $"{station.Name} ({station.Url})");
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task RemoveSpotifyTrack(SpotifyObject track)
-    {
-        if (_settings?.SpotifyTracks is null) return;
-        
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete track '{track.Name}'?");
-        if (!confirmed) return;
-
-        _settings.SpotifyTracks.Remove(track);
-        await SaveSettings();
-
-        await AddLog("Spotify Track Removed", $"{track.Name} ({track.Url})");
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task RemoveYouTubeEntry(YouTubeObject entry)
-    {
-        if (_settings?.YouTubeCollections is null) return;
-        
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete YouTube link '{entry.Name}'?");
-        if (!confirmed) return;
-
-        _settings.YouTubeCollections.Remove(entry);
-        await SaveSettings();
-
-        await AddLog("YouTube Video Link Removed", $"{entry.Name} ({entry.Url})");
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task RemoveYouTubeMusicEntry(YouTubeMusicObject entry)
-    {
-        if (_settings?.YouTubeMusicCollections is null) return;
-        
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to delete link '{entry.Name}'?");
-        if (!confirmed) return;
-
-        _settings.YouTubeMusicCollections.Remove(entry);
-        await SaveSettings();
-
-        await AddLog("YouTube Music Link Removed", $"{entry.Name} ({entry.Url})");
-        await InvokeAsync(StateHasChanged);
     }
 
     private Random _random = new();

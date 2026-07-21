@@ -1,10 +1,11 @@
-@page "/stats"
+@* Routed through InsightsPage. *@
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
 @using SonosControl.Web.Services
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject ApplicationDbContext Db
+@inject ConfiguredTimeZoneService AppTimeZone
 
 <PageTitle>Statistics - Sonos Control</PageTitle>
 
@@ -186,26 +187,15 @@
                     }
                 </div>
 
-                <div class="table-responsive stats-table-wrap stats-table-wrap--compact">
-                    <table class="table table-sm table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>Station</th>
-                                <th>Time</th>
-                                <th>Plays</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var station in stationStats)
-                            {
-                                <tr>
-                                    <td class="small fw-bold">@station.Station</td>
-                                    <td class="small">@FormatDuration(station.Duration)</td>
-                                    <td class="small">@station.PlayCount</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                <div class="stats-station-cards" aria-label="All station listening statistics">
+                    @foreach (var station in stationStats)
+                    {
+                        <article class="stats-station-card">
+                            <strong>@station.Station</strong>
+                            <span><small>Listening</small>@FormatDuration(station.Duration)</span>
+                            <span><small>Plays</small>@station.PlayCount</span>
+                        </article>
+                    }
                 </div>
             }
         </article>
@@ -403,6 +393,9 @@
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
         var logsInWindow = Db.Logs.AsNoTracking().Where(l => l.Timestamp >= thirtyDaysAgo);
         var playbackInWindow = Db.PlaybackStats.AsNoTracking().Where(p => p.StartTime >= thirtyDaysAgo);
+        var timedLogs = await logsInWindow
+            .Select(log => new { log.Timestamp, log.PerformedBy })
+            .ToListAsync();
         var settingsRepo = _uow.ISettingsRepo;
         var settings = settingsRepo is null
             ? new SonosSettings()
@@ -448,13 +441,17 @@
             .Take(5)
             .ToListAsync();
 
-        nightOwlStats = await logsInWindow
-            .Where(l => l.Timestamp.Hour >= 22 || l.Timestamp.Hour < 4)
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
+        nightOwlStats = timedLogs
+            .Where(log =>
+            {
+                var hour = AppTimeZone.ConvertUtc(log.Timestamp).Hour;
+                return hour >= 22 || hour < 4;
+            })
+            .GroupBy(log => log.PerformedBy)
+            .Select(group => new UserStat { User = group.Key ?? "Unknown", Count = group.Count() })
             .OrderByDescending(x => x.Count)
             .Take(5)
-            .ToListAsync();
+            .ToList();
 
         stationMasterStats = await logsInWindow
             .Where(l => l.Action == "Station Changed")
@@ -490,23 +487,11 @@
         longestSessionLabel = ResolvePlaybackDisplayLabel(longestSession, resolver);
         await InvokeAsync(StateHasChanged);
 
-        try
-        {
-            activityOverTime = await logsInWindow
-                .GroupBy(l => l.Timestamp.Date)
-                .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
-                .OrderBy(x => x.Date)
-                .ToListAsync();
-        }
-        catch (InvalidOperationException)
-        {
-            var timestamps = await logsInWindow.Select(l => l.Timestamp).ToListAsync();
-            activityOverTime = timestamps
-                .GroupBy(ts => ts.Date)
-                .Select(g => new DateStat { Date = g.Key, Count = g.Count() })
-                .OrderBy(x => x.Date)
-                .ToList();
-        }
+        activityOverTime = timedLogs
+            .GroupBy(log => AppTimeZone.ConvertUtc(log.Timestamp).Date)
+            .Select(group => new DateStat { Date = group.Key, Count = group.Count() })
+            .OrderBy(item => item.Date)
+            .ToList();
 
         var activeDayGroup = activityOverTime?
             .GroupBy(x => x.Date.DayOfWeek)
@@ -514,11 +499,11 @@
             .FirstOrDefault();
         mostActiveDay = activeDayGroup?.Key.ToString() ?? "-";
 
-        activityByHour = await logsInWindow
-            .GroupBy(l => l.Timestamp.Hour)
-            .Select(g => new HourStat { Hour = g.Key, Count = g.Count() })
-            .OrderBy(x => x.Hour)
-            .ToListAsync();
+        activityByHour = timedLogs
+            .GroupBy(log => AppTimeZone.ConvertUtc(log.Timestamp).Hour)
+            .Select(group => new HourStat { Hour = group.Key, Count = group.Count() })
+            .OrderBy(item => item.Hour)
+            .ToList();
         await InvokeAsync(StateHasChanged);
 
         mediaTypeStats = await playbackInWindow

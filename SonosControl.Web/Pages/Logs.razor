@@ -1,9 +1,11 @@
-﻿@page "/logs"
+﻿@* Routed through InsightsPage. *@
 @using SonosControl.Web.Models
+@using SonosControl.Web.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext Db
+@inject ConfiguredTimeZoneService AppTimeZone
 @implements IDisposable
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
@@ -132,7 +134,7 @@
                         @foreach (var log in logs)
                         {
                             <tr @key="log.Id">
-                                <td>@log.Timestamp.ToLocalTime().ToString("g")</td>
+                                <td>@AppTimeZone.Format(log.Timestamp)</td>
                                 <td><span class="logs-user-pill">@GetUserLabel(log.PerformedBy)</span></td>
                                 <td><span class="logs-action-pill @GetActionClass(log.Action)">@log.Action</span></td>
                                 <td>@GetLogDetails(log)</td>
@@ -147,7 +149,7 @@
                 {
                     <article class="logs-card" @key="log.Id">
                         <div class="logs-card__meta">
-                            <span>@log.Timestamp.ToLocalTime().ToString("g")</span>
+                            <span>@AppTimeZone.Format(log.Timestamp)</span>
                             <span class="logs-user-pill">@GetUserLabel(log.PerformedBy)</span>
                         </div>
                         <p class="logs-card__action mb-1 fw-semibold"><span class="logs-action-pill @GetActionClass(log.Action)">@log.Action</span></p>
@@ -344,13 +346,13 @@
 
         if (startDate.HasValue)
         {
-            var startInclusive = startDate.Value.Date;
+            var startInclusive = AppTimeZone.FromLocal(startDate.Value.Date).UtcDateTime;
             query = query.Where(l => l.Timestamp >= startInclusive);
         }
 
         if (endDate.HasValue)
         {
-            var endExclusive = endDate.Value.Date.AddDays(1);
+            var endExclusive = AppTimeZone.FromLocal(endDate.Value.Date.AddDays(1)).UtcDateTime;
             query = query.Where(l => l.Timestamp < endExclusive);
         }
 

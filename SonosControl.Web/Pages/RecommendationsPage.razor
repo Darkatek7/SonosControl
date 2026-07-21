@@ -1,4 +1,4 @@
-﻿@page "/recommendations"
+﻿@* Routed through LibraryPage. *@
 @using Microsoft.EntityFrameworkCore
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
@@ -122,38 +122,29 @@
                     </div>
                     <span class="recommendations-count">@_timeOfDay.Count</span>
                 </div>
-                <div class="recommendations-table-wrap">
-                    <table class="table table-sm align-middle recommendations-table">
-                        <thead>
-                        <tr>
-                            <th>Track</th>
-                            <th>Type</th>
-                            <th class="text-end">Plays</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        @if (_timeOfDay.Any())
+                @if (_timeOfDay.Any())
+                {
+                    <div class="recommendations-time-cards" aria-label="Best sources for the current time">
+                        @foreach (var item in _timeOfDay)
                         {
-                            @foreach (var item in _timeOfDay)
-                            {
-                                <tr>
-                                    <td>
-                                        <div class="recommendations-table__title">@item.Name</div>
-                                    </td>
-                                    <td>@FormatMediaType(item.MediaType)</td>
-                                    <td class="text-end">@item.Count</td>
-                                </tr>
-                            }
+                            <article class="recommendations-time-card">
+                                <div>
+                                    <strong>@item.Name</strong>
+                                    <span>@FormatMediaType(item.MediaType)</span>
+                                </div>
+                                <span class="recommendations-time-card__metric"><strong>@item.Count</strong> plays</span>
+                            </article>
                         }
-                        else
-                        {
-                            <tr>
-                                <td colspan="3" class="recommendations-empty-cell">No current time-window patterns yet.</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="recommendations-empty">
+                        <Icon Name="clock" Size="24" />
+                        <strong>No current time-window patterns yet.</strong>
+                        <span>Listening at this time will build recommendations here.</span>
+                    </div>
+                }
             </article>
 
             <article class="recommendations-panel">

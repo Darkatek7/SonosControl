@@ -325,3 +325,26 @@
         width: 100%;
     }
 }
+.logs-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.logs-field--search {
+    grid-column: span 2;
+}
+
+@media (max-width: 1199.98px) {
+    .logs-filter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .logs-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .logs-field--search {
+        grid-column: auto;
+    }
+}

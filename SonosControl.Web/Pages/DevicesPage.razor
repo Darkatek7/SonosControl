@@ -1,7 +1,8 @@
-@page "/devices"
+@* Routed through AdministrationPage. *@
 @using SonosControl.Web.Services
 @inject ISonosDeviceDiscoveryService DiscoveryService
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
+@inject ConfiguredTimeZoneService AppTimeZone
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 <PageTitle>Devices - Sonos Control</PageTitle>
@@ -9,9 +10,9 @@
 <div class="devices-console-shell">
     <section class="devices-hero" aria-labelledby="devices-heading">
         <div class="devices-hero__copy">
-            <span class="spotify-eyebrow">Operations</span>
-            <h1 id="devices-heading">Device Ops</h1>
-            <p>Scan Sonos devices, import missing speakers, and keep health states visible from one control-room surface.</p>
+            <span class="spotify-eyebrow">Administration</span>
+            <h1 id="devices-heading">Devices</h1>
+            <p>Discover speakers, review health, and manage names, addresses, and startup volume.</p>
         </div>
         <div class="devices-hero__actions">
             <div class="devices-stat">
@@ -102,6 +103,17 @@
                                     <span class="device-status-pill @GetHealthClass(health)">@GetHealthLabel(health)</span>
                                     <small>@FormatLastSeen(health)</small>
                                 </div>
+                                <div class="device-card__settings">
+                                    <label>
+                                        <span>Name</span>
+                                        <input class="form-control form-control-sm" value="@speaker.Name" @onchange="e => UpdateSpeakerNameAsync(speaker, e.Value)" aria-label="@($"Name for {speaker.Name}")" />
+                                    </label>
+                                    <label>
+                                        <span>Startup volume</span>
+                                        <input class="form-control form-control-sm" type="number" min="0" max="100" value="@speaker.StartupVolume" @onchange="e => UpdateStartupVolumeAsync(speaker, e.Value)" placeholder="@_settings.Volume" aria-label="@($"Startup volume for {speaker.Name}")" />
+                                    </label>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestRemoveSpeaker(speaker)" aria-label="@($"Remove {speaker.Name}")"><Icon Name="trash" Size="15" /> Remove</button>
+                                </div>
                             </article>
                         }
                     </div>
@@ -172,9 +184,51 @@
                     </div>
                 }
             </article>
+
+            <article class="devices-panel devices-manual-panel">
+                <div class="devices-panel__header">
+                    <div>
+                        <span class="spotify-eyebrow">Manual setup</span>
+                        <h2><Icon Name="plus" Size="18" /> Add speaker</h2>
+                    </div>
+                </div>
+                <div class="devices-manual-form">
+                    <div>
+                        <label for="manual-speaker-name" class="form-label">Name</label>
+                        <input id="manual-speaker-name" class="form-control" @bind="_manualName" placeholder="Living Room" />
+                    </div>
+                    <div>
+                        <label for="manual-speaker-ip" class="form-label">IPv4 address</label>
+                        <input id="manual-speaker-ip" class="form-control" @bind="_manualIp" inputmode="decimal" placeholder="192.168.1.50" />
+                    </div>
+                    <div>
+                        <label for="manual-speaker-volume" class="form-label">Startup volume</label>
+                        <input id="manual-speaker-volume" class="form-control" type="number" min="0" max="100" @bind="_manualStartupVolume" />
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="AddManualSpeakerAsync"><Icon Name="plus" Size="15" /> Add speaker</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_manualError))
+                {
+                    <div class="alert alert-danger mt-3 mb-0" role="alert">@_manualError</div>
+                }
+            </article>
         </section>
     }
 </div>
+
+@if (_pendingRemoval is not null)
+{
+    <div class="app-dialog-backdrop" @onclick="CancelRemoveSpeaker">
+        <section class="app-dialog app-dialog--confirm" role="alertdialog" aria-modal="true" aria-labelledby="remove-device-title" aria-describedby="remove-device-copy" @onclick:stopPropagation="true">
+            <header class="app-dialog__header"><h2 id="remove-device-title">Remove speaker?</h2></header>
+            <div class="app-dialog__body"><p id="remove-device-copy">“@_pendingRemoval.Name” (@_pendingRemoval.IpAddress) will be removed from SonosControl.</p></div>
+            <footer class="app-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CancelRemoveSpeaker">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="RemoveSpeakerAsync">Remove</button>
+            </footer>
+        </section>
+    </div>
+}
 
 @code {
     private SonosSettings? _settings;
@@ -183,6 +237,11 @@
     private string? _statusMessage;
     private bool _statusIsError;
     private bool _isDiscovering;
+    private string _manualName = string.Empty;
+    private string _manualIp = string.Empty;
+    private int? _manualStartupVolume;
+    private string? _manualError;
+    private SonosSpeaker? _pendingRemoval;
 
     private int GetOnlineSpeakerCount() => _settings?.Speakers?.Count(s => _healthByIp.TryGetValue(s.IpAddress, out var health) && health.IsOnline) ?? 0;
 
@@ -210,9 +269,9 @@
         return health.IsOnline ? "is-online" : "is-offline";
     }
 
-    private static string FormatLastSeen(DeviceHealthStatus? health)
+    private string FormatLastSeen(DeviceHealthStatus? health)
     {
-        return health?.LastSeenUtc.ToLocalTime().ToString("g") ?? "No snapshot";
+        return health is null ? "No snapshot" : AppTimeZone.Format(health.LastSeenUtc);
     }
 
     protected override async Task OnInitializedAsync()
@@ -299,6 +358,64 @@
         }
 
         ShowStatus(imported > 0 ? $"Imported {imported} speaker(s)." : "No new speakers to import.");
+    }
+
+    private async Task UpdateSpeakerNameAsync(SonosSpeaker speaker, object? value)
+    {
+        if (_settings is null) return;
+        var name = value?.ToString()?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            ShowStatus("Speaker name cannot be empty.", true);
+            return;
+        }
+        speaker.Name = name;
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowStatus($"Updated {speaker.Name}.");
+    }
+
+    private async Task UpdateStartupVolumeAsync(SonosSpeaker speaker, object? value)
+    {
+        if (_settings is null) return;
+        speaker.StartupVolume = int.TryParse(value?.ToString(), out var parsed) ? Math.Clamp(parsed, 0, 100) : null;
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        ShowStatus($"Startup volume updated for {speaker.Name}.");
+    }
+
+    private async Task AddManualSpeakerAsync()
+    {
+        if (_settings is null) return;
+        _manualError = null;
+        if (string.IsNullOrWhiteSpace(_manualName) || !IPAddress.TryParse(_manualIp, out var address) || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || IPAddress.IsLoopback(address) || address.Equals(IPAddress.Any))
+        {
+            _manualError = "Enter a name and a valid, non-loopback IPv4 address.";
+            return;
+        }
+        if (_settings.Speakers.Any(speaker => string.Equals(speaker.IpAddress, _manualIp.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            _manualError = "A speaker with that address already exists.";
+            return;
+        }
+        var speaker = new SonosSpeaker { Name = _manualName.Trim(), IpAddress = _manualIp.Trim(), StartupVolume = _manualStartupVolume.HasValue ? Math.Clamp(_manualStartupVolume.Value, 0, 100) : null };
+        _settings.Speakers.Add(speaker);
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _manualName = string.Empty;
+        _manualIp = string.Empty;
+        _manualStartupVolume = null;
+        ShowStatus($"Added {speaker.Name}.");
+    }
+
+    private void RequestRemoveSpeaker(SonosSpeaker speaker) => _pendingRemoval = speaker;
+    private void CancelRemoveSpeaker() => _pendingRemoval = null;
+
+    private async Task RemoveSpeakerAsync()
+    {
+        if (_settings is null || _pendingRemoval is null) return;
+        var name = _pendingRemoval.Name;
+        _settings.Speakers.Remove(_pendingRemoval);
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _pendingRemoval = null;
+        ShowStatus($"Removed {name}.");
     }
 
     private void RefreshHealth()

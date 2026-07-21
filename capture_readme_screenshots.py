@@ -15,11 +15,11 @@ from playwright.sync_api import expect, sync_playwright
 CHROME_PATH = os.getenv("PLAYWRIGHT_CHROME_PATH")
 
 ROUTES = [
-    ("/", "home", "Today at a glance"),
-    ("/config", "config", "System Configuration"),
-    ("/stats", "stats", "Statistics"),
-    ("/admin/users", "users", "User Management"),
-    ("/logs", "logs", "System Logs"),
+    ("/", "home", "Saved sources"),
+    ("/library", "library", "Library"),
+    ("/automation", "automation", "Automation"),
+    ("/insights", "insights", "Insights"),
+    ("/administration/devices", "administration", "Devices"),
 ]
 
 
@@ -95,6 +95,7 @@ def start_local_server(base_url: str, project_root: Path):
         shell=False,
         env={
             **os.environ,
+            "BackgroundServices__Enabled": os.getenv("BackgroundServices__Enabled", "false"),
             "DataProtection__KeysDirectory": os.getenv(
                 "DataProtection__KeysDirectory",
                 str((project_root / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
@@ -254,7 +255,7 @@ def parse_args():
     parser.add_argument("--username", default=None)
     parser.add_argument("--password", default=None)
     parser.add_argument("--out", default="docs/assets/readme/images")
-    parser.add_argument("--desktop-viewport", default="1366x768")
+    parser.add_argument("--desktop-viewport", default="1280x900")
     parser.add_argument("--mobile-viewport", default="390x844")
     parser.add_argument("--server-timeout", type=int, default=180)
     parser.add_argument("--no-autostart", action="store_true")

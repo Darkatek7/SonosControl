@@ -1,0 +1,479 @@
+@page "/library"
+@page "/lookup"
+@page "/recommendations"
+@using SonosControl.DAL.Models
+@using SonosControl.Web.Services
+@attribute [Authorize(Roles = "admin,operator,superadmin")]
+@inject NavigationManager Navigation
+@inject PlaybackUiStateService PlaybackState
+
+<PageTitle>Library - SonosControl</PageTitle>
+
+<div class="workspace-page library-page" data-qa="library-page">
+    <header class="workspace-header">
+        <div>
+            <span class="workspace-eyebrow">Your audio</span>
+            <h1>Library</h1>
+            <p>Play saved sources, discover radio stations, and revisit recommendations.</p>
+        </div>
+        @if (_activeTab == "saved")
+        {
+            <button type="button" class="btn btn-primary workspace-primary-action" @onclick="OpenCreateDialog">
+                <Icon Name="plus" Size="16" /> Add source
+            </button>
+        }
+    </header>
+
+    <nav class="workspace-tabs" aria-label="Library sections">
+        <button type="button" class="@GetTabClass("saved")" aria-current="@GetAriaCurrent("saved")" @onclick='() => SelectTab("saved")'>Saved</button>
+        <button type="button" class="@GetTabClass("discover")" aria-current="@GetAriaCurrent("discover")" @onclick='() => SelectTab("discover")'>Discover Radio</button>
+        <button type="button" class="@GetTabClass("for-you")" aria-current="@GetAriaCurrent("for-you")" @onclick='() => SelectTab("for-you")'>For You</button>
+    </nav>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status" aria-live="polite">@_statusMessage</div>
+    }
+
+    @if (_activeTab == "discover")
+    {
+        <StationLookup />
+    }
+    else if (_activeTab == "for-you")
+    {
+        <RecommendationsPage />
+    }
+    else if (_settings is null)
+    {
+        <div class="workspace-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading library…</div>
+    }
+    else
+    {
+        <section class="library-tools" aria-label="Filter saved sources">
+            <label class="library-search-field" for="library-page-search">
+                <Icon Name="search" Size="16" />
+                <span class="visually-hidden">Search saved sources</span>
+                <input id="library-page-search" class="form-control" type="search" placeholder="Search name or URL" @bind="_search" @bind:event="oninput" />
+            </label>
+            <label class="library-type-filter" for="library-page-type">
+                <span class="visually-hidden">Source type</span>
+                <select id="library-page-type" class="form-select" @bind="_typeFilter">
+                    <option value="all">All source types</option>
+                    @foreach (var type in Enum.GetValues<LibrarySourceType>())
+                    {
+                        <option value="@TypeKey(type)">@TypeLabel(type)</option>
+                    }
+                </select>
+            </label>
+        </section>
+
+        var sources = FilteredSources.ToList();
+        @if (sources.Count == 0)
+        {
+            <EmptyState IconName="music" Title="No saved sources found" Description="Add a source or change the current filters." />
+        }
+        else
+        {
+            <section class="source-card-grid" aria-label="Saved sources">
+                @foreach (var source in sources)
+                {
+                    <article class="source-card" @key="source.Key">
+                        <div class="source-card__icon"><Icon Name="@SourceIcon(source.Type)" Size="20" /></div>
+                        <div class="source-card__body">
+                            <span class="source-card__type">@TypeLabel(source.Type)</span>
+                            <h2>@source.Name</h2>
+                            <p title="@source.Url">@source.Url</p>
+                        </div>
+                        <div class="source-card__actions">
+                            <button type="button" class="btn btn-primary" @onclick="() => PlaySourceAsync(source)" disabled="@(_busyKey == source.Key)" aria-label="@($"Play {source.Name}")">
+                                <Icon Name="play" Size="15" /> Play
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" @onclick="() => OpenEditDialog(source)" aria-label="@($"Edit {source.Name}")">
+                                <Icon Name="edit" Size="15" />
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" @onclick="() => OpenDeleteDialog(source)" aria-label="@($"Delete {source.Name}")">
+                                <Icon Name="trash" Size="15" />
+                            </button>
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+    }
+</div>
+
+@if (_showEditor)
+{
+    <div class="app-dialog-backdrop" @onclick="CloseEditor">
+        <section class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="source-editor-title" @onclick:stopPropagation="true">
+            <header class="app-dialog__header">
+                <div>
+                    <span class="workspace-eyebrow">Saved source</span>
+                    <h2 id="source-editor-title">@(_editingKey is null ? "Add source" : "Edit source")</h2>
+                </div>
+                <button type="button" class="app-dialog__close" @onclick="CloseEditor" aria-label="Close source editor"><Icon Name="x" Size="18" /></button>
+            </header>
+            <div class="app-dialog__body form-grid-simple">
+                <div>
+                    <label for="source-type" class="form-label">Source type</label>
+                    <select id="source-type" class="form-select" @bind="_draft.Type">
+                        @foreach (var type in Enum.GetValues<LibrarySourceType>())
+                        {
+                            <option value="@type">@TypeLabel(type)</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label for="source-name" class="form-label">Name</label>
+                    <input id="source-name" class="form-control" @bind="_draft.Name" autocomplete="off" />
+                </div>
+                <div>
+                    <label for="source-url" class="form-label">URL or service link</label>
+                    <input id="source-url" class="form-control" @bind="_draft.Url" autocomplete="off" />
+                </div>
+                @if (_draft.Type == LibrarySourceType.YouTube)
+                {
+                    <div>
+                        <label for="source-playback-mode" class="form-label">Playback mode</label>
+                        <select id="source-playback-mode" class="form-select" @bind="_draft.PlaybackMode">
+                            @foreach (var mode in Enum.GetValues<YouTubePlaybackMode>())
+                            {
+                                <option value="@mode">@FormatPlaybackMode(mode)</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="source-queue-length" class="form-label">Related queue length</label>
+                        <input id="source-queue-length" class="form-control" type="number" min="1" max="100" @bind="_draft.PreferredQueueLength" />
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_dialogError))
+                {
+                    <div class="alert alert-danger mb-0" role="alert">@_dialogError</div>
+                }
+            </div>
+            <footer class="app-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditor">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveSourceAsync" disabled="@_isSaving">Save source</button>
+            </footer>
+        </section>
+    </div>
+}
+
+@if (_pendingDelete is not null)
+{
+    <div class="app-dialog-backdrop" @onclick="CancelDelete">
+        <section class="app-dialog app-dialog--confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-source-title" aria-describedby="delete-source-copy" @onclick:stopPropagation="true">
+            <header class="app-dialog__header"><h2 id="delete-source-title">Delete source?</h2></header>
+            <div class="app-dialog__body"><p id="delete-source-copy">“@_pendingDelete.Name” will be removed from the saved library.</p></div>
+            <footer class="app-dialog__actions">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CancelDelete">Cancel</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteSourceAsync">Delete</button>
+            </footer>
+        </section>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? RequestedTab { get; set; }
+
+    private SonosSettings? _settings;
+    private string _activeTab = "saved";
+    private string _search = string.Empty;
+    private string _typeFilter = "all";
+    private string? _statusMessage;
+    private bool _statusIsError;
+    private string? _busyKey;
+    private bool _showEditor;
+    private bool _isSaving;
+    private string? _editingKey;
+    private string? _dialogError;
+    private SourceDraft _draft = new();
+    private LibrarySource? _pendingDelete;
+    private bool _redirectedAlias;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettingsAsync();
+        ApplyRequestedTab();
+    }
+
+    protected override void OnParametersSet() => ApplyRequestedTab();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender || _redirectedAlias) return;
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        if (route is "lookup" or "recommendations")
+        {
+            _redirectedAlias = true;
+            var tab = route == "lookup" ? "discover" : "for-you";
+            Navigation.NavigateTo($"/library?tab={tab}", replace: true);
+        }
+    }
+
+    private void ApplyRequestedTab()
+    {
+        if (RequestedTab is "saved" or "discover" or "for-you")
+        {
+            _activeTab = RequestedTab;
+            return;
+        }
+
+        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+        _activeTab = route switch { "lookup" => "discover", "recommendations" => "for-you", _ => "saved" };
+    }
+
+    private void SelectTab(string tab) => Navigation.NavigateTo($"/library?tab={tab}");
+    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
+    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+
+    private async Task LoadSettingsAsync()
+    {
+        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings.Stations ??= new();
+        _settings.SpotifyTracks ??= new();
+        _settings.YouTubeCollections ??= new();
+        _settings.YouTubeMusicCollections ??= new();
+        _settings.Speakers ??= new();
+    }
+
+    private IEnumerable<LibrarySource> FilteredSources
+    {
+        get
+        {
+            var query = AllSources;
+            if (_typeFilter != "all") query = query.Where(source => TypeKey(source.Type) == _typeFilter);
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                query = query.Where(source => source.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) || source.Url.Contains(_search, StringComparison.OrdinalIgnoreCase));
+            }
+            return query.OrderBy(source => source.Name, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private IEnumerable<LibrarySource> AllSources
+    {
+        get
+        {
+            if (_settings is null) yield break;
+            foreach (var item in _settings.Stations) yield return CreateSource(LibrarySourceType.Radio, item.Name, item.Url);
+            foreach (var item in _settings.SpotifyTracks) yield return CreateSource(LibrarySourceType.Spotify, item.Name, item.Url);
+            foreach (var item in _settings.YouTubeCollections)
+            {
+                yield return CreateSource(
+                    LibrarySourceType.YouTube,
+                    item.Name,
+                    item.Url,
+                    item.PlaybackMode,
+                    item.PreferredQueueLength);
+            }
+            foreach (var item in _settings.YouTubeMusicCollections) yield return CreateSource(LibrarySourceType.YouTubeMusic, item.Name, item.Url);
+        }
+    }
+
+    private static LibrarySource CreateSource(
+        LibrarySourceType type,
+        string? name,
+        string? url,
+        YouTubePlaybackMode? playbackMode = null,
+        int? preferredQueueLength = null)
+    {
+        var safeUrl = url?.Trim() ?? string.Empty;
+        return new LibrarySource(
+            $"{TypeKey(type)}|{safeUrl}",
+            type,
+            name?.Trim() ?? "Untitled source",
+            safeUrl,
+            playbackMode,
+            preferredQueueLength);
+    }
+
+    private void OpenCreateDialog()
+    {
+        _editingKey = null;
+        _draft = new SourceDraft();
+        _dialogError = null;
+        _showEditor = true;
+    }
+
+    private void OpenEditDialog(LibrarySource source)
+    {
+        _editingKey = source.Key;
+        _draft = new SourceDraft
+        {
+            Type = source.Type,
+            Name = source.Name,
+            Url = source.Url,
+            PlaybackMode = source.PlaybackMode ?? YouTubePlaybackMode.AutoQueueRelated,
+            PreferredQueueLength = source.PreferredQueueLength ?? YouTubePlaybackModeResolver.DefaultRelatedQueueLength
+        };
+        _dialogError = null;
+        _showEditor = true;
+    }
+
+    private void CloseEditor()
+    {
+        if (_isSaving) return;
+        _showEditor = false;
+        _dialogError = null;
+    }
+
+    private async Task SaveSourceAsync()
+    {
+        if (_settings is null || _isSaving) return;
+        if (string.IsNullOrWhiteSpace(_draft.Name) || string.IsNullOrWhiteSpace(_draft.Url))
+        {
+            _dialogError = "Name and URL are required.";
+            return;
+        }
+
+        var duplicate = AllSources.Any(source => source.Key != _editingKey && source.Type == _draft.Type && string.Equals(source.Url, _draft.Url.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (duplicate)
+        {
+            _dialogError = "That source is already saved.";
+            return;
+        }
+
+        _isSaving = true;
+        try
+        {
+            if (_editingKey is not null) RemoveByKey(_editingKey);
+            AddDraft(_draft);
+            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await LoadSettingsAsync();
+            _showEditor = false;
+            ShowStatus(_editingKey is null ? "Source added." : "Source updated.");
+        }
+        catch (Exception ex)
+        {
+            _dialogError = $"Source could not be saved: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void AddDraft(SourceDraft draft)
+    {
+        var name = draft.Name.Trim();
+        var url = draft.Url.Trim();
+        switch (draft.Type)
+        {
+            case LibrarySourceType.Radio: _settings!.Stations.Add(new TuneInStation { Name = name, Url = url }); break;
+            case LibrarySourceType.Spotify: _settings!.SpotifyTracks.Add(new SpotifyObject { Name = name, Url = url }); break;
+            case LibrarySourceType.YouTube:
+                _settings!.YouTubeCollections.Add(new YouTubeObject
+                {
+                    Name = name,
+                    Url = url,
+                    PlaybackMode = draft.PlaybackMode,
+                    PreferredQueueLength = Math.Clamp(draft.PreferredQueueLength, 1, 100)
+                });
+                break;
+            case LibrarySourceType.YouTubeMusic: _settings!.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = name, Url = url }); break;
+        }
+    }
+
+    private void OpenDeleteDialog(LibrarySource source) => _pendingDelete = source;
+    private void CancelDelete() => _pendingDelete = null;
+
+    private async Task DeleteSourceAsync()
+    {
+        if (_settings is null || _pendingDelete is null) return;
+        var name = _pendingDelete.Name;
+        RemoveByKey(_pendingDelete.Key);
+        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _pendingDelete = null;
+        await LoadSettingsAsync();
+        ShowStatus($"{name} was deleted.");
+    }
+
+    private void RemoveByKey(string key)
+    {
+        if (_settings is null) return;
+        var separator = key.IndexOf('|');
+        if (separator < 0) return;
+        var type = key[..separator];
+        var url = key[(separator + 1)..];
+        if (type == TypeKey(LibrarySourceType.Radio)) _settings.Stations.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.Spotify)) _settings.SpotifyTracks.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.YouTube)) _settings.YouTubeCollections.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.YouTubeMusic)) _settings.YouTubeMusicCollections.RemoveAll(item => SameUrl(item.Url, url));
+    }
+
+    private async Task PlaySourceAsync(LibrarySource source)
+    {
+        if (_settings is null) return;
+        var speakerIp = !string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)
+            ? PlaybackState.ActiveSpeakerIp
+            : !string.IsNullOrWhiteSpace(_settings.IP_Adress)
+                ? _settings.IP_Adress
+                : _settings.Speakers.FirstOrDefault()?.IpAddress;
+        if (string.IsNullOrWhiteSpace(speakerIp))
+        {
+            ShowStatus("Configure a speaker before starting playback.", true);
+            return;
+        }
+
+        _busyKey = source.Key;
+        try
+        {
+            switch (source.Type)
+            {
+                case LibrarySourceType.Radio: await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speakerIp, source.Url); break;
+                case LibrarySourceType.Spotify: await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(speakerIp, source.Url); break;
+                case LibrarySourceType.YouTube:
+                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(
+                        speakerIp,
+                        source.Url,
+                        source.PlaybackMode ?? YouTubePlaybackMode.AutoQueueRelated,
+                        source.PreferredQueueLength ?? YouTubePlaybackModeResolver.DefaultRelatedQueueLength);
+                    break;
+                case LibrarySourceType.YouTubeMusic: await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(speakerIp, source.Url, _settings.AutoPlayStationUrl); break;
+            }
+            await _uow.ISonosConnectorRepo.StartPlaying(speakerIp);
+            ShowStatus($"Playing {source.Name}.");
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Playback failed: {ex.Message}", true);
+        }
+        finally
+        {
+            _busyKey = null;
+        }
+    }
+
+    private void ShowStatus(string message, bool isError = false) { _statusMessage = message; _statusIsError = isError; }
+    private static bool SameUrl(string? left, string right) => string.Equals(left?.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+    private static string TypeKey(LibrarySourceType type) => type.ToString().ToLowerInvariant();
+    private static string TypeLabel(LibrarySourceType type) => type switch { LibrarySourceType.Radio => "Radio", LibrarySourceType.YouTubeMusic => "YouTube Music", _ => type.ToString() };
+    private static string SourceIcon(LibrarySourceType type) => type switch { LibrarySourceType.Radio => "rss", LibrarySourceType.Spotify => "music", LibrarySourceType.YouTube => "play", _ => "headphones" };
+    private static string FormatPlaybackMode(YouTubePlaybackMode mode) => mode switch
+    {
+        YouTubePlaybackMode.PlaylistOrdered => "Playlist in order",
+        YouTubePlaybackMode.PlaylistShuffle => "Shuffle playlist",
+        YouTubePlaybackMode.AutoQueueRelated => "Auto-queue related",
+        _ => mode.ToString()
+    };
+
+    private enum LibrarySourceType { Radio, Spotify, YouTube, YouTubeMusic }
+    private sealed record LibrarySource(
+        string Key,
+        LibrarySourceType Type,
+        string Name,
+        string Url,
+        YouTubePlaybackMode? PlaybackMode = null,
+        int? PreferredQueueLength = null);
+    private sealed class SourceDraft
+    {
+        public LibrarySourceType Type { get; set; } = LibrarySourceType.Radio;
+        public string Name { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+        public YouTubePlaybackMode PlaybackMode { get; set; } = YouTubePlaybackMode.AutoQueueRelated;
+        public int PreferredQueueLength { get; set; } = YouTubePlaybackModeResolver.DefaultRelatedQueueLength;
+    }
+}

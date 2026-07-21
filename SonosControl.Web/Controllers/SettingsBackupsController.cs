@@ -20,16 +20,20 @@ public sealed class SettingsBackupsController : ControllerBase
     private readonly IUnitOfWork _uow;
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<SettingsBackupsController> _logger;
+    private readonly string _dataDirectory;
 
-    private static string DataDirectory => Path.Combine(AppContext.BaseDirectory, "Data");
-    private static string ConfigPath => Path.Combine(DataDirectory, "config.json");
-    private static string BackupDirectory => Path.Combine(DataDirectory, "backups");
+    private string BackupDirectory => Path.Combine(_dataDirectory, "backups");
 
-    public SettingsBackupsController(IUnitOfWork uow, ActionLogger actionLogger, ILogger<SettingsBackupsController> logger)
+    public SettingsBackupsController(
+        IUnitOfWork uow,
+        ActionLogger actionLogger,
+        ILogger<SettingsBackupsController> logger,
+        IWebHostEnvironment environment)
     {
         _uow = uow;
         _actionLogger = actionLogger;
         _logger = logger;
+        _dataDirectory = Path.Combine(environment.ContentRootPath, "Data");
     }
 
     [HttpGet]
@@ -48,16 +52,15 @@ public sealed class SettingsBackupsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<BackupFileInfo>> Create()
     {
-        if (!System.IO.File.Exists(ConfigPath))
+        var fileName = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
+            "manual",
+            HttpContext.RequestAborted);
+        if (fileName is null)
         {
             return NotFound("config.json was not found.");
         }
 
-        Directory.CreateDirectory(BackupDirectory);
-        var fileName = $"config-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
         var targetPath = Path.Combine(BackupDirectory, fileName);
-        System.IO.File.Copy(ConfigPath, targetPath, overwrite: false);
-
         await _actionLogger.LogAsync("ConfigBackupCreated", fileName);
         var info = new FileInfo(targetPath);
         return Ok(new BackupFileInfo(info.Name, info.CreationTimeUtc, info.Length));
@@ -94,11 +97,16 @@ public sealed class SettingsBackupsController : ControllerBase
             return BadRequest("Backup file could not be deserialized.");
         }
 
+        var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
+            "pre-restore",
+            HttpContext.RequestAborted);
         await _uow.ISettingsRepo.WriteSettings(importedSettings);
-        await _actionLogger.LogAsync("ConfigBackupRestored", sanitized);
+        await _actionLogger.LogAsync(
+            "ConfigBackupRestored",
+            $"{sanitized}; safety backup: {safetyBackup ?? "not required"}");
 
         _logger.LogInformation("Settings restored from backup {FileName}.", sanitized);
-        return Ok(new { restored = sanitized });
+        return Ok(new { restored = sanitized, safetyBackup });
     }
 
     [HttpPost("import")]
@@ -127,12 +135,16 @@ public sealed class SettingsBackupsController : ControllerBase
             return BadRequest("The uploaded file is not a valid Sonos settings JSON.");
         }
 
+        var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
+            "pre-import",
+            HttpContext.RequestAborted);
         await _uow.ISettingsRepo.WriteSettings(importedSettings);
-        await _actionLogger.LogAsync("ConfigImported", file.FileName);
+        await _actionLogger.LogAsync("ConfigImported", $"{file.FileName}; safety backup: {safetyBackup ?? "not required"}");
         _logger.LogInformation("Settings imported from {FileName}.", file.FileName);
 
-        return Ok(new { imported = file.FileName });
+        return Ok(new { imported = file.FileName, safetyBackup });
     }
 
     public sealed record BackupFileInfo(string FileName, DateTime CreatedUtc, long Bytes);
+
 }
