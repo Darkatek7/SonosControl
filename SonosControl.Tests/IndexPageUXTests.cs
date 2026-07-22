@@ -35,6 +35,7 @@ public class IndexPageUXTests
         {
             Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
             Assert.Empty(cut.FindAll("[data-qa='global-player-bar']"));
+            Assert.Single(cut.FindAll("[data-qa='now-playing-hero']"));
             Assert.NotEmpty(cut.FindAll("[data-qa='room-card']"));
             Assert.Single(cut.FindAll(".home-quick-library"));
             Assert.Equal("/library", cut.Find(".home-quick-library a").GetAttribute("href"));
@@ -111,8 +112,40 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll("[data-qa='home-dashboard']"));
-            Assert.Contains("No saved sources yet. Add one in Library.", cut.Markup);
-            Assert.Single(cut.FindAll("a[href='/library']"));
+            Assert.Contains("Your quick access is waiting", cut.Markup);
+            Assert.Contains("Save a source in Library and it will appear here.", cut.Markup);
+            Assert.Equal(2, cut.FindAll("a[href='/library']").Count);
+        });
+    }
+
+    [Fact]
+    public void IndexPage_RendersSpeakerSetupStateWithoutPlaybackHero_WhenNoRoomsExist()
+    {
+        using var ctx = new TestContext();
+        var settings = new SonosSettings
+        {
+            IP_Adress = string.Empty,
+            Speakers = new List<SonosSpeaker>(),
+            Stations = new List<TuneInStation>(),
+            SpotifyTracks = new List<SpotifyObject>(),
+            YouTubeCollections = new List<YouTubeObject>(),
+            YouTubeMusicCollections = new List<YouTubeMusicObject>()
+        };
+        using var resources = ConfigureServices(
+            ctx,
+            settings.Stations,
+            settings.SpotifyTracks,
+            settings.YouTubeMusicCollections,
+            settings);
+
+        var cut = ctx.RenderComponent<IndexPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[data-qa='now-playing-hero']"));
+            Assert.Empty(cut.FindAll("[data-qa='room-card']"));
+            Assert.Contains("No rooms configured", cut.Markup);
+            Assert.Single(cut.FindAll("a[href='/administration/devices']"));
         });
     }
 

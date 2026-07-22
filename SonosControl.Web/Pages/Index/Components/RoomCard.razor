@@ -5,10 +5,13 @@
          data-qa="room-card"
          aria-label="@($"Speaker {Speaker.Name}")">
     <header class="room-card__head">
-        <span class="room-card__dot @StatusClass" aria-hidden="true"></span>
+        <span class="room-card__speaker-icon" aria-hidden="true"><Icon Name="speaker" Size="18" /></span>
         <div class="room-card__title">
             <strong>@Speaker.Name</strong>
-            <span class="room-card__status">@StatusLabel</span>
+            <span class="room-card__status">
+                <span class="room-card__dot @StatusClass" aria-hidden="true"></span>
+                @StatusLabel
+            </span>
         </div>
         @if (IsActive)
         {
@@ -18,7 +21,7 @@
 
     @if (IsActive)
     {
-        <div class="room-card__volume">
+        <div class="room-card__volume room-card__volume--active">
             <Icon Name="volume" Size="14" />
             <VolumeControl Value="@ActiveVolume"
                            MaxVolume="@MaxVolume"
