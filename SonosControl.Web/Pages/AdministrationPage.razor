@@ -7,8 +7,10 @@
 @page "/config"
 @page "/admin/users"
 @page "/settings-backups"
+@using Microsoft.AspNetCore.Components.Routing
 @using SonosControl.Web.Services
 @attribute [Authorize(Roles = "admin,superadmin")]
+@implements IDisposable
 @inject NavigationManager Navigation
 @inject AutomationRuntimeStatus RuntimeStatus
 
@@ -63,16 +65,14 @@
     private string _activeTab = "devices";
     private bool _redirectedAlias;
 
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
     protected override void OnParametersSet()
     {
-        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
-        _activeTab = route switch
-        {
-            "administration/settings" or "config" => "settings",
-            "administration/users" or "admin/users" => "users",
-            "administration/backups" or "settings-backups" => "backups",
-            _ => "devices"
-        };
+        _activeTab = ResolveTab(Navigation.Uri);
     }
 
     protected override void OnAfterRender(bool firstRender)
@@ -95,7 +95,41 @@
         }
     }
 
-    private void SelectTab(string tab) => Navigation.NavigateTo($"/administration/{tab}");
+    private void SelectTab(string tab)
+    {
+        _activeTab = tab;
+        Navigation.NavigateTo($"/administration/{tab}");
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        var tab = ResolveTab(args.Location);
+        if (_activeTab == tab) return;
+
+        _ = InvokeAsync(() =>
+        {
+            _activeTab = tab;
+            StateHasChanged();
+        });
+    }
+
+    private string ResolveTab(string location)
+    {
+        var route = Navigation.ToBaseRelativePath(location).Split('?', '#')[0].Trim('/');
+        return route switch
+        {
+            "administration/settings" or "config" => "settings",
+            "administration/users" or "admin/users" => "users",
+            "administration/backups" or "settings-backups" => "backups",
+            _ => "devices"
+        };
+    }
+
     private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
 }
