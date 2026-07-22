@@ -4,12 +4,15 @@
 @inject PlaybackUiStateService PlaybackState
 
 <section class="np-hero @(HasArt ? "np-hero--has-art" : "np-hero--no-art")"
-         data-qa="now-playing-hero" aria-label="Now playing">
+         data-qa="now-playing-hero" aria-labelledby="now-playing-hero-title">
     <div class="np-hero__bg" aria-hidden="true">
         @if (HasArt)
         {
             <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
         }
+        <span class="np-hero__ring np-hero__ring--one"></span>
+        <span class="np-hero__ring np-hero__ring--two"></span>
+        <span class="np-hero__ring np-hero__ring--three"></span>
     </div>
 
     <div class="np-hero__panel">
@@ -25,24 +28,39 @@
         </div>
 
         <div class="np-hero__meta">
-            <span class="np-hero__eyebrow">Now Playing</span>
-            <h2 class="np-hero__title">@PlaybackState.CurrentTrack</h2>
+            <div class="np-hero__status-line">
+                <span class="np-hero__eyebrow">Now Playing</span>
+                @if (PlaybackState.IsPlaying)
+                {
+                    <div class="np-hero__eq" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                }
+            </div>
+            <h2 class="np-hero__title" id="now-playing-hero-title">@PlaybackState.CurrentTrack</h2>
             <span class="np-hero__source">@PlaybackState.CurrentStationDisplay</span>
-            @if (PlaybackState.IsPlaying)
-            {
-                <div class="np-hero__eq" aria-hidden="true">
-                    <span></span><span></span><span></span><span></span>
-                </div>
-            }
+            <div class="np-hero__context">
+                <span class="np-hero__room-chip">
+                    <Icon Name="speaker" Size="14" />
+                    <span>Active room</span>
+                    <strong>@PlaybackState.ActiveSpeakerName</strong>
+                </span>
+                <span class="np-hero__playback-state @(PlaybackState.IsPlaying ? "is-playing" : "is-paused")">
+                    <span aria-hidden="true"></span>
+                    @(PlaybackState.IsPlaying ? "Playing" : "Paused")
+                </span>
+            </div>
         </div>
 
         <div class="np-hero__transport">
             <button type="button" class="np-hero__btn"
+                    data-qa="home-player-refresh"
                     @onclick="Refresh" disabled="@PlaybackState.IsLoading"
                     aria-label="Refresh playback state">
                 <Icon Name="refresh" Size="18" Class="@(PlaybackState.IsLoading ? "icon-spin" : "")" />
             </button>
             <button type="button" class="np-hero__play"
+                    data-qa="home-player-toggle"
                     @onclick="Toggle" disabled="@PlaybackState.IsLoading"
                     aria-label="@(PlaybackState.IsPlaying ? "Pause playback" : "Start playback")">
                 @if (PlaybackState.IsLoading)
@@ -55,6 +73,7 @@
                 }
             </button>
             <button type="button" class="np-hero__btn"
+                    data-qa="home-player-next"
                     @onclick="Skip" disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping)"
                     aria-label="Next track">
                 @if (PlaybackState.IsSkipping)
@@ -67,65 +86,10 @@
                 }
             </button>
         </div>
-
-        <div class="np-hero__room">
-            <div class="np-hero__room-id">
-                <span class="np-hero__room-label">Active room</span>
-                <strong class="np-hero__room-name">@PlaybackState.ActiveSpeakerName</strong>
-            </div>
-            <div class="np-hero__room-actions">
-                <button type="button" class="btn btn-sm btn-outline-primary"
-                        data-qa="home-group-speakers"
-                        @onclick="OpenGroup" disabled="@IsGrouping"
-                        aria-label="Group speakers">
-                    @if (IsGrouping)
-                    {
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    }
-                    else
-                    {
-                        <Icon Name="link" Size="14" />
-                    }
-                    <span>Group</span>
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary"
-                        @onclick="Ungroup" disabled="@IsUngrouping"
-                        aria-label="Ungroup active speaker">
-                    @if (IsUngrouping)
-                    {
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    }
-                    else
-                    {
-                        <Icon Name="unlink" Size="14" />
-                    }
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary"
-                        @onclick="OpenTimer" aria-label="Open timed playback">
-                    <Icon Name="timer" Size="14" /> <span>Timer</span>
-                </button>
-                @if (TimerEndTimeUtc is not null)
-                {
-                    var local = TimerEndTimeUtc.Value.ToLocalTime();
-                    <button type="button" class="btn btn-sm btn-outline-secondary"
-                            @onclick="CancelTimer" aria-label="Cancel timed playback">
-                        Cancel · @local.ToString("t")
-                    </button>
-                }
-            </div>
-        </div>
     </div>
 </section>
 
 @code {
-    [Parameter] public DateTime? TimerEndTimeUtc { get; set; }
-    [Parameter] public bool IsGrouping { get; set; }
-    [Parameter] public bool IsUngrouping { get; set; }
-    [Parameter] public EventCallback OnOpenTimer { get; set; }
-    [Parameter] public EventCallback OnCancelTimer { get; set; }
-    [Parameter] public EventCallback OnOpenGroup { get; set; }
-    [Parameter] public EventCallback OnUngroup { get; set; }
-
     private bool HasArt => !string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl);
 
     protected override void OnInitialized()
@@ -138,10 +102,6 @@
     private Task Refresh() => PlaybackState.RefreshAsync();
     private Task Toggle() => PlaybackState.TogglePlaybackAsync();
     private Task Skip() => PlaybackState.SkipNextAsync();
-    private Task OpenTimer() => OnOpenTimer.InvokeAsync();
-    private Task CancelTimer() => OnCancelTimer.InvokeAsync();
-    private Task OpenGroup() => OnOpenGroup.InvokeAsync();
-    private Task Ungroup() => OnUngroup.InvokeAsync();
 
     public void Dispose() => PlaybackState.StateChanged -= OnChanged;
 }
