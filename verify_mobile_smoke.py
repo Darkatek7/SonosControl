@@ -1,8 +1,9 @@
 import os
 import platform
 import re
-import sqlite3
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from urllib.error import URLError, HTTPError
@@ -25,6 +26,7 @@ VIEWPORTS = [
     ("tablet", 768, 900),
     ("desktop", 1280, 900),
 ]
+THEMES = ["light", "dark"]
 
 ROUTES = [
     ("/", "home", "Favourites"),
@@ -62,6 +64,9 @@ def start_local_server():
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "mobile_smoke_server.log"
     log_stream = log_path.open("w", encoding="utf-8")
+    runtime_dir = Path(tempfile.mkdtemp(prefix="sonoscontrol-smoke-", dir=artifacts_dir)).resolve()
+    settings_dir = runtime_dir / "settings"
+    settings_dir.mkdir(parents=True, exist_ok=True)
 
     process = subprocess.Popen(
         ["dotnet", "run", "--project", "SonosControl.Web", "--no-build", "--urls", BASE_URL],
@@ -72,16 +77,21 @@ def start_local_server():
         env={
             **os.environ,
             "BackgroundServices__Enabled": os.getenv("BackgroundServices__Enabled", "false"),
+            "Settings__DataDirectory": str(settings_dir),
+            "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
+            "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
+            "ADMIN_EMAIL": os.getenv("ADMIN_EMAIL", "admin@smoke.invalid"),
+            "ADMIN_PASSWORD": os.getenv("ADMIN_PASSWORD", "Test1234."),
             "DataProtection__KeysDirectory": os.getenv(
                 "DataProtection__KeysDirectory",
                 str((Path(__file__).resolve().parent / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
             ),
         },
     )
-    return process, log_stream, log_path
+    return process, log_stream, log_path, runtime_dir
 
 
-def stop_local_server(process, log_stream):
+def stop_local_server(process, log_stream, runtime_dir=None):
     if process and process.poll() is None:
         process.terminate()
         try:
@@ -91,6 +101,8 @@ def stop_local_server(process, log_stream):
             process.wait(timeout=5)
     if log_stream:
         log_stream.close()
+    if runtime_dir:
+        shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
 def assert_no_horizontal_overflow(page):
@@ -166,6 +178,18 @@ def assert_bottom_player_does_not_cover_content(page):
         ), "Main content does not reserve enough space for the global bottom player."
 
 
+def apply_theme(page, theme):
+    page.evaluate(
+        """
+        theme => {
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+        }
+        """,
+        theme,
+    )
+
+
 def assert_home_dashboard_layout(page):
     expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Favourites")).to_be_visible(timeout=10000)
@@ -206,24 +230,26 @@ def assert_library_cards_are_uniform(page):
 
 def verify_responsive_home(page, output_dir):
     for slug, width, height in VIEWPORTS:
-        page.set_viewport_size({"width": width, "height": height})
-        page.goto(f"{BASE_URL}/", wait_until="networkidle")
-        assert_global_player_visible(page)
-        assert_home_dashboard_layout(page)
-        if width >= 1200:
-            expect(page.locator("#global-player-volume-number")).to_be_visible(timeout=10000)
-        if width <= 768:
-            page.get_by_role("button", name="Open expanded player").click()
-            sheet = page.get_by_role("dialog", name="Now playing")
-            expect(sheet).to_be_visible(timeout=10000)
-            expect(sheet.get_by_label("Room", exact=True)).to_be_visible()
-            expect(sheet.get_by_label("Volume for active room percentage")).to_be_visible()
-            expect(sheet.get_by_role("button", name="Sync", exact=True)).to_be_visible()
-            expect(sheet.get_by_role("heading", name="Queue")).to_be_visible()
-            sheet.get_by_role("button", name="Close expanded player").click()
-        assert_no_horizontal_overflow(page)
-        assert_bottom_player_does_not_cover_content(page)
-        page.screenshot(path=str(output_dir / f"home_{slug}.png"), full_page=True)
+        for theme in THEMES:
+            page.set_viewport_size({"width": width, "height": height})
+            page.goto(f"{BASE_URL}/", wait_until="networkidle")
+            apply_theme(page, theme)
+            assert_global_player_visible(page)
+            assert_home_dashboard_layout(page)
+            if width >= 1200:
+                expect(page.locator("#global-player-volume-number")).to_be_visible(timeout=10000)
+            if width <= 768:
+                page.get_by_role("button", name="Open expanded player").click()
+                sheet = page.get_by_role("dialog", name="Now playing")
+                expect(sheet).to_be_visible(timeout=10000)
+                expect(sheet.get_by_label("Room", exact=True)).to_be_visible()
+                expect(sheet.get_by_label("Volume for active room percentage")).to_be_visible()
+                expect(sheet.get_by_role("button", name="Sync", exact=True)).to_be_visible()
+                expect(sheet.get_by_role("heading", name="Queue")).to_be_visible()
+                sheet.get_by_role("button", name="Close expanded player").click()
+            assert_no_horizontal_overflow(page)
+            assert_bottom_player_does_not_cover_content(page)
+            page.screenshot(path=str(output_dir / f"home_{slug}_{theme}.png"), full_page=True)
 
 
 def verify_drawer(page):
@@ -243,30 +269,6 @@ def verify_drawer(page):
     page.wait_for_timeout(150)
 
 
-def get_unlocked_admin_usernames():
-    db_path = Path(__file__).resolve().parent / "SonosControl.Web" / "app.db"
-    if not db_path.exists():
-        return []
-
-    try:
-        with sqlite3.connect(db_path) as con:
-            cur = con.cursor()
-            rows = cur.execute(
-                """
-                SELECT DISTINCT u.UserName
-                FROM AspNetUsers u
-                JOIN AspNetUserRoles ur ON ur.UserId = u.Id
-                JOIN AspNetRoles r ON r.Id = ur.RoleId
-                WHERE r.Name IN ('admin', 'superadmin', 'operator')
-                  AND u.LockoutEnd IS NULL
-                ORDER BY CASE WHEN lower(u.UserName) = 'admin' THEN 0 ELSE 1 END, u.UserName
-                """
-            ).fetchall()
-            return [row[0] for row in rows if row and row[0]]
-    except sqlite3.Error:
-        return []
-
-
 def get_login_attempts():
     attempts = []
     seen = set()
@@ -278,7 +280,6 @@ def get_login_attempts():
         usernames.append(USERNAME)
     if ADMIN_USERNAME:
         usernames.append(ADMIN_USERNAME)
-    usernames.extend(get_unlocked_admin_usernames())
     usernames.append("admin")
 
     if PASSWORD:
@@ -325,14 +326,15 @@ def run():
     server_process = None
     server_log_stream = None
     server_log_path = None
+    runtime_dir = None
     started_local_server = False
 
     if AUTO_START_SERVER and not is_server_reachable():
-        server_process, server_log_stream, server_log_path = start_local_server()
+        server_process, server_log_stream, server_log_path, runtime_dir = start_local_server()
         started_local_server = True
         if not wait_for_server_ready(SERVER_START_TIMEOUT_SECONDS, process=server_process):
             exit_code = server_process.poll()
-            stop_local_server(server_process, server_log_stream)
+            stop_local_server(server_process, server_log_stream, runtime_dir)
             raise RuntimeError(
                 f"Timed out waiting for {BASE_URL} (server exit code: {exit_code}). "
                 f"Check server log: {server_log_path}"
@@ -348,6 +350,9 @@ def run():
             browser = launch_chromium(p)
             context = browser.new_context(viewport={"width": 390, "height": 844})
             page = context.new_page()
+            browser_errors = []
+            page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
+            page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
 
             output_dir = Path("mobile_smoke_screenshots")
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -375,26 +380,34 @@ def run():
 
             for viewport_slug, width, height in VIEWPORTS:
                 page.set_viewport_size({"width": width, "height": height})
-                for route, slug, expected_text in ROUTES:
-                    page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
-                    main_content = page.locator("article.content")
-                    expect(main_content.get_by_text(expected_text, exact=True).first).to_be_visible(timeout=10000)
+                for theme in THEMES:
+                    for route, slug, expected_text in ROUTES:
+                        page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
+                        apply_theme(page, theme)
+                        main_content = page.locator("article.content")
+                        expect(main_content.get_by_text(expected_text, exact=True).first).to_be_visible(timeout=10000)
 
-                    assert_global_player_visible(page)
-                    if width < 992:
-                        verify_drawer(page)
-                    assert_no_horizontal_overflow(page)
-                    assert_bottom_player_does_not_cover_content(page)
-                    if route == "/library":
-                        assert_library_cards_are_uniform(page)
+                        assert_global_player_visible(page)
+                        if width < 992:
+                            verify_drawer(page)
+                        assert_no_horizontal_overflow(page)
+                        assert_bottom_player_does_not_cover_content(page)
+                        if route == "/library":
+                            assert_library_cards_are_uniform(page)
 
-                    page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}.png"), full_page=True)
+                        page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}_{theme}.png"), full_page=True)
+
+            assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
 
             context.close()
             browser.close()
+            print(
+                f"UI smoke passed: {len(VIEWPORTS)} viewports × {len(THEMES)} themes × "
+                f"{len(ROUTES)} primary routes; isolated runtime={started_local_server}."
+            )
         finally:
             if started_local_server:
-                stop_local_server(server_process, server_log_stream)
+                stop_local_server(server_process, server_log_stream, runtime_dir)
 
 
 if __name__ == "__main__":

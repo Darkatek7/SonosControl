@@ -71,7 +71,7 @@
                     </button>
                 }
             </div>
-            <button class="lookup-shell__search-button btn btn-primary"
+            <button type="button" class="lookup-shell__search-button btn btn-primary"
                     @onclick="SearchStations"
                     disabled="@(string.IsNullOrWhiteSpace(searchTerm) || isLoading)"
                     aria-label="Search stations"

@@ -14,9 +14,7 @@
     max-width: 100%;
     border: 1px solid rgba(13, 148, 136, 0.22);
     border-radius: 14px;
-    background:
-        radial-gradient(circle at top left, rgba(13, 148, 136, 0.12), transparent 34rem),
-        linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+    background: var(--surface-elevated);
     box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
@@ -344,9 +342,7 @@
 [data-theme='dark'] .users-registration-panel,
 [data-theme='dark'] .users-panel {
     border-color: rgba(139, 92, 246, 0.34);
-    background:
-        radial-gradient(circle at top left, rgba(139, 92, 246, 0.16), transparent 34rem),
-        linear-gradient(145deg, rgba(26, 23, 42, 0.96), rgba(16, 18, 31, 0.98));
+    background: var(--surface-elevated);
     box-shadow: none;
 }
 

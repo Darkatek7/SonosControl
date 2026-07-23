@@ -7,28 +7,6 @@
 <PageTitle>Schedule Windows - Sonos Control</PageTitle>
 
 <div class="schedule-console-shell">
-    <section class="schedule-hero" aria-labelledby="schedule-windows-heading">
-        <div class="schedule-hero__copy">
-            <span class="spotify-eyebrow">Automation</span>
-            <h1 id="schedule-windows-heading">Schedule Windows</h1>
-            <p>Define recurring playback windows with a clear run order, scene handoffs, and optional fades.</p>
-        </div>
-        <div class="schedule-hero__actions">
-            <div class="schedule-hero__stat">
-                <span><Icon Name="schedule" Size="16" /> Windows</span>
-                <strong>@(_settings?.ScheduleWindows?.Count ?? 0)</strong>
-            </div>
-            <div class="schedule-hero__stat">
-                <span><Icon Name="check" Size="16" /> Enabled</span>
-                <strong>@GetEnabledWindowCount()</strong>
-            </div>
-            @if (_canManage)
-            {
-                <button class="btn btn-primary schedule-new-button" @onclick="CreateNewWindow"><Icon Name="plus" Size="16" /> New schedule</button>
-            }
-        </div>
-    </section>
-
     @if (!string.IsNullOrWhiteSpace(_statusMessage))
     {
         <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") schedule-alert" role="status">@_statusMessage</div>
@@ -64,6 +42,12 @@
                         <span class="spotify-eyebrow">Run order</span>
                         <h2><Icon Name="schedule" Size="18" /> Window library</h2>
                     </div>
+                    @if (_canManage)
+                    {
+                        <button type="button" class="btn btn-primary schedule-new-button" @onclick="CreateNewWindow">
+                            <Icon Name="plus" Size="16" /> New schedule
+                        </button>
+                    }
                 </div>
 
                 @if (_settings.ScheduleWindows.Any())
@@ -91,7 +75,7 @@
                                             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => MoveWindowAsync(window, -1)" disabled="@(GetHumanOrder(window) == 1 || _isSaving)" aria-label="@($"Move {window.Name} earlier")"><Icon Name="chevron-up" Size="14" /></button>
                                             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => MoveWindowAsync(window, 1)" disabled="@(GetHumanOrder(window) == _settings.ScheduleWindows.Count || _isSaving)" aria-label="@($"Move {window.Name} later")"><Icon Name="chevron-down" Size="14" /></button>
                                         </div>
-                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteWindow(window)" disabled="@_isSaving" aria-label="@($"Delete {window.Name}")" title="@($"Delete {window.Name}")">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteWindow(window)" disabled="@_isSaving" aria-label="@($"Delete {window.Name}")" title="@($"Delete {window.Name}")">
                                             <Icon Name="trash" Size="15" />
                                         </button>
                                     }
@@ -239,7 +223,7 @@
                         @if (_canManage)
                         {
                             <div class="schedule-editor-actions">
-                                <button class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">
+                                <button type="button" class="btn btn-primary" @onclick="SaveWindow" disabled="@_isSaving">
                                     <Icon Name="check" Size="16" /> Save schedule
                                 </button>
                             </div>
@@ -268,8 +252,6 @@
     private bool _statusIsError;
     private bool _isSaving;
     private bool _canManage;
-
-    private int GetEnabledWindowCount() => _settings?.ScheduleWindows?.Count(window => window.IsEnabled) ?? 0;
 
     private static string FormatWindowTimeRange(ScheduleWindow window)
     {

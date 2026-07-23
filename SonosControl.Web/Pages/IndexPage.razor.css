@@ -17,27 +17,16 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-lg);
-    padding: clamp(var(--spacing-lg), 2.5vw, var(--spacing-xl));
-    overflow: hidden;
-    background:
-        radial-gradient(circle at 8% -30%, color-mix(in srgb, var(--brand-primary) 16%, transparent), transparent 42%),
-        radial-gradient(circle at 92% 0, color-mix(in srgb, var(--brand-accent) 10%, transparent), transparent 36%),
-        color-mix(in srgb, var(--surface-1) 92%, var(--surface-0));
-    border: 1px solid color-mix(in srgb, var(--brand-primary) 14%, var(--border-subtle));
-    border-radius: var(--radius-2xl);
-    box-shadow: var(--shadow-sm);
+    padding: 0;
+    overflow: visible;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .home-stage::after {
-    content: "";
-    position: absolute;
-    top: -8rem;
-    right: -7rem;
-    width: 19rem;
-    height: 19rem;
-    border: 1px solid color-mix(in srgb, var(--brand-primary) 12%, transparent);
-    border-radius: 999px;
-    pointer-events: none;
+    content: none;
 }
 
 .home-eyebrow {
@@ -67,7 +56,9 @@
     margin: var(--spacing-2xs) 0 0;
     color: var(--text-primary);
     font-family: var(--font-family-display);
-    font-size: clamp(1.65rem, 2vw + 1rem, 2.35rem);
+    font-size: clamp(2rem, 3vw + 1rem, 3.35rem);
+    font-weight: 600;
+    letter-spacing: -0.04em;
     line-height: var(--line-height-tight);
 }
 
@@ -114,14 +105,14 @@
 
 .home-status-pill.is-active {
     color: white;
-    background: var(--gradient-primary);
-    border: 1px solid color-mix(in srgb, white 15%, transparent);
-    box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-primary) 22%, transparent);
+    background: var(--brand-primary);
+    border: 1px solid var(--brand-primary);
+    box-shadow: none;
 }
 
 .home-status-pill.is-active .home-status-pill__dot {
     box-shadow: 0 0 0 4px color-mix(in srgb, white 18%, transparent);
-    animation: home-status-pulse 1.8s ease-in-out infinite;
+    animation: none;
 }
 
 @keyframes home-status-pulse {
@@ -141,8 +132,7 @@
 }
 
 .home-panel {
-    background:
-        linear-gradient(145deg, color-mix(in srgb, var(--surface-1) 96%, var(--brand-primary) 4%), var(--surface-1));
+    background: var(--surface-1);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-sm);
@@ -372,7 +362,7 @@
     padding: 0;
     color: white;
     cursor: pointer;
-    background: var(--gradient-primary);
+    background: var(--brand-primary);
     border: 1px solid color-mix(in srgb, white 12%, transparent);
     border-radius: 999px;
     box-shadow: 0 5px 14px color-mix(in srgb, var(--brand-primary) 22%, transparent);
@@ -406,9 +396,7 @@
     padding: var(--spacing-xl);
     color: var(--text-muted);
     text-align: center;
-    background:
-        radial-gradient(circle at 50% 0, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 58%),
-        color-mix(in srgb, var(--surface-2) 45%, transparent);
+    background: var(--surface-elevated);
     border: 1px dashed var(--border-subtle);
     border-radius: var(--radius-xl);
 }
@@ -463,7 +451,7 @@
     right: var(--radius-xl);
     left: var(--radius-xl);
     height: 2px;
-    background: var(--gradient-primary);
+    background: var(--brand-primary);
     border-radius: 999px;
     pointer-events: none;
 }
@@ -474,6 +462,18 @@
 
 .home-footer__card--health.is-clear::before {
     background: var(--brand-success);
+}
+
+.home-footer__card--automation {
+    --section-accent: var(--brand-primary);
+}
+
+.home-footer__card--health.has-warnings {
+    --section-accent: var(--brand-danger);
+}
+
+.home-footer__card--health.is-clear {
+    --section-accent: var(--brand-success);
 }
 
 .home-footer__card ::deep .section-card {
@@ -648,9 +648,7 @@
     gap: var(--spacing-md);
     min-height: 7rem;
     padding: var(--spacing-lg);
-    background:
-        radial-gradient(circle at 0 50%, color-mix(in srgb, var(--brand-success) 12%, transparent), transparent 55%),
-        color-mix(in srgb, var(--surface-2) 54%, transparent);
+    background: var(--surface-elevated);
     border: 1px solid color-mix(in srgb, var(--brand-success) 16%, var(--border-subtle));
     border-radius: var(--radius-xl);
 }
@@ -667,28 +665,40 @@
     border-radius: 999px;
 }
 
-.home-health-ok strong,
-.home-health-ok span {
+.home-health-ok > div > strong,
+.home-health-ok > div > span {
     display: block;
 }
 
-.home-health-ok strong {
+.home-health-ok > div > strong {
     color: var(--text-primary);
     font-size: var(--font-size-base);
 }
 
-.home-health-ok div > span {
+.home-health-ok > div > span {
     margin-top: var(--spacing-2xs);
     color: var(--text-muted);
     font-size: var(--font-size-sm);
 }
 
-[data-theme='dark'] .home-stage,
 [data-theme='dark'] .home-panel {
-    background:
-        radial-gradient(circle at 8% -30%, color-mix(in srgb, var(--brand-primary) 15%, transparent), transparent 42%),
-        color-mix(in srgb, var(--surface-1) 94%, black 6%);
+    background: var(--surface-elevated);
     border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+}
+
+[data-theme='dark'] .rooms-section {
+    background: color-mix(in srgb, var(--brand-primary) 5%, var(--surface-elevated));
+    border-color: color-mix(in srgb, var(--brand-primary) 24%, var(--border-strong));
+}
+
+[data-theme='dark'] .home-quick-library {
+    background: color-mix(in srgb, var(--brand-accent) 4%, var(--surface-elevated));
+    border-color: color-mix(in srgb, var(--brand-accent) 22%, var(--border-strong));
+}
+
+[data-theme='dark'] .library__item {
+    background: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-2));
+    border-color: color-mix(in srgb, var(--brand-primary) 8%, transparent);
 }
 
 [data-theme='dark'] .library__item-icon {

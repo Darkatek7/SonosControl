@@ -1,5 +1,5 @@
 {
-  // Keep document globs aligned with .github/workflows/docs-quality.yml.
+  // Keep document globs aligned with .github/workflows/docs-quality.yml and AGENTS.md.
   "config": {
     "default": true,
     "MD013": false,

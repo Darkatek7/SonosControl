@@ -1,0 +1,78 @@
+@inject IJSRuntime JSRuntime
+
+<nav class="workspace-tabs"
+     role="tablist"
+     aria-label="@AriaLabel"
+     aria-orientation="horizontal">
+    @for (var index = 0; index < Items.Count; index++)
+    {
+        var itemIndex = index;
+        var item = Items[index];
+        var selected = string.Equals(item.Key, ActiveKey, StringComparison.OrdinalIgnoreCase);
+        <button id="@GetTabId(item)"
+                type="button"
+                role="tab"
+                class="workspace-tab @(selected ? "is-active" : string.Empty)"
+                aria-selected="@(selected ? "true" : "false")"
+                aria-controls="@GetPanelId(item)"
+                tabindex="@(selected ? "0" : "-1")"
+                @onclick="() => SelectAsync(itemIndex, focus: false)"
+                @onkeydown="args => HandleKeyDownAsync(args, itemIndex)">
+            @item.Label
+        </button>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<WorkspaceTabItem> Items { get; set; } = Array.Empty<WorkspaceTabItem>();
+
+    [Parameter, EditorRequired]
+    public string ActiveKey { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public EventCallback<string> OnSelect { get; set; }
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Workspace sections";
+
+    [Parameter]
+    public string IdPrefix { get; set; } = "workspace";
+
+    public string GetTabId(WorkspaceTabItem item) => $"{IdPrefix}-tab-{item.Key}";
+
+    public string GetPanelId(WorkspaceTabItem item)
+        => item.PanelId ?? $"{IdPrefix}-panel-{item.Key}";
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs args, int currentIndex)
+    {
+        var targetIndex = args.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => (currentIndex + 1) % Items.Count,
+            "ArrowLeft" or "ArrowUp" => (currentIndex - 1 + Items.Count) % Items.Count,
+            "Home" => 0,
+            "End" => Items.Count - 1,
+            _ => -1
+        };
+
+        if (targetIndex >= 0)
+        {
+            await SelectAsync(targetIndex, focus: true);
+        }
+    }
+
+    private async Task SelectAsync(int index, bool focus)
+    {
+        if (index < 0 || index >= Items.Count)
+        {
+            return;
+        }
+
+        var item = Items[index];
+        await OnSelect.InvokeAsync(item.Key);
+        if (focus)
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.focusById", GetTabId(item));
+        }
+    }
+}

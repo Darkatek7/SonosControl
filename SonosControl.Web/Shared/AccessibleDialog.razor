@@ -1,0 +1,115 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+
+@if (Visible)
+{
+    <div class="app-dialog-backdrop @BackdropClass"
+         role="presentation"
+         @onclick="HandleBackdropAsync">
+        <section class="app-dialog @SizeClass"
+                 role="@Role"
+                 aria-modal="true"
+                 aria-labelledby="@_titleId"
+                 aria-describedby="@DescriptionId"
+                 tabindex="-1"
+                 @ref="_dialogRef"
+                 @onkeydown="HandleKeyDownAsync"
+                 @onclick:stopPropagation="true">
+            <div class="app-dialog__header">
+                <div>
+                    @if (!string.IsNullOrWhiteSpace(Eyebrow))
+                    {
+                        <span class="workspace-eyebrow">@Eyebrow</span>
+                    }
+                    <h2 id="@_titleId">@Title</h2>
+                </div>
+                <button type="button"
+                        class="btn app-dialog__close"
+                        @ref="_closeRef"
+                        @onclick="CloseAsync"
+                        aria-label="@CloseLabel">
+                    <Icon Name="x" Size="18" />
+                </button>
+            </div>
+            <div class="app-dialog__body @BodyClass">
+                @ChildContent
+            </div>
+            @if (FooterContent is not null)
+            {
+                <div class="app-dialog__actions">
+                    @FooterContent
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly string _titleId = $"dialog-title-{Guid.NewGuid():N}";
+    private ElementReference _dialogRef;
+    private ElementReference _closeRef;
+    private bool _focusTrapActive;
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Eyebrow { get; set; }
+    [Parameter] public string Role { get; set; } = "dialog";
+    [Parameter] public string? DescriptionId { get; set; }
+    [Parameter] public string SizeClass { get; set; } = string.Empty;
+    [Parameter] public string BackdropClass { get; set; } = string.Empty;
+    [Parameter] public string BodyClass { get; set; } = string.Empty;
+    [Parameter] public string CloseLabel { get; set; } = "Close dialog";
+    [Parameter] public bool CloseOnBackdrop { get; set; } = true;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Visible && !_focusTrapActive)
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.activateFocusTrap", _dialogRef, _closeRef);
+            _focusTrapActive = true;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible && _focusTrapActive)
+        {
+            await ReleaseFocusTrapAsync();
+        }
+    }
+
+    private Task HandleBackdropAsync()
+        => CloseOnBackdrop ? CloseAsync() : Task.CompletedTask;
+
+    private Task HandleKeyDownAsync(KeyboardEventArgs args)
+        => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task CloseAsync()
+    {
+        await ReleaseFocusTrapAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task ReleaseFocusTrapAsync()
+    {
+        if (!_focusTrapActive)
+        {
+            return;
+        }
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.releaseFocusTrap", _dialogRef);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        _focusTrapActive = false;
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseFocusTrapAsync();
+}

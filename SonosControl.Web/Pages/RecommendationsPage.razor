@@ -49,7 +49,7 @@
                 </select>
             </div>
         }
-        <button class="btn btn-outline-primary recommendations-refresh-button" @onclick="LoadAsync" disabled="@_isLoading">
+        <button type="button" class="btn btn-outline-primary recommendations-refresh-button" @onclick="LoadAsync" disabled="@_isLoading">
             <Icon Name="refresh" Size="16" /> Refresh
         </button>
     </section>
@@ -92,7 +92,7 @@
                                 </div>
                                 @if (!string.IsNullOrWhiteSpace(item.SourceUrl) && !string.IsNullOrWhiteSpace(_selectedSpeakerIp))
                                 {
-                                    <button class="btn btn-outline-success btn-sm recommendation-play-button"
+                                    <button type="button" class="btn btn-outline-success btn-sm recommendation-play-button"
                                             @onclick="() => PlayPersonalItemAsync(item)"
                                             disabled="@_isPlayingFromRecommendation"
                                             aria-label="@($"Play {item.Name}")"

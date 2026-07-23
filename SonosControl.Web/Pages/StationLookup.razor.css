@@ -13,7 +13,7 @@
 .lookup-search-panel,
 .lookup-results-panel {
     border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #030712 6%) 0%, color-mix(in srgb, var(--surface-1) 84%, #030712 16%) 100%);
+    background: var(--surface-elevated);
     border-radius: 1rem;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
     min-width: 0;
@@ -25,9 +25,7 @@
     justify-content: space-between;
     gap: var(--spacing-lg);
     padding: clamp(1rem, 2vw, 1.4rem);
-    background:
-        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 16%, transparent) 0%, transparent 42%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, #04070d 6%) 0%, color-mix(in srgb, #101423 80%, var(--surface-1)) 100%);
+    background: var(--surface-elevated);
 }
 
 .lookup-hero__copy {
@@ -51,28 +49,24 @@
 [data-theme='light'] .lookup-search-panel,
 [data-theme='light'] .lookup-results-panel {
     border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+    background: var(--surface-elevated);
+    box-shadow: 0 12px 30px rgba(33, 26, 47, 0.08), 0 2px 8px rgba(124, 77, 204, 0.06);
 }
 
 [data-theme='light'] .lookup-hero {
-    background:
-        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+    background: var(--surface-elevated);
 }
 
 html:not([data-theme='dark']) .lookup-hero,
 html:not([data-theme='dark']) .lookup-search-panel,
 html:not([data-theme='dark']) .lookup-results-panel {
     border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
-    background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, var(--surface-2) 4%) 0%, color-mix(in srgb, var(--surface-1) 84%, var(--surface-2) 16%) 100%);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 118, 110, 0.05);
+    background: var(--surface-elevated);
+    box-shadow: 0 12px 30px rgba(33, 26, 47, 0.08), 0 2px 8px rgba(124, 77, 204, 0.06);
 }
 
 html:not([data-theme='dark']) .lookup-hero {
-    background:
-        radial-gradient(circle at top left, color-mix(in srgb, var(--brand-primary) 12%, transparent) 0%, transparent 42%),
-        linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 94%, var(--surface-2) 6%) 0%, color-mix(in srgb, var(--surface-1) 72%, var(--surface-3) 28%) 100%);
+    background: var(--surface-elevated);
 }
 
 .lookup-hero__meta {
@@ -133,7 +127,7 @@ html:not([data-theme='dark']) .lookup-hero {
     font-size: clamp(1rem, 0.7vw + 0.9rem, 1.28rem);
 }
 
-.lookup-search-panel__heading h2 svg {
+.lookup-search-panel__heading h2 ::deep svg {
     color: var(--brand-primary);
 }
 
@@ -162,7 +156,7 @@ html:not([data-theme='dark']) .lookup-hero {
     max-width: 100%;
 }
 
-.lookup-search-wrapper__icon {
+.lookup-search-wrapper ::deep .lookup-search-wrapper__icon {
     position: absolute;
     left: 1rem;
     top: 50%;
@@ -187,6 +181,7 @@ html:not([data-theme='dark']) .lookup-hero {
     position: absolute;
     right: 0.75rem;
     top: 50%;
+    transform: translateY(-50%);
     display: inline-flex;
     width: 1.8rem;
     height: 1.8rem;
