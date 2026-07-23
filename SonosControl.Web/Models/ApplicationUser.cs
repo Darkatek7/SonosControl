@@ -7,11 +7,11 @@ namespace SonosControl.Web.Models
     {
         [PersonalData]
         [MaxLength(100)]
-        public string FirstName { get; set; }
+        public string FirstName { get; set; } = string.Empty;
 
         [PersonalData]
         [MaxLength(100)]
-        public string LastName { get; set; }
+        public string LastName { get; set; } = string.Empty;
 
         [PersonalData]
         [MaxLength(16)]

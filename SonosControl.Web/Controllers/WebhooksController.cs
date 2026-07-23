@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SonosControl.DAL.Interfaces;
@@ -11,7 +13,7 @@ namespace SonosControl.Web.Controllers;
 [Route("api/webhooks")]
 public sealed class WebhooksController : ControllerBase
 {
-    private static readonly ConcurrentDictionary<string, DateTime> IdempotencyKeys = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, IdempotencyEntry> IdempotencyKeys = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly IConfiguration _configuration;
     private readonly IUnitOfWork _uow;
@@ -49,17 +51,25 @@ public sealed class WebhooksController : ControllerBase
         }
 
         if (!Request.Headers.TryGetValue("X-API-Key", out var providedKey)
-            || !string.Equals(providedKey.ToString(), configuredApiKey, StringComparison.Ordinal))
+            || !ApiKeysMatch(providedKey.ToString(), configuredApiKey))
         {
             return Unauthorized();
         }
 
         CleanupExpiredIdempotencyKeys();
 
+        string? reservedIdempotencyKey = null;
         if (Request.Headers.TryGetValue("Idempotency-Key", out var idempotencyKey)
             && !string.IsNullOrWhiteSpace(idempotencyKey))
         {
-            if (!IdempotencyKeys.TryAdd(idempotencyKey.ToString(), DateTime.UtcNow))
+            var key = idempotencyKey.ToString().Trim();
+            if (key.Length > 200)
+            {
+                return BadRequest("Idempotency-Key may not exceed 200 characters.");
+            }
+
+            var reservation = ReserveIdempotencyKey(key);
+            if (reservation == IdempotencyReservation.Completed)
             {
                 return Ok(new
                 {
@@ -67,8 +77,56 @@ public sealed class WebhooksController : ControllerBase
                     message = "Request already processed."
                 });
             }
+
+            if (reservation == IdempotencyReservation.InProgress)
+            {
+                Response.Headers.RetryAfter = "2";
+                return Conflict(new
+                {
+                    duplicate = true,
+                    inProgress = true,
+                    message = "An identical request is still being processed."
+                });
+            }
+
+            reservedIdempotencyKey = key;
         }
 
+        try
+        {
+            var result = await ExecuteActionAsync(request, cancellationToken);
+            if (reservedIdempotencyKey is not null)
+            {
+                if (IsSuccessful(result))
+                {
+                    IdempotencyKeys[reservedIdempotencyKey] = new IdempotencyEntry(IdempotencyState.Completed, DateTime.UtcNow);
+                }
+                else
+                {
+                    IdempotencyKeys.TryRemove(reservedIdempotencyKey, out _);
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            if (reservedIdempotencyKey is not null)
+            {
+                IdempotencyKeys.TryRemove(reservedIdempotencyKey, out _);
+            }
+
+            _logger.LogError(ex, "Unhandled webhook action failure for {Action}.", request.Action);
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                success = false,
+                error = "The webhook action could not be completed."
+            });
+        }
+    }
+
+    private async Task<IActionResult> ExecuteActionAsync(WebhookActionRequest request, CancellationToken cancellationToken)
+    {
         var action = request.Action.Trim().ToLowerInvariant();
         switch (action)
         {
@@ -124,8 +182,8 @@ public sealed class WebhooksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Webhook transport action failed.");
-            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, error = ex.Message });
+            _logger.LogWarning(ex, "Webhook transport action {Action} failed for speaker {SpeakerIp}.", action, speakerIp);
+            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, error = "The speaker did not complete the transport action." });
         }
     }
 
@@ -169,9 +227,55 @@ public sealed class WebhooksController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Webhook play-source action failed.");
-            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, error = ex.Message });
+            _logger.LogWarning(ex, "Webhook play-source action failed for speaker {SpeakerIp} and source type {SourceType}.", request.SpeakerIp, sourceType);
+            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, error = "The speaker did not start the requested source." });
         }
+    }
+
+    private static bool ApiKeysMatch(string provided, string configured)
+    {
+        var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(provided));
+        var configuredHash = SHA256.HashData(Encoding.UTF8.GetBytes(configured));
+        return CryptographicOperations.FixedTimeEquals(providedHash, configuredHash);
+    }
+
+    private static IdempotencyReservation ReserveIdempotencyKey(string key)
+    {
+        while (true)
+        {
+            var now = DateTime.UtcNow;
+            if (IdempotencyKeys.TryAdd(key, new IdempotencyEntry(IdempotencyState.InProgress, now)))
+            {
+                return IdempotencyReservation.Reserved;
+            }
+
+            if (!IdempotencyKeys.TryGetValue(key, out var existing))
+            {
+                continue;
+            }
+
+            if (existing.UpdatedUtc < now.AddMinutes(-30))
+            {
+                IdempotencyKeys.TryRemove(new KeyValuePair<string, IdempotencyEntry>(key, existing));
+                continue;
+            }
+
+            return existing.State == IdempotencyState.Completed
+                ? IdempotencyReservation.Completed
+                : IdempotencyReservation.InProgress;
+        }
+    }
+
+    private static bool IsSuccessful(IActionResult result)
+    {
+        var statusCode = result switch
+        {
+            ObjectResult objectResult => objectResult.StatusCode ?? StatusCodes.Status200OK,
+            StatusCodeResult statusResult => statusResult.StatusCode,
+            _ => StatusCodes.Status200OK
+        };
+
+        return statusCode is >= 200 and < 300;
     }
 
     private static void CleanupExpiredIdempotencyKeys()
@@ -179,12 +283,27 @@ public sealed class WebhooksController : ControllerBase
         var cutoff = DateTime.UtcNow.AddMinutes(-30);
         foreach (var entry in IdempotencyKeys)
         {
-            if (entry.Value < cutoff)
+            if (entry.Value.UpdatedUtc < cutoff)
             {
-                IdempotencyKeys.TryRemove(entry.Key, out _);
+                IdempotencyKeys.TryRemove(new KeyValuePair<string, IdempotencyEntry>(entry.Key, entry.Value));
             }
         }
     }
+
+    private enum IdempotencyState
+    {
+        InProgress,
+        Completed
+    }
+
+    private enum IdempotencyReservation
+    {
+        Reserved,
+        InProgress,
+        Completed
+    }
+
+    private sealed record IdempotencyEntry(IdempotencyState State, DateTime UpdatedUtc);
 
     public sealed class WebhookActionRequest
     {

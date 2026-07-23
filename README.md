@@ -3,7 +3,7 @@
 
 SonosControl is a deployer-friendly Blazor control centre organised around everyday playback, a unified source library, scene-based automation, listening insights, and role-aware administration.
 
-![SonosControl dashboard hero](docs/assets/readme/images/desktop-home.png)
+![SonosControl dashboard hero in dark theme](docs/assets/readme/images/desktop-dark-home.png)
 
 ## Quick Start
 
@@ -60,17 +60,29 @@ Then open `http://localhost:5107`.
 
 ## Screenshot Gallery
 
-### Desktop
+### Desktop · Light
 
 | Home | Library | Automation | Insights | Administration |
 |---|---|---|---|---|
-| ![Desktop home](docs/assets/readme/images/desktop-home.png) | ![Desktop library](docs/assets/readme/images/desktop-library.png) | ![Desktop automation](docs/assets/readme/images/desktop-automation.png) | ![Desktop insights](docs/assets/readme/images/desktop-insights.png) | ![Desktop administration](docs/assets/readme/images/desktop-administration.png) |
+| ![Desktop light home](docs/assets/readme/images/desktop-light-home.png) | ![Desktop light library](docs/assets/readme/images/desktop-light-library.png) | ![Desktop light automation](docs/assets/readme/images/desktop-light-automation.png) | ![Desktop light insights](docs/assets/readme/images/desktop-light-insights.png) | ![Desktop light administration](docs/assets/readme/images/desktop-light-administration.png) |
 
-### Mobile
+### Desktop · Dark
 
 | Home | Library | Automation | Insights | Administration |
 |---|---|---|---|---|
-| ![Mobile home](docs/assets/readme/images/mobile-home.png) | ![Mobile library](docs/assets/readme/images/mobile-library.png) | ![Mobile automation](docs/assets/readme/images/mobile-automation.png) | ![Mobile insights](docs/assets/readme/images/mobile-insights.png) | ![Mobile administration](docs/assets/readme/images/mobile-administration.png) |
+| ![Desktop dark home](docs/assets/readme/images/desktop-dark-home.png) | ![Desktop dark library](docs/assets/readme/images/desktop-dark-library.png) | ![Desktop dark automation](docs/assets/readme/images/desktop-dark-automation.png) | ![Desktop dark insights](docs/assets/readme/images/desktop-dark-insights.png) | ![Desktop dark administration](docs/assets/readme/images/desktop-dark-administration.png) |
+
+### Mobile · Light
+
+| Home | Library | Automation | Insights | Administration |
+|---|---|---|---|---|
+| ![Mobile light home](docs/assets/readme/images/mobile-light-home.png) | ![Mobile light library](docs/assets/readme/images/mobile-light-library.png) | ![Mobile light automation](docs/assets/readme/images/mobile-light-automation.png) | ![Mobile light insights](docs/assets/readme/images/mobile-light-insights.png) | ![Mobile light administration](docs/assets/readme/images/mobile-light-administration.png) |
+
+### Mobile · Dark
+
+| Home | Library | Automation | Insights | Administration |
+|---|---|---|---|---|
+| ![Mobile dark home](docs/assets/readme/images/mobile-dark-home.png) | ![Mobile dark library](docs/assets/readme/images/mobile-dark-library.png) | ![Mobile dark automation](docs/assets/readme/images/mobile-dark-automation.png) | ![Mobile dark insights](docs/assets/readme/images/mobile-dark-insights.png) | ![Mobile dark administration](docs/assets/readme/images/mobile-dark-administration.png) |
 
 ## Feature Highlights
 

@@ -1,8 +1,5 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SonosControl.DAL.Interfaces;
-using SonosControl.DAL.Models;
 using SonosControl.Web.Services;
 
 namespace SonosControl.Web.Controllers;
@@ -12,139 +9,91 @@ namespace SonosControl.Web.Controllers;
 [Authorize(Roles = "admin,superadmin")]
 public sealed class SettingsBackupsController : ControllerBase
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private readonly IUnitOfWork _uow;
-    private readonly ActionLogger _actionLogger;
+    private readonly ISettingsBackupService _backups;
     private readonly ILogger<SettingsBackupsController> _logger;
-    private readonly string _dataDirectory;
-
-    private string BackupDirectory => Path.Combine(_dataDirectory, "backups");
 
     public SettingsBackupsController(
-        IUnitOfWork uow,
-        ActionLogger actionLogger,
-        ILogger<SettingsBackupsController> logger,
-        IWebHostEnvironment environment)
+        ISettingsBackupService backups,
+        ILogger<SettingsBackupsController> logger)
     {
-        _uow = uow;
-        _actionLogger = actionLogger;
+        _backups = backups;
         _logger = logger;
-        _dataDirectory = Path.Combine(environment.ContentRootPath, "Data");
     }
 
     [HttpGet]
-    public ActionResult<IReadOnlyList<BackupFileInfo>> List()
-    {
-        Directory.CreateDirectory(BackupDirectory);
-        var backups = Directory.EnumerateFiles(BackupDirectory, "*.json", SearchOption.TopDirectoryOnly)
-            .Select(path => new FileInfo(path))
-            .OrderByDescending(file => file.CreationTimeUtc)
-            .Select(file => new BackupFileInfo(file.Name, file.CreationTimeUtc, file.Length))
-            .ToList();
-
-        return Ok(backups);
-    }
+    public async Task<ActionResult<IReadOnlyList<SettingsBackupInfo>>> List(CancellationToken cancellationToken)
+        => Ok(await _backups.ListAsync(cancellationToken));
 
     [HttpPost]
-    public async Task<ActionResult<BackupFileInfo>> Create()
+    public async Task<ActionResult<SettingsBackupInfo>> Create(CancellationToken cancellationToken)
     {
-        var fileName = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
-            "manual",
-            HttpContext.RequestAborted);
-        if (fileName is null)
-        {
-            return NotFound("config.json was not found.");
-        }
-
-        var targetPath = Path.Combine(BackupDirectory, fileName);
-        await _actionLogger.LogAsync("ConfigBackupCreated", fileName);
-        var info = new FileInfo(targetPath);
-        return Ok(new BackupFileInfo(info.Name, info.CreationTimeUtc, info.Length));
+        var created = await _backups.CreateAsync(cancellationToken);
+        return created is null ? NotFound("config.json was not found.") : Ok(created);
     }
 
     [HttpGet("{fileName}")]
-    public IActionResult Download(string fileName)
+    public async Task<IActionResult> Download(string fileName, CancellationToken cancellationToken)
     {
-        var sanitized = Path.GetFileName(fileName);
-        var path = Path.Combine(BackupDirectory, sanitized);
-        if (!System.IO.File.Exists(path))
+        try
         {
-            return NotFound();
+            var result = await _backups.OpenReadAsync(fileName, cancellationToken);
+            return result is null
+                ? NotFound()
+                : File(result.Value.Stream, "application/json", result.Value.FileName);
         }
-
-        var bytes = System.IO.File.ReadAllBytes(path);
-        return File(bytes, "application/json", sanitized);
+        catch (SettingsBackupException ex)
+        {
+            return Problem(ex.Message, statusCode: ex.StatusCode);
+        }
     }
 
     [HttpPost("{fileName}/restore")]
-    public async Task<IActionResult> Restore(string fileName)
+    public async Task<IActionResult> Restore(string fileName, CancellationToken cancellationToken)
     {
-        var sanitized = Path.GetFileName(fileName);
-        var sourcePath = Path.Combine(BackupDirectory, sanitized);
-        if (!System.IO.File.Exists(sourcePath))
+        try
         {
-            return NotFound();
+            var result = await _backups.RestoreAsync(fileName, cancellationToken);
+            return Ok(new { restored = result.FileName, safetyBackup = result.SafetyBackup });
         }
-
-        var rawJson = await System.IO.File.ReadAllTextAsync(sourcePath);
-        var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
-        if (importedSettings is null)
+        catch (SettingsBackupException ex)
         {
-            return BadRequest("Backup file could not be deserialized.");
+            _logger.LogWarning(ex, "Settings restore rejected for {FileName}.", fileName);
+            return Problem(ex.Message, statusCode: ex.StatusCode);
         }
-
-        var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
-            "pre-restore",
-            HttpContext.RequestAborted);
-        await _uow.ISettingsRepo.WriteSettings(importedSettings);
-        await _actionLogger.LogAsync(
-            "ConfigBackupRestored",
-            $"{sanitized}; safety backup: {safetyBackup ?? "not required"}");
-
-        _logger.LogInformation("Settings restored from backup {FileName}.", sanitized);
-        return Ok(new { restored = sanitized, safetyBackup });
     }
 
     [HttpPost("import")]
-    public async Task<IActionResult> Import([FromForm] IFormFile file)
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> Import([FromForm] IFormFile file, CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
+        if (file is null)
         {
             return BadRequest("A non-empty JSON file is required.");
         }
 
-        if (!string.Equals(Path.GetExtension(file.FileName), ".json", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            return BadRequest("Only .json files are supported.");
+            await using var stream = file.OpenReadStream();
+            var result = await _backups.ImportAsync(file.FileName, stream, file.Length, cancellationToken);
+            return Ok(new { imported = result.FileName, safetyBackup = result.SafetyBackup });
         }
-
-        string rawJson;
-        using (var stream = file.OpenReadStream())
-        using (var reader = new StreamReader(stream))
+        catch (SettingsBackupException ex)
         {
-            rawJson = await reader.ReadToEndAsync();
+            _logger.LogWarning(ex, "Settings import rejected for {FileName}.", file.FileName);
+            return Problem(ex.Message, statusCode: ex.StatusCode);
         }
-
-        var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
-        if (importedSettings is null)
-        {
-            return BadRequest("The uploaded file is not a valid Sonos settings JSON.");
-        }
-
-        var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync(
-            "pre-import",
-            HttpContext.RequestAborted);
-        await _uow.ISettingsRepo.WriteSettings(importedSettings);
-        await _actionLogger.LogAsync("ConfigImported", $"{file.FileName}; safety backup: {safetyBackup ?? "not required"}");
-        _logger.LogInformation("Settings imported from {FileName}.", file.FileName);
-
-        return Ok(new { imported = file.FileName, safetyBackup });
     }
 
-    public sealed record BackupFileInfo(string FileName, DateTime CreatedUtc, long Bytes);
-
+    [HttpDelete("{fileName}")]
+    public async Task<IActionResult> Delete(string fileName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _backups.DeleteAsync(fileName, cancellationToken) ? NoContent() : NotFound();
+        }
+        catch (SettingsBackupException ex)
+        {
+            return Problem(ex.Message, statusCode: ex.StatusCode);
+        }
+    }
 }

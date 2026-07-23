@@ -29,12 +29,12 @@ public class NowPlayingHeroTests
         var cut = ctx.RenderComponent<NowPlayingHero>();
 
         Assert.Contains("np-hero--has-art", cut.Find("[data-qa='now-playing-hero']").ClassList);
-        Assert.Equal(2, cut.FindAll(".np-hero img").Count);
+        Assert.Single(cut.FindAll(".np-hero img"));
         Assert.All(cut.FindAll(".np-hero img"), image => Assert.Equal(string.Empty, image.GetAttribute("alt")));
         Assert.Contains("Midnight City", cut.Find("#now-playing-hero-title").TextContent);
         Assert.Contains("Night Drive", cut.Markup);
-        Assert.Contains("Office", cut.Find(".np-hero__room-chip").TextContent);
-        Assert.Single(cut.FindAll(".np-hero__eq"));
+        Assert.Contains("Office", cut.Find("#home-now-playing-room").TextContent);
+        Assert.Empty(cut.FindAll(".np-hero__eq"));
         Assert.Equal("Pause playback", cut.Find("[data-qa='home-player-toggle']").GetAttribute("aria-label"));
         Assert.Equal("Refresh playback state", cut.Find("[data-qa='home-player-refresh']").GetAttribute("aria-label"));
         Assert.Equal("Next track", cut.Find("[data-qa='home-player-next']").GetAttribute("aria-label"));
@@ -57,9 +57,26 @@ public class NowPlayingHeroTests
         Assert.Empty(cut.FindAll(".np-hero img"));
         Assert.Equal("true", cut.Find(".np-hero__art").GetAttribute("aria-hidden"));
         Assert.Single(cut.FindAll(".np-hero__art-fallback"));
+        Assert.Single(cut.FindAll(".np-hero__record"));
+        Assert.Equal("SC", cut.Find(".np-hero__record-brand").TextContent);
+        Assert.Single(cut.FindAll(".np-hero__record-imprint svg"));
+        Assert.DoesNotContain("is-spinning", cut.Find(".np-hero__record").ClassList);
         Assert.Empty(cut.FindAll(".np-hero__eq"));
         Assert.Contains("Paused", cut.Find(".np-hero__playback-state").TextContent);
         Assert.Equal("Start playback", cut.Find("[data-qa='home-player-toggle']").GetAttribute("aria-label"));
+    }
+
+    [Fact]
+    public async Task Hero_SpinsFallbackWhilePlaybackIsActive()
+    {
+        using var ctx = new TestContext();
+        ConfigureServices(ctx, isPlaying: true, albumArtUrl: null);
+        await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
+
+        var cut = ctx.RenderComponent<NowPlayingHero>();
+
+        Assert.Contains("is-spinning", cut.Find(".np-hero__record").ClassList);
+        Assert.Equal("Pause playback", cut.Find("[data-qa='home-player-toggle']").GetAttribute("aria-label"));
     }
 
     private static Mock<ISonosConnectorRepo> ConfigureServices(

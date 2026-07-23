@@ -66,16 +66,14 @@
 
 @if (_isPanelOpen)
 {
-    <div class="player-sheet-backdrop" @onclick="ClosePanel">
-        <section class="player-sheet" role="dialog" aria-modal="true" aria-labelledby="player-sheet-title" @onclick:stopPropagation="true">
-            <header class="player-sheet__header">
-                <div>
-                    <span class="workspace-eyebrow">@PlaybackState.ActiveSpeakerName</span>
-                    <h2 id="player-sheet-title">Now playing</h2>
-                </div>
-                <button type="button" class="app-dialog__close" @onclick="ClosePanel" aria-label="Close expanded player"><Icon Name="x" Size="18" /></button>
-            </header>
-
+    <AccessibleDialog Visible="true"
+                      Title="Now playing"
+                      Eyebrow="@PlaybackState.ActiveSpeakerName"
+                      SizeClass="player-sheet"
+                      BackdropClass="player-sheet-backdrop"
+                      BodyClass="player-sheet__body"
+                      CloseLabel="Close expanded player"
+                      OnClose="ClosePanel">
             <div class="player-sheet__now">
                 <span class="global-player-bar__art" aria-hidden="true">
                     @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl)) { <img src="@PlaybackState.CurrentTrackArtUrl" alt="" /> }
@@ -151,8 +149,7 @@
                     }
                 }
             </section>
-        </section>
-    </div>
+    </AccessibleDialog>
 }
 
 @code {

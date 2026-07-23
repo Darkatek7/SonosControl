@@ -6,7 +6,9 @@ This guide covers test commands, smoke checks, and common failure recovery steps
 
 ### Full suite
 ```bash
-dotnet test SonosControl.sln --no-build
+dotnet test SonosControl.sln --verbosity minimal
+dotnet format SonosControl.sln --verify-no-changes --no-restore
+dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
 ```
 
 ### Targeted service tests
@@ -19,8 +21,15 @@ dotnet test SonosControl.Tests/SonosControl.Tests.csproj --no-build --filter "Fu
 ### Mobile smoke
 macOS/Linux:
 ```bash
-python3 verify_mobile_smoke.py
+python3 -m venv artifacts/ui-smoke-venv
+artifacts/ui-smoke-venv/bin/python -m pip install --requirement requirements-ui.txt
+artifacts/ui-smoke-venv/bin/python verify_mobile_smoke.py
 ```
+
+The auto-start path creates disposable settings and SQLite directories under
+`artifacts`, disables background services, and checks all primary pages in
+light and dark themes at 390, 768, and 1280 pixels. It also fails on browser
+console errors, horizontal overflow, or content hidden behind the player.
 
 Optional:
 ```bash
@@ -46,6 +55,15 @@ Optional:
 ```
 
 ### README screenshot capture
+macOS/Linux:
+```bash
+artifacts/ui-smoke-venv/bin/python capture_readme_screenshots.py
+```
+
+The auto-start path uses disposable settings and SQLite storage, disables
+background services, and captures Light and Dark at desktop and mobile sizes.
+
+Windows:
 ```powershell
 .\run-readme-screenshots.ps1
 ```
@@ -63,7 +81,7 @@ Optional:
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
 | Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |
-| README screenshot script cannot log in | Missing credentials in env/args | Pass `-Username/-Password` explicitly |
+| README screenshot script cannot log in against a manually started app | Missing credentials in env/args | Pass `-Username/-Password` explicitly |
 
 ## Debugging Tips
 1. Check app logs first, then inspect `/healthz` and `/metricsz`.

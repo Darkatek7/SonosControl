@@ -90,6 +90,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_PlayerSheet_UsesActiveSpeakerAndNumericVolume()
     {
         using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ConfigureServices(ctx, activeSpeakerIp: "10.0.0.2");
 
         var cut = ctx.RenderComponent<GlobalPlayerBar>();
@@ -105,7 +106,7 @@ public class GlobalPlayerBarTests
         {
             Assert.Single(cut.FindAll(".player-sheet[role='dialog']"));
             Assert.Equal("10.0.0.2", cut.Find("#player-sheet-room").GetAttribute("value"));
-            Assert.Contains("Kitchen", cut.Find(".player-sheet__header").TextContent);
+            Assert.Contains("Kitchen", cut.Find(".player-sheet .app-dialog__header").TextContent);
             Assert.Equal("25", cut.Find("#player-sheet-volume-number").GetAttribute("value"));
             Assert.Equal("80", cut.Find("#player-sheet-volume-slider").GetAttribute("max"));
         });

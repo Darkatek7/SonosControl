@@ -8,28 +8,6 @@
 <PageTitle>Scenes - Sonos Control</PageTitle>
 
 <div class="scenes-console-shell">
-    <section class="scenes-hero" aria-labelledby="scenes-heading">
-        <div class="scenes-hero__copy">
-            <span class="spotify-eyebrow">Presets</span>
-            <h1 id="scenes-heading">Scenes</h1>
-            <p>Create one-tap room states with source, speaker targets, volume, synced playback, and optional timers.</p>
-        </div>
-        <div class="scenes-hero__actions">
-            <div class="scenes-hero__stat">
-                <span><Icon Name="scenes" Size="17" /> Configured</span>
-                <strong>@(_settings?.Scenes?.Count ?? 0)</strong>
-            </div>
-            <div class="scenes-hero__stat">
-                <span><Icon Name="check" Size="17" /> Enabled</span>
-                <strong>@GetEnabledSceneCount()</strong>
-            </div>
-            @if (_canManage)
-            {
-                <button class="btn btn-primary scenes-new-button" @onclick="CreateNewScene"><Icon Name="plus" Size="16" /> New Scene</button>
-            }
-        </div>
-    </section>
-
     @if (!string.IsNullOrWhiteSpace(_statusMessage))
     {
         <div class="alert @(_statusIsError ? "alert-danger" : "alert-success") scenes-alert" role="status">@_statusMessage</div>
@@ -51,6 +29,12 @@
                         <span class="spotify-eyebrow">Library</span>
                         <h2><Icon Name="layers" Size="18" /> Scene presets</h2>
                     </div>
+                    @if (_canManage)
+                    {
+                        <button type="button" class="btn btn-primary scenes-new-button" @onclick="CreateNewScene">
+                            <Icon Name="plus" Size="16" /> New scene
+                        </button>
+                    }
                 </div>
 
                 @if (_settings.Scenes.Any())
@@ -71,12 +55,12 @@
                                     </span>
                                 </button>
                                 <div class="scene-card__actions">
-                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ApplyScene(scene)" disabled="@_isApplying" aria-label="@($"Apply {scene.Name}")" title="@($"Apply {scene.Name}")">
+                                    <button type="button" class="btn btn-outline-success btn-sm" @onclick="() => ApplyScene(scene)" disabled="@_isApplying" aria-label="@($"Apply {scene.Name}")" title="@($"Apply {scene.Name}")">
                                         <Icon Name="play" Size="15" />
                                     </button>
                                     @if (_canManage)
                                     {
-                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteScene(scene)" disabled="@_isSaving" aria-label="@($"Delete {scene.Name}")" title="@($"Delete {scene.Name}")">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestDeleteScene(scene)" disabled="@_isSaving" aria-label="@($"Delete {scene.Name}")" title="@($"Delete {scene.Name}")">
                                             <Icon Name="trash" Size="15" />
                                         </button>
                                     }
@@ -264,7 +248,7 @@
                         <div class="scenes-editor-actions">
                             @if (_canManage)
                             {
-                                <button class="btn btn-primary" @onclick="SaveScene" disabled="@_isSaving">
+                                <button type="button" class="btn btn-primary" @onclick="SaveScene" disabled="@_isSaving">
                                     @if (_isSaving)
                                     {
                                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -276,7 +260,7 @@
                                     Save Scene
                                 </button>
                             }
-                            <button class="btn btn-outline-success" @onclick="() => ApplyScene(_editingScene)" disabled="@_isApplying">
+                            <button type="button" class="btn btn-outline-success" @onclick="() => ApplyScene(_editingScene)" disabled="@_isApplying">
                                 @if (_isApplying)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -333,8 +317,6 @@
         _settings.YouTubeCollections ??= new();
         _settings.YouTubeMusicCollections ??= new();
     }
-
-    private int GetEnabledSceneCount() => _settings?.Scenes?.Count(scene => scene.Enabled) ?? 0;
 
     private string GetSpeakerTargetSummary()
     {

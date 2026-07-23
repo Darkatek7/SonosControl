@@ -15,19 +15,26 @@
         </div>
     </header>
 
-    <nav class="workspace-tabs" aria-label="Insights sections">
-        <button type="button" class="@GetTabClass("listening")" aria-current="@GetAriaCurrent("listening")" @onclick='() => SelectTab("listening")'>Listening</button>
-        <button type="button" class="@GetTabClass("activity")" aria-current="@GetAriaCurrent("activity")" @onclick='() => SelectTab("activity")'>Activity</button>
-    </nav>
+    <WorkspaceTabs Items="InsightTabs"
+                   ActiveKey="@_activeTab"
+                   OnSelect="SelectTab"
+                   AriaLabel="Insights sections"
+                   IdPrefix="insights" />
 
-    @if (_activeTab == "activity")
-    {
-        <Logs />
-    }
-    else
-    {
-        <StatsPage />
-    }
+    <section id="@($"insights-panel-{_activeTab}")"
+             role="tabpanel"
+             aria-labelledby="@($"insights-tab-{_activeTab}")"
+             tabindex="0"
+             class="workspace-tab-panel">
+        @if (_activeTab == "activity")
+        {
+            <Logs />
+        }
+        else
+        {
+            <StatsPage />
+        }
+    </section>
 </div>
 
 @code {
@@ -36,6 +43,11 @@
 
     private string _activeTab = "listening";
     private bool _redirectedAlias;
+    private static readonly IReadOnlyList<WorkspaceTabItem> InsightTabs =
+    [
+        new("listening", "Listening"),
+        new("activity", "Activity")
+    ];
 
     protected override void OnParametersSet()
     {
@@ -56,6 +68,4 @@
     }
 
     private void SelectTab(string tab) => Navigation.NavigateTo($"/insights?tab={tab}");
-    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
-    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
 }

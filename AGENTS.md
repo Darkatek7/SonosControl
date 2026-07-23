@@ -21,6 +21,7 @@
 |---|---|
 | `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
 | `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `python3 verify_mobile_smoke.py` on macOS/Linux or `.\run-mobile-smoke.ps1` on Windows |
+| `*.cs`, `*.csproj`, `*.razor`, `*.razor.cs`, `SonosControl.sln` | Run `dotnet format SonosControl.sln --verify-no-changes --no-restore` and the NuGet audit command below |
 | `README.md`, `docs/**`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
 
@@ -32,7 +33,13 @@ Run only the commands required by the routing matrix for the files you changed.
 dotnet test SonosControl.sln --verbosity minimal
 ```
 
+```powershell
+dotnet restore -p:NuGetAudit=true -p:NuGetAuditMode=all -warnaserror:NU1901,NU1902,NU1903,NU1904
+dotnet format SonosControl.sln --verify-no-changes --no-restore
+```
+
 ```bash
+python3 -m pip install --requirement requirements-ui.txt
 python3 verify_mobile_smoke.py
 ```
 
@@ -42,7 +49,7 @@ On Windows, the PowerShell wrapper is also supported:
 .\run-mobile-smoke.ps1
 ```
 
-On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. The runner uses a writable `artifacts/mobile_smoke_dataprotection_keys` directory for local Data Protection keys unless `DataProtection__KeysDirectory` is already set.
+On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. Auto-start uses isolated temporary settings, SQLite, and Data Protection paths under `artifacts`, disables background services, and never reads configured Sonos addresses.
 
 ```powershell
 markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md
@@ -65,6 +72,12 @@ python scripts/check_markdown_links.py README.md docs CONTRIBUTING.md CODE_OF_CO
 
 ```powershell
 .\run-readme-screenshots.ps1
+```
+
+On macOS/Linux, use the installed UI-smoke environment directly:
+
+```bash
+artifacts/ui-smoke-venv/bin/python capture_readme_screenshots.py
 ```
 
 ## Safety Rules

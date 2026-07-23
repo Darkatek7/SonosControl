@@ -1,7 +1,7 @@
 @namespace SonosControl.Web.Shared
 
 <div class="empty-state">
-    <div class="empty-state__icon">
+    <div class="empty-state__icon" aria-hidden="true">
         @if (IconName == "music")
         {
             <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -37,7 +37,21 @@
             </svg>
         }
     </div>
-    <h6 class="empty-state__title">@Title</h6>
+    @switch (HeadingLevel)
+    {
+        case 1:
+            <h1 class="empty-state__title">@Title</h1>
+            break;
+        case 3:
+            <h3 class="empty-state__title">@Title</h3>
+            break;
+        case 4:
+            <h4 class="empty-state__title">@Title</h4>
+            break;
+        default:
+            <h2 class="empty-state__title">@Title</h2>
+            break;
+    }
     @if (!string.IsNullOrWhiteSpace(Description))
     {
         <p class="empty-state__description">@Description</p>
@@ -59,6 +73,9 @@
 
     [Parameter]
     public string IconName { get; set; } = "default";
+
+    [Parameter]
+    public int HeadingLevel { get; set; } = 2;
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
