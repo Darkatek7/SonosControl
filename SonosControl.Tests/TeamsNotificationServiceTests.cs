@@ -75,8 +75,8 @@ namespace SonosControl.Tests
                 Times.Once(),
                 ItExpr.Is<HttpRequestMessage>(req =>
                     req.Method == HttpMethod.Post &&
-                    req.RequestUri.ToString() == webhookUrl &&
-                    req.Content.ReadAsStringAsync().Result.Contains("Test Message") &&
+                    req.RequestUri!.ToString() == webhookUrl &&
+                    req.Content!.ReadAsStringAsync().Result.Contains("Test Message") &&
                     req.Content.ReadAsStringAsync().Result.Contains("User1") &&
                     req.Content.ReadAsStringAsync().Result.Contains("\"text\":")
                 ),

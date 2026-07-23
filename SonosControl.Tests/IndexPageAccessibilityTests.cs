@@ -95,7 +95,7 @@ public class IndexPageAccessibilityTests
     [Fact]
     public void GlobalPlayer_FallbackArt_IsHiddenFromScreenReaders()
     {
-         using var ctx = new TestContext();
+        using var ctx = new TestContext();
 
         // Setup Mocks (No album art)
         var auth = ctx.AddTestAuthorization();

@@ -33,7 +33,7 @@ public class AdministrationPageNavigationTests
 
             Assert.Equal("http://localhost/administration/users", navigation.Uri);
             Assert.Contains("is-active", usersTab.ClassList);
-            Assert.Equal("page", usersTab.GetAttribute("aria-current"));
+            Assert.Equal("true", usersTab.GetAttribute("aria-selected"));
             Assert.Single(cut.FindComponents<Stub<UserManagement>>());
             Assert.Empty(cut.FindComponents<Stub<DevicesPage>>());
         });
@@ -57,7 +57,7 @@ public class AdministrationPageNavigationTests
                 .Single(button => button.TextContent.Trim() == "Backups");
 
             Assert.Contains("is-active", backupsTab.ClassList);
-            Assert.Equal("page", backupsTab.GetAttribute("aria-current"));
+            Assert.Equal("true", backupsTab.GetAttribute("aria-selected"));
             Assert.Single(cut.FindComponents<Stub<SettingsBackupsPage>>());
             Assert.Empty(cut.FindComponents<Stub<DevicesPage>>());
         });

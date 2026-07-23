@@ -5,54 +5,58 @@
 
 <section class="np-hero @(HasArt ? "np-hero--has-art" : "np-hero--no-art")"
          data-qa="now-playing-hero" aria-labelledby="now-playing-hero-title">
-    <div class="np-hero__bg" aria-hidden="true">
+    <div class="np-hero__art" aria-hidden="true">
         @if (HasArt)
         {
             <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
         }
-        <span class="np-hero__ring np-hero__ring--one"></span>
-        <span class="np-hero__ring np-hero__ring--two"></span>
-        <span class="np-hero__ring np-hero__ring--three"></span>
+        else
+        {
+            <div class="np-hero__art-fallback">
+                <span class="np-hero__record-kicker">Sonos live</span>
+                <div class="np-hero__record-stage">
+                    <div class="np-hero__record @(PlaybackState.IsPlaying ? "is-spinning" : null)">
+                        <div class="np-hero__record-label">
+                            <span class="np-hero__record-brand">SC</span>
+                            <span class="np-hero__record-imprint" aria-hidden="true">
+                                <Icon Name="music" Size="17" />
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <span class="np-hero__record-caption">No artwork · still spinning</span>
+            </div>
+        }
     </div>
 
-    <div class="np-hero__panel">
-        <div class="np-hero__art" aria-hidden="true">
-            @if (HasArt)
-            {
-                <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
-            }
-            else
-            {
-                <div class="np-hero__art-fallback"><Icon Name="music" Size="40" /></div>
-            }
+    <div class="np-hero__content">
+        <div class="np-hero__status-line">
+            <span class="np-hero__eyebrow">Now Playing</span>
+            <span class="np-hero__playback-state @(PlaybackState.IsPlaying ? "is-playing" : "is-paused")">
+                <span aria-hidden="true"></span>
+                @(PlaybackState.IsPlaying ? "Playing" : "Paused")
+            </span>
         </div>
 
         <div class="np-hero__meta">
-            <div class="np-hero__status-line">
-                <span class="np-hero__eyebrow">Now Playing</span>
-                @if (PlaybackState.IsPlaying)
-                {
-                    <div class="np-hero__eq" aria-hidden="true">
-                        <span></span><span></span><span></span><span></span>
-                    </div>
-                }
-            </div>
             <h2 class="np-hero__title" id="now-playing-hero-title">@PlaybackState.CurrentTrack</h2>
-            <span class="np-hero__source">@PlaybackState.CurrentStationDisplay</span>
-            <div class="np-hero__context">
-                <span class="np-hero__room-chip">
-                    <Icon Name="speaker" Size="14" />
-                    <span>Active room</span>
-                    <strong>@PlaybackState.ActiveSpeakerName</strong>
-                </span>
-                <span class="np-hero__playback-state @(PlaybackState.IsPlaying ? "is-playing" : "is-paused")">
-                    <span aria-hidden="true"></span>
-                    @(PlaybackState.IsPlaying ? "Playing" : "Paused")
-                </span>
-            </div>
+            <p class="np-hero__source">@PlaybackState.CurrentStationDisplay</p>
         </div>
 
-        <div class="np-hero__transport">
+        <div class="np-hero__room">
+            <label for="home-now-playing-room">Active room</label>
+            <select id="home-now-playing-room"
+                    class="form-select"
+                    value="@PlaybackState.ActiveSpeakerIp"
+                    @onchange="HandleSpeakerChanged">
+                @foreach (var speaker in PlaybackState.Speakers)
+                {
+                    <option value="@speaker.IpAddress">@speaker.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="np-hero__transport" aria-label="Playback controls">
             <button type="button" class="np-hero__btn"
                     data-qa="home-player-refresh"
                     @onclick="Refresh" disabled="@PlaybackState.IsLoading"
@@ -86,6 +90,15 @@
                 }
             </button>
         </div>
+
+        <div class="np-hero__volume">
+            <span class="np-hero__volume-label"><Icon Name="volume" Size="16" /> Volume</span>
+            <VolumeControl Value="@PlaybackState.Volume"
+                           MaxVolume="@PlaybackState.MaxVolume"
+                           ValueChanged="PlaybackState.SetVolumeAsync"
+                           IdPrefix="home-now-playing-volume"
+                           Label="Volume for active room" />
+        </div>
     </div>
 </section>
 
@@ -102,6 +115,11 @@
     private Task Refresh() => PlaybackState.RefreshAsync();
     private Task Toggle() => PlaybackState.TogglePlaybackAsync();
     private Task Skip() => PlaybackState.SkipNextAsync();
+
+    private Task HandleSpeakerChanged(ChangeEventArgs args)
+        => args.Value is string speakerIp
+            ? PlaybackState.SetActiveSpeakerAsync(speakerIp)
+            : Task.CompletedTask;
 
     public void Dispose() => PlaybackState.StateChanged -= OnChanged;
 }

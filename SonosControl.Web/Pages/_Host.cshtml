@@ -118,10 +118,11 @@
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="_content/Radzen.Blazor/css/standard-dark.css">
     <link href="css/site.css" rel="stylesheet" asp-append-version="true" />
-    <link href="SonosControl.Web.styles.css" rel="stylesheet" />
+    <link href="SonosControl.Web.styles.css" rel="stylesheet" asp-append-version="true" />
     <link rel="icon" type="image/png" href="favicon.png" />
         <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
     <script src="_content/Radzen.Blazor/Radzen.Blazor.js"></script>
+    <script src="js/sonos-ui.js" asp-append-version="true"></script>
 </head>
 <body>
     <component type="typeof(App)" render-mode="ServerPrerendered" param-AntiforgeryToken="antiforgeryToken" />

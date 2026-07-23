@@ -1,9 +1,8 @@
 @* Routed through AdministrationPage. *@
-@using System.Text.Json
 @using SonosControl.Web.Services
 @attribute [Authorize(Roles = "admin,superadmin")]
-@inject IWebHostEnvironment Environment
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject ISettingsBackupService Backups
 
 <PageTitle>Settings Backups - Sonos Control</PageTitle>
 
@@ -36,10 +35,10 @@
     }
 
     <section class="backups-actions-panel">
-        <button class="btn btn-outline-primary" @onclick="RefreshBackupsAsync" disabled="@_isBusy">
+        <button type="button" class="btn btn-outline-primary" @onclick="RefreshBackupsAsync" disabled="@_isBusy">
             <Icon Name="refresh" Size="16" /> Refresh
         </button>
-        <button class="btn btn-primary" @onclick="CreateBackupAsync" disabled="@_isBusy">
+        <button type="button" class="btn btn-primary" @onclick="CreateBackupAsync" disabled="@_isBusy">
             @if (_isBusy)
             {
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -91,10 +90,10 @@
                                         <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
                                             <Icon Name="file" Size="15" /> Download
                                         </a>
-                                        <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
+                                        <button type="button" class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
                                             <Icon Name="refresh" Size="15" /> Restore
                                         </button>
-                                        <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
+                                        <button type="button" class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
                                             <Icon Name="trash" Size="15" /> Delete
                                         </button>
                                     </div>
@@ -121,10 +120,10 @@
                                 <a class="btn btn-outline-secondary btn-sm backup-action-btn" href="@($"/api/settings/backups/{Uri.EscapeDataString(backup.FileName)}")">
                                     <Icon Name="file" Size="15" /> Download
                                 </a>
-                                <button class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
+                                <button type="button" class="btn btn-outline-success btn-sm backup-action-btn" @onclick="() => RequestRestoreBackup(backup)" disabled="@_isBusy">
                                     <Icon Name="refresh" Size="15" /> Restore
                                 </button>
-                                <button class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
+                                <button type="button" class="btn btn-outline-danger btn-sm backup-action-btn" @onclick="() => RequestDeleteBackup(backup)" disabled="@_isBusy">
                                     <Icon Name="trash" Size="15" /> Delete
                                 </button>
                             </div>
@@ -165,7 +164,7 @@
                 <span class="backup-selected-file">@(!string.IsNullOrWhiteSpace(_selectedImportFileName) ? _selectedImportFileName : "No file selected")</span>
             </div>
 
-            <button class="btn btn-warning backups-import-btn" @onclick="ImportSelectedFileAsync" disabled="@(_isBusy || _selectedImportFile is null)">
+            <button type="button" class="btn btn-warning backups-import-btn" @onclick="ImportSelectedFileAsync" disabled="@(_isBusy || _selectedImportFile is null)">
                 <Icon Name="refresh" Size="16" /> Import Selected File
             </button>
         </article>
@@ -188,24 +187,14 @@
                OnCancel="CancelBackupAction" />
 
 @code {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private string DataDirectory => Path.Combine(Environment.ContentRootPath, "Data");
-    private string BackupDirectory => Path.Combine(DataDirectory, "backups");
-
-    private sealed record BackupFileEntry(string FileName, DateTime CreatedUtc, long Bytes);
-
-    private readonly List<BackupFileEntry> _backups = new();
+    private readonly List<SettingsBackupInfo> _backups = new();
     private IBrowserFile? _selectedImportFile;
     private string? _selectedImportFileName;
     private bool _isBusy;
     private string? _statusMessage;
     private bool _statusIsError;
-    private BackupFileEntry? _pendingRestore;
-    private BackupFileEntry? _pendingDelete;
+    private SettingsBackupInfo? _pendingRestore;
+    private SettingsBackupInfo? _pendingDelete;
 
     protected override async Task OnInitializedAsync()
     {
@@ -226,13 +215,8 @@
 
         try
         {
-            Directory.CreateDirectory(BackupDirectory);
             _backups.Clear();
-            _backups.AddRange(
-                Directory.EnumerateFiles(BackupDirectory, "*.json", SearchOption.TopDirectoryOnly)
-                    .Select(path => new System.IO.FileInfo(path))
-                    .OrderByDescending(file => file.CreationTimeUtc)
-                    .Select(file => new BackupFileEntry(file.Name, file.CreationTimeUtc, file.Length)));
+            _backups.AddRange(await Backups.ListAsync());
             ShowStatus("Backups refreshed.");
         }
         catch (Exception ex)
@@ -253,14 +237,14 @@
         _isBusy = true;
         try
         {
-            var fileName = await _uow.ISettingsRepo.CreateVersionedBackupAsync("manual");
-            if (fileName is null)
+            var backup = await Backups.CreateAsync();
+            if (backup is null)
             {
                 throw new FileNotFoundException("config.json was not found.");
             }
 
             await RefreshBackupsAsyncInternal(manageBusy: false);
-            ShowStatus($"Backup created: {fileName}");
+            ShowStatus($"Backup created: {backup.FileName}");
         }
         catch (Exception ex)
         {
@@ -272,13 +256,13 @@
         }
     }
 
-    private void RequestRestoreBackup(BackupFileEntry backup)
+    private void RequestRestoreBackup(SettingsBackupInfo backup)
     {
         _pendingRestore = backup;
         _pendingDelete = null;
     }
 
-    private void RequestDeleteBackup(BackupFileEntry backup)
+    private void RequestDeleteBackup(SettingsBackupInfo backup)
     {
         _pendingDelete = backup;
         _pendingRestore = null;
@@ -309,25 +293,9 @@
         _isBusy = true;
         try
         {
-            var path = Path.Combine(BackupDirectory, Path.GetFileName(backup.FileName));
-            if (!File.Exists(path))
-            {
-                ShowStatus("Selected backup file was not found.", true);
-                return;
-            }
-
-            var rawJson = await File.ReadAllTextAsync(path);
-            var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
-            if (importedSettings is null)
-            {
-                ShowStatus("Backup file is not a valid settings JSON.", true);
-                return;
-            }
-
-            var safetyBackup = await _uow.ISettingsRepo.CreateVersionedBackupAsync("pre-restore");
-            await _uow.ISettingsRepo.WriteSettings(importedSettings);
+            var restored = await Backups.RestoreAsync(backup.FileName);
             await RefreshBackupsAsyncInternal(manageBusy: false);
-            ShowStatus($"Restored {backup.FileName}. Safety backup: {safetyBackup}.");
+            ShowStatus($"Restored {backup.FileName}. Safety backup: {restored.SafetyBackup ?? "not required"}.");
         }
         catch (Exception ex)
         {
@@ -351,12 +319,7 @@
         _isBusy = true;
         try
         {
-            var path = Path.Combine(BackupDirectory, Path.GetFileName(backup.FileName));
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-
+            await Backups.DeleteAsync(backup.FileName);
             await RefreshBackupsAsyncInternal(manageBusy: false);
             ShowStatus($"Deleted backup: {backup.FileName}");
         }
@@ -387,26 +350,8 @@
         _isBusy = true;
         try
         {
-            var extension = Path.GetExtension(_selectedImportFile.Name);
-            if (!string.Equals(extension, ".json", StringComparison.OrdinalIgnoreCase))
-            {
-                ShowStatus("Only .json files are supported.", true);
-                return;
-            }
-
-            await using var stream = _selectedImportFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-            using var reader = new StreamReader(stream);
-            var rawJson = await reader.ReadToEndAsync();
-
-            var importedSettings = JsonSerializer.Deserialize<SonosSettings>(rawJson, JsonOptions);
-            if (importedSettings is null)
-            {
-                ShowStatus("Uploaded file is not a valid settings JSON.", true);
-                return;
-            }
-
-            await _uow.ISettingsRepo.CreateVersionedBackupAsync("pre-import");
-            await _uow.ISettingsRepo.WriteSettings(importedSettings);
+            await using var stream = _selectedImportFile.OpenReadStream(maxAllowedSize: ISettingsBackupService.MaxImportBytes);
+            await Backups.ImportAsync(_selectedImportFile.Name, stream, _selectedImportFile.Size);
 
             _selectedImportFile = null;
             _selectedImportFileName = null;

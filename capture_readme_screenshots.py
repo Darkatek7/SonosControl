@@ -1,8 +1,9 @@
 import argparse
 import os
 import platform
-import sqlite3
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,7 @@ ROUTES = [
     ("/insights", "insights", "Insights"),
     ("/administration/devices", "administration", "Devices"),
 ]
+THEMES = ["light", "dark"]
 
 
 def parse_viewport(viewport: str) -> dict:
@@ -86,6 +88,9 @@ def start_local_server(base_url: str, project_root: Path):
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "readme_screenshots_server.log"
     log_stream = log_path.open("w", encoding="utf-8")
+    runtime_dir = Path(tempfile.mkdtemp(prefix="sonoscontrol-readme-", dir=artifacts_dir)).resolve()
+    settings_dir = runtime_dir / "settings"
+    settings_dir.mkdir(parents=True, exist_ok=True)
 
     process = subprocess.Popen(
         ["dotnet", "run", "--project", "SonosControl.Web", "--no-build", "--urls", base_url],
@@ -96,16 +101,21 @@ def start_local_server(base_url: str, project_root: Path):
         env={
             **os.environ,
             "BackgroundServices__Enabled": os.getenv("BackgroundServices__Enabled", "false"),
+            "Settings__DataDirectory": str(settings_dir),
+            "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
+            "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
+            "ADMIN_EMAIL": os.getenv("ADMIN_EMAIL", "admin@readme.invalid"),
+            "ADMIN_PASSWORD": os.getenv("ADMIN_PASSWORD", "Test1234."),
             "DataProtection__KeysDirectory": os.getenv(
                 "DataProtection__KeysDirectory",
-                str((project_root / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
+                str((runtime_dir / "keys").resolve()),
             ),
         },
     )
-    return process, log_stream, log_path
+    return process, log_stream, log_path, runtime_dir
 
 
-def stop_local_server(process, log_stream):
+def stop_local_server(process, log_stream, runtime_dir=None):
     if process and process.poll() is None:
         process.terminate()
         try:
@@ -116,44 +126,11 @@ def stop_local_server(process, log_stream):
 
     if log_stream:
         log_stream.close()
+    if runtime_dir:
+        shutil.rmtree(runtime_dir, ignore_errors=True)
 
 
-def find_db_path(project_root: Path) -> Optional[Path]:
-    candidates = [
-        project_root / "SonosControl.Web" / "app.db",
-        project_root / "SonosControl.Web" / "Data" / "app.db",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def get_unlocked_admin_usernames(project_root: Path) -> list[str]:
-    db_path = find_db_path(project_root)
-    if not db_path:
-        return []
-
-    try:
-        with sqlite3.connect(db_path) as con:
-            cur = con.cursor()
-            rows = cur.execute(
-                """
-                SELECT DISTINCT u.UserName
-                FROM AspNetUsers u
-                JOIN AspNetUserRoles ur ON ur.UserId = u.Id
-                JOIN AspNetRoles r ON r.Id = ur.RoleId
-                WHERE r.Name IN ('admin', 'superadmin', 'operator')
-                  AND u.LockoutEnd IS NULL
-                ORDER BY CASE WHEN lower(u.UserName) = 'admin' THEN 0 ELSE 1 END, u.UserName
-                """
-            ).fetchall()
-            return [row[0] for row in rows if row and row[0]]
-    except sqlite3.Error:
-        return []
-
-
-def get_login_attempts(project_root: Path, username_arg: Optional[str], password_arg: Optional[str]) -> list[tuple[str, str]]:
+def get_login_attempts(username_arg: Optional[str], password_arg: Optional[str]) -> list[tuple[str, str]]:
     seen = set()
     attempts: list[tuple[str, str]] = []
 
@@ -163,7 +140,6 @@ def get_login_attempts(project_root: Path, username_arg: Optional[str], password
         os.getenv("MOBILE_SMOKE_USERNAME"),
         os.getenv("ADMIN_USERNAME"),
     ]
-    usernames.extend(get_unlocked_admin_usernames(project_root))
     usernames.append("admin")
 
     passwords = [
@@ -213,35 +189,39 @@ def ensure_expected_heading(page, expected_text: str):
     expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
 
 
-def force_dark_theme(page):
+def apply_theme(page, theme: str):
     page.evaluate(
         """
-        () => {
+        theme => {
             if (window.sonosTheme && typeof window.sonosTheme.apply === "function") {
-                window.sonosTheme.apply("dark");
+                window.sonosTheme.apply(theme);
             }
-            document.documentElement.setAttribute("data-theme", "dark");
+            document.documentElement.setAttribute("data-theme", theme);
+            document.documentElement.style.colorScheme = theme;
         }
-        """
+        """,
+        theme,
     )
-    page.wait_for_timeout(150)
+    page.wait_for_timeout(200)
 
 
-def capture_route(page, base_url: str, route: str, slug: str, expected_text: str, output_path: Path):
+def capture_route(page, base_url: str, route: str, expected_text: str, theme: str, output_path: Path):
     page.goto(f"{base_url.rstrip('/')}{route}", wait_until="networkidle")
     ensure_expected_heading(page, expected_text)
-    force_dark_theme(page)
+    apply_theme(page, theme)
     page.keyboard.press("Escape")
-    page.wait_for_timeout(150)
+    page.mouse.move(1, 1)
+    page.wait_for_timeout(200)
     page.screenshot(path=str(output_path), full_page=False)
 
 
 def capture_viewport_set(page, base_url: str, viewport_label: str, viewport: dict, output_dir: Path):
     page.set_viewport_size(viewport)
-    for route, slug, expected_text in ROUTES:
-        output_path = output_dir / f"{viewport_label}-{slug}.png"
-        capture_route(page, base_url, route, slug, expected_text, output_path)
-        print(f"Captured {output_path}")
+    for theme in THEMES:
+        for route, slug, expected_text in ROUTES:
+            output_path = output_dir / f"{viewport_label}-{theme}-{slug}.png"
+            capture_route(page, base_url, route, expected_text, theme, output_path)
+            print(f"Captured {output_path}")
 
 
 def parse_args():
@@ -280,14 +260,15 @@ def run():
     server_process = None
     server_log_stream = None
     server_log_path = None
+    runtime_dir = None
     started_local_server = False
 
     if not args.no_autostart and not is_server_reachable(args.base_url):
-        server_process, server_log_stream, server_log_path = start_local_server(args.base_url, project_root)
+        server_process, server_log_stream, server_log_path, runtime_dir = start_local_server(args.base_url, project_root)
         started_local_server = True
         if not wait_for_server_ready(args.base_url, args.server_timeout, process=server_process):
             exit_code = server_process.poll()
-            stop_local_server(server_process, server_log_stream)
+            stop_local_server(server_process, server_log_stream, runtime_dir)
             raise RuntimeError(
                 f"Timed out waiting for {args.base_url} (server exit code: {exit_code}). "
                 f"Check server log: {server_log_path}"
@@ -306,7 +287,7 @@ def run():
 
         login_attempt_errors = []
         login_succeeded = False
-        for username, password in get_login_attempts(project_root, args.username, args.password):
+        for username, password in get_login_attempts(args.username, args.password):
             login_succeeded, current_url, error_text = try_login(page, args.base_url, username, password)
             if login_succeeded:
                 print(f"Login succeeded with user '{username}'.")
@@ -322,7 +303,7 @@ def run():
             attempts_description = "; ".join(login_attempt_errors) or "none"
             browser.close()
             if started_local_server:
-                stop_local_server(server_process, server_log_stream)
+                stop_local_server(server_process, server_log_stream, runtime_dir)
             raise RuntimeError(
                 "Unable to log in. Provide credentials with --username/--password or set env vars. "
                 f"Attempt results: {attempts_description}"
@@ -335,7 +316,7 @@ def run():
         browser.close()
 
     if started_local_server:
-        stop_local_server(server_process, server_log_stream)
+        stop_local_server(server_process, server_log_stream, runtime_dir)
 
     print("README screenshot capture complete.")
 

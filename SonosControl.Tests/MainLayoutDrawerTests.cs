@@ -149,14 +149,14 @@ public class MainLayoutDrawerTests
         var userStore = new Mock<IUserStore<ApplicationUser>>();
         var userManager = new Mock<UserManager<ApplicationUser>>(
             userStore.Object,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            null!,
+            null!);
 
         ctx.Services.AddSingleton(userManager.Object);
         ctx.Services.AddSingleton<ThemeService>(serviceProvider =>

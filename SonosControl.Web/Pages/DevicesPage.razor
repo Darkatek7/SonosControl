@@ -23,8 +23,8 @@
                 <span><Icon Name="check" Size="16" /> Online</span>
                 <strong>@GetOnlineSpeakerCount()</strong>
             </div>
-            <button class="btn btn-outline-primary" @onclick="RefreshHealth"><Icon Name="refresh" Size="16" /> Health</button>
-            <button class="btn btn-primary" @onclick="RunDiscovery" disabled="@_isDiscovering">
+            <button type="button" class="btn btn-outline-primary" @onclick="RefreshHealth"><Icon Name="refresh" Size="16" /> Health</button>
+            <button type="button" class="btn btn-primary" @onclick="RunDiscovery" disabled="@_isDiscovering">
                 @if (_isDiscovering)
                 {
                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -136,7 +136,7 @@
                     </div>
                     @if (_discoveredSpeakers.Any())
                     {
-                        <button class="btn btn-outline-success btn-sm devices-import-all" @onclick="ImportAllDiscovered">
+                        <button type="button" class="btn btn-outline-success btn-sm devices-import-all" @onclick="ImportAllDiscovered">
                             <Icon Name="plus" Size="15" /> Import All
                         </button>
                     }
@@ -163,7 +163,7 @@
                                     <td>@speaker.IpAddress</td>
                                     <td>@(!string.IsNullOrWhiteSpace(speaker.Uuid) ? speaker.Uuid : "-")</td>
                                     <td class="text-end">
-                                        <button class="btn btn-outline-primary btn-sm"
+                                        <button type="button" class="btn btn-outline-primary btn-sm"
                                                 @onclick="() => ImportSpeaker(speaker)"
                                                 disabled="@exists">
                                             @(exists ? "Imported" : "Import")

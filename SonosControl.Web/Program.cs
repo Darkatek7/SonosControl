@@ -35,7 +35,10 @@ builder.Services.AddHttpClient(nameof(SonosDeviceDiscoveryService), client =>
 {
     client.Timeout = TimeSpan.FromSeconds(5);
 });
-var settingsDataDirectory = Path.Combine(builder.Environment.ContentRootPath, "Data");
+var configuredSettingsDataDirectory = builder.Configuration["Settings:DataDirectory"];
+var settingsDataDirectory = string.IsNullOrWhiteSpace(configuredSettingsDataDirectory)
+    ? Path.Combine(builder.Environment.ContentRootPath, "Data")
+    : Path.GetFullPath(configuredSettingsDataDirectory);
 builder.Services.AddSingleton<ISettingsRepo>(_ => new SettingsRepo(settingsDataDirectory));
 builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSection("Playback"));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
@@ -61,13 +64,13 @@ if (builder.Configuration.GetValue("BackgroundServices:Enabled", true))
     builder.Services.AddHostedService<YouTubePlaybackMaintenanceService>();
     builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
 }
-builder.Services.AddSingleton<HolidayCalendarSyncService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
 builder.Services.AddScoped<SonosControl.Web.Services.ThemeService>();
 builder.Services.AddScoped<PlaybackUiStateService>();
 builder.Services.AddScoped<SettingsAutosaveCoordinator>();
+builder.Services.AddScoped<ISettingsBackupService, SettingsBackupService>();
 builder.Services.AddScoped<UserFavouriteSourceService>();
 builder.Services.AddScoped<HomeLibraryService>();
 builder.Services.AddScoped<INotifier, DiscordNotificationService>();
@@ -150,6 +153,7 @@ using (var scope = app.Services.CreateScope())
 
 if (!app.Environment.IsDevelopment())
 {
+    app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
@@ -173,21 +177,18 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseEndpoints(endpoints =>
+app.MapControllers();
+app.MapDefaultControllerRoute();
+app.MapBlazorHub();
+app.MapHealthChecks("/healthz", new HealthCheckOptions
 {
-    endpoints.MapControllers();
-    endpoints.MapDefaultControllerRoute();
-    endpoints.MapBlazorHub();
-    endpoints.MapHealthChecks("/healthz", new HealthCheckOptions
-    {
-        AllowCachingResponses = false
-    });
-    endpoints.MapGet("/metricsz", (IMetricsCollector metricsCollector, IConfiguration configuration) =>
-    {
-        var enabled = configuration.GetValue<bool?>("Observability:EnableMetrics") ?? true;
-        return enabled ? Results.Ok(metricsCollector.GetSnapshot()) : Results.NotFound();
-    });
-    endpoints.MapFallbackToPage("/_Host"); // only here once
+    AllowCachingResponses = false
 });
+app.MapGet("/metricsz", (IMetricsCollector metricsCollector, IConfiguration configuration) =>
+{
+    var enabled = configuration.GetValue<bool?>("Observability:EnableMetrics") ?? true;
+    return enabled ? Results.Ok(metricsCollector.GetSnapshot()) : Results.NotFound();
+});
+app.MapFallbackToPage("/_Host");
 
 app.Run();

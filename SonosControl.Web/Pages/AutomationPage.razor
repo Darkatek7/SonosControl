@@ -43,12 +43,17 @@
         <div><span>Last checked</span><strong>@FormatEvaluationTime()</strong></div>
     </section>
 
-    <nav class="workspace-tabs" aria-label="Automation sections">
-        <button type="button" class="@GetTabClass("scenes")" aria-current="@GetAriaCurrent("scenes")" @onclick='() => SelectTab("scenes")'>Scenes</button>
-        <button type="button" class="@GetTabClass("schedules")" aria-current="@GetAriaCurrent("schedules")" @onclick='() => SelectTab("schedules")'>Schedules</button>
-        <button type="button" class="@GetTabClass("exceptions")" aria-current="@GetAriaCurrent("exceptions")" @onclick='() => SelectTab("exceptions")'>Date exceptions</button>
-    </nav>
+    <WorkspaceTabs Items="AutomationTabs"
+                   ActiveKey="@_activeTab"
+                   OnSelect="SelectTab"
+                   AriaLabel="Automation sections"
+                   IdPrefix="automation" />
 
+    <section id="@($"automation-panel-{_activeTab}")"
+             role="tabpanel"
+             aria-labelledby="@($"automation-tab-{_activeTab}")"
+             tabindex="0"
+             class="workspace-tab-panel">
     @if (_activeTab == "schedules")
     {
         <ScheduleWindowsPage />
@@ -134,6 +139,7 @@
     {
         <ScenesPage />
     }
+    </section>
 </div>
 
 @code {
@@ -149,6 +155,12 @@
     private bool _canEditSchedules;
     private bool _redirectedAlias;
     private AutomationRuntimeSnapshot Snapshot => RuntimeStatus.Snapshot;
+    private static readonly IReadOnlyList<WorkspaceTabItem> AutomationTabs =
+    [
+        new("scenes", "Scenes"),
+        new("schedules", "Schedules"),
+        new("exceptions", "Date exceptions")
+    ];
 
     protected override async Task OnInitializedAsync()
     {

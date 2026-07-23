@@ -20,7 +20,12 @@ namespace SonosControl.Web.Controllers
         [HttpGet("login")]
         public async Task<IActionResult> Login(string? error = null, string? registered = null)
         {
-            ViewBag.Error = error == "1" ? "Invalid username or password." : null;
+            ViewBag.Error = error switch
+            {
+                "1" => "Invalid username or password.",
+                "lockedout" => "This account is temporarily locked after too many failed sign-in attempts. Please try again in five minutes.",
+                _ => null
+            };
             ViewBag.Registered = registered == "1";
             var settings = await _uow.ISettingsRepo.GetSettings();
             ViewBag.AllowRegistration = settings?.AllowUserRegistration ?? true;
