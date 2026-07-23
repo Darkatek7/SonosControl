@@ -1,12 +1,13 @@
 .section-card {
+    --section-card-accent: var(--section-accent, var(--brand-primary));
     display: flex;
     flex-direction: column;
     gap: 0;
-    border: 1px solid rgba(99, 102, 241, 0.12);
+    border: 1px solid color-mix(in srgb, var(--section-card-accent) 16%, var(--border-subtle));
     border-radius: var(--radius-xl);
-    background: linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 100%);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--surface-elevated);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.6);
     min-width: 0;
     overflow-x: hidden;
@@ -15,20 +16,20 @@
 }
 
 [data-theme='dark'] .section-card {
-    background: linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(17, 24, 39, 0.85) 100%);
-    border-color: rgba(129, 140, 248, 0.15);
+    background: color-mix(in srgb, var(--section-card-accent) 4%, var(--surface-elevated));
+    border-color: color-mix(in srgb, var(--section-card-accent) 22%, var(--border-subtle));
     box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .section-card:hover {
-    transform: translateY(-2px);
+    transform: none;
     box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: color-mix(in srgb, var(--section-card-accent) 34%, var(--border-subtle));
 }
 
 [data-theme='dark'] .section-card:hover {
     box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    border-color: rgba(129, 140, 248, 0.3);
+    border-color: color-mix(in srgb, var(--section-card-accent) 42%, var(--border-subtle));
 }
 
 .section-card__header {
@@ -49,11 +50,11 @@
     left: var(--spacing-lg);
     right: var(--spacing-lg);
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.2) 20%, rgba(139, 92, 246, 0.15) 50%, rgba(99, 102, 241, 0.2) 80%, transparent 100%);
+    background: var(--section-card-accent);
 }
 
 [data-theme='dark'] .section-card__header::after {
-    background: linear-gradient(90deg, transparent 0%, rgba(129, 140, 248, 0.25) 20%, rgba(139, 92, 246, 0.2) 50%, rgba(129, 140, 248, 0.25) 80%, transparent 100%);
+    background: var(--section-card-accent);
 }
 
 .section-card__header-main {
@@ -66,14 +67,14 @@
 .section-card__icon {
     font-size: 1.75rem;
     line-height: 1;
-    color: var(--brand-primary);
-    filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.2));
+    color: var(--section-card-accent);
+    filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--section-card-accent) 22%, transparent));
     transition: transform var(--transition-fast), filter var(--transition-fast);
 }
 
 .section-card:hover .section-card__icon {
     transform: scale(1.05);
-    filter: drop-shadow(0 4px 8px rgba(99, 102, 241, 0.3));
+    filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--section-card-accent) 30%, transparent));
 }
 
 .section-card__header-text {
@@ -95,7 +96,7 @@
     margin: 0 0 0.25rem 0;
     font-size: var(--font-size-xs);
     font-weight: 600;
-    color: var(--brand-primary);
+    color: var(--section-card-accent);
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }

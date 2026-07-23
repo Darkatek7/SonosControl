@@ -22,6 +22,14 @@
         </div>
     </section>
 
+    @if (!HasInsightData)
+    {
+        <EmptyState IconName="graph"
+                    Title="Your listening story starts here"
+                    Description="Play music and use your rooms for a while. Insights will turn that activity into trends, favourites, and listening-time summaries." />
+    }
+    else
+    {
     <section class="stats-kpi-grid" aria-label="Listening overview">
         <article class="stats-kpi-card stats-kpi-card--primary">
             <div class="stats-kpi-card__icon"><Icon Name="clock" Size="20" /></div>
@@ -284,6 +292,7 @@
             </div>
         }
     </section>
+    }
 </div>
 
 @code {
@@ -382,6 +391,18 @@
 
     private List<StationStat>? stationStats;
     private List<TrackStat>? trackStats;
+
+    private bool HasInsightData =>
+        totalDuration > 0 ||
+        activityOverTime?.Any() == true ||
+        activityByHour?.Any() == true ||
+        mediaTypeStats?.Any() == true ||
+        stationStats?.Any() == true ||
+        trackStats?.Any() == true ||
+        topDjStats?.Any() == true ||
+        skipperStats?.Any() == true ||
+        grouperStats?.Any() == true ||
+        nightOwlStats?.Any() == true;
 
     protected override async Task OnInitializedAsync()
     {

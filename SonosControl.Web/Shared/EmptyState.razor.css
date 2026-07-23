@@ -5,14 +5,14 @@
     justify-content: center;
     text-align: center;
     padding: var(--spacing-xl) var(--spacing-md);
-    animation: fade-in 0.3s ease-out;
+    animation: fade-in 180ms ease-out;
 }
 
 .empty-state__icon {
     color: var(--text-muted);
     opacity: 0.6;
     margin-bottom: var(--spacing-md);
-    animation: float 3s ease-in-out infinite;
+    animation: none;
 }
 
 .empty-state__title {
@@ -44,15 +44,6 @@
     to {
         opacity: 1;
         transform: translateY(0);
-    }
-}
-
-@keyframes float {
-    0%, 100% {
-        transform: translateY(0);
-    }
-    50% {
-        transform: translateY(-6px);
     }
 }
 

@@ -1,4 +1,5 @@
 @page "/register"
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @inject UserManager<ApplicationUser> UserManager
@@ -142,12 +143,24 @@
 
     public class RegisterModel
     {
-        public string UserName { get; set; }
-        public string Firstname { get; set; }
-        public string Lastname { get; set; }
-        public string Email { get; set; }
-        public string Password { get; set; }
-        public string ConfirmPassword { get; set; }
-        public string statusMessage { get; set; }
+        [Required]
+        public string UserName { get; set; } = string.Empty;
+
+        [Required]
+        public string Firstname { get; set; } = string.Empty;
+
+        [Required]
+        public string Lastname { get; set; } = string.Empty;
+
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required, StringLength(100, MinimumLength = 6)]
+        public string Password { get; set; } = string.Empty;
+
+        [Required, Compare(nameof(Password))]
+        public string ConfirmPassword { get; set; } = string.Empty;
+
+        public string statusMessage { get; set; } = string.Empty;
     }
 }

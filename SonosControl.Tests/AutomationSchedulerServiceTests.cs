@@ -287,7 +287,7 @@ public class AutomationSchedulerServiceTests
         public void Dispose()
         {
             provider.Dispose();
-            db.Dispose();
+            Db.Dispose();
         }
     }
 }

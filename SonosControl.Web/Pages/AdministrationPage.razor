@@ -25,13 +25,17 @@
         </div>
     </header>
 
-    <nav class="workspace-tabs" aria-label="Administration sections">
-        <button type="button" class="@GetTabClass("devices")" aria-current="@GetAriaCurrent("devices")" @onclick='() => SelectTab("devices")'>Devices</button>
-        <button type="button" class="@GetTabClass("settings")" aria-current="@GetAriaCurrent("settings")" @onclick='() => SelectTab("settings")'>System settings</button>
-        <button type="button" class="@GetTabClass("users")" aria-current="@GetAriaCurrent("users")" @onclick='() => SelectTab("users")'>Users</button>
-        <button type="button" class="@GetTabClass("backups")" aria-current="@GetAriaCurrent("backups")" @onclick='() => SelectTab("backups")'>Backups</button>
-    </nav>
+    <WorkspaceTabs Items="AdministrationTabs"
+                   ActiveKey="@_activeTab"
+                   OnSelect="SelectTab"
+                   AriaLabel="Administration sections"
+                   IdPrefix="administration" />
 
+    <section id="@($"administration-panel-{_activeTab}")"
+             role="tabpanel"
+             aria-labelledby="@($"administration-tab-{_activeTab}")"
+             tabindex="0"
+             class="workspace-tab-panel">
     @if (_activeTab == "settings")
     {
         var automation = RuntimeStatus.Snapshot;
@@ -45,7 +49,7 @@
         {
             <div class="alert alert-warning" role="status">Automation is running with @automation.Warnings.Count configuration warning(s). Review Automation for details.</div>
         }
-        <ConfigPage SystemSettingsOnly="true" />
+        <ConfigPage />
     }
     else if (_activeTab == "users")
     {
@@ -59,11 +63,19 @@
     {
         <DevicesPage />
     }
+    </section>
 </div>
 
 @code {
     private string _activeTab = "devices";
     private bool _redirectedAlias;
+    private static readonly IReadOnlyList<WorkspaceTabItem> AdministrationTabs =
+    [
+        new("devices", "Devices"),
+        new("settings", "System settings"),
+        new("users", "Users"),
+        new("backups", "Backups")
+    ];
 
     protected override void OnInitialized()
     {
@@ -124,9 +136,6 @@
             _ => "devices"
         };
     }
-
-    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
-    private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
 
     public void Dispose()
     {

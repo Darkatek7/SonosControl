@@ -1,39 +1,27 @@
 @if (Visible)
 {
-    <div class="app-dialog-backdrop" role="presentation" @onclick="CancelAsync">
-        <section class="app-dialog app-dialog--confirm"
-                 role="alertdialog"
-                 aria-modal="true"
-                 aria-labelledby="@_titleId"
-                 aria-describedby="@_messageId"
-                 @onclick:stopPropagation="true">
-            <div class="app-dialog__header">
-                <div>
-                    <span class="spotify-eyebrow">Confirmation</span>
-                    <h2 id="@_titleId">@Title</h2>
-                </div>
-                <button type="button" class="btn app-dialog__close" @onclick="CancelAsync" aria-label="Close dialog">
-                    <Icon Name="x" Size="18" />
-                </button>
-            </div>
-            <div class="app-dialog__body">
-                <p id="@_messageId" class="app-dialog__message">@Message</p>
-            </div>
-            <div class="app-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync">Cancel</button>
-                <button type="button"
-                        class="btn @(Dangerous ? "btn-danger" : "btn-primary")"
-                        @onclick="ConfirmAsync"
-                        autofocus>
-                    @ConfirmLabel
-                </button>
-            </div>
-        </section>
-    </div>
+    <AccessibleDialog Visible="true"
+                      Title="@Title"
+                      Eyebrow="Confirmation"
+                      Role="alertdialog"
+                      DescriptionId="@_messageId"
+                      SizeClass="app-dialog--confirm"
+                      OnClose="CancelAsync">
+        <ChildContent>
+            <p id="@_messageId" class="app-dialog__message">@Message</p>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync">Cancel</button>
+            <button type="button"
+                    class="btn @(Dangerous ? "btn-danger" : "btn-primary")"
+                    @onclick="ConfirmAsync">
+                @ConfirmLabel
+            </button>
+        </FooterContent>
+    </AccessibleDialog>
 }
 
 @code {
-    private readonly string _titleId = $"confirm-title-{Guid.NewGuid():N}";
     private readonly string _messageId = $"confirm-message-{Guid.NewGuid():N}";
 
     [Parameter] public bool Visible { get; set; }

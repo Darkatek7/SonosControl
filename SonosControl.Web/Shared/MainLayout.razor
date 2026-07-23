@@ -32,7 +32,8 @@
         <button type="button"
                 class="app-drawer-backdrop"
                 @onclick="CloseDrawerAsync"
-                aria-label="Close navigation menu"></button>
+                tabindex="-1"
+                aria-hidden="true"></button>
     }
 
     <main class="app-main">
@@ -40,7 +41,7 @@
             <div class="app-mobile-top-bar__content px-3">
                 <button type="button"
                         class="app-mobile-menu-button"
-                        aria-label="@(_isDrawerOpen ? "Close navigation menu" : "Open navigation menu")"
+                        aria-label="Navigation menu"
                         aria-controls="app-sidebar"
                         aria-expanded="@(_isDrawerOpen ? "true" : "false")"
                         @onclick="ToggleDrawerAsync">
@@ -65,7 +66,7 @@
                 <div class="top-bar-actions">
                     @if (isAuthenticated)
                     {
-                        <details class="top-bar-profile">
+                        <details id="account-menu" class="top-bar-profile" data-disclosure>
                             <summary aria-label="Open account menu">
                                 <span class="top-bar-profile__avatar"><Icon Name="person" Size="16" /></span>
                                 <span class="top-bar-profile__summary-copy">
@@ -148,6 +149,7 @@
     private bool _isDrawerOpen;
     private bool _isBodyScrollLocked;
     private bool _focusDrawerOnNextRender;
+    private bool _drawerFocusTrapActive;
     private ElementReference _drawerRef;
 
     private string CurrentPageTitle
@@ -215,6 +217,19 @@
             return;
         }
 
+        if (!isOpen && _drawerFocusTrapActive)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("window.sonosUi.releaseFocusTrap", _drawerRef);
+            }
+            catch (JSException)
+            {
+            }
+
+            _drawerFocusTrapActive = false;
+        }
+
         _isDrawerOpen = isOpen;
         _focusDrawerOnNextRender = isOpen && focusDrawer;
         await UpdateBodyScrollLockAsync(isOpen);
@@ -251,6 +266,8 @@
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
+        _ = JSRuntime.InvokeVoidAsync("window.sonosUi.closeDisclosure", "account-menu");
+
         if (_isDrawerOpen)
         {
             _ = InvokeAsync(CloseDrawerAsync);
@@ -279,7 +296,7 @@
     };
 
     private string GetThemeButtonClasses(ThemePreferenceMode mode)
-        => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-light";
+        => mode == _userThemePreference ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-secondary";
 
     private async Task ApplyThemePreferenceAsync()
     {
@@ -323,11 +340,12 @@
             _focusDrawerOnNextRender = false;
             try
             {
-                await _drawerRef.FocusAsync();
+                await JSRuntime.InvokeVoidAsync("window.sonosUi.activateFocusTrap", _drawerRef, _drawerRef);
+                _drawerFocusTrapActive = true;
             }
-            catch (InvalidOperationException)
+            catch (JSException)
             {
-                // Ignore if sidebar is not focusable yet.
+                // Ignore when interop is unavailable during prerender.
             }
         }
     }
@@ -350,6 +368,12 @@
         {
             _ = JSRuntime.InvokeVoidAsync("window.sonosUi.setBodyScrollLock", false);
             _isBodyScrollLocked = false;
+        }
+
+        if (_drawerFocusTrapActive)
+        {
+            _ = JSRuntime.InvokeVoidAsync("window.sonosUi.releaseFocusTrap", _drawerRef);
+            _drawerFocusTrapActive = false;
         }
     }
 }

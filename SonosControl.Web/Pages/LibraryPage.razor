@@ -25,31 +25,36 @@
         }
     </header>
 
-    <nav class="workspace-tabs" aria-label="Library sections">
-        <button type="button" class="@GetTabClass("saved")" aria-current="@GetAriaCurrent("saved")" @onclick='() => SelectTab("saved")'>Saved</button>
-        <button type="button" class="@GetTabClass("discover")" aria-current="@GetAriaCurrent("discover")" @onclick='() => SelectTab("discover")'>Discover Radio</button>
-        <button type="button" class="@GetTabClass("for-you")" aria-current="@GetAriaCurrent("for-you")" @onclick='() => SelectTab("for-you")'>For You</button>
-    </nav>
+    <WorkspaceTabs Items="LibraryTabs"
+                   ActiveKey="@_activeTab"
+                   OnSelect="SelectTab"
+                   AriaLabel="Library sections"
+                   IdPrefix="library" />
 
     @if (!string.IsNullOrWhiteSpace(_statusMessage))
     {
         <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status" aria-live="polite">@_statusMessage</div>
     }
 
-    @if (_activeTab == "discover")
-    {
-        <StationLookup />
-    }
-    else if (_activeTab == "for-you")
-    {
-        <RecommendationsPage />
-    }
-    else if (_settings is null)
-    {
-        <div class="workspace-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading library…</div>
-    }
-    else
-    {
+    <section id="@($"library-panel-{_activeTab}")"
+             role="tabpanel"
+             aria-labelledby="@($"library-tab-{_activeTab}")"
+             tabindex="0"
+             class="workspace-tab-panel">
+        @if (_activeTab == "discover")
+        {
+            <StationLookup />
+        }
+        else if (_activeTab == "for-you")
+        {
+            <RecommendationsPage />
+        }
+        else if (_settings is null)
+        {
+            <div class="workspace-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading library…</div>
+        }
+        else
+        {
         <section class="library-tools" aria-label="Filter saved sources">
             <label class="library-search-field" for="library-page-search">
                 <Icon Name="search" Size="16" />
@@ -108,21 +113,18 @@
                 }
             </section>
         }
-    }
+        }
+    </section>
 </div>
 
 @if (_showEditor)
 {
-    <div class="app-dialog-backdrop" @onclick="CloseEditor">
-        <section class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="source-editor-title" @onclick:stopPropagation="true">
-            <header class="app-dialog__header">
-                <div>
-                    <span class="workspace-eyebrow">Saved source</span>
-                    <h2 id="source-editor-title">@(_editingKey is null ? "Add source" : "Edit source")</h2>
-                </div>
-                <button type="button" class="app-dialog__close" @onclick="CloseEditor" aria-label="Close source editor"><Icon Name="x" Size="18" /></button>
-            </header>
-            <div class="app-dialog__body form-grid-simple">
+    <AccessibleDialog Visible="true"
+                      Title="@(_editingKey is null ? "Add source" : "Edit source")"
+                      Eyebrow="Saved source"
+                      OnClose="CloseEditor">
+        <ChildContent>
+            <div class="form-grid-simple">
                 <div>
                     <label for="source-type" class="form-label">Source type</label>
                     <select id="source-type" class="form-select" @bind="_draft.Type">
@@ -161,26 +163,23 @@
                     <div class="alert alert-danger mb-0" role="alert">@_dialogError</div>
                 }
             </div>
-            <footer class="app-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditor">Cancel</button>
-                <button type="button" class="btn btn-primary" @onclick="SaveSourceAsync" disabled="@_isSaving">Save source</button>
-            </footer>
-        </section>
-    </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CloseEditor">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveSourceAsync" disabled="@_isSaving">Save source</button>
+        </FooterContent>
+    </AccessibleDialog>
 }
 
 @if (_pendingDelete is not null)
 {
-    <div class="app-dialog-backdrop" @onclick="CancelDelete">
-        <section class="app-dialog app-dialog--confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-source-title" aria-describedby="delete-source-copy" @onclick:stopPropagation="true">
-            <header class="app-dialog__header"><h2 id="delete-source-title">Delete source?</h2></header>
-            <div class="app-dialog__body"><p id="delete-source-copy">“@_pendingDelete.Name” will be removed from the saved library.</p></div>
-            <footer class="app-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CancelDelete">Cancel</button>
-                <button type="button" class="btn btn-danger" @onclick="DeleteSourceAsync">Delete</button>
-            </footer>
-        </section>
-    </div>
+    <ConfirmDialog Visible="true"
+                   Title="Delete source?"
+                   Message="@($"“{_pendingDelete.Name}” will be removed from the saved library.")"
+                   ConfirmLabel="Delete"
+                   Dangerous="true"
+                   OnConfirm="DeleteSourceAsync"
+                   OnCancel="CancelDelete" />
 }
 
 @code {
@@ -203,6 +202,12 @@
     private SourceDraft _draft = new();
     private LibrarySource? _pendingDelete;
     private bool _redirectedAlias;
+    private static readonly IReadOnlyList<WorkspaceTabItem> LibraryTabs =
+    [
+        new("saved", "Saved"),
+        new("discover", "Discover Radio"),
+        new("for-you", "For You")
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -237,7 +242,6 @@
     }
 
     private void SelectTab(string tab) => Navigation.NavigateTo($"/library?tab={tab}");
-    private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
 
     private async Task LoadSettingsAsync()

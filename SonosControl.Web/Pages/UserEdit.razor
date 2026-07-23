@@ -34,13 +34,17 @@
                 @if (user == null)
                 {
                     <div class="profile-panel profile-empty-state">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        <strong>Loading profile...</strong>
+                        @if (string.IsNullOrEmpty(statusMessage))
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <strong>Loading profile…</strong>
+                        }
+                        else
+                        {
+                            <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
+                            <a class="btn btn-outline-secondary" href="/auth/login">Return to sign in</a>
+                        }
                     </div>
-                    @if (!string.IsNullOrEmpty(statusMessage))
-                    {
-                        <FormStatus StatusMessage="@statusMessage" Severity="@statusSeverity" />
-                    }
                 }
                 else
                 {
@@ -115,12 +119,20 @@
 
         isAuthenticated = user_auth.Identity?.IsAuthenticated ?? false;
 
-        if (isAuthenticated)
+        if (!isAuthenticated)
         {
-            var appUser = await UserManager.GetUserAsync(user_auth);
-            UserId = appUser?.Id;
+            SetStatus("You must be signed in to edit your account.", FormStatus.AlertSeverity.Warning);
+            return;
         }
-        
+
+        var appUser = await UserManager.GetUserAsync(user_auth);
+        UserId = appUser?.Id;
+        if (string.IsNullOrWhiteSpace(UserId))
+        {
+            SetStatus("Your account could not be resolved. Please sign in again.", FormStatus.AlertSeverity.Danger);
+            return;
+        }
+
         user = await UserManager.FindByIdAsync(UserId);
 
         if (user != null)
@@ -129,8 +141,8 @@
             {
                 FirstName = user.FirstName,
                 LastName = user.LastName,
-                Email = user.Email,
-                UserName = user.UserName
+                Email = user.Email ?? string.Empty,
+                UserName = user.UserName ?? string.Empty
             };
         }
         else

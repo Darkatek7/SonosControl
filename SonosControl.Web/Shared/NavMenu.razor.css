@@ -1,19 +1,19 @@
 /* Navigation styling - complementary styles to wwwroot/css/site.css */
 
 .nav-menu-container {
-    background: linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, transparent 100%);
+    background: transparent;
     border-radius: var(--radius-2xl);
     padding: var(--spacing-md);
-    transition: background 0.3s ease;
+    transition: background 180ms ease;
 }
 
 [data-theme='dark'] .nav-menu-container {
-    background: linear-gradient(180deg, rgba(129, 140, 248, 0.1) 0%, transparent 100%);
+    background: transparent;
 }
 
 .nav-menu-item {
     border-radius: var(--radius-lg);
-    transition: all 0.3s ease;
+    transition: color 180ms ease, background 180ms ease, border-color 180ms ease;
     position: relative;
     overflow: hidden;
 }
@@ -22,9 +22,9 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: var(--gradient-primary);
+    background: var(--brand-primary);
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 180ms ease;
 }
 
 .nav-menu-item:hover::before {
@@ -36,16 +36,16 @@
 }
 
 .nav-menu-item.active {
-    box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.1);
+    box-shadow: none;
 }
 
 .nav-menu-icon {
-    transition: transform 0.3s ease, filter 0.3s ease;
+    transition: transform 180ms ease, filter 180ms ease;
 }
 
 .nav-menu-item:hover .nav-menu-icon {
-    transform: scale(1.1);
-    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
+    transform: translateX(2px);
+    filter: none;
 }
 
 /* Animated underline for active nav items */
@@ -53,11 +53,11 @@
     content: '';
     position: absolute;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 60%;
-    height: 2px;
-    background: var(--gradient-primary);
-    border-radius: 1px;
-    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+    left: 0;
+    transform: none;
+    width: 3px;
+    height: 100%;
+    background: var(--brand-primary);
+    border-radius: 0 2px 2px 0;
+    box-shadow: none;
 }

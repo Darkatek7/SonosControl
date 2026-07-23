@@ -27,6 +27,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersEverydayHierarchy_WithoutEmbeddedPlayer()
     {
         using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
         var cut = ctx.RenderComponent<IndexPage>();
@@ -306,13 +307,14 @@ public class IndexPageUXTests
     public void LibraryPage_HasAccessibleTabsSearchAndExplicitSourceType()
     {
         using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
         var cut = ctx.RenderComponent<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("page", cut.Find(".workspace-tab.is-active").GetAttribute("aria-current"));
+            Assert.Equal("true", cut.Find(".workspace-tab.is-active").GetAttribute("aria-selected"));
             Assert.NotNull(cut.Find("#library-page-search"));
             Assert.NotNull(cut.Find("button.workspace-primary-action"));
         });
@@ -587,6 +589,7 @@ public class IndexPageUXTests
     public void LibraryPage_YouTubeEditor_UpdatesSelectedEntryWithoutPlaying()
     {
         using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         var settings = new SonosSettings
         {
