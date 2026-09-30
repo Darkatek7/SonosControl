@@ -20,3 +20,9 @@
 .exception-card .btn { min-height: 2.75rem; }
 @media (max-width: 991.98px) { .exception-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767.98px) { .automation-live-strip, .exception-editor { grid-template-columns: 1fr; } .automation-health { align-self: flex-start; } }
+@media (max-width: 575.98px) {
+    .automation-health { min-height: 1.75rem; padding: 0.25rem 0.65rem; font-size: 0.8rem; }
+    .automation-live-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem; }
+    .automation-live-strip > div { min-width: 0; padding: 0.55rem 0.65rem; }
+    .automation-live-strip strong { font-size: 0.875rem; overflow-wrap: anywhere; }
+}

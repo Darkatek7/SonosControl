@@ -11,7 +11,7 @@
                                  Disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping)"
                                  OnRetry="PlaybackState.RetryLastPlaybackCommandAsync" />
     }
-    <button type="button" class="player-surface__open" @onclick="OpenPanelAsync" aria-label="Open expanded player" aria-expanded="@_isPanelOpen">
+    <button type="button" class="player-surface__open" @onclick="OpenPanelAsync" aria-label="Open expanded player" aria-describedby="@(PlaybackState.HasActiveSpeaker ? "global-player-active-room" : null)" aria-expanded="@_isPanelOpen">
         <span class="global-player-bar__art" aria-hidden="true">
             @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
             {
@@ -25,7 +25,11 @@
         <span class="global-player-bar__meta">
             <span class="global-player-bar__eyebrow" role="heading" aria-level="2">Now playing</span>
             <strong title="@PlayerTitle">@PlayerTitle</strong>
-            <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay · @PlaybackState.ActiveSpeakerName</span>
+            <span class="global-player-bar__source" title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay · @PlaybackState.ActiveSpeakerName</span>
+            @if (PlaybackState.HasActiveSpeaker)
+            {
+                <span id="global-player-active-room" class="global-player-bar__active-room" title="@PlaybackState.ActiveSpeakerName">Room: @PlaybackState.ActiveSpeakerName</span>
+            }
         </span>
         <span class="player-surface__expand" aria-hidden="true"><Icon Name="chevron-up" Size="18" /></span>
     </button>

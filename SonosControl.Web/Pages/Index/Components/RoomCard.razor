@@ -59,9 +59,9 @@
         {
             <button type="button" class="btn btn-outline-secondary btn-sm room-card__activate"
                     @onclick="Activate" disabled="@(!IsOnline)"
-                    aria-label="@($"Make {Speaker.Name} the active speaker")">
-                <Icon Name="play" Size="14" />
-                <span>Make active</span>
+                    aria-label="@($"Select {Speaker.Name} as the active room")">
+                <Icon Name="speaker" Size="14" />
+                <span>Select room</span>
             </button>
         }
     </div>
