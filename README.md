@@ -38,7 +38,7 @@ docker compose up -d --build
 ```
 
 Open `http://localhost:8080` and sign in with the seeded admin account.
-Set `PLAYBACK_PUBLIC_BASE_URL` to the LAN URL that your Sonos devices can reach. `localhost` does not work for YouTube audio streaming to Sonos.
+Set `PLAYBACK_PUBLIC_BASE_URL` to the LAN URL that your Sonos devices can reach. `localhost` does not work for YouTube or uploaded MP3 audio streaming to Sonos.
 
 ### 2. Run locally with .NET 10
 
@@ -88,6 +88,7 @@ Then open `http://localhost:5107`.
 
 - Expanded Home player plus a compact sticky mini-player with queue, room, group, sync, timer, and coalesced volume controls.
 - One Library for saved TuneIn, Spotify, YouTube, and YouTube Music sources, Radio Browser discovery, and recommendations.
+- Temporary MP3 uploads in Library with immediate speaker playback and configurable automatic deletion.
 - Reusable scenes, ordered recurring schedules, date exceptions, fades, and migration from legacy day-based automation.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
 - Responsive listening statistics and a searchable read-only activity trail.

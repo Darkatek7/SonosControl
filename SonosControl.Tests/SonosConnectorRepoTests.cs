@@ -87,6 +87,32 @@ public class SonosConnectorRepoTests
     }
 
     [Fact]
+    public async Task PlayAudioFile_PreservesHttpUrlAndMetadata_AndStartsPlayback()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        using var client = new HttpClient(handler);
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        await repo.PlayAudioFileAsync("10.0.0.1", "https://sonos.local/api/mp3-audio/id.mp3", "Song & title");
+        var request = Assert.Single(handler.Requests);
+        Assert.Contains("<CurrentURI>https://sonos.local/api/mp3-audio/id.mp3</CurrentURI>", request.Body);
+        Assert.Contains("Song &amp;amp; title", request.Body);
+        Assert.DoesNotContain("x-rincon-mp3radio", request.Body);
+        Assert.Equal(1, repo.StartPlayingCallCount);
+    }
+
+    [Fact]
+    public async Task PlayAudioFile_PropagatesSonosFailure_WithoutStartingPlayback()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        using var client = new HttpClient(handler);
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        await Assert.ThrowsAsync<HttpRequestException>(() => repo.PlayAudioFileAsync("10.0.0.1", "http://sonos.local/file.mp3", "Song"));
+        Assert.Equal(0, repo.StartPlayingCallCount);
+    }
+
+    [Fact]
     public async Task NextTrack_SendsCorrectSoapRequest()
     {
         var handler = new QueueHttpMessageHandler();

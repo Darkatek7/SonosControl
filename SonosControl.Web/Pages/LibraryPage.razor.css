@@ -1,3 +1,5 @@
+.library-page ::deep .workspace-tab { flex-shrink: 0; }
+.library-setup-notice { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-2); color: var(--text-secondary); }
 .source-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1rem; }
 .library-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 15rem); gap: 0.75rem; margin-bottom: 1rem; }
 .library-search-field { position: relative; display: flex; align-items: center; }
@@ -16,3 +18,7 @@
 .source-card__actions { grid-column: 1 / -1; display: flex; align-self: end; justify-content: flex-end; gap: 0.45rem; }
 .source-card__actions .btn { min-height: 2.75rem; }
 @media (max-width: 575.98px) { .library-tools { grid-template-columns: 1fr; } .source-card__actions { display: grid; grid-template-columns: 1fr 2.75rem 2.75rem; } }
+@media (max-width: 575.98px) {
+    .library-page ::deep .workspace-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+    .library-page ::deep .workspace-tab { padding-inline: 0.5rem; white-space: normal; }
+}

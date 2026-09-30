@@ -126,6 +126,68 @@ public class ScheduleWindowEvaluatorTests
         Assert.True(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 2, 17, 23, 0)));
     }
 
+    [Theory]
+    [InlineData(2026, 12, 25, false)]
+    [InlineData(2027, 12, 25, false)]
+    [InlineData(2025, 12, 25, false)]
+    [InlineData(2027, 12, 24, true)]
+    [InlineData(2027, 11, 25, true)]
+    public void IsWindowActive_AnnualExclusion_MatchesDayAndMonth(int year, int month, int day, bool expected)
+    {
+        var window = AlwaysActiveWindow("holiday", 10, DateTime.UtcNow);
+        window.AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+
+        Assert.Equal(expected, ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(year, month, day, 10, 0)));
+    }
+
+    [Theory]
+    [InlineData(2028, 2, 29, false)]
+    [InlineData(2032, 2, 29, false)]
+    [InlineData(2029, 2, 28, true)]
+    [InlineData(2029, 3, 1, true)]
+    public void IsWindowActive_AnnualLeapDay_OnlyExcludesFebruary29(int year, int month, int day, bool expected)
+    {
+        var window = AlwaysActiveWindow("leap-day", 10, DateTime.UtcNow);
+        window.AnnualExcludedDates = [new DateOnly(2024, 2, 29)];
+
+        Assert.Equal(expected, ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(year, month, day, 10, 0)));
+    }
+
+    [Fact]
+    public void IsWindowActive_OneTimeExclusion_DoesNotRepeatNextYear()
+    {
+        var window = AlwaysActiveWindow("one-time", 10, DateTime.UtcNow);
+        window.ExcludedDates = [new DateOnly(2026, 12, 25)];
+
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2026, 12, 25, 10, 0)));
+        Assert.True(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2027, 12, 25, 10, 0)));
+    }
+
+    [Fact]
+    public void IsWindowActive_AnnualOvernightExclusion_UsesStartDateAcrossYearBoundary()
+    {
+        var window = AlwaysActiveWindow("overnight", 10, DateTime.UtcNow);
+        window.StartTime = new TimeOnly(22, 0);
+        window.StopTime = new TimeOnly(2, 0);
+        window.AnnualExcludedDates = [new DateOnly(2026, 12, 31)];
+
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2027, 12, 31, 23, 0)));
+        Assert.False(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2028, 1, 1, 1, 0)));
+        Assert.True(ScheduleWindowEvaluator.IsWindowActive(window, LocalTime(2028, 1, 1, 23, 0)));
+    }
+
+    [Fact]
+    public void SelectActiveWindow_AnnualExclusion_OnlySkipsSelectedSchedule()
+    {
+        var excluded = AlwaysActiveWindow("excluded", 10, DateTime.UtcNow);
+        excluded.AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+        var fallback = AlwaysActiveWindow("fallback", 20, DateTime.UtcNow);
+
+        var selected = ScheduleWindowEvaluator.SelectActiveWindow([excluded, fallback], LocalTime(2027, 12, 25, 10, 0));
+
+        Assert.Same(fallback, selected);
+    }
+
     [Fact]
     public void SelectActiveWindow_ResolvesOverlap_ByPriorityFirst()
     {

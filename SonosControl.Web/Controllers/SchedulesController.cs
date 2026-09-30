@@ -130,6 +130,9 @@ public sealed class SchedulesController : ControllerBase
         existing.StartDate = window.StartDate;
         existing.EndDate = window.EndDate;
         existing.ExcludedDates = window.ExcludedDates?.Distinct().OrderBy(date => date).ToList() ?? new();
+        existing.AnnualExcludedDates = window.AnnualExcludedDates?
+            .DistinctBy(date => (date.Month, date.Day))
+            .OrderBy(date => date.Month).ThenBy(date => date.Day).ToList() ?? new();
         existing.SceneId = window.SceneId;
         existing.FadeInSeconds = Math.Max(0, window.FadeInSeconds);
         existing.FadeOutSeconds = Math.Max(0, window.FadeOutSeconds);

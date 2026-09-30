@@ -94,7 +94,7 @@
                                 {
                                     <button type="button" class="btn btn-outline-success btn-sm recommendation-play-button"
                                             @onclick="() => PlayPersonalItemAsync(item)"
-                                            disabled="@_isPlayingFromRecommendation"
+                                            disabled="@(_isPlayingFromRecommendation || string.IsNullOrWhiteSpace(_selectedSpeakerIp))"
                                             aria-label="@($"Play {item.Name}")"
                                             title="@($"Play {item.Name}")">
                                         <Icon Name="play" Size="15" />

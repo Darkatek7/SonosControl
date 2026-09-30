@@ -36,6 +36,17 @@
         <div class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status" aria-live="polite">@_statusMessage</div>
     }
 
+    @if (_settings is not null && !_settings.Speakers.Any())
+    {
+        <div class="library-setup-notice" role="status">
+            <span>Set up a speaker first to play your sources.</span>
+            <AuthorizeView Roles="admin,superadmin">
+                <Authorized><a href="/administration/devices">Configure devices</a></Authorized>
+                <NotAuthorized><span>Ask an administrator to configure a room.</span></NotAuthorized>
+            </AuthorizeView>
+        </div>
+    }
+
     <section id="@($"library-panel-{_activeTab}")"
              role="tabpanel"
              aria-labelledby="@($"library-tab-{_activeTab}")"
@@ -52,6 +63,10 @@
         else if (_settings is null)
         {
             <div class="workspace-loading" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading library…</div>
+        }
+        else if (_activeTab == "mp3")
+        {
+            <Mp3UploadPlayer Speakers="_settings.Speakers" ActiveSpeakerIp="@PlaybackState.ActiveSpeakerIp" />
         }
         else
         {
@@ -99,7 +114,7 @@
                             <Icon Name="heart" Size="20" />
                         </button>
                         <div class="source-card__actions">
-                            <button type="button" class="btn btn-primary" @onclick="() => PlaySourceAsync(source)" disabled="@(_busyKey == source.Key)" aria-label="@($"Play {source.Name}")">
+                            <button type="button" class="btn btn-primary" @onclick="() => PlaySourceAsync(source)" disabled="@(!_settings.Speakers.Any() || _busyKey == source.Key)" title="@(!_settings.Speakers.Any() ? "Set up a speaker first" : $"Play {source.Name}")" aria-label="@($"Play {source.Name}")">
                                 <Icon Name="play" Size="15" /> Play
                             </button>
                             <button type="button" class="btn btn-outline-secondary" @onclick="() => OpenEditDialog(source)" aria-label="@($"Edit {source.Name}")">
@@ -206,7 +221,8 @@
     [
         new("saved", "Saved"),
         new("discover", "Discover Radio"),
-        new("for-you", "For You")
+        new("for-you", "For You"),
+        new("mp3", "Upload MP3")
     ];
 
     protected override async Task OnInitializedAsync()
@@ -231,7 +247,7 @@
 
     private void ApplyRequestedTab()
     {
-        if (RequestedTab is "saved" or "discover" or "for-you")
+        if (RequestedTab is "saved" or "discover" or "for-you" or "mp3")
         {
             _activeTab = RequestedTab;
             return;

@@ -20,6 +20,8 @@ public sealed class PlaybackUiStateService
     private long _volumeGeneration;
 
     private SonosSettings? _settings;
+    private PlaybackRetryCommand? _retryCommand;
+    private string? _retrySpeakerIp;
 
     public PlaybackUiStateService(
         IUnitOfWork uow,
@@ -48,6 +50,8 @@ public sealed class PlaybackUiStateService
     public bool IsSkipping { get; private set; }
     public bool IsSyncing { get; private set; }
     public bool IsStale { get; private set; }
+    public bool HasActiveSpeaker => !string.IsNullOrWhiteSpace(ActiveSpeakerIp);
+    public string? PlaybackErrorMessage { get; private set; }
     public int Volume { get; private set; }
     public int MaxVolume { get; private set; } = 100;
     public DateTime? LastSuccessfulRefreshUtc { get; private set; }
@@ -68,6 +72,12 @@ public sealed class PlaybackUiStateService
             ActiveSpeakerName = activeSpeaker.Name;
             _settings.IP_Adress = activeSpeaker.IpAddress;
         }
+        else
+        {
+            ActiveSpeakerIp = "";
+            ActiveSpeakerName = "No speaker";
+            ClearPlaybackError();
+        }
 
         MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
         Volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
@@ -82,6 +92,7 @@ public sealed class PlaybackUiStateService
         }
 
         CancelPendingVolumeUpdate();
+        ClearPlaybackError();
         _settings ??= await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         var speaker = _settings.Speakers.FirstOrDefault(s => s.IpAddress == speakerIp);
         ActiveSpeakerIp = speakerIp;
@@ -92,26 +103,30 @@ public sealed class PlaybackUiStateService
         await RefreshAsync();
     }
 
-    public async Task TogglePlaybackAsync()
+    public Task TogglePlaybackAsync() => SetPlaybackAsync(!IsPlaying);
+
+    private async Task SetPlaybackAsync(bool shouldPlay)
     {
-        if (string.IsNullOrWhiteSpace(ActiveSpeakerIp))
+        if (!HasActiveSpeaker || IsLoading || IsSkipping)
         {
             return;
         }
 
+        var speakerIp = ActiveSpeakerIp;
+        ClearPlaybackError();
         IsLoading = true;
         NotifyStateChanged();
 
         try
         {
-            if (IsPlaying)
+            if (!shouldPlay)
             {
-                await _uow.ISonosConnectorRepo.PausePlaying(ActiveSpeakerIp);
+                await _uow.ISonosConnectorRepo.PausePlaying(speakerIp);
                 IsPlaying = false;
             }
             else
             {
-                await _uow.ISonosConnectorRepo.StartPlaying(ActiveSpeakerIp);
+                await _uow.ISonosConnectorRepo.StartPlaying(speakerIp);
                 IsPlaying = true;
             }
 
@@ -121,6 +136,10 @@ public sealed class PlaybackUiStateService
         catch (Exception ex)
         {
             IsStale = true;
+            SetPlaybackError(
+                shouldPlay ? "Playback could not be started. Check the speaker connection and try again." : "Playback could not be paused. Check the speaker connection and try again.",
+                shouldPlay ? PlaybackRetryCommand.Play : PlaybackRetryCommand.Pause,
+                speakerIp);
             _logger.LogWarning(ex, "Failed to toggle playback for {SpeakerIp}", ActiveSpeakerIp);
         }
         finally
@@ -207,23 +226,26 @@ public sealed class PlaybackUiStateService
 
     public async Task SkipNextAsync()
     {
-        if (string.IsNullOrWhiteSpace(ActiveSpeakerIp) || IsSkipping)
+        if (!HasActiveSpeaker || IsSkipping || IsLoading)
         {
             return;
         }
 
+        var speakerIp = ActiveSpeakerIp;
+        ClearPlaybackError();
         IsSkipping = true;
         NotifyStateChanged();
 
         try
         {
-            await _uow.ISonosConnectorRepo.NextTrack(ActiveSpeakerIp);
+            await _uow.ISonosConnectorRepo.NextTrack(speakerIp);
             IsStale = false;
             await RefreshAsync();
         }
         catch (Exception ex)
         {
             IsStale = true;
+            SetPlaybackError("The next track could not be played. Check the speaker connection and try again.", PlaybackRetryCommand.Skip, speakerIp);
             _logger.LogWarning(ex, "Failed to skip to the next track for {SpeakerIp}", ActiveSpeakerIp);
         }
         finally
@@ -232,6 +254,39 @@ public sealed class PlaybackUiStateService
             NotifyStateChanged();
         }
     }
+
+    public Task RetryLastPlaybackCommandAsync()
+    {
+        if (!HasActiveSpeaker || IsLoading || IsSkipping || _retrySpeakerIp != ActiveSpeakerIp)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _retryCommand switch
+        {
+            PlaybackRetryCommand.Play => SetPlaybackAsync(true),
+            PlaybackRetryCommand.Pause => SetPlaybackAsync(false),
+            PlaybackRetryCommand.Skip => SkipNextAsync(),
+            _ => Task.CompletedTask
+        };
+    }
+
+    private void SetPlaybackError(string message, PlaybackRetryCommand command, string speakerIp)
+    {
+        if (speakerIp != ActiveSpeakerIp) return;
+        PlaybackErrorMessage = message;
+        _retryCommand = command;
+        _retrySpeakerIp = speakerIp;
+    }
+
+    private void ClearPlaybackError()
+    {
+        PlaybackErrorMessage = null;
+        _retryCommand = null;
+        _retrySpeakerIp = null;
+    }
+
+    private enum PlaybackRetryCommand { Play, Pause, Skip }
 
     public async Task<PlaybackCommandResult> SyncPlayAsync()
     {

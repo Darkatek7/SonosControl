@@ -2,6 +2,7 @@
 @page "/scenes"
 @page "/schedule-windows"
 @using SonosControl.Web.Services
+@using System.Globalization
 @implements IDisposable
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject NavigationManager Navigation
@@ -74,7 +75,7 @@
                 <header class="exception-panel__header">
                     <div>
                         <h2>Excluded dates</h2>
-                        <p>An excluded date skips only the selected schedule. Other matching schedules can still run.</p>
+                        <p>An excluded date skips only the selected schedule. Other matching schedules can still run. Yearly exceptions repeat on the same day and month.</p>
                     </div>
                 </header>
 
@@ -92,6 +93,13 @@
                         <label for="exception-date" class="form-label">Date (DD/MM/YYYY)</label>
                         <input id="exception-date" class="form-control" type="date" @bind="_newExceptionDate" disabled="@(!_canEditSchedules)" />
                     </div>
+                    <div>
+                        <label for="exception-recurrence" class="form-label">Repeat</label>
+                        <select id="exception-recurrence" class="form-select" @bind="_newExceptionRecurrence" disabled="@(!_canEditSchedules)">
+                            <option value="@ExceptionRecurrence.Once">Once</option>
+                            <option value="@ExceptionRecurrence.Yearly">Every year</option>
+                        </select>
+                    </div>
                     <button type="button" class="btn btn-primary" @onclick="AddExceptionAsync" disabled="@(!_canEditSchedules || !_newExceptionDate.HasValue)">
                         <Icon Name="plus" Size="15" /> Add exception
                     </button>
@@ -108,19 +116,21 @@
                 }
 
                 var selected = SelectedWindow;
-                @if (selected is not null && selected.ExcludedDates.Count > 0)
+                @if (selected is not null && (selected.ExcludedDates.Count > 0 || selected.AnnualExcludedDates.Count > 0))
                 {
                     <div class="exception-list" aria-label="Excluded dates">
-                        @foreach (var date in selected.ExcludedDates.OrderBy(date => date))
+                        @foreach (var exception in selected.ExcludedDates.Select(date => (Date: date, IsAnnual: false))
+                            .Concat(selected.AnnualExcludedDates.Select(date => (Date: date, IsAnnual: true)))
+                            .OrderBy(item => item.Date.Month).ThenBy(item => item.Date.Day).ThenBy(item => item.Date.Year))
                         {
                             <article class="exception-card">
                                 <div>
-                                    <strong>@date.ToString("dd/MM/yyyy")</strong>
-                                    <span>@date.DayOfWeek</span>
+                                    <strong>@FormatExceptionDate(exception.Date, exception.IsAnnual)</strong>
+                                    <span>@(exception.IsAnnual ? "Every year" : "Once")</span>
                                 </div>
                                 @if (_canEditSchedules)
                                 {
-                                    <button type="button" class="btn btn-outline-danger" @onclick="() => RemoveExceptionAsync(date)" aria-label="@($"Remove exception {date:dd/MM/yyyy}")">
+                                    <button type="button" class="btn btn-outline-danger" @onclick="() => RemoveExceptionAsync(exception.Date, exception.IsAnnual)" aria-label="@($"Remove exception {FormatExceptionDate(exception.Date, exception.IsAnnual)} ({(exception.IsAnnual ? "Every year" : "Once")})")">
                                         <Icon Name="trash" Size="15" /> Remove
                                     </button>
                                 }
@@ -150,6 +160,9 @@
     private SonosSettings? _settings;
     private string? _selectedWindowId;
     private DateTime? _newExceptionDate;
+    private enum ExceptionRecurrence { Once, Yearly }
+    private ExceptionRecurrence _newExceptionRecurrence;
+    private bool NewExceptionIsAnnual => _newExceptionRecurrence == ExceptionRecurrence.Yearly;
     private string? _exceptionStatus;
     private bool _exceptionError;
     private bool _canEditSchedules;
@@ -189,7 +202,11 @@
     {
         _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
         _settings.ScheduleWindows ??= new();
-        foreach (var window in _settings.ScheduleWindows) window.ExcludedDates ??= new();
+        foreach (var window in _settings.ScheduleWindows)
+        {
+            window.ExcludedDates ??= new();
+            window.AnnualExcludedDates ??= new();
+        }
         _selectedWindowId ??= OrderedWindows.FirstOrDefault()?.Id;
     }
 
@@ -201,28 +218,38 @@
         var window = SelectedWindow;
         if (!_canEditSchedules || window is null || !_newExceptionDate.HasValue || _settings is null) return;
         var date = DateOnly.FromDateTime(_newExceptionDate.Value);
-        window.ExcludedDates ??= new();
-        if (window.ExcludedDates.Contains(date))
+        var dates = NewExceptionIsAnnual ? window.AnnualExcludedDates : window.ExcludedDates;
+        if (dates.Any(existing => NewExceptionIsAnnual
+            ? existing.Month == date.Month && existing.Day == date.Day
+            : existing == date))
         {
-            ShowExceptionStatus("That date is already excluded.", true);
+            ShowExceptionStatus("That date already has an exception with the selected repeat option.", true);
             return;
         }
-        window.ExcludedDates.Add(date);
+        dates.Add(date);
         window.LastModifiedUtc = DateTime.UtcNow;
         await _uow.ISettingsRepo.WriteSettings(_settings);
         _newExceptionDate = null;
-        ShowExceptionStatus($"{date:dd/MM/yyyy} was excluded from {window.Name}.");
+        ShowExceptionStatus(NewExceptionIsAnnual
+            ? $"{FormatExceptionDate(date, true)} is excluded from {window.Name} every year."
+            : $"{FormatExceptionDate(date, false)} was excluded from {window.Name} once.");
     }
 
-    private async Task RemoveExceptionAsync(DateOnly date)
+    private async Task RemoveExceptionAsync(DateOnly date, bool isAnnual)
     {
         var window = SelectedWindow;
         if (!_canEditSchedules || window is null || _settings is null) return;
-        window.ExcludedDates.Remove(date);
+        var dates = isAnnual ? window.AnnualExcludedDates : window.ExcludedDates;
+        dates.Remove(date);
         window.LastModifiedUtc = DateTime.UtcNow;
         await _uow.ISettingsRepo.WriteSettings(_settings);
-        ShowExceptionStatus($"{date:dd/MM/yyyy} can run again.");
+        ShowExceptionStatus(isAnnual
+            ? $"The yearly exception for {FormatExceptionDate(date, true)} was removed."
+            : $"The one-time exception for {FormatExceptionDate(date, false)} was removed.");
     }
+
+    private static string FormatExceptionDate(DateOnly date, bool isAnnual) =>
+        date.ToString(isAnnual ? "dd/MM" : "dd/MM/yyyy", CultureInfo.GetCultureInfo("en-GB"));
 
     private void ApplyRequestedTab()
     {

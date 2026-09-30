@@ -123,6 +123,34 @@ namespace SonosControl.DAL.Repos
             await controller.SetVolumeAsync(sonosVolume);
         }
 
+        public async Task PlayAudioFileAsync(string ip, string audioUrl, string title, CancellationToken cancellationToken = default)
+        {
+            if (!Uri.TryCreate(audioUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+            {
+                throw new ArgumentException("An HTTP or HTTPS audio URL is required.", nameof(audioUrl));
+            }
+
+            var metadata = YouTubeQueueMetadataBuilder.Build(title, audioUrl);
+            var soapRequest = $@"
+                <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
+                            s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
+                  <s:Body>
+                    <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
+                      <InstanceID>0</InstanceID>
+                      <CurrentURI>{SecurityElement.Escape(audioUrl)}</CurrentURI>
+                      <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
+                    </u:SetAVTransportURI>
+                  </s:Body>
+                </s:Envelope>";
+
+            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
+            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
+            using var response = await CreateClient().PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            cancellationToken.ThrowIfCancellationRequested();
+            await StartPlaying(ip);
+        }
+
         public virtual async Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default)
         {
             await ClearQueue(ip, cancellationToken);
