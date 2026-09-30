@@ -46,7 +46,7 @@ public sealed class SchedulesController : ControllerBase
         settings.ScheduleWindows ??= new();
 
         var now = _appTimeZone.Now;
-        var active = ScheduleWindowEvaluator.SelectActiveWindow(settings.ScheduleWindows, now);
+        var active = ScheduleWindowEvaluator.SelectActiveWindow(settings.ScheduleWindows, now, settings);
 
         if (active is null)
         {

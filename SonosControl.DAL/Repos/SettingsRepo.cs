@@ -73,6 +73,7 @@ namespace SonosControl.DAL.Repos
                 string jsonString;
                 try
                 {
+                    settings?.NormalizeAutomationDateExceptions();
                     jsonString = JsonConvert.SerializeObject(settings, SerializerSettings);
                 }
                 catch (JsonException ex)
@@ -282,6 +283,7 @@ namespace SonosControl.DAL.Repos
                     scene.Actions ??= new();
                 }
 
+                settings.NormalizeAutomationDateExceptions();
                 return settings;
             }
             catch (JsonException)

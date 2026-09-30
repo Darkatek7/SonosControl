@@ -96,6 +96,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                 return;
             }
 
+            settings.NormalizeAutomationDateExceptions();
             settings.ScheduleWindows ??= new();
             settings.Scenes ??= new();
             var validSceneIds = settings.Scenes
@@ -110,7 +111,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
             var utcNow = _timeProvider.GetUtcNow();
             var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
-            var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(eligibleWindows, localNow);
+            var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(eligibleWindows, localNow, settings);
 
             if (activeWindow is null)
             {
@@ -118,7 +119,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                 {
                     var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
                         string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                    await StopWindowPlaybackAsync(oldWindow, settings, uow, actionLogger, cancellationToken);
+                    await StopWindowPlaybackAsync(oldWindow, settings, uow, actionLogger, cancellationToken,
+                        skipFadeOut: settings.ExcludesAutomationDate(DateOnly.FromDateTime(localNow.DateTime)));
                     _activeWindowId = null;
                     _activeWindowAppliedUtc = default;
                 }
@@ -204,7 +206,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         IUnitOfWork uow,
         ActionLogger actionLogger,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<string>? excludeSpeakerIps = null)
+        IReadOnlyCollection<string>? excludeSpeakerIps = null,
+        bool skipFadeOut = false)
     {
         var targetSpeakers = ResolveWindowTargetSpeakers(window, settings).ToList();
         if (excludeSpeakerIps?.Count > 0)
@@ -219,7 +222,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             return;
         }
 
-        if ((window?.FadeOutSeconds ?? 0) > 0)
+        if (!skipFadeOut && (window?.FadeOutSeconds ?? 0) > 0)
         {
             await ApplyFadeOutAsync(targetSpeakers, window!.FadeOutSeconds, uow, cancellationToken);
         }

@@ -29,9 +29,14 @@ public class AutomationDateExceptionsTests
 
         cut.WaitForAssertion(() =>
         {
-            var window = settings.ScheduleWindows[0];
-            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(isAnnual ? window.AnnualExcludedDates : window.ExcludedDates));
-            Assert.Empty(isAnnual ? window.ExcludedDates : window.AnnualExcludedDates);
+            Assert.Empty(cut.FindAll("#exception-schedule"));
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(isAnnual ? settings.AnnualAutomationExcludedDates : settings.AutomationExcludedDates));
+            Assert.Empty(isAnnual ? settings.AutomationExcludedDates : settings.AnnualAutomationExcludedDates);
+            Assert.All(settings.ScheduleWindows, window =>
+            {
+                Assert.Empty(window.ExcludedDates);
+                Assert.Empty(window.AnnualExcludedDates);
+            });
             var card = cut.Find(".exception-card");
             Assert.Equal(isAnnual ? "Every year" : "Once", card.QuerySelector("span")!.TextContent);
             Assert.Equal(isAnnual ? "25/12" : "25/12/2026", card.QuerySelector("strong")!.TextContent);
@@ -44,7 +49,7 @@ public class AutomationDateExceptionsTests
     {
         using var ctx = new BunitContext();
         var settings = CreateSettings();
-        settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+        settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings);
         var cut = RenderExceptions(ctx);
 
@@ -52,7 +57,7 @@ public class AutomationDateExceptionsTests
         cut.Find("#exception-date").Change("2027-12-25");
         cut.Find(".exception-editor button").Click();
 
-        Assert.Single(settings.ScheduleWindows[0].AnnualExcludedDates);
+        Assert.Single(settings.AnnualAutomationExcludedDates);
         Assert.Contains("already has an exception", cut.Find(".alert-danger").TextContent);
         repo.Verify(repository => repository.WriteSettings(It.IsAny<SonosSettings?>()), Times.Never);
     }
@@ -63,8 +68,8 @@ public class AutomationDateExceptionsTests
         using var ctx = new BunitContext();
         var settings = CreateSettings();
         var date = new DateOnly(2026, 12, 25);
-        settings.ScheduleWindows[0].ExcludedDates = [date];
-        settings.ScheduleWindows[0].AnnualExcludedDates = [date];
+        settings.AutomationExcludedDates = [date];
+        settings.AnnualAutomationExcludedDates = [date];
         var repo = ConfigureServices(ctx, settings);
         var cut = RenderExceptions(ctx);
 
@@ -72,8 +77,8 @@ public class AutomationDateExceptionsTests
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(settings.ScheduleWindows[0].AnnualExcludedDates);
-            Assert.Equal(date, Assert.Single(settings.ScheduleWindows[0].ExcludedDates));
+            Assert.Empty(settings.AnnualAutomationExcludedDates);
+            Assert.Equal(date, Assert.Single(settings.AutomationExcludedDates));
             Assert.Single(cut.FindAll(".exception-card"));
             repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
         });
@@ -84,7 +89,7 @@ public class AutomationDateExceptionsTests
     {
         using var ctx = new BunitContext();
         var settings = CreateSettings();
-        settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+        settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings, "operator");
         var cut = RenderExceptions(ctx);
 
@@ -97,30 +102,70 @@ public class AutomationDateExceptionsTests
     }
 
     [Fact]
-    public void EditSchedule_PreservesBothExceptionTypes()
+    public void EditSchedule_PreservesGlobalExceptions()
     {
         using var ctx = new BunitContext();
         var settings = CreateSettings();
         settings.ScheduleWindows[0].IsEnabled = false;
-        settings.ScheduleWindows[0].ExcludedDates = [new DateOnly(2026, 12, 24)];
-        settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+        settings.AutomationExcludedDates = [new DateOnly(2026, 12, 24)];
+        settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings);
         var cut = ctx.Render<ScheduleWindowsPage>();
 
-        cut.Find(".schedule-window-card__main").Click();
+        cut.FindAll(".schedule-window-card__main").Single(button => button.TextContent.Contains("Tuesday schedule")).Click();
         cut.Find(".schedule-editor-actions button").Click();
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(settings.ScheduleWindows[0].ExcludedDates));
-            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.ScheduleWindows[0].AnnualExcludedDates));
+            Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(settings.AutomationExcludedDates));
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.AnnualAutomationExcludedDates));
             repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
         });
     }
 
+    [Fact]
+    public void AddException_WithoutSchedules_SavesGlobalDate()
+    {
+        using var ctx = new BunitContext();
+        var settings = new SonosSettings();
+        var repo = ConfigureServices(ctx, settings);
+        var cut = RenderExceptions(ctx);
+
+        cut.Find("#exception-date").Change("2026-12-25");
+        cut.Find(".exception-editor button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.AutomationExcludedDates));
+            repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
+        });
+    }
+
+    [Fact]
+    public void LegacyWindowExceptions_AreShownAsGlobalAndCanBeRemoved()
+    {
+        using var ctx = new BunitContext();
+        var settings = CreateSettings();
+        settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
+        ConfigureServices(ctx, settings);
+        var cut = RenderExceptions(ctx);
+
+        Assert.Empty(settings.ScheduleWindows[0].AnnualExcludedDates);
+        Assert.Single(settings.AnnualAutomationExcludedDates);
+        cut.Find("button[aria-label='Remove exception 25/12 (Every year)']").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(settings.AnnualAutomationExcludedDates));
+        settings.NormalizeAutomationDateExceptions();
+        Assert.Empty(settings.AnnualAutomationExcludedDates);
+    }
+
     private static SonosSettings CreateSettings() => new()
     {
-        ScheduleWindows = [new ScheduleWindow { Name = "Holiday schedule" }]
+        ScheduleWindows =
+        [
+            new ScheduleWindow { Name = "Tuesday schedule", RecurrenceType = ScheduleRecurrenceType.CustomDays, DaysOfWeek = [DayOfWeek.Tuesday] },
+            new ScheduleWindow { Name = "Wednesday schedule", RecurrenceType = ScheduleRecurrenceType.CustomDays, DaysOfWeek = [DayOfWeek.Wednesday] }
+        ]
     };
 
     private static IRenderedComponent<AutomationPage> RenderExceptions(BunitContext ctx)

@@ -50,6 +50,10 @@
     }
     else
     {
+        @if (_insights.ExcludedOverlapSeconds > 1)
+        {
+            <p class="listening-method" role="status">Overlapping history detected: @FormatDuration(_insights.ExcludedOverlapSeconds) of duplicate time excluded. Each room counts only once at any moment.</p>
+        }
         <section class="listening-summary" aria-label="Listening summary">
             <article class="listening-metric listening-metric--total">
                 <span>Recorded listening</span>
@@ -144,6 +148,7 @@
             <div>
                 <strong>How this is counted</strong>
                 <p>Time is added up per speaker: two rooms playing for an hour count as two hours, including grouped rooms.
+                    Overlapping entries for the same room count only once.
                     Playback spanning midnight is split between days in @AppTimeZone.TimeZone.Id.
                     Only saved playback is included; recent playback may take about a minute to appear. Missing history is not estimated.</p>
                 <a href="/insights?tab=activity">Review controls and system events in Activity <span aria-hidden="true">→</span></a>

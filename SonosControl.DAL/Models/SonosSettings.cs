@@ -58,6 +58,8 @@ namespace SonosControl.DAL.Models
 
         public List<Scene> Scenes { get; set; } = new();
         public List<ScheduleWindow> ScheduleWindows { get; set; } = new();
+        public List<DateOnly> AutomationExcludedDates { get; set; } = new();
+        public List<DateOnly> AnnualAutomationExcludedDates { get; set; } = new();
         public List<AutomationRule> AutomationRules { get; set; } = new();
         public List<QueueSnapshot> QueueSnapshots { get; set; } = new();
         public List<DeviceHealthStatus> DeviceHealthStatuses { get; set; } = new();
@@ -70,6 +72,43 @@ namespace SonosControl.DAL.Models
 
         public string? DiscordWebhookUrl { get; set; }
         public string? TeamsWebhookUrl { get; set; }
+
+        public bool ExcludesAutomationDate(DateOnly date) =>
+            AutomationExcludedDates?.Contains(date) == true
+            || AnnualAutomationExcludedDates?.Any(excluded => excluded.Month == date.Month && excluded.Day == date.Day) == true;
+
+        public void NormalizeAutomationDateExceptions()
+        {
+            AutomationExcludedDates ??= new();
+            AnnualAutomationExcludedDates ??= new();
+            ScheduleWindows ??= new();
+
+            // Legacy holiday overrides intentionally replace a baseline schedule on
+            // one date. Keep those baseline filters local so the override can play.
+            var legacyOverrideDates = ScheduleWindows
+                .Where(window => window.Id?.StartsWith("legacy-holiday-window-", StringComparison.Ordinal) == true
+                    && window.IsEnabled && window.StartDate.HasValue && window.StartDate == window.EndDate)
+                .Select(window => window.StartDate!.Value)
+                .ToHashSet();
+
+            foreach (var window in ScheduleWindows)
+            {
+                window.ExcludedDates ??= new();
+                window.AnnualExcludedDates ??= new();
+                var localOverrideDates = window.Id?.StartsWith("legacy-window-", StringComparison.Ordinal) == true
+                    ? window.ExcludedDates.Where(legacyOverrideDates.Contains).ToList()
+                    : new List<DateOnly>();
+                AutomationExcludedDates.AddRange(window.ExcludedDates.Except(localOverrideDates));
+                AnnualAutomationExcludedDates.AddRange(window.AnnualExcludedDates);
+                window.ExcludedDates = localOverrideDates;
+                window.AnnualExcludedDates.Clear();
+            }
+
+            AutomationExcludedDates = AutomationExcludedDates.Distinct().OrderBy(date => date).ToList();
+            AnnualAutomationExcludedDates = AnnualAutomationExcludedDates
+                .DistinctBy(date => (date.Month, date.Day))
+                .OrderBy(date => date.Month).ThenBy(date => date.Day).ToList();
+        }
 
         public string NowPlayingGradientStartColor { get; set; } = DefaultNowPlayingGradientStartColor;
         public string NowPlayingGradientMidColor { get; set; } = DefaultNowPlayingGradientMidColor;

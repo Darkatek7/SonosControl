@@ -14,6 +14,7 @@ public sealed class ListeningInsights
     public required IReadOnlyList<ListeningBreakdown> Sources { get; init; }
     public required IReadOnlyList<ListeningContent> Stations { get; init; }
     public required IReadOnlyList<ListeningContent> Tracks { get; init; }
+    public double ExcludedOverlapSeconds { get; init; }
     public double TotalSeconds => Days.Sum(day => day.Seconds);
     public int ActiveDays => Days.Count(day => day.Seconds > 0);
     public double AveragePerActiveDay => ActiveDays > 0 ? TotalSeconds / ActiveDays : 0;
@@ -31,7 +32,8 @@ public sealed class ListeningInsights
         var boundaries = days.Select(day => timeZone.FromLocal(day).UtcDateTime).Append(nowUtc).ToArray();
         var totals = new double[dayCount];
         var resolver = RecommendationMediaResolver.Create(settings);
-        var rows = new List<(PlaybackHistory Playback, ResolvedRecommendationMedia Media, string Source, double Seconds)>();
+        var rows = new List<(PlaybackHistory Playback, string Room, ResolvedRecommendationMedia Media, string Source, double Seconds)>();
+        var intervals = new List<(PlaybackHistory Playback, string Room, DateTime Start, DateTime End)>();
 
         foreach (var playback in history)
         {
@@ -47,6 +49,10 @@ public sealed class ListeningInsights
                 continue;
             }
             var recordedEnd = playback.StartTime.AddSeconds(recordedSeconds);
+            if (playback.EndTime is { } savedEnd && savedEnd < recordedEnd)
+            {
+                recordedEnd = savedEnd;
+            }
             var start = playback.StartTime > boundaries[0] ? playback.StartTime : boundaries[0];
             var end = recordedEnd < nowUtc ? recordedEnd : nowUtc;
             if (end <= start)
@@ -54,13 +60,51 @@ public sealed class ListeningInsights
                 continue;
             }
 
+            var room = string.IsNullOrWhiteSpace(playback.SpeakerName) ? "Unassigned room" : playback.SpeakerName.Trim();
+            intervals.Add((playback, room, start, end));
+        }
+
+        // Sweep each room's interval boundaries. A speaker can contribute time only once
+        // at any instant; the newest active entry supplies the media attribution.
+        foreach (var room in intervals.GroupBy(interval => interval.Room, StringComparer.OrdinalIgnoreCase))
+        {
+            var entries = room.ToArray();
+            var events = entries.SelectMany((entry, index) => new[]
+            {
+                (At: entry.Start, IsStart: true, Index: index),
+                (At: entry.End, IsStart: false, Index: index)
+            }).OrderBy(item => item.At).ToArray();
+            var active = new SortedSet<int>(Comparer<int>.Create((left, right) =>
+            {
+                var order = entries[left].Playback.StartTime.CompareTo(entries[right].Playback.StartTime);
+                if (order == 0) order = entries[left].Playback.Id.CompareTo(entries[right].Playback.Id);
+                return order != 0 ? order : left.CompareTo(right);
+            }));
+            var previous = events[0].At;
+            foreach (var boundary in events.GroupBy(item => item.At))
+            {
+                if (boundary.Key > previous && active.Count > 0)
+                {
+                    var playback = entries[active.Max].Playback;
+                    AddSegment(playback, room.Key, previous, boundary.Key);
+                }
+                foreach (var item in boundary)
+                {
+                    if (item.IsStart) active.Add(item.Index);
+                    else active.Remove(item.Index);
+                }
+                previous = boundary.Key;
+            }
+        }
+
+        void AddSegment(PlaybackHistory playback, string room, DateTime start, DateTime end)
+        {
             for (var index = 0; index < dayCount; index++)
             {
                 var overlapStart = start > boundaries[index] ? start : boundaries[index];
                 var overlapEnd = end < boundaries[index + 1] ? end : boundaries[index + 1];
                 totals[index] += Math.Max(0, (overlapEnd - overlapStart).TotalSeconds);
             }
-
             var media = resolver.ResolveFromPlaybackEntry(playback.TrackName, playback.Artist, playback.MediaType);
             var source = media.MediaType.ToLowerInvariant() switch
             {
@@ -72,7 +116,7 @@ public sealed class ListeningInsights
                 "unknown" or "" => "Unidentified audio",
                 _ => "Other audio"
             };
-            rows.Add((playback, media, source, (end - start).TotalSeconds));
+            rows.Add((playback, room, media, source, (end - start).TotalSeconds));
         }
 
         IReadOnlyList<ListeningContent> Content(bool stations) => rows
@@ -92,7 +136,8 @@ public sealed class ListeningInsights
         return new ListeningInsights
         {
             Days = days.Select((date, index) => new ListeningDay(date, totals[index])).ToList(),
-            Rooms = rows.GroupBy(row => string.IsNullOrWhiteSpace(row.Playback.SpeakerName) ? "Unassigned room" : row.Playback.SpeakerName.Trim())
+            ExcludedOverlapSeconds = Math.Max(0, intervals.Sum(interval => (interval.End - interval.Start).TotalSeconds) - totals.Sum()),
+            Rooms = rows.GroupBy(row => row.Room)
                 .Select(group => new ListeningBreakdown(group.Key, group.Sum(row => row.Seconds)))
                 .OrderByDescending(item => item.Seconds).ThenBy(item => item.Name).ToList(),
             Sources = rows.GroupBy(row => row.Source)

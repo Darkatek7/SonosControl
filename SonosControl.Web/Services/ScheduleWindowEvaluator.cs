@@ -4,7 +4,7 @@ namespace SonosControl.Web.Services;
 
 public static class ScheduleWindowEvaluator
 {
-    public static ScheduleWindow? SelectActiveWindow(IEnumerable<ScheduleWindow>? windows, DateTimeOffset nowLocal)
+    public static ScheduleWindow? SelectActiveWindow(IEnumerable<ScheduleWindow>? windows, DateTimeOffset nowLocal, SonosSettings? settings = null)
     {
         if (windows is null)
         {
@@ -13,14 +13,14 @@ public static class ScheduleWindowEvaluator
 
         return windows
             .Where(window => window.IsEnabled)
-            .Where(window => IsWindowActive(window, nowLocal))
+            .Where(window => IsWindowActive(window, nowLocal, settings))
             .OrderBy(window => window.Priority)
             .ThenByDescending(window => window.LastModifiedUtc)
             .ThenBy(window => window.Id, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
     }
 
-    public static bool IsWindowActive(ScheduleWindow window, DateTimeOffset nowLocal)
+    public static bool IsWindowActive(ScheduleWindow window, DateTimeOffset nowLocal, SonosSettings? settings = null)
     {
         if (!window.IsEnabled)
         {
@@ -32,6 +32,13 @@ public static class ScheduleWindowEvaluator
         // its wall-clock DateTime value directly.
         var date = DateOnly.FromDateTime(nowLocal.DateTime);
         var time = TimeOnly.FromDateTime(nowLocal.DateTime);
+
+        // Global exceptions block the actual calendar day, including overnight
+        // playback that started the evening before.
+        if (settings?.ExcludesAutomationDate(date) == true)
+        {
+            return false;
+        }
 
         if (window.StartDate.HasValue && date < window.StartDate.Value)
         {
@@ -63,7 +70,8 @@ public static class ScheduleWindowEvaluator
         {
             var previous = nowLocal.AddDays(-1);
             var previousDate = DateOnly.FromDateTime(previous.DateTime);
-            return IsDateAllowed(window, previousDate, previous.DayOfWeek);
+            return settings?.ExcludesAutomationDate(previousDate) != true
+                && IsDateAllowed(window, previousDate, previous.DayOfWeek);
         }
 
         return false;

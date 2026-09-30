@@ -22,7 +22,7 @@
     else
     {
         var now = AppTimeZone.Now;
-        var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now);
+        var active = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, now, _settings);
 
         <section class="schedule-active-strip schedule-active-alert" aria-label="Active schedule window">
             <div>

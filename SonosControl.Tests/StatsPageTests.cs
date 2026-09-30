@@ -23,8 +23,8 @@ public class StatsPageTests
         db.PlaybackStats.AddRange(
             Playback("Track1", "Spotify", 120, "Kitchen", "Artist1"),
             Playback("Radio 1", "Station", 300, "Office"),
-            Playback("breakz?ref=rb-djclubcharts&amp;upd-meta&amp;token=abc123", "Track", 600, "Office"),
-            Playback("vbg-q2a", "Track", 500, "Office"));
+            Playback("breakz?ref=rb-djclubcharts&amp;upd-meta&amp;token=abc123", "Track", 600, "Office", minutesAfterNoon: 5),
+            Playback("vbg-q2a", "Track", 500, "Office", minutesAfterNoon: 15));
         db.SaveChanges();
 
         var cut = ctx.Render<StatsPage>();
@@ -80,6 +80,18 @@ public class StatsPageTests
     }
 
     [Fact]
+    public void OverlappingRecords_AreCountedOnceAndExplained()
+    {
+        using var ctx = CreateContext();
+        var db = ctx.Services.GetRequiredService<ApplicationDbContext>();
+        db.PlaybackStats.AddRange(Playback("Radio", "Station", 3600, "Kitchen"), Playback("Radio", "Station", 3600, "Kitchen"));
+        db.SaveChanges();
+        var cut = ctx.Render<StatsPage>();
+        cut.WaitForAssertion(() => Assert.Equal("1h 0m", cut.Find("[data-qa='listening-total']").TextContent));
+        Assert.Contains("1h 0m of duplicate time excluded", cut.Find("[role='status']").TextContent);
+    }
+
+    [Fact]
     public void ActivityWithoutPlayback_ShowsListeningEmptyState()
     {
         using var ctx = CreateContext();
@@ -107,13 +119,13 @@ public class StatsPageTests
         return ctx;
     }
 
-    private static PlaybackHistory Playback(string name, string mediaType, double seconds, string room, string artist = "", int daysAgo = 1) => new()
+    private static PlaybackHistory Playback(string name, string mediaType, double seconds, string room, string artist = "", int daysAgo = 1, int minutesAfterNoon = 0) => new()
     {
         TrackName = name,
         Artist = artist,
         MediaType = mediaType,
         SpeakerName = room,
         DurationSeconds = seconds,
-        StartTime = DateTime.UtcNow.Date.AddDays(-daysAgo).AddHours(12)
+        StartTime = DateTime.UtcNow.Date.AddDays(-daysAgo).AddHours(12).AddMinutes(minutesAfterNoon)
     };
 }
