@@ -15,12 +15,12 @@ public class AdministrationPageNavigationTests
     [Fact]
     public void AdministrationPage_UpdatesContentImmediately_WhenTabRouteChanges()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureServices(ctx);
 
         var navigation = ctx.Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/administration/devices");
-        var cut = ctx.RenderComponent<AdministrationPage>();
+        var cut = ctx.Render<AdministrationPage>();
 
         cut.FindAll("button")
             .Single(button => button.TextContent.Trim() == "Users")
@@ -42,12 +42,12 @@ public class AdministrationPageNavigationTests
     [Fact]
     public void AdministrationPage_FollowsExternalLocationChanges()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureServices(ctx);
 
         var navigation = ctx.Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/administration/devices");
-        var cut = ctx.RenderComponent<AdministrationPage>();
+        var cut = ctx.Render<AdministrationPage>();
 
         navigation.NavigateTo("/administration/backups");
 
@@ -63,7 +63,7 @@ public class AdministrationPageNavigationTests
         });
     }
 
-    private static void ConfigureServices(TestContext ctx)
+    private static void ConfigureServices(BunitContext ctx)
     {
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
         ctx.Services.AddSingleton(new AutomationRuntimeStatus());

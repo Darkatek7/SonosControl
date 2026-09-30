@@ -27,11 +27,11 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersEverydayHierarchy_WithoutEmbeddedPlayer()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -53,7 +53,7 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_SearchesAndFiltersEverySourceType()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         var stations = Enumerable.Range(1, 8)
             .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
@@ -64,7 +64,7 @@ public class IndexPageUXTests
 
         using var resources = ConfigureServices(ctx, stations, tracks, collections, youTubeVideos: videos);
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -106,10 +106,10 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersEmptyState_WhenLibraryIsEmpty()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -123,7 +123,7 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersSpeakerSetupStateWithoutPlaybackHero_WhenNoRoomsExist()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = new SonosSettings
         {
             IP_Adress = string.Empty,
@@ -140,7 +140,7 @@ public class IndexPageUXTests
             settings.YouTubeMusicCollections,
             settings);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -152,7 +152,7 @@ public class IndexPageUXTests
             Assert.NotNull(cut.Find("button[aria-label='Play Setup Radio']").GetAttribute("disabled"));
         });
 
-        var library = ctx.RenderComponent<LibraryPage>();
+        var library = ctx.Render<LibraryPage>();
         library.WaitForAssertion(() =>
         {
             Assert.Contains("Set up a speaker first", library.Find(".library-setup-notice").TextContent);
@@ -163,7 +163,7 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersGroupedSpeakers_Correctly()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         var master = new SonosSpeaker { Name = "Living Room", IpAddress = "192.168.1.10", Uuid = "uuid:RINCON_1234567890ABCDEF" };
         var slave = new SonosSpeaker { Name = "Kitchen", IpAddress = "192.168.1.11", Uuid = "uuid:RINCON_0000000000000000" };
@@ -175,7 +175,7 @@ public class IndexPageUXTests
             Speakers = speakers
         };
 
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 
@@ -225,7 +225,7 @@ public class IndexPageUXTests
             .Build();
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -241,7 +241,7 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_CollapsesGroupedSpeaker_WhenChildReportsPlaying()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         var master = new SonosSpeaker { Name = "Office Pair", IpAddress = "192.168.1.20", Uuid = "uuid:RINCON_ABCDEF1234567890" };
         var slave = new SonosSpeaker { Name = "Office Right", IpAddress = "192.168.1.21", Uuid = "uuid:RINCON_0000000000000001" };
@@ -251,7 +251,7 @@ public class IndexPageUXTests
             Speakers = new List<SonosSpeaker> { master, slave }
         };
 
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 
@@ -301,7 +301,7 @@ public class IndexPageUXTests
             .Build();
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -316,11 +316,11 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_HasAccessibleTabsSearchAndExplicitSourceType()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -341,10 +341,10 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_Mp3Upload_HasDedicatedTabAndQueryRoute()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
         Assert.Empty(cut.FindAll("#mp3-file"));
         cut.Find("#library-tab-mp3").Click();
         Assert.EndsWith("/library?tab=mp3", ctx.Services.GetRequiredService<NavigationManager>().Uri);
@@ -368,7 +368,7 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_TogglesFavourite_WithAccessibleHeartButton()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         using var resources = ConfigureServices(
             ctx,
             new List<TuneInStation>
@@ -378,7 +378,7 @@ public class IndexPageUXTests
             new List<SpotifyObject>(),
             new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -406,7 +406,7 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_ShowsFavouriteError_WhenCurrentUserCannotBeResolved()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         using var resources = ConfigureServices(
             ctx,
             new List<TuneInStation>
@@ -416,7 +416,7 @@ public class IndexPageUXTests
             new List<SpotifyObject>(),
             new List<YouTubeMusicObject>());
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
         cut.WaitForAssertion(() => Assert.NotNull(cut.Find("button[aria-label='Add Unavailable Favourite to favourites']")));
         resources.DbContext.Users.Remove(resources.DbContext.Users.Single());
         resources.DbContext.SaveChanges();
@@ -433,7 +433,7 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersDashboard_WithAutomationRoomsQuickLibraryAndWarnings()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         var scene = new Scene
         {
@@ -517,7 +517,7 @@ public class IndexPageUXTests
         });
         resources.DbContext.SaveChanges();
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -546,7 +546,7 @@ public class IndexPageUXTests
     [Fact]
     public void IndexPage_RendersDeviceWarningDetails()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var healthStore = new DeviceHealthSnapshotStore();
         healthStore.Replace(new[]
         {
@@ -565,7 +565,7 @@ public class IndexPageUXTests
             new List<YouTubeMusicObject>(),
             healthStore: healthStore);
 
-        var cut = ctx.RenderComponent<IndexPage>();
+        var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -578,7 +578,7 @@ public class IndexPageUXTests
     [Fact]
     public async Task LibraryPage_PlaySource_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         var settings = new SonosSettings
         {
@@ -604,7 +604,7 @@ public class IndexPageUXTests
             settings,
             youTubeVideos: settings.YouTubeCollections);
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
 
         cut.WaitForAssertion(() => Assert.Contains("Live Set", cut.Markup));
 
@@ -625,7 +625,7 @@ public class IndexPageUXTests
     [Fact]
     public void LibraryPage_YouTubeEditor_UpdatesSelectedEntryWithoutPlaying()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         var settings = new SonosSettings
@@ -651,7 +651,7 @@ public class IndexPageUXTests
             settings,
             youTubeVideos: settings.YouTubeCollections);
 
-        var cut = ctx.RenderComponent<LibraryPage>();
+        var cut = ctx.Render<LibraryPage>();
 
         cut.WaitForAssertion(() =>
         {
@@ -696,7 +696,7 @@ public class IndexPageUXTests
     }
 
     private static TestResources ConfigureServices(
-        TestContext ctx,
+        BunitContext ctx,
         List<TuneInStation> stations,
         List<SpotifyObject> tracks,
         List<YouTubeMusicObject> collections,
@@ -705,7 +705,7 @@ public class IndexPageUXTests
         string? connectorCurrentStation = null,
         List<YouTubeObject>? youTubeVideos = null)
     {
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
         ctx.JSInterop.SetupVoid("window.sonosUi.setBodyScrollLock", _ => true);

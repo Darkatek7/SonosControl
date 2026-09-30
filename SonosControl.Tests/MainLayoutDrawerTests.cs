@@ -21,11 +21,11 @@ public class MainLayoutDrawerTests
     [Fact]
     public void MainLayout_DesktopHeader_ShowsPageContextAndConsolidatedProfileMenu()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
-        var cut = ctx.RenderComponent<MainLayout>(parameters => parameters
+        var cut = ctx.Render<MainLayout>(parameters => parameters
             .Add(p => p.Body, builder => builder.AddMarkupContent(0, "<p>Body</p>"))
             .Add(p => p.AntiforgeryToken, "token"));
 
@@ -39,10 +39,10 @@ public class MainLayoutDrawerTests
     [Fact]
     public void NavMenu_GroupsLinksIntoMainAdministrationAndThemeSections()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx);
 
-        var cut = ctx.RenderComponent<NavMenu>();
+        var cut = ctx.Render<NavMenu>();
 
         var labels = cut.FindAll(".nav-section-label").Select(label => label.TextContent.Trim()).ToList();
         Assert.Equal(new[] { "Main", "Administration", "Theme" }, labels);
@@ -51,11 +51,11 @@ public class MainLayoutDrawerTests
     [Fact]
     public void MainLayout_MobileMenuButton_TogglesDrawerState()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
-        var cut = ctx.RenderComponent<MainLayout>(parameters => parameters
+        var cut = ctx.Render<MainLayout>(parameters => parameters
             .Add(p => p.Body, builder => builder.AddMarkupContent(0, "<p>Body</p>"))
             .Add(p => p.AntiforgeryToken, "token"));
 
@@ -76,11 +76,11 @@ public class MainLayoutDrawerTests
     [Fact]
     public void NavMenu_NavigationClick_InvokesOnNavigate()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx);
 
         var navigateCalls = 0;
-        var cut = ctx.RenderComponent<NavMenu>(parameters => parameters
+        var cut = ctx.Render<NavMenu>(parameters => parameters
             .Add(p => p.IsDrawerOpen, true)
             .Add(p => p.OnNavigate, () => { navigateCalls++; return Task.CompletedTask; }));
 
@@ -95,10 +95,10 @@ public class MainLayoutDrawerTests
     [Fact]
     public void NavMenu_CloseButton_HasAriaLabel()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx);
 
-        var cut = ctx.RenderComponent<NavMenu>(parameters => parameters
+        var cut = ctx.Render<NavMenu>(parameters => parameters
             .Add(p => p.IsDrawerOpen, true));
 
         var closeButton = cut.Find("button.nav-drawer-close");
@@ -112,10 +112,10 @@ public class MainLayoutDrawerTests
     [InlineData("superadmin", true)]
     public void NavMenu_OnlyShowsAdministrationToAdministrativeRoles(string role, bool expectsAdministration)
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureAuthAndTheme(ctx, role);
 
-        var cut = ctx.RenderComponent<NavMenu>();
+        var cut = ctx.Render<NavMenu>();
         var links = cut.FindAll("a.nav-link").Select(link => link.TextContent.Trim()).ToList();
 
         Assert.Contains("Home", links);
@@ -125,7 +125,7 @@ public class MainLayoutDrawerTests
         Assert.Equal(expectsAdministration, links.Contains("Administration"));
     }
 
-    private static void ConfigureAuthAndTheme(TestContext ctx, params string[] roles)
+    private static void ConfigureAuthAndTheme(BunitContext ctx, params string[] roles)
     {
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo
@@ -165,7 +165,7 @@ public class MainLayoutDrawerTests
                 userManager.Object,
                 Mock.Of<ILogger<ThemeService>>()));
 
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles(roles.Length == 0 ? ["admin"] : roles);
     }

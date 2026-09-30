@@ -18,7 +18,7 @@ public class AutomationDateExceptionsTests
     [InlineData(true)]
     public void AddException_SavesSelectedRepeatOption(bool isAnnual)
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = CreateSettings();
         var repo = ConfigureServices(ctx, settings);
         var cut = RenderExceptions(ctx);
@@ -42,7 +42,7 @@ public class AutomationDateExceptionsTests
     [Fact]
     public void AddAnnualException_RejectsSameDayAndMonthInAnotherYear()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = CreateSettings();
         settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings);
@@ -60,7 +60,7 @@ public class AutomationDateExceptionsTests
     [Fact]
     public void RemoveAnnualException_PreservesOneTimeExceptionForSameDate()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = CreateSettings();
         var date = new DateOnly(2026, 12, 25);
         settings.ScheduleWindows[0].ExcludedDates = [date];
@@ -82,7 +82,7 @@ public class AutomationDateExceptionsTests
     [Fact]
     public void Operator_CanViewRepeatOptionsButCannotChangeExceptions()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = CreateSettings();
         settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings, "operator");
@@ -99,13 +99,13 @@ public class AutomationDateExceptionsTests
     [Fact]
     public void EditSchedule_PreservesBothExceptionTypes()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var settings = CreateSettings();
         settings.ScheduleWindows[0].IsEnabled = false;
         settings.ScheduleWindows[0].ExcludedDates = [new DateOnly(2026, 12, 24)];
         settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings);
-        var cut = ctx.RenderComponent<ScheduleWindowsPage>();
+        var cut = ctx.Render<ScheduleWindowsPage>();
 
         cut.Find(".schedule-window-card__main").Click();
         cut.Find(".schedule-editor-actions button").Click();
@@ -123,15 +123,15 @@ public class AutomationDateExceptionsTests
         ScheduleWindows = [new ScheduleWindow { Name = "Holiday schedule" }]
     };
 
-    private static IRenderedComponent<AutomationPage> RenderExceptions(TestContext ctx)
+    private static IRenderedComponent<AutomationPage> RenderExceptions(BunitContext ctx)
     {
         ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/automation?tab=exceptions");
-        return ctx.RenderComponent<AutomationPage>();
+        return ctx.Render<AutomationPage>();
     }
 
-    private static Mock<ISettingsRepo> ConfigureServices(TestContext ctx, SonosSettings settings, string role = "admin")
+    private static Mock<ISettingsRepo> ConfigureServices(BunitContext ctx, SonosSettings settings, string role = "admin")
     {
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("test-user");
         auth.SetRoles(role);
         var repo = new Mock<ISettingsRepo>();

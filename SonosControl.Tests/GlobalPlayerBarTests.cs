@@ -19,10 +19,10 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(ctx);
 
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         cut.WaitForAssertion(() =>
         {
@@ -39,10 +39,10 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_SyncButton_IsEnabledAfterInitialRefresh()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(ctx);
 
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         cut.WaitForAssertion(() =>
         {
@@ -64,7 +64,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_ResolvesSavedStationNameFromCurrentUri()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureServices(
             ctx,
             stations:
@@ -77,7 +77,7 @@ public class GlobalPlayerBarTests
             ],
             currentStationUri: "x-rincon-mp3radio://breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts");
 
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         cut.WaitForAssertion(() =>
         {
@@ -89,11 +89,11 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_PlayerSheet_UsesActiveSpeakerAndNumericVolume()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ConfigureServices(ctx, activeSpeakerIp: "10.0.0.2");
 
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
         cut.WaitForAssertion(() =>
         {
             Assert.Equal("25", cut.Find("#global-player-volume-number").GetAttribute("value"));
@@ -115,7 +115,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task PlaybackState_CoalescesRapidVolumeUpdatesAndPersistsFinalValue()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(ctx);
         var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
         await playbackState.InitializeAsync();
@@ -135,7 +135,7 @@ public class GlobalPlayerBarTests
     [InlineData("skip")]
     public async Task GlobalPlayerBar_FailedCommand_ShowsErrorAndRetriesOriginalAction(string command)
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(ctx);
         var wasPlaying = command != "play";
         connectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(wasPlaying);
@@ -152,7 +152,7 @@ public class GlobalPlayerBarTests
                 .ThrowsAsync(new InvalidOperationException("Internal device details"))
                 .Returns(Task.CompletedTask);
 
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
         cut.Find(command == "skip" ? "[data-qa='global-player-next']" : ".global-player-bar__play").Click();
 
         cut.WaitForAssertion(() =>
@@ -186,7 +186,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task PlaybackState_ChangingRoom_DiscardsFailedCommand()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(ctx);
         connectorRepo.Setup(repo => repo.NextTrack("10.0.0.1")).ThrowsAsync(new InvalidOperationException("Offline"));
         var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
@@ -205,10 +205,10 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_WithoutSpeakers_DisablesPlaybackAndOffersSetup()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx, withSpeakers: false);
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         Assert.Contains("Set up a speaker first", cut.Find(".player-surface__open").TextContent);
         Assert.Single(cut.FindAll(".player-surface__expand"));
@@ -226,13 +226,13 @@ public class GlobalPlayerBarTests
     [Fact]
     public void GlobalPlayerBar_FailedCommand_CanBeRetriedInsideExpandedPlayer()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx);
         connectorRepo.SetupSequence(repo => repo.NextTrack("10.0.0.1"))
             .ThrowsAsync(new InvalidOperationException("Offline"))
             .Returns(Task.CompletedTask);
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
         cut.Find("[data-qa='global-player-next']").Click();
         cut.Find(".player-surface__open").Click();
 
@@ -243,13 +243,13 @@ public class GlobalPlayerBarTests
     }
 
     private static Mock<ISonosConnectorRepo> ConfigureServices(
-        TestContext ctx,
+        BunitContext ctx,
         List<TuneInStation>? stations = null,
         string currentStationUri = "http://stream.example/live",
         string activeSpeakerIp = "10.0.0.1",
         bool withSpeakers = true)
     {
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 

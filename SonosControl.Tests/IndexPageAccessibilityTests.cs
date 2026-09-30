@@ -23,10 +23,10 @@ public class IndexPageAccessibilityTests
     [Fact]
     public void GlobalPlayer_UsesDecorativeAlbumArtWithAdjacentTrackText()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         // Setup Mocks
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 
@@ -81,7 +81,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         // Verify
         cut.WaitForAssertion(() =>
@@ -95,10 +95,10 @@ public class IndexPageAccessibilityTests
     [Fact]
     public void GlobalPlayer_FallbackArt_IsHiddenFromScreenReaders()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         // Setup Mocks (No album art)
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 
@@ -153,7 +153,7 @@ public class IndexPageAccessibilityTests
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
         // Render
-        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        var cut = ctx.Render<GlobalPlayerBar>();
 
         // Verify
         cut.WaitForAssertion(() =>

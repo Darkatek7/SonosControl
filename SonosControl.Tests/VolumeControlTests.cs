@@ -14,10 +14,10 @@ public class VolumeControlTests
     [Fact]
     public void VolumeControl_SynchronizesInputsAndClampsTypedValues()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
         var changedValue = -1;
-        var cut = ctx.RenderComponent<VolumeControl>(parameters => parameters
+        var cut = ctx.Render<VolumeControl>(parameters => parameters
             .Add(component => component.Value, 25)
             .Add(component => component.MaxVolume, 80)
             .Add(component => component.IdPrefix, "test-volume")
@@ -36,7 +36,7 @@ public class VolumeControlTests
         cut.Find("#test-volume-number").Input("95");
         Assert.Equal(80, changedValue);
 
-        cut.SetParametersAndRender(parameters => parameters
+        cut.Render(parameters => parameters
             .Add(component => component.Value, changedValue)
             .Add(component => component.MaxVolume, 80)
             .Add(component => component.IdPrefix, "test-volume")
@@ -50,7 +50,7 @@ public class VolumeControlTests
     [Fact]
     public void RoomCard_UsesPlaybackVolumeAndConfiguredMaximum()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
         var changedValue = -1;
         var speaker = new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" };
@@ -62,7 +62,7 @@ public class VolumeControlTests
             CurrentVolume = 12
         };
 
-        var cut = ctx.RenderComponent<RoomCard>(parameters => parameters
+        var cut = ctx.Render<RoomCard>(parameters => parameters
             .Add(component => component.Speaker, speaker)
             .Add(component => component.Health, health)
             .Add(component => component.IsActive, true)
