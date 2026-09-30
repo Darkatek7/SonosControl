@@ -1,658 +1,246 @@
 @* Routed through InsightsPage. *@
+@using System.Globalization
 @using SonosControl.Web.Data
-@using SonosControl.Web.Models
 @using SonosControl.Web.Services
 @using Microsoft.EntityFrameworkCore
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject ApplicationDbContext Db
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject ILogger<StatsPage> Logger
 
-<PageTitle>Statistics - Sonos Control</PageTitle>
-
-<div class="stats-dashboard-shell">
-    <section class="stats-hero" aria-labelledby="stats-heading">
-        <div class="stats-hero__copy">
-            <span class="spotify-eyebrow">SonosControl</span>
-            <h1 id="stats-heading">Statistics</h1>
-            <p>Listening intelligence from the last 30 days, including playback volume, operator activity, and media trends.</p>
+<div class="listening-insights" aria-busy="@_loading" data-qa="listening-insights">
+    <div class="listening-toolbar">
+        <div>
+            <h2>Listening overview</h2>
+            <p>@DateRange · @AppTimeZone.TimeZone.Id · Today is in progress</p>
         </div>
-        <div class="stats-hero__window">
-            <Icon Name="calendar" Size="18" />
-            <span>Last 30 days</span>
+        <div class="listening-controls">
+            <label for="listening-period" class="visually-hidden">Listening period</label>
+            <select id="listening-period" class="form-select" value="@_dayCount" @onchange="ChangePeriod" disabled="@_loading">
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" @onclick="LoadStats" disabled="@_loading" aria-label="Refresh listening insights">
+                <Icon Name="refresh" Size="18" />
+            </button>
         </div>
-    </section>
+    </div>
 
-    @if (!HasInsightData)
+    @if (_loading)
     {
-        <EmptyState IconName="graph"
-                    Title="Your listening story starts here"
-                    Description="Play music and use your rooms for a while. Insights will turn that activity into trends, favourites, and listening-time summaries." />
+        <p class="listening-status" role="status">Loading listening history…</p>
+    }
+    else if (_error)
+    {
+        <div class="listening-status" role="alert">
+            <p>Listening history could not be loaded. Try refreshing.</p>
+            <button type="button" class="btn btn-outline-secondary" @onclick="LoadStats">Try again</button>
+        </div>
+    }
+    else if (_insights is null || _insights.TotalSeconds <= 0)
+    {
+        <div class="listening-empty">
+            <EmptyState IconName="music"
+                        Title="No listening recorded in this period"
+                        Description="Listening summaries appear after your speakers have played music. Try a longer period to see earlier playback." />
+            <a class="btn btn-outline-secondary" href="/insights?tab=activity">View activity log</a>
+            <p>Button presses and system events appear in Activity. They do not count as listening time.</p>
+        </div>
     }
     else
     {
-    <section class="stats-kpi-grid" aria-label="Listening overview">
-        <article class="stats-kpi-card stats-kpi-card--primary">
-            <div class="stats-kpi-card__icon"><Icon Name="clock" Size="20" /></div>
-            <div>
-                <h2>Total Listening Time</h2>
-                <strong>@FormatDuration(totalDuration)</strong>
-                <span>Last 30 Days</span>
-            </div>
-        </article>
-        <article class="stats-kpi-card">
-            <div class="stats-kpi-card__icon"><Icon Name="music" Size="20" /></div>
-            <div>
-                <h2>Longest Session</h2>
-                <strong>@(longestSession != null ? FormatDuration(longestSession.DurationSeconds) : "-")</strong>
-                <span class="text-truncate">@longestSessionLabel</span>
-            </div>
-        </article>
-        <article class="stats-kpi-card">
-            <div class="stats-kpi-card__icon"><Icon Name="graph" Size="20" /></div>
-            <div>
-                <h2>Most Active Day</h2>
-                <strong>@mostActiveDay</strong>
-                <span>Based on activity</span>
-            </div>
-        </article>
-    </section>
+        <section class="listening-summary" aria-label="Listening summary">
+            <article class="listening-metric listening-metric--total">
+                <span>Recorded listening</span>
+                <strong data-qa="listening-total">@FormatDuration(_insights.TotalSeconds)</strong>
+                <small>Across all rooms</small>
+            </article>
+            <article class="listening-metric">
+                <span>Days with music</span>
+                <strong>@_insights.ActiveDays <small>/ @_dayCount</small></strong>
+                <small>Days with recorded playback</small>
+            </article>
+            <article class="listening-metric">
+                <span>Average on listening days</span>
+                <strong>@FormatDuration(_insights.AveragePerActiveDay)</strong>
+                <small>Across all rooms per active day</small>
+            </article>
+        </section>
 
-    <section class="stats-analytics-grid" aria-label="Activity analytics">
-        <article class="stats-panel stats-panel--wide">
-            <header class="stats-panel__header">
+        <section class="listening-panel" aria-labelledby="daily-listening-heading">
+            <header class="listening-panel-heading">
                 <div>
-                    <span class="spotify-eyebrow">Trends</span>
-                    <h2><Icon Name="graph" Size="18" /> Activity Trends (Last 30 Days)</h2>
+                    <h3 id="daily-listening-heading">Listening by day</h3>
+                    <p>Recorded playback time, including days without recorded playback.</p>
                 </div>
+                @if (_insights.PeakDay is { } peak)
+                {
+                    <div class="listening-peak"><span>Most listening</span><strong>@peak.Date.ToString("ddd, d MMM", DisplayCulture) · @FormatDuration(peak.Seconds)</strong></div>
+                }
             </header>
-            @if (activityOverTime == null)
-            {
-                <p class="stats-empty">Loading...</p>
-            }
-            else if (!activityOverTime.Any())
-            {
-                <p class="stats-empty">No activity data available.</p>
-            }
-            else
-            {
-                <div class="stats-chart">
-                    <RadzenChart>
-                        <RadzenLineSeries Data="@activityOverTime" CategoryProperty="Date" Title="Actions" ValueProperty="Count" LineType="LineType.Solid" Smooth="true">
-                            <RadzenMarkers MarkerType="MarkerType.Circle" />
-                        </RadzenLineSeries>
-                        <RadzenCategoryAxis Padding="20" FormatString="{0:d}" />
-                        <RadzenValueAxis>
-                            <RadzenGridLines Visible="true" />
-                        </RadzenValueAxis>
-                    </RadzenChart>
-                </div>
-            }
-        </article>
-
-        <article class="stats-panel">
-            <header class="stats-panel__header">
-                <div>
-                    <span class="spotify-eyebrow">Usage</span>
-                    <h2><Icon Name="clock" Size="18" /> Peak Usage Times</h2>
-                </div>
-            </header>
-            @if (activityByHour == null)
-            {
-                <p class="stats-empty">Loading...</p>
-            }
-            else if (!activityByHour.Any())
-            {
-                <p class="stats-empty">No data available.</p>
-            }
-            else
-            {
-                <div class="stats-chart">
-                    <RadzenChart>
-                        <RadzenColumnSeries Data="@activityByHour" CategoryProperty="Hour" ValueProperty="Count" Title="Actions" />
-                        <RadzenCategoryAxis Step="1" />
-                    </RadzenChart>
-                </div>
-            }
-        </article>
-
-        <article class="stats-panel">
-            <header class="stats-panel__header">
-                <div>
-                    <span class="spotify-eyebrow">Media</span>
-                    <h2><Icon Name="music" Size="18" /> Media Consumption</h2>
-                </div>
-            </header>
-            @if (mediaTypeStats == null)
-            {
-                <p class="stats-empty">Loading...</p>
-            }
-            else if (!mediaTypeStats.Any())
-            {
-                <p class="stats-empty">No data available.</p>
-            }
-            else
-            {
-                var mediaTotalDuration = mediaTypeStats.Sum(item => item.Duration);
-                <div class="stats-media-layout">
-                    <div class="stats-chart stats-chart--donut">
-                        <RadzenChart>
-                            <RadzenDonutSeries Data="@mediaTypeStats" CategoryProperty="MediaType" ValueProperty="Duration" Title="Listening time">
-                                <RadzenSeriesDataLabels Visible="false" />
-                            </RadzenDonutSeries>
-                        </RadzenChart>
-                    </div>
-                    <div class="stats-media-breakdown" aria-label="Media consumption breakdown">
-                        @foreach (var item in mediaTypeStats)
+            <div class="listening-chart" aria-hidden="true">
+                <div class="listening-chart-scale"><span>@FormatAxis(ChartMaximum)</span><span>@FormatAxis(ChartMaximum / 2)</span><span>0</span></div>
+                <div class="listening-chart-plot">
+                    <div class="listening-chart-bars" style="@($"--day-count: {_dayCount}")">
+                        @foreach (var day in _insights.Days)
                         {
-                            <div class="stats-media-row">
-                                <span class="stats-media-row__label">
-                                    <span class="stats-media-row__swatch" aria-hidden="true"></span>
-                                    <span>@item.MediaType</span>
-                                </span>
-                                <span class="stats-media-row__value">@FormatDuration(item.Duration)</span>
-                                <span class="stats-media-row__share">@FormatPercent(item.Duration, mediaTotalDuration)</span>
+                            <div class="listening-chart-column" title="@($"{day.Date.ToString("ddd, d MMM", DisplayCulture)}: {FormatDuration(day.Seconds)}")">
+                                <span class="@(day.Date == _insights.PeakDay?.Date ? "is-peak" : "")" style="@Height(day.Seconds)"></span>
                             </div>
                         }
                     </div>
+                    <div class="listening-chart-dates"><span>@_insights.Days[0].Date.ToString("d MMM", DisplayCulture)</span><span>@_insights.Days[_dayCount / 2].Date.ToString("d MMM", DisplayCulture)</span><span>Today</span></div>
                 </div>
-            }
-        </article>
-
-        <article class="stats-panel stats-panel--wide">
-            <header class="stats-panel__header">
-                <div>
-                    <span class="spotify-eyebrow">Stations</span>
-                    <h2><Icon Name="rss" Size="18" /> Top Stations (by Time)</h2>
-                </div>
-            </header>
-            @if (stationStats == null)
-            {
-                <p class="stats-empty">Loading...</p>
-            }
-            else if (!stationStats.Any())
-            {
-                <p class="stats-empty">No data available.</p>
-            }
-            else
-            {
-                var maxStationDuration = stationStats.Max(station => station.Duration);
-                <div class="stats-station-rank" aria-label="Top stations ranked by listening time">
-                    @foreach (var station in stationStats.Take(8).Select((value, index) => new { value, index }))
-                    {
-                        var percent = maxStationDuration > 0 ? Math.Max(3, station.value.Duration / maxStationDuration * 100) : 0;
-                        <article class="stats-station-rank__row">
-                            <span class="stats-station-rank__position">@(station.index + 1)</span>
-                            <div class="stats-station-rank__body">
-                                <div class="stats-station-rank__meta">
-                                    <strong title="@station.value.Station">@station.value.Station</strong>
-                                    <span>@FormatDuration(station.value.Duration) · @station.value.PlayCount plays</span>
-                                </div>
-                                <div class="stats-station-rank__track" aria-hidden="true">
-                                    <span style="@($"width: {percent:F1}%")"></span>
-                                </div>
-                            </div>
-                        </article>
-                    }
-                </div>
-
-                <div class="stats-station-cards" aria-label="All station listening statistics">
-                    @foreach (var station in stationStats)
-                    {
-                        <article class="stats-station-card">
-                            <strong>@station.Station</strong>
-                            <span><small>Listening</small>@FormatDuration(station.Duration)</span>
-                            <span><small>Plays</small>@station.PlayCount</span>
-                        </article>
-                    }
-                </div>
-            }
-        </article>
-    </section>
-
-    <section class="stats-leaderboard-grid" aria-label="Leaderboards">
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="rss" Size="17" /> Station Master</h2>
-            <p>Most station changes</p>
-            @RenderLeaderboard(stationMasterStats, "changes")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="rss" Size="17" /> Top Stations</h2>
-            <p>Most total plays</p>
-            @RenderLeaderboard(stationPlayCountStats, "plays")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="pause" Size="17" /> The Silencer</h2>
-            <p>Most playback pauses</p>
-            @RenderLeaderboard(silencerStats, "pauses")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="unlink" Size="17" /> The Loner</h2>
-            <p>Most groups disbanded</p>
-            @RenderLeaderboard(lonerStats, "ungroups")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="music" Size="17" /> Top DJ</h2>
-            <p>Most selections and playback starts</p>
-            @RenderLeaderboard(topDjStats, "actions")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="forward" Size="17" /> The Skipper</h2>
-            <p>Most tracks skipped</p>
-            @RenderLeaderboard(skipperStats, "skips")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="link" Size="17" /> The Grouper</h2>
-            <p>Most groups and syncs created</p>
-            @RenderLeaderboard(grouperStats, "groups")
-        </article>
-        <article class="stats-leaderboard-card">
-            <h2><Icon Name="clock" Size="17" /> Night Owl</h2>
-            <p>Most active 10PM - 4AM</p>
-            @RenderLeaderboard(nightOwlStats, "actions")
-        </article>
-    </section>
-
-    <section class="stats-panel stats-panel--tracks" aria-labelledby="top-tracks-heading">
-        <header class="stats-panel__header">
-            <div>
-                <span class="spotify-eyebrow">Tracks</span>
-                <h2 id="top-tracks-heading"><Icon Name="track" Size="18" /> Top Tracks</h2>
             </div>
-        </header>
-        @if (trackStats == null)
+            <details class="listening-daily-values">
+                <summary>View daily values</summary>
+                <table>
+                    <caption class="visually-hidden">Recorded listening time per day, across all rooms</caption>
+                    <thead><tr><th scope="col">Date</th><th scope="col">Listening time</th></tr></thead>
+                    <tbody>
+                        @foreach (var day in _insights.Days.Reverse())
+                        {
+                            <tr><th scope="row">@day.Date.ToString("ddd, d MMM yyyy", DisplayCulture)</th><td>@FormatDuration(day.Seconds)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        </section>
+
+        <div class="listening-breakdowns">
+            <section class="listening-panel" aria-labelledby="rooms-heading">
+                <header class="listening-panel-heading"><div><h3 id="rooms-heading">Where music plays</h3><p>Rooms ranked by recorded listening time.</p></div></header>
+                @Breakdown(_insights.Rooms)
+            </section>
+            <section class="listening-panel" aria-labelledby="sources-heading">
+                <header class="listening-panel-heading"><div><h3 id="sources-heading">What you listen to</h3><p>Sources as a share of all recorded listening time.</p></div></header>
+                @Breakdown(_insights.Sources)
+            </section>
+        </div>
+
+        @if (_insights.Stations.Count > 0 || _insights.Tracks.Count > 0)
         {
-            <p class="stats-empty">Loading...</p>
-        }
-        else if (!trackStats.Any())
-        {
-            <p class="stats-empty">No data available.</p>
-        }
-        else
-        {
-            var maxTrackDuration = trackStats.Max(track => track.Duration);
-            <div class="stats-track-list" aria-label="Top tracks ranked by listening time">
-                @foreach (var track in trackStats.Select((value, index) => new { value, index }))
+            <div class="listening-breakdowns">
+                @if (_insights.Stations.Count > 0)
                 {
-                    var percent = maxTrackDuration > 0 ? Math.Max(3, track.value.Duration / maxTrackDuration * 100) : 0;
-                    <article class="stats-track-row">
-                        <span class="stats-track-row__position">@(track.index + 1)</span>
-                        <div class="stats-track-row__main">
-                            <strong title="@track.value.Track">@track.value.Track</strong>
-                            <span title="@track.value.Artist">@(!string.IsNullOrWhiteSpace(track.value.Artist) ? track.value.Artist : "Unknown artist")</span>
-                            <div class="stats-track-row__track" aria-hidden="true">
-                                <span style="@($"width: {percent:F1}%")"></span>
-                            </div>
-                        </div>
-                        <div class="stats-track-row__metrics">
-                            <span><strong>@FormatDuration(track.value.Duration)</strong> Total time</span>
-                            <span><strong>@track.value.PlayCount</strong> Plays</span>
-                        </div>
-                    </article>
+                    <section class="listening-panel" aria-labelledby="stations-heading">
+                        <header class="listening-panel-heading"><div><h3 id="stations-heading">Most listened stations</h3><p>Up to 8 stations, ranked by listening time.</p></div></header>
+                        @ContentRanking(_insights.Stations)
+                    </section>
+                }
+                @if (_insights.Tracks.Count > 0)
+                {
+                    <section class="listening-panel" aria-labelledby="tracks-heading">
+                        <header class="listening-panel-heading"><div><h3 id="tracks-heading">Most listened tracks &amp; selections</h3><p>Up to 8 named items, ranked by listening time.</p></div></header>
+                        @ContentRanking(_insights.Tracks)
+                    </section>
                 }
             </div>
         }
-    </section>
+
+        <aside class="listening-method" aria-label="How listening time is counted">
+            <Icon Name="clock" Size="18" />
+            <div>
+                <strong>How this is counted</strong>
+                <p>Time is added up per speaker: two rooms playing for an hour count as two hours, including grouped rooms.
+                    Playback spanning midnight is split between days in @AppTimeZone.TimeZone.Id.
+                    Only saved playback is included; recent playback may take about a minute to appear. Missing history is not estimated.</p>
+                <a href="/insights?tab=activity">Review controls and system events in Activity <span aria-hidden="true">→</span></a>
+            </div>
+        </aside>
     }
 </div>
 
 @code {
-    RenderFragment RenderLeaderboard(List<UserStat>? stats, string label) => __builder =>
+    private static readonly CultureInfo DisplayCulture = CultureInfo.GetCultureInfo("en-GB");
+    private int _dayCount = 30;
+    private DateTime _loadedAtUtc = DateTime.UtcNow;
+    private ListeningInsights? _insights;
+    private bool _loading = true;
+    private bool _error;
+    private string DateRange => $"{AppTimeZone.ConvertUtc(_loadedAtUtc).Date.AddDays(1 - _dayCount).ToString("d MMM", DisplayCulture)} – {AppTimeZone.ConvertUtc(_loadedAtUtc).ToString("d MMM yyyy", DisplayCulture)}";
+    private double ChartMaximum
     {
-        if (stats == null)
+        get
         {
-            <p>Loading...</p>
+            var peak = _insights?.PeakDay?.Seconds ?? 0;
+            var step = peak <= 300 ? 60 : peak <= 3600 ? 300 : 3600;
+            return Math.Max(step, Math.Ceiling(peak / step) * step);
         }
-        else if (!stats.Any())
+    }
+
+    protected override Task OnInitializedAsync() => LoadStats();
+
+    private async Task ChangePeriod(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var days) && days is 7 or 30 or 90)
         {
-            <p class="text-muted">No data available.</p>
+            _dayCount = days;
+            await LoadStats();
         }
-        else
-        {
-            <ul class="list-group list-group-flush stats-leaderboard">
-                @foreach (var user in stats)
-                {
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <span>
-                            <span class="fw-bold">@user.User</span>
-                        </span>
-                        <span class="badge bg-primary rounded-pill">@user.Count @label</span>
-                    </li>
-                }
-            </ul>
-        }
-    };
-
-    class UserStat
-    {
-        public string User { get; set; } = "";
-        public int Count { get; set; }
-    }
-
-    class StationStat
-    {
-        public string Station { get; set; } = "";
-        public double Duration { get; set; }
-        public double DurationHours => Math.Round(Duration / 3600.0, 2);
-        public int PlayCount { get; set; }
-    }
-
-    class TrackStat
-    {
-        public string Track { get; set; } = "";
-        public string Artist { get; set; } = "";
-        public double Duration { get; set; }
-        public int PlayCount { get; set; }
-    }
-
-    class DateStat
-    {
-        public DateTime Date { get; set; }
-        public int Count { get; set; }
-    }
-
-    class HourStat
-    {
-        public int Hour { get; set; }
-        public int Count { get; set; }
-    }
-
-    class MediaStat
-    {
-        public string MediaType { get; set; } = "";
-        public double Duration { get; set; }
-    }
-
-    class PlaybackAggregateRow
-    {
-        public string TrackName { get; set; } = "";
-        public string Artist { get; set; } = "";
-        public string MediaType { get; set; } = "";
-        public double Duration { get; set; }
-        public int PlayCount { get; set; }
-    }
-
-    private List<UserStat>? topDjStats;
-    private List<UserStat>? skipperStats;
-    private List<UserStat>? grouperStats;
-    private List<UserStat>? nightOwlStats;
-    private List<UserStat>? stationMasterStats;
-    private List<UserStat>? stationPlayCountStats;
-    private List<UserStat>? silencerStats;
-    private List<UserStat>? lonerStats;
-
-    private double totalDuration;
-    private PlaybackHistory? longestSession;
-    private string longestSessionLabel = "None";
-    private string mostActiveDay = "-";
-
-    private List<DateStat>? activityOverTime;
-    private List<HourStat>? activityByHour;
-    private List<MediaStat>? mediaTypeStats;
-
-    private List<StationStat>? stationStats;
-    private List<TrackStat>? trackStats;
-
-    private bool HasInsightData =>
-        totalDuration > 0 ||
-        activityOverTime?.Any() == true ||
-        activityByHour?.Any() == true ||
-        mediaTypeStats?.Any() == true ||
-        stationStats?.Any() == true ||
-        trackStats?.Any() == true ||
-        topDjStats?.Any() == true ||
-        skipperStats?.Any() == true ||
-        grouperStats?.Any() == true ||
-        nightOwlStats?.Any() == true;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadStats();
     }
 
     private async Task LoadStats()
     {
-        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-        var logsInWindow = Db.Logs.AsNoTracking().Where(l => l.Timestamp >= thirtyDaysAgo);
-        var playbackInWindow = Db.PlaybackStats.AsNoTracking().Where(p => p.StartTime >= thirtyDaysAgo);
-        var timedLogs = await logsInWindow
-            .Select(log => new { log.Timestamp, log.PerformedBy })
-            .ToListAsync();
-        var settingsRepo = _uow.ISettingsRepo;
-        var settings = settingsRepo is null
-            ? new SonosSettings()
-            : await settingsRepo.GetSettings() ?? new SonosSettings();
-        var resolver = RecommendationMediaResolver.Create(settings);
-
-        var djActions = new[]
+        if (_loading && _insights is not null) return;
+        _loading = true;
+        _error = false;
+        try
         {
-            "Station Changed",
-            "Spotify Track Changed",
-            "YouTube Music Changed",
-            "Spotify URL Played",
-            "Playback Started"
-        };
-
-        topDjStats = await logsInWindow
-            .Where(l => djActions.Contains(l.Action))
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        skipperStats = await logsInWindow
-            .Where(l => l.Action == "Next Track")
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        var groupActions = new[]
-        {
-            "Group Created",
-            "Sync Play Started (Cloned URI)"
-        };
-
-        grouperStats = await logsInWindow
-            .Where(l => groupActions.Contains(l.Action))
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        nightOwlStats = timedLogs
-            .Where(log =>
-            {
-                var hour = AppTimeZone.ConvertUtc(log.Timestamp).Hour;
-                return hour >= 22 || hour < 4;
-            })
-            .GroupBy(log => log.PerformedBy)
-            .Select(group => new UserStat { User = group.Key ?? "Unknown", Count = group.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToList();
-
-        stationMasterStats = await logsInWindow
-            .Where(l => l.Action == "Station Changed")
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        silencerStats = await logsInWindow
-            .Where(l => l.Action == "Playback Paused")
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-
-        lonerStats = await logsInWindow
-            .Where(l => l.Action == "Speaker Ungrouped")
-            .GroupBy(l => l.PerformedBy)
-            .Select(g => new UserStat { User = g.Key ?? "Unknown", Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .Take(5)
-            .ToListAsync();
-        await InvokeAsync(StateHasChanged);
-
-        totalDuration = await playbackInWindow
-            .SumAsync(x => x.DurationSeconds);
-
-        longestSession = await playbackInWindow
-            .OrderByDescending(x => x.DurationSeconds)
-            .FirstOrDefaultAsync();
-        longestSessionLabel = ResolvePlaybackDisplayLabel(longestSession, resolver);
-        await InvokeAsync(StateHasChanged);
-
-        activityOverTime = timedLogs
-            .GroupBy(log => AppTimeZone.ConvertUtc(log.Timestamp).Date)
-            .Select(group => new DateStat { Date = group.Key, Count = group.Count() })
-            .OrderBy(item => item.Date)
-            .ToList();
-
-        var activeDayGroup = activityOverTime?
-            .GroupBy(x => x.Date.DayOfWeek)
-            .OrderByDescending(g => g.Sum(x => x.Count))
-            .FirstOrDefault();
-        mostActiveDay = activeDayGroup?.Key.ToString() ?? "-";
-
-        activityByHour = timedLogs
-            .GroupBy(log => AppTimeZone.ConvertUtc(log.Timestamp).Hour)
-            .Select(group => new HourStat { Hour = group.Key, Count = group.Count() })
-            .OrderBy(item => item.Hour)
-            .ToList();
-        await InvokeAsync(StateHasChanged);
-
-        mediaTypeStats = await playbackInWindow
-            .GroupBy(p => p.MediaType)
-            .Select(g => new MediaStat { MediaType = g.Key, Duration = g.Sum(x => x.DurationSeconds) })
-            .OrderByDescending(x => x.Duration)
-            .ToListAsync();
-
-        var stationRows = await playbackInWindow
-            .Where(p => p.MediaType == "Station" || p.MediaType == "Stream" || p.MediaType == "Track")
-            .GroupBy(p => new { p.TrackName, p.Artist, p.MediaType })
-            .Select(g => new PlaybackAggregateRow
-            {
-                TrackName = g.Key.TrackName,
-                Artist = g.Key.Artist,
-                MediaType = g.Key.MediaType,
-                Duration = g.Sum(x => x.DurationSeconds),
-                PlayCount = g.Count()
-            })
-            .ToListAsync();
-
-        var normalizedStations = stationRows
-            .Select(row => new
-            {
-                row.Duration,
-                row.PlayCount,
-                Resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType)
-            })
-            .Where(x => string.Equals(x.Resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase))
-            .Where(x => !string.IsNullOrWhiteSpace(x.Resolved.Name))
-            .GroupBy(x => x.Resolved.Name)
-            .Select(g => new StationStat
-            {
-                Station = g.Key,
-                Duration = g.Sum(x => x.Duration),
-                PlayCount = g.Sum(x => x.PlayCount)
-            })
-            .ToList();
-
-        stationPlayCountStats = normalizedStations
-            .OrderByDescending(x => x.PlayCount)
-            .ThenByDescending(x => x.Duration)
-            .ThenBy(x => x.Station)
-            .Take(5)
-            .Select(x => new UserStat { User = x.Station, Count = x.PlayCount })
-            .ToList();
-
-        stationStats = normalizedStations
-            .OrderByDescending(x => x.Duration)
-            .ThenByDescending(x => x.PlayCount)
-            .ThenBy(x => x.Station)
-            .Take(10)
-            .ToList();
-
-        var trackRows = await playbackInWindow
-            .Where(p => p.MediaType != "Unknown")
-            .GroupBy(p => new { p.TrackName, p.Artist, p.MediaType })
-            .Select(g => new PlaybackAggregateRow
-            {
-                TrackName = g.Key.TrackName,
-                Artist = g.Key.Artist,
-                MediaType = g.Key.MediaType,
-                Duration = g.Sum(x => x.DurationSeconds),
-                PlayCount = g.Count()
-            })
-            .ToListAsync();
-
-        trackStats = trackRows
-            .Select(row => new
-            {
-                Row = row,
-                Resolved = resolver.ResolveFromPlaybackEntry(row.TrackName, row.Artist, row.MediaType)
-            })
-            .Where(x => !string.Equals(x.Resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase))
-            .Where(x => !string.IsNullOrWhiteSpace(x.Resolved.Name))
-            .Where(x => x.Resolved.MatchedCatalog || !RecommendationMediaResolver.IsTechnicalPlaybackDisplayName(x.Resolved.Name, x.Row.Artist))
-            .GroupBy(x => new { TrackName = x.Resolved.Name, x.Row.Artist })
-            .Select(g => new TrackStat
-            {
-                Track = g.Key.TrackName,
-                Artist = g.Key.Artist,
-                Duration = g.Sum(x => x.Row.Duration),
-                PlayCount = g.Sum(x => x.Row.PlayCount)
-            })
-            .OrderByDescending(x => x.Duration)
-            .ThenBy(x => x.Track)
-            .Take(20)
-            .ToList();
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private static string ResolvePlaybackDisplayLabel(PlaybackHistory? playback, RecommendationMediaResolver resolver)
-    {
-        if (playback is null)
-        {
-            return "None";
+            _loadedAtUtc = DateTime.UtcNow;
+            var start = AppTimeZone.FromLocal(AppTimeZone.ConvertUtc(_loadedAtUtc).Date.AddDays(1 - _dayCount)).UtcDateTime;
+            var history = await Db.PlaybackStats.AsNoTracking()
+                .Where(playback => playback.StartTime < _loadedAtUtc && playback.DurationSeconds > 0
+                    && playback.StartTime.AddSeconds(playback.DurationSeconds) > start)
+                .ToListAsync();
+            var settings = _uow.ISettingsRepo is { } repo ? await repo.GetSettings() : null;
+            _insights = ListeningInsights.Create(history, settings ?? new SonosSettings(), AppTimeZone, _loadedAtUtc, _dayCount);
         }
-
-        var resolved = resolver.ResolveFromPlaybackEntry(playback.TrackName, playback.Artist, playback.MediaType);
-        if (!string.IsNullOrWhiteSpace(resolved.Name)
-            && (resolved.MatchedCatalog || !RecommendationMediaResolver.IsTechnicalPlaybackDisplayName(resolved.Name, playback.Artist)))
+        catch (Exception exception)
         {
-            return resolved.Name;
+            Logger.LogError(exception, "Could not load listening insights.");
+            _error = true;
         }
-
-        return string.Equals(resolved.MediaType, "Station", StringComparison.OrdinalIgnoreCase)
-            ? "Station playback"
-            : "Stream playback";
+        finally
+        {
+            _loading = false;
+        }
     }
 
-    private string FormatDuration(double seconds)
-    {
-        var ts = TimeSpan.FromSeconds(seconds);
-        if (ts.TotalHours >= 1)
-            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
-        return $"{ts.Minutes}m {ts.Seconds}s";
-    }
+    private RenderFragment Breakdown(IReadOnlyList<ListeningBreakdown> items) => @<ul class="listening-bars">
+        @foreach (var item in items)
+        {
+            <li>
+                <div class="listening-bar-label"><strong>@item.Name</strong><span>@FormatDuration(item.Seconds) <small>@Percent(item.Seconds)%</small></span></div>
+                <div class="listening-bar-track" aria-hidden="true"><span style="@Width(item.Seconds)"></span></div>
+            </li>
+        }
+    </ul>;
 
-    private static string FormatPercent(double value, double total)
-    {
-        if (total <= 0)
-            return "0%";
+    private RenderFragment ContentRanking(IReadOnlyList<ListeningContent> items) => @<ol class="listening-ranking">
+        @foreach (var item in items)
+        {
+            <li>
+                <div><strong>@item.Name</strong>@if (!string.IsNullOrWhiteSpace(item.Artist)) { <span>@item.Artist</span> }</div>
+                <span class="listening-ranking-time">@FormatDuration(item.Seconds)</span>
+            </li>
+        }
+    </ol>;
 
-        return $"{Math.Round(value / total * 100, 0, MidpointRounding.AwayFromZero):0}%";
-    }
+    private string Percent(double seconds) => (seconds / (_insights?.TotalSeconds ?? 1) * 100).ToString("0.#", DisplayCulture);
+    private string Width(double seconds) => $"width: {(seconds / (_insights?.TotalSeconds ?? 1) * 100).ToString("0.###", CultureInfo.InvariantCulture)}%";
+    private string Height(double seconds) => $"height: {(seconds / ChartMaximum * 100).ToString("0.###", CultureInfo.InvariantCulture)}%";
 
-    string FormatTimeAxis(object value)
+    private static string FormatAxis(double seconds) => seconds >= 3600
+        ? $"{(seconds / 3600).ToString("0.#", DisplayCulture)}h"
+        : seconds >= 60 ? $"{(seconds / 60).ToString("0.#", DisplayCulture)}m" : $"{seconds:0}s";
+
+    private static string FormatDuration(double seconds)
     {
-        return $"{value}h";
+        if (seconds <= 0) return "0m";
+        if (seconds < 60) return "< 1m";
+        var minutes = (int)(seconds / 60);
+        return minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
     }
 }

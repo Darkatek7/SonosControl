@@ -71,7 +71,7 @@ public static class ScheduleWindowEvaluator
 
     private static bool IsDateAllowed(ScheduleWindow window, DateOnly date, DayOfWeek day)
     {
-        if (window.ExcludedDates?.Contains(date) == true)
+        if (window.ExcludesDate(date))
         {
             return false;
         }

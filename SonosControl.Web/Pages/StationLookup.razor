@@ -139,7 +139,7 @@
                                     @onclick="() => PlayStation(station.Url)"
                                     aria-label="@($"Play {station.Name}")"
                                     title="@($"Play {station.Name}")"
-                                    disabled="@IsLoading($"play-{station.Url}")">
+                                    disabled="@(_settings?.Speakers.Any() != true || IsLoading($"play-{station.Url}"))">
                                 @if (IsLoading($"play-{station.Url}"))
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -368,7 +368,7 @@
 
     private async Task PlayStation(string url)
     {
-        if (_settings is not null)
+        if (_settings is not null && _settings.Speakers.Any())
         {
             var key = $"play-{url}";
             _loadingStates.Add(key);

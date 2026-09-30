@@ -4,6 +4,13 @@
 @inject ConfiguredTimeZoneService AppTimeZone
 
 <aside class="global-player-bar player-surface player-surface--compact" data-qa="global-player-bar" aria-label="Playback controls">
+    @if (!_isPanelOpen)
+    {
+        <PlaybackCommandFeedback Message="@PlaybackState.PlaybackErrorMessage"
+                                 Class="player-command-feedback--floating"
+                                 Disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping)"
+                                 OnRetry="PlaybackState.RetryLastPlaybackCommandAsync" />
+    }
     <button type="button" class="player-surface__open" @onclick="OpenPanelAsync" aria-label="Open expanded player" aria-expanded="@_isPanelOpen">
         <span class="global-player-bar__art" aria-hidden="true">
             @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
@@ -17,16 +24,17 @@
         </span>
         <span class="global-player-bar__meta">
             <span class="global-player-bar__eyebrow" role="heading" aria-level="2">Now playing</span>
-            <strong title="@PlaybackState.CurrentTrack">@PlaybackState.CurrentTrack</strong>
+            <strong title="@PlayerTitle">@PlayerTitle</strong>
             <span title="@PlaybackState.CurrentStationDisplay">@PlaybackState.CurrentStationDisplay · @PlaybackState.ActiveSpeakerName</span>
         </span>
+        <span class="player-surface__expand" aria-hidden="true"><Icon Name="chevron-up" Size="18" /></span>
     </button>
 
     <div class="global-player-bar__center">
-        <button type="button" class="global-player-bar__control" @onclick="RefreshAsync" title="Refresh playback state" aria-label="Refresh playback state" disabled="@PlaybackState.IsLoading">
+        <button type="button" class="global-player-bar__control" @onclick="RefreshAsync" title="Refresh playback state" aria-label="Refresh playback state" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading)">
             <Icon Name="refresh" Size="16" Class="@(PlaybackState.IsLoading ? "icon-spin" : "")" />
         </button>
-        <button type="button" class="global-player-bar__play" @onclick="TogglePlaybackAsync" title="@PlayToggleLabel" aria-label="@PlayToggleLabel" disabled="@PlaybackState.IsLoading">
+        <button type="button" class="global-player-bar__play" @onclick="TogglePlaybackAsync" title="@(PlaybackState.HasActiveSpeaker ? PlayToggleLabel : "Set up a speaker first")" aria-label="@PlayToggleLabel" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading || PlaybackState.IsSkipping)">
             @if (PlaybackState.IsLoading)
             {
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -43,12 +51,13 @@
     </div>
 
     <div class="global-player-bar__room">
-        <button type="button" class="global-player-bar__sync" @onclick="SyncPlayAsync" title="Sync current playback to all speakers" aria-label="Sync current playback to all speakers" data-qa="global-player-sync" disabled="@(PlaybackState.IsLoading || PlaybackState.IsSyncing)">
+        <button type="button" class="global-player-bar__sync" @onclick="SyncPlayAsync" title="Sync current playback to all speakers" aria-label="Sync current playback to all speakers" data-qa="global-player-sync" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading || PlaybackState.IsSyncing)">
             @if (PlaybackState.IsSyncing) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
             else { <Icon Name="sync" Size="14" /><span>Sync</span> }
         </button>
         <label class="visually-hidden" for="@SpeakerSelectId">Active speaker</label>
-        <select id="@SpeakerSelectId" class="form-select form-select-sm global-player-bar__speaker" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" aria-label="Active speaker">
+        <select id="@SpeakerSelectId" class="form-select form-select-sm global-player-bar__speaker" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" aria-label="Active speaker" disabled="@(!PlaybackState.HasActiveSpeaker)">
+            @if (!PlaybackState.HasActiveSpeaker) { <option value="">No speaker</option> }
             @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
         </select>
         <div class="global-player-bar__volume">
@@ -57,6 +66,7 @@
                            MaxVolume="@PlaybackState.MaxVolume"
                            ValueChanged="PlaybackState.SetVolumeAsync"
                            IdPrefix="global-player-volume"
+                           Disabled="@(!PlaybackState.HasActiveSpeaker)"
                            Label="Volume for active room" />
         </div>
         <button type="button" class="global-player-bar__more" @onclick="OpenPanelAsync" aria-label="Open queue and room controls"><Icon Name="menu" Size="17" /></button>
@@ -74,24 +84,38 @@
                       BodyClass="player-sheet__body"
                       CloseLabel="Close expanded player"
                       OnClose="ClosePanel">
+            <PlaybackCommandFeedback Message="@PlaybackState.PlaybackErrorMessage"
+                                     Disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping)"
+                                     OnRetry="PlaybackState.RetryLastPlaybackCommandAsync" />
+            @if (!PlaybackState.HasActiveSpeaker)
+            {
+                <div class="player-sheet__setup" role="status">
+                    <strong>Set up a speaker first</strong>
+                    <AuthorizeView Roles="admin,superadmin">
+                        <Authorized><a class="btn btn-sm btn-primary" href="/administration/devices">Configure devices</a></Authorized>
+                        <NotAuthorized><span>Ask an administrator to configure a room.</span></NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            }
             <div class="player-sheet__now">
                 <span class="global-player-bar__art" aria-hidden="true">
                     @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl)) { <img src="@PlaybackState.CurrentTrackArtUrl" alt="" /> }
                     else { <Icon Name="music" Size="28" /> }
                 </span>
-                <div><strong>@PlaybackState.CurrentTrack</strong><span>@PlaybackState.CurrentStationDisplay</span></div>
+                <div><strong>@PlayerTitle</strong><span>@PlaybackState.CurrentStationDisplay</span></div>
             </div>
 
             <div class="player-sheet__transport" aria-label="Transport controls">
-                <button type="button" class="btn btn-outline-secondary" @onclick="RefreshAsync" aria-label="Refresh"><Icon Name="refresh" Size="17" /></button>
-                <button type="button" class="btn btn-primary player-sheet__play" @onclick="TogglePlaybackAsync" aria-label="@PlayToggleLabel"><Icon Name="@PlayToggleIcon" Size="20" /></button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="SkipNextAsync" aria-label="Next track"><Icon Name="forward" Size="17" /></button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="RefreshAsync" aria-label="Refresh" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading)"><Icon Name="refresh" Size="17" /></button>
+                <button type="button" class="btn btn-primary player-sheet__play" @onclick="TogglePlaybackAsync" aria-label="@PlayToggleLabel" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading || PlaybackState.IsSkipping)"><Icon Name="@PlayToggleIcon" Size="20" /></button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="SkipNextAsync" aria-label="Next track" disabled="@(!PlaybackState.HasActiveSpeaker || PlaybackState.IsLoading || PlaybackState.IsSkipping)"><Icon Name="forward" Size="17" /></button>
             </div>
 
             <div class="player-sheet__controls">
                 <div>
                     <label for="player-sheet-room" class="form-label">Room</label>
-                    <select id="player-sheet-room" class="form-select" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged">
+                    <select id="player-sheet-room" class="form-select" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" disabled="@(!PlaybackState.HasActiveSpeaker)">
+                        @if (!PlaybackState.HasActiveSpeaker) { <option value="">No speaker</option> }
                         @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
                     </select>
                 </div>
@@ -101,14 +125,15 @@
                                    MaxVolume="@PlaybackState.MaxVolume"
                                    ValueChanged="PlaybackState.SetVolumeAsync"
                                    IdPrefix="player-sheet-volume"
+                                   Disabled="@(!PlaybackState.HasActiveSpeaker)"
                                    Label="Volume for active room" />
                 </div>
             </div>
 
             <div class="player-sheet__actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="SyncPlayAsync" disabled="@_isCommandBusy"><Icon Name="sync" Size="15" /> Sync</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="GroupAllAsync" disabled="@_isCommandBusy"><Icon Name="group" Size="15" /> Group all</button>
-                <button type="button" class="btn btn-outline-secondary" @onclick="UngroupAsync" disabled="@_isCommandBusy"><Icon Name="ungroup" Size="15" /> Ungroup</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="SyncPlayAsync" disabled="@(!PlaybackState.HasActiveSpeaker || _isCommandBusy || PlaybackState.IsSyncing)"><Icon Name="sync" Size="15" /> Sync</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="GroupAllAsync" disabled="@(!PlaybackState.HasActiveSpeaker || _isCommandBusy)"><Icon Name="group" Size="15" /> Group all</button>
+                <button type="button" class="btn btn-outline-secondary" @onclick="UngroupAsync" disabled="@(!PlaybackState.HasActiveSpeaker || _isCommandBusy)"><Icon Name="ungroup" Size="15" /> Ungroup</button>
             </div>
 
             <section class="player-sheet__timer" aria-labelledby="timer-heading">
@@ -116,7 +141,7 @@
                 <div class="input-group">
                     <label class="visually-hidden" for="player-timer-minutes">Timer minutes</label>
                     <input id="player-timer-minutes" class="form-control" type="number" min="1" max="720" @bind="_timerMinutes" />
-                    <button type="button" class="btn btn-outline-secondary" @onclick="StartTimer">Start</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="StartTimer" disabled="@(!PlaybackState.HasActiveSpeaker)">Start</button>
                     @if (_timerEndsUtc.HasValue) { <button type="button" class="btn btn-outline-danger" @onclick="CancelTimer">Cancel</button> }
                 </div>
             </section>
@@ -124,7 +149,7 @@
             <section class="player-sheet__queue" aria-labelledby="queue-heading">
                 <header>
                     <div><h3 id="queue-heading">Queue</h3><span>@_queueTotal item(s)</span></div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => LoadQueueAsync(true)" disabled="@_isQueueLoading"><Icon Name="refresh" Size="14" /> Refresh</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => LoadQueueAsync(true)" disabled="@(!PlaybackState.HasActiveSpeaker || _isQueueLoading)"><Icon Name="refresh" Size="14" /> Refresh</button>
                 </header>
                 @if (!string.IsNullOrWhiteSpace(_queueError))
                 {
@@ -166,6 +191,7 @@
 
     private const string SpeakerSelectId = "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
+    private string PlayerTitle => PlaybackState.HasActiveSpeaker ? PlaybackState.CurrentTrack : "Set up a speaker first";
     private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
     private string TimerStatus => _timerEndsUtc.HasValue ? $"Pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
 
