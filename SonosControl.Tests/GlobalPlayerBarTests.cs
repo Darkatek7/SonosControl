@@ -17,6 +17,101 @@ namespace SonosControl.Tests;
 public class GlobalPlayerBarTests
 {
     [Fact]
+    public async Task SleepTimer_PausesOriginalRoomAfterRoomSelectionChanges()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connector = ConfigureServices(ctx);
+        var callbacks = ConfigureTimerClock(ctx);
+        var cut = ctx.Render<GlobalPlayerBar>();
+        cut.Find(".player-surface__open").Click();
+        cut.Find(".player-sheet__timer .input-group button").Click();
+
+        await cut.InvokeAsync(() => ctx.Services.GetRequiredService<PlaybackUiStateService>().SetActiveSpeakerAsync("10.0.0.2"));
+        Assert.Contains("Office pauses at", cut.Find(".player-sheet__timer").TextContent);
+        await cut.InvokeAsync(callbacks[0]);
+
+        cut.WaitForAssertion(() =>
+        {
+            connector.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Once);
+            connector.Verify(repo => repo.PausePlaying("10.0.0.2"), Times.Never);
+            Assert.Contains("Not running", cut.Find(".player-sheet__timer").TextContent);
+        });
+    }
+
+    [Fact]
+    public async Task SleepTimer_RestartKeepsNewRoomAndIgnoresOldTimer()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connector = ConfigureServices(ctx);
+        var callbacks = ConfigureTimerClock(ctx);
+        var cut = ctx.Render<GlobalPlayerBar>();
+        cut.Find(".player-surface__open").Click();
+        cut.Find(".player-sheet__timer .input-group button").Click();
+        await cut.InvokeAsync(() => ctx.Services.GetRequiredService<PlaybackUiStateService>().SetActiveSpeakerAsync("10.0.0.2"));
+        cut.Find(".player-sheet__timer .input-group button").Click();
+        await cut.InvokeAsync(callbacks[0]);
+
+        Assert.Contains("Kitchen pauses at", cut.Find(".player-sheet__timer").TextContent);
+        connector.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+        await cut.InvokeAsync(callbacks[1]);
+        cut.WaitForAssertion(() =>
+        {
+            connector.Verify(repo => repo.PausePlaying("10.0.0.2"), Times.Once);
+            Assert.Contains("Not running", cut.Find(".player-sheet__timer").TextContent);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SleepTimer_CancelOrDisposePreventsPlaybackCommand(bool dispose)
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connector = ConfigureServices(ctx);
+        var callbacks = ConfigureTimerClock(ctx);
+        var cut = ctx.Render<GlobalPlayerBar>();
+        cut.Find(".player-surface__open").Click();
+        cut.Find(".player-sheet__timer .input-group button").Click();
+        if (dispose) await ctx.DisposeAsync();
+        else cut.Find(".player-sheet__timer .btn-outline-danger").Click();
+
+        callbacks[0]();
+        await Task.Yield();
+        connector.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SleepTimer_FailureShowsActionableFeedback()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connector = ConfigureServices(ctx);
+        connector.Setup(repo => repo.PausePlaying(It.IsAny<string>())).ThrowsAsync(new InvalidOperationException("Offline"));
+        var callbacks = ConfigureTimerClock(ctx);
+        var cut = ctx.Render<GlobalPlayerBar>();
+        cut.Find(".player-surface__open").Click();
+        cut.Find(".player-sheet__timer .input-group button").Click();
+        await cut.InvokeAsync(callbacks[0]);
+
+        cut.WaitForAssertion(() => Assert.Contains("Check the speaker connection", cut.Find(".player-sheet__timer [role='alert']").TextContent));
+    }
+
+    private static List<Action> ConfigureTimerClock(BunitContext ctx)
+    {
+        var callbacks = new List<Action>();
+        var clock = new Mock<TimeProvider>();
+        clock.Setup(provider => provider.GetUtcNow()).Returns(new DateTimeOffset(2026, 9, 30, 20, 0, 0, TimeSpan.Zero));
+        clock.Setup(provider => provider.CreateTimer(It.IsAny<TimerCallback>(), It.IsAny<object?>(), It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>()))
+            .Callback<TimerCallback, object?, TimeSpan, TimeSpan>((callback, state, _, _) => callbacks.Add(() => callback(state)))
+            .Returns(() => Mock.Of<ITimer>());
+        ctx.Services.AddSingleton(clock.Object);
+        return callbacks;
+    }
+
+    [Fact]
     public void GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
     {
         using var ctx = new BunitContext();
@@ -300,6 +395,7 @@ public class GlobalPlayerBarTests
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
+        ctx.Services.AddSingleton(TimeProvider.System);
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         return connectorRepo;

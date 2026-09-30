@@ -20,7 +20,17 @@ public sealed record AutomationRuntimeSnapshot(
     IReadOnlyList<string> Warnings,
     string? ActiveScheduleName,
     DateTimeOffset? LastEvaluationUtc,
-    string? SchedulerError);
+    string? SchedulerError)
+{
+    public string? FailureMessage => Phase == AutomationRuntimePhase.Failed ? Error : SchedulerError;
+    public bool HasError => Phase == AutomationRuntimePhase.Failed || !string.IsNullOrWhiteSpace(SchedulerError);
+    public bool IsRunning => Phase == AutomationRuntimePhase.Ready && !HasError && !string.IsNullOrWhiteSpace(ActiveScheduleName);
+    public string StatusClass => HasError ? "is-error" : Phase == AutomationRuntimePhase.Ready ? "is-ready" : "is-pending";
+    public string StatusLabel => Phase == AutomationRuntimePhase.Failed ? "Automation paused"
+        : HasError ? "Automation error"
+        : Phase != AutomationRuntimePhase.Ready ? "Preparing automation"
+        : IsRunning ? "Automation running" : "Scheduler ready";
+}
 
 public sealed class AutomationRuntimeStatus
 {

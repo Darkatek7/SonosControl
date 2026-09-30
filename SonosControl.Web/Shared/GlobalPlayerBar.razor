@@ -2,8 +2,9 @@
 @using SonosControl.Web.Services
 @inject PlaybackUiStateService PlaybackState
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject TimeProvider TimerClock
 
-<aside class="global-player-bar player-surface player-surface--compact" data-qa="global-player-bar" aria-label="Playback controls">
+<aside class="global-player-bar player-surface player-surface--compact @(PlaybackState.HasActiveSpeaker ? "global-player-bar--with-volume" : null)" data-qa="global-player-bar" aria-label="Playback controls">
     @if (!_isPanelOpen)
     {
         <PlaybackCommandFeedback Message="@PlaybackState.PlaybackErrorMessage"
@@ -76,6 +77,17 @@
         <button type="button" class="global-player-bar__more" @onclick="OpenPanelAsync" aria-label="Open queue and room controls"><Icon Name="menu" Size="17" /></button>
         @if (PlaybackState.IsStale) { <span class="global-player-bar__stale" title="Playback state may be stale">Stale</span> }
     </div>
+    @if (PlaybackState.HasActiveSpeaker)
+    {
+        <div class="global-player-bar__mobile-volume" data-qa="mobile-player-volume">
+            <Icon Name="volume" Size="16" />
+            <VolumeControl Value="@PlaybackState.Volume"
+                           MaxVolume="@PlaybackState.MaxVolume"
+                           ValueChanged="PlaybackState.SetVolumeAsync"
+                           IdPrefix="mobile-player-volume"
+                           Label="Volume for active room" />
+        </div>
+    }
 </aside>
 
 @if (_isPanelOpen)
@@ -141,7 +153,11 @@
             </div>
 
             <section class="player-sheet__timer" aria-labelledby="timer-heading">
-                <div><h3 id="timer-heading">Sleep timer</h3><span>@TimerStatus</span></div>
+                <div><h3 id="timer-heading">Sleep timer</h3><span role="status">@TimerStatus</span></div>
+                @if (!string.IsNullOrWhiteSpace(_timerError))
+                {
+                    <p class="text-danger" role="alert">@_timerError</p>
+                }
                 <div class="input-group">
                     <label class="visually-hidden" for="player-timer-minutes">Timer minutes</label>
                     <input id="player-timer-minutes" class="form-control" type="number" min="1" max="720" @bind="_timerMinutes" />
@@ -192,12 +208,15 @@
     private int _timerMinutes = 60;
     private DateTime? _timerEndsUtc;
     private CancellationTokenSource? _timerCts;
+    private string? _timerRoomName;
+    private string? _timerError;
+    private bool _disposed;
 
     private const string SpeakerSelectId = "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
     private string PlayerTitle => PlaybackState.HasActiveSpeaker ? PlaybackState.CurrentTrack : "Set up a speaker first";
     private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
-    private string TimerStatus => _timerEndsUtc.HasValue ? $"Pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
+    private string TimerStatus => _timerEndsUtc.HasValue ? $"{_timerRoomName} pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
 
     protected override async Task OnInitializedAsync()
     {
@@ -271,35 +290,68 @@
 
     private void StartTimer()
     {
+        var speakerIp = PlaybackState.ActiveSpeakerIp;
+        if (string.IsNullOrWhiteSpace(speakerIp)) return;
         CancelTimer();
         var minutes = Math.Clamp(_timerMinutes, 1, 720);
-        _timerEndsUtc = DateTime.UtcNow.AddMinutes(minutes);
-        _timerCts = new CancellationTokenSource();
-        var token = _timerCts.Token;
-        _ = Task.Run(async () =>
+        _timerEndsUtc = TimerClock.GetUtcNow().UtcDateTime.AddMinutes(minutes);
+        _timerRoomName = PlaybackState.ActiveSpeakerName;
+        _timerError = null;
+        var timerCts = new CancellationTokenSource();
+        _timerCts = timerCts;
+        _ = RunTimerAsync(speakerIp, minutes, timerCts);
+    }
+
+    private async Task RunTimerAsync(string speakerIp, int minutes, CancellationTokenSource timerCts)
+    {
+        var token = timerCts.Token;
+        string? error = null;
+        try
         {
-            try
+            await Task.Delay(TimeSpan.FromMinutes(minutes), TimerClock, token);
+            token.ThrowIfCancellationRequested();
+            await _uow.ISonosConnectorRepo.PausePlaying(speakerIp);
+            if (PlaybackState.ActiveSpeakerIp == speakerIp) await PlaybackState.RefreshAsync();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception)
+        {
+            error = "The sleep timer could not pause the room. Check the speaker connection and try again.";
+        }
+        finally
+        {
+            if (!_disposed && ReferenceEquals(_timerCts, timerCts))
             {
-                await Task.Delay(TimeSpan.FromMinutes(minutes), token);
-                if (!string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) await _uow.ISonosConnectorRepo.PausePlaying(PlaybackState.ActiveSpeakerIp);
+                await InvokeAsync(() =>
+                {
+                    if (!ReferenceEquals(_timerCts, timerCts)) return;
+                    _timerEndsUtc = null;
+                    _timerRoomName = null;
+                    _timerError = error;
+                    _timerCts = null;
+                    timerCts.Dispose();
+                    StateHasChanged();
+                });
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-            finally { await InvokeAsync(() => { _timerEndsUtc = null; StateHasChanged(); }); }
-        }, token);
+        }
     }
 
     private void CancelTimer()
     {
-        _timerCts?.Cancel();
-        _timerCts?.Dispose();
+        var timerCts = _timerCts;
         _timerCts = null;
         _timerEndsUtc = null;
+        _timerRoomName = null;
+        _timerError = null;
+        timerCts?.Cancel();
+        timerCts?.Dispose();
     }
 
     private void HandlePlaybackStateChanged() => _ = InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
+        _disposed = true;
         PlaybackState.StateChanged -= HandlePlaybackStateChanged;
         CancelTimer();
     }

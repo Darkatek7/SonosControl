@@ -138,11 +138,26 @@ public partial class IndexPage : IAsyncDisposable
     private static string GetWindowTimeRange(ScheduleWindow window)
         => $"{window.StartTime:HH\\:mm}-{window.StopTime:HH\\:mm}";
 
-    private string GetActiveAutomationDescription(ScheduleWindow? window, Scene? scene)
+    private string GetActiveAutomationDescription(AutomationRuntimeSnapshot runtime, ScheduleWindow? window, Scene? scene)
     {
+        if (runtime.HasError)
+        {
+            return runtime.FailureMessage ?? "Open Automation to review the scheduler error.";
+        }
+
+        if (runtime.Phase != AutomationRuntimePhase.Ready)
+        {
+            return "Waiting for the scheduler to prepare and check your schedules.";
+        }
+
+        if (!runtime.IsRunning)
+        {
+            return "The scheduler is ready. No automation is currently running; playback is under manual control.";
+        }
+
         if (window is null)
         {
-            return "No schedule window is active right now. Playback is under manual control.";
+            return "The scheduler reports this automation as running. Open Automation for details.";
         }
 
         var sceneName = scene?.Name ?? "No linked scene";
@@ -771,8 +786,11 @@ public partial class IndexPage : IAsyncDisposable
         _settings.IP_Adress = PlaybackState.ActiveSpeakerIp;
 
         PlaybackState.StateChanged += HandlePlaybackStateChanged;
+        RuntimeStatus.Changed += HandleRuntimeStatusChanged;
         _playbackStateSubscribed = true;
     }
+
+    private void HandleRuntimeStatusChanged() => _ = InvokeAsync(StateHasChanged);
 
     private void HandlePlaybackStateChanged()
     {
@@ -881,6 +899,7 @@ public partial class IndexPage : IAsyncDisposable
         if (_playbackStateSubscribed)
         {
             PlaybackState.StateChanged -= HandlePlaybackStateChanged;
+            RuntimeStatus.Changed -= HandleRuntimeStatusChanged;
             _playbackStateSubscribed = false;
         }
 

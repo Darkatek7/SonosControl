@@ -124,14 +124,19 @@
                         </button>
                         <div class="source-card__actions">
                             <button type="button" class="btn btn-primary" @onclick="() => PlaySourceAsync(source)" disabled="@(!_settings.Speakers.Any() || _busyKey == source.Key)" title="@(!_settings.Speakers.Any() ? "Set up a speaker first" : $"Play {source.Name}")" aria-label="@($"Play {source.Name}")">
-                                <Icon Name="play" Size="15" /> Play
+                                <Icon Name="play" Size="15" /> <span class="source-card__play-label">Play</span>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" @onclick="() => OpenEditDialog(source)" aria-label="@($"Edit {source.Name}")">
-                                <Icon Name="edit" Size="15" />
-                            </button>
-                            <button type="button" class="btn btn-outline-danger" @onclick="() => OpenDeleteDialog(source)" aria-label="@($"Delete {source.Name}")">
-                                <Icon Name="trash" Size="15" />
-                            </button>
+                            <details class="source-card__more">
+                                <summary role="button" aria-label="@($"More actions for {source.Name}")" title="More actions"><Icon Name="menu" Size="17" /></summary>
+                                <div class="source-card__menu" role="group" aria-label="@($"Actions for {source.Name}")">
+                                    <button type="button" class="btn btn-outline-secondary" @onclick="() => OpenEditDialog(source)" aria-label="@($"Edit {source.Name}")">
+                                        <Icon Name="edit" Size="15" /> Edit
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" @onclick="() => OpenDeleteDialog(source)" aria-label="@($"Delete {source.Name}")">
+                                        <Icon Name="trash" Size="15" /> Delete
+                                    </button>
+                                </div>
+                            </details>
                         </div>
                     </article>
                 }
