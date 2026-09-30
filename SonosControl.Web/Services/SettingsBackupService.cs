@@ -261,6 +261,7 @@ public sealed class SettingsBackupService : ISettingsBackupService
         settings.HolidaySchedules ??= new();
         settings.Scenes ??= new();
         settings.ScheduleWindows ??= new();
+        settings.NormalizeAutomationDateExceptions();
         settings.AutomationRules ??= new();
         settings.QueueSnapshots ??= new();
         settings.DeviceHealthStatuses ??= new();

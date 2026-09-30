@@ -82,9 +82,9 @@ public class ListeningInsightsTests
         };
         var insights = ListeningInsights.Create([
             radio,
-            Playback(start, 600, "YouTube Music", "One song"),
-            Playback(start, 600, "YouTubeMusic", "Other song"),
-            Playback(start, 600, "Stream", "Playing Stream")
+            Playback(start.AddHours(1), 600, "YouTube Music", "One song"),
+            Playback(start.AddHours(2), 600, "YouTubeMusic", "Other song"),
+            Playback(start.AddHours(3), 600, "Stream", "Playing Stream")
         ], settings, Vienna, now, 7);
 
         Assert.Equal(3600, insights.Sources.Single(source => source.Name == "Radio").Seconds);
@@ -92,6 +92,55 @@ public class ListeningInsightsTests
         Assert.Equal(600, insights.Sources.Single(source => source.Name == "Other streams").Seconds);
         Assert.Equal("Demo Radio", Assert.Single(insights.Stations).Name);
         Assert.Equal(2, insights.Tracks.Count);
+    }
+
+    [Fact]
+    public void TwoSpeakersWithOverlappingHistory_CannotExceed48HoursOnANormalDay()
+    {
+        var start = Utc(2026, 9, 16, 22); // Midnight on 17 September in Vienna.
+        var kitchen = Playback(start, 24 * 3600);
+        var duplicate = Playback(start.AddHours(10), 12 * 3600 + 49 * 60);
+        duplicate.Id = 2;
+        var office = Playback(start, 24 * 3600);
+        office.SpeakerName = "Office";
+        var insights = Create([kitchen, duplicate, office], Utc(2026, 9, 18, 12));
+
+        Assert.Equal(48 * 3600, insights.TotalSeconds);
+        Assert.Equal(48 * 3600, insights.PeakDay?.Seconds);
+        Assert.Equal(12 * 3600 + 49 * 60, insights.ExcludedOverlapSeconds);
+        Assert.All(insights.Rooms, room => Assert.Equal(24 * 3600, room.Seconds));
+        Assert.Equal(insights.TotalSeconds, insights.Sources.Sum(source => source.Seconds));
+        Assert.Equal(insights.TotalSeconds, insights.Tracks.Sum(track => track.Seconds));
+    }
+
+    [Fact]
+    public void OverlapUsesLatestMedia_AndRetainsEarlierNonOverlappingParts()
+    {
+        var start = Utc(2026, 9, 29, 8);
+        var first = Playback(start, 3 * 3600, "Spotify", "First song");
+        var second = Playback(start.AddHours(1), 3600, "Station", "Radio");
+        var duplicate = Playback(second.StartTime, 3600, "Station", "Radio");
+        duplicate.SpeakerName = " kitchen ";
+        var insights = Create([duplicate, first, second], Utc(2026, 9, 30, 12));
+
+        Assert.Equal(3 * 3600, insights.TotalSeconds);
+        Assert.Equal(2 * 3600, insights.ExcludedOverlapSeconds);
+        Assert.Equal(2 * 3600, insights.Sources.Single(source => source.Name == "Spotify").Seconds);
+        Assert.Equal(3600, insights.Sources.Single(source => source.Name == "Radio").Seconds);
+        Assert.Single(insights.Rooms);
+    }
+
+    [Fact]
+    public void SavedEndTimeBoundsDuration_AndGapsBetweenRecordsStayEmpty()
+    {
+        var start = Utc(2026, 9, 29, 8);
+        var first = Playback(start, 12 * 3600);
+        first.EndTime = start.AddMinutes(30);
+        var second = Playback(start.AddHours(3), 3600);
+        var insights = Create([first, second], Utc(2026, 9, 30, 12));
+
+        Assert.Equal(5400, insights.TotalSeconds);
+        Assert.Equal(0, insights.ExcludedOverlapSeconds);
     }
 
     [Fact]

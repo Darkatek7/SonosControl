@@ -64,19 +64,15 @@ public class SettingsRepoTests
             {
                 await repo.WriteSettings(new SonosSettings
                 {
-                    ScheduleWindows = [new ScheduleWindow
-                    {
-                        ExcludedDates = [new DateOnly(2026, 12, 24)],
-                        AnnualExcludedDates = [new DateOnly(2026, 12, 25)]
-                    }]
+                    AutomationExcludedDates = [new DateOnly(2026, 12, 24)],
+                    AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)]
                 });
             }
 
             using var reader = new SettingsRepo(tempDir);
             var settings = await reader.GetSettings();
-            var window = Assert.Single(settings!.ScheduleWindows);
-            Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(window.ExcludedDates));
-            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(window.AnnualExcludedDates));
+            Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(settings!.AutomationExcludedDates));
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.AnnualAutomationExcludedDates));
         }
         finally
         {
@@ -97,9 +93,37 @@ public class SettingsRepoTests
 
             var settings = await repo.GetSettings();
             var window = Assert.Single(settings!.ScheduleWindows);
-            Assert.Empty(window.AnnualExcludedDates);
-            Assert.True(window.ExcludesDate(new DateOnly(2026, 12, 25)));
-            Assert.False(window.ExcludesDate(new DateOnly(2027, 12, 25)));
+            Assert.Empty(window.ExcludedDates);
+            Assert.Empty(settings.AnnualAutomationExcludedDates);
+            Assert.True(settings.ExcludesAutomationDate(new DateOnly(2026, 12, 25)));
+            Assert.False(settings.ExcludesAutomationDate(new DateOnly(2027, 12, 25)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task GetSettings_PromotesLegacyAnnualExceptions_AndRemovalSurvivesReload()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "config.json"),
+                """{"SettingsSchemaVersion":2,"ScheduleWindows":[{"AnnualExcludedDates":["2026-12-25"]}]}""");
+            using var repo = new SettingsRepo(tempDir);
+            var settings = await repo.GetSettings();
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings!.AnnualAutomationExcludedDates));
+            Assert.Empty(settings.ScheduleWindows[0].AnnualExcludedDates);
+            settings.AnnualAutomationExcludedDates.Clear();
+
+            await repo.WriteSettings(settings);
+            using var reader = new SettingsRepo(tempDir);
+            var reloaded = await reader.GetSettings();
+            Assert.Empty(reloaded!.AnnualAutomationExcludedDates);
+            Assert.Empty(reloaded.ScheduleWindows[0].AnnualExcludedDates);
         }
         finally
         {

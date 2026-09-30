@@ -83,7 +83,7 @@ public class SettingsSchemaMigrationServiceTests
     }
 
     [Fact]
-    public async Task Migration_ConvertsPlayableAndSkippedHolidays_WithoutBlockingExistingWindows()
+    public async Task Migration_ConvertsPlayableOverrides_AndMakesSkippedHolidaysGlobal()
     {
         var settings = LegacySettings();
         settings.ActiveDays = [DayOfWeek.Monday];
@@ -127,7 +127,9 @@ public class SettingsSchemaMigrationServiceTests
 
         var baseline = windows.Single(window => window.Priority == 1000);
         Assert.Contains(new DateOnly(2026, 7, 20), baseline.ExcludedDates);
-        Assert.Contains(new DateOnly(2026, 7, 27), baseline.ExcludedDates);
+        Assert.DoesNotContain(new DateOnly(2026, 7, 27), baseline.ExcludedDates);
+        Assert.Contains(new DateOnly(2026, 7, 27), repository.Current.AutomationExcludedDates);
+        Assert.DoesNotContain(new DateOnly(2026, 7, 20), repository.Current.AutomationExcludedDates);
 
         var migratedExisting = windows.Where(window => window.Id is "earlier" or "later").OrderBy(window => window.Priority).ToList();
         Assert.Equal(["earlier", "later"], migratedExisting.Select(window => window.Id).ToArray());

@@ -485,6 +485,7 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             warnings.Add($"Schedule '{window.Name}' is disabled at runtime because it has no valid scene.");
         }
 
+        settings.NormalizeAutomationDateExceptions();
         return warnings.Distinct(StringComparer.Ordinal).ToList();
     }
 

@@ -20,8 +20,10 @@ namespace SonosControl.Web.Services
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<PlaybackMonitorService> _logger;
         private readonly IMetricsCollector _metricsCollector;
+        private readonly TimeProvider _timeProvider;
         private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan DurationPersistInterval = TimeSpan.FromSeconds(60);
+        private static readonly TimeSpan MaxObservationGap = TimeSpan.FromMinutes(2);
 
         // Maps Speaker IP -> Active PlaybackHistory ID
         private readonly ConcurrentDictionary<string, int> _activeSessions = new();
@@ -29,15 +31,18 @@ namespace SonosControl.Web.Services
         // Maps Speaker IP -> Last known media signature (to detect track changes)
         private readonly ConcurrentDictionary<string, string> _lastMediaSignature = new();
         private readonly ConcurrentDictionary<string, DateTime> _lastDurationPersistUtc = new();
+        private readonly ConcurrentDictionary<string, DateTime> _lastObservedPlayingUtc = new();
 
         public PlaybackMonitorService(
             IServiceScopeFactory scopeFactory,
             ILogger<PlaybackMonitorService> logger,
-            IMetricsCollector metricsCollector)
+            IMetricsCollector metricsCollector,
+            TimeProvider? timeProvider = null)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
             _metricsCollector = metricsCollector;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -61,7 +66,7 @@ namespace SonosControl.Web.Services
 
         private async Task MonitorPlayback(CancellationToken token)
         {
-            var cycleStartedUtc = DateTime.UtcNow;
+            var cycleStartedUtc = _timeProvider.GetUtcNow().UtcDateTime;
             var speakersProcessed = 0;
             var sessionWrites = 0;
 
@@ -72,29 +77,43 @@ namespace SonosControl.Web.Services
             try
             {
                 var settings = await uow.ISettingsRepo.GetSettings();
-                if (settings?.Speakers == null || !settings.Speakers.Any())
+                var speakers = (settings?.Speakers ?? new List<SonosSpeaker>())
+                    .Where(speaker => !string.IsNullOrWhiteSpace(speaker.IpAddress))
+                    .DistinctBy(speaker => speaker.IpAddress.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var configuredIps = speakers.Select(speaker => speaker.IpAddress.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var ip in _activeSessions.Keys.Where(ip => !configuredIps.Contains(ip)))
                 {
-                    return;
+                    // A removed speaker has no observations after its last successful poll.
+                    var lastObserved = _lastObservedPlayingUtc.GetValueOrDefault(ip, cycleStartedUtc);
+                    sessionWrites += await CloseSessionIfExists(ip, db, lastObserved, token);
                 }
 
-                var knownStations = BuildKnownStationLookup(settings);
-                var nowUtc = DateTime.UtcNow;
+                var knownStations = BuildKnownStationLookup(settings ?? new SonosSettings());
 
-                foreach (var speaker in settings.Speakers)
+                foreach (var speaker in speakers)
                 {
                     token.ThrowIfCancellationRequested();
+                    var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
                     sessionWrites += await ProcessSpeaker(speaker, uow, db, knownStations, nowUtc, token);
                     speakersProcessed++;
                 }
 
-                if (db.ChangeTracker.HasChanges())
-                {
-                    await db.SaveChangesAsync(token);
-                }
             }
             finally
             {
-                _metricsCollector.RecordPlaybackMonitorCycle(DateTime.UtcNow - cycleStartedUtc, speakersProcessed, sessionWrites);
+                try
+                {
+                    // Preserve closed sessions even if a later device query fails.
+                    if (db.ChangeTracker.HasChanges())
+                    {
+                        await db.SaveChangesAsync(token);
+                    }
+                }
+                finally
+                {
+                    _metricsCollector.RecordPlaybackMonitorCycle(_timeProvider.GetUtcNow().UtcDateTime - cycleStartedUtc, speakersProcessed, sessionWrites);
+                }
             }
         }
 
@@ -106,12 +125,18 @@ namespace SonosControl.Web.Services
             DateTime nowUtc,
             CancellationToken token)
         {
-            var ip = speaker.IpAddress;
+            var ip = speaker.IpAddress.Trim();
+            var gapWrites = 0;
+            if (_lastObservedPlayingUtc.TryGetValue(ip, out var lastObserved) && nowUtc - lastObserved > MaxObservationGap)
+            {
+                // A laptop sleep, outage, or stalled poll must not become listening time.
+                gapWrites = await CloseSessionIfExists(ip, db, lastObserved, token);
+            }
             var isPlaying = await uow.ISonosConnectorRepo.IsPlaying(ip);
 
             if (!isPlaying)
             {
-                return await CloseSessionIfExists(ip, db, nowUtc, token);
+                return gapWrites + await CloseSessionIfExists(ip, db, nowUtc, token);
             }
 
             // Fetch info
@@ -131,7 +156,16 @@ namespace SonosControl.Web.Services
             var mediaType = "Unknown";
             var mediaSignature = string.Empty;
 
-            if (trackInfo != null && trackInfo.IsValidMetadata())
+            var matchedStation = MatchKnownStation(cleanStationUrl, knownStations);
+            if (!string.IsNullOrWhiteSpace(matchedStation))
+            {
+                // Radio can expose song metadata. Its source is still the radio station.
+                mediaType = "Station";
+                trackName = matchedStation;
+                artist = "Live Stream";
+                mediaSignature = $"{mediaType}|{trackName}|{cleanStationUrl}";
+            }
+            else if (trackInfo != null && trackInfo.IsValidMetadata())
             {
                 trackName = trackInfo.Title;
                 artist = trackInfo.Artist;
@@ -142,7 +176,7 @@ namespace SonosControl.Web.Services
                 else if (stationUrl.Contains("/api/youtube-audio/", StringComparison.OrdinalIgnoreCase)) mediaType = "YouTube";
                 else if (stationUrl.Contains("youtube", StringComparison.OrdinalIgnoreCase)) mediaType = "YouTube Music";
 
-                mediaSignature = $"{trackName}|{artist}|{album}";
+                mediaSignature = $"{mediaType}|{trackName}|{artist}|{album}|{cleanStationUrl}";
             }
             else
             {
@@ -164,22 +198,11 @@ namespace SonosControl.Web.Services
                 }
                 else
                 {
-                    // Try to match with known stations loaded once per cycle.
-                    var matchedStation = MatchKnownStation(cleanStationUrl, knownStations);
-                    if (!string.IsNullOrWhiteSpace(matchedStation))
-                    {
-                        mediaType = "Station";
-                        trackName = matchedStation;
-                        artist = "Live Stream";
-                    }
-                    else
-                    {
-                        mediaType = "Stream";
-                        trackName = "Playing Stream";
-                        artist = cleanStationUrl;
-                    }
+                    mediaType = "Stream";
+                    trackName = "Playing Stream";
+                    artist = cleanStationUrl;
                 }
-                mediaSignature = $"{mediaType}|{trackName}";
+                mediaSignature = $"{mediaType}|{trackName}|{cleanStationUrl}";
             }
 
             // Check if we have an active session
@@ -188,6 +211,7 @@ namespace SonosControl.Web.Services
                 // Check if track changed
                 if (_lastMediaSignature.TryGetValue(ip, out string? lastSig) && lastSig == mediaSignature)
                 {
+                    _lastObservedPlayingUtc[ip] = nowUtc;
                     // Same track, update duration with throttling to avoid write amplification.
                     if (ShouldPersistSessionDuration(ip, nowUtc))
                     {
@@ -196,8 +220,10 @@ namespace SonosControl.Web.Services
                         {
                             _lastDurationPersistUtc[ip] = nowUtc;
                             _metricsCollector.RecordPlaybackSessionWrite(skippedByThrottle: false);
-                            return 1;
+                            return gapWrites + 1;
                         }
+                        _activeSessions.TryRemove(ip, out _);
+                        return gapWrites + await StartNewSession(ip, speaker.Name, trackName, artist, album, mediaType, mediaSignature, nowUtc, db, token);
                     }
                     else
                     {
@@ -209,16 +235,16 @@ namespace SonosControl.Web.Services
                     // Track changed
                     var writes = await CloseSessionIfExists(ip, db, nowUtc, token);
                     writes += await StartNewSession(ip, speaker.Name, trackName, artist, album, mediaType, mediaSignature, nowUtc, db, token);
-                    return writes;
+                    return gapWrites + writes;
                 }
             }
             else
             {
                 // No active session, start new
-                return await StartNewSession(ip, speaker.Name, trackName, artist, album, mediaType, mediaSignature, nowUtc, db, token);
+                return gapWrites + await StartNewSession(ip, speaker.Name, trackName, artist, album, mediaType, mediaSignature, nowUtc, db, token);
             }
 
-            return 0;
+            return gapWrites;
         }
 
         private bool ShouldPersistSessionDuration(string ip, DateTime nowUtc)
@@ -261,6 +287,7 @@ namespace SonosControl.Web.Services
             _activeSessions[ip] = history.Id;
             _lastMediaSignature[ip] = signature;
             _lastDurationPersistUtc[ip] = nowUtc;
+            _lastObservedPlayingUtc[ip] = nowUtc;
             _metricsCollector.RecordPlaybackSessionWrite(skippedByThrottle: false);
 
             return 1;
@@ -288,6 +315,7 @@ namespace SonosControl.Web.Services
 
             _lastMediaSignature.TryRemove(ip, out _);
             _lastDurationPersistUtc.TryRemove(ip, out _);
+            _lastObservedPlayingUtc.TryRemove(ip, out _);
 
             var persisted = await UpdateSessionDuration(sessionId, db, nowUtc, token);
             if (persisted)

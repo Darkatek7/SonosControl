@@ -21,7 +21,7 @@
         </div>
         <div class="automation-health @Snapshot.StatusClass" role="status">
             <span class="automation-health__dot" aria-hidden="true"></span>
-            <span>@Snapshot.StatusLabel</span>
+            <span>@(DateExceptionActive ? "Date exception active" : Snapshot.StatusLabel)</span>
         </div>
     </header>
 
@@ -40,7 +40,7 @@
     }
 
     <section class="automation-live-strip" aria-label="Live automation status">
-        <div><span>Live now</span><strong>@(Snapshot.IsRunning ? Snapshot.ActiveScheduleName : Snapshot.StatusLabel)</strong></div>
+        <div><span>Live now</span><strong>@(DateExceptionActive ? "All schedules paused" : Snapshot.IsRunning ? Snapshot.ActiveScheduleName : Snapshot.StatusLabel)</strong></div>
         <div><span>Last checked</span><strong>@FormatEvaluationTime()</strong></div>
     </section>
 
@@ -66,29 +66,16 @@
             {
                 <div class="workspace-loading" role="status">Loading exceptions…</div>
             }
-            else if (_settings.ScheduleWindows.Count == 0)
-            {
-                <EmptyState IconName="calendar" Title="No schedules yet" Description="Create a schedule before adding a date exception." />
-            }
             else
             {
                 <header class="exception-panel__header">
                     <div>
                         <h2>Excluded dates</h2>
-                        <p>An excluded date skips only the selected schedule. Other matching schedules can still run. Yearly exceptions repeat on the same day and month.</p>
+                        <p>Excluded dates pause all schedules for the entire day. Yearly exceptions repeat on the same day and month, regardless of the weekday. Manual playback is still available.</p>
                     </div>
                 </header>
 
                 <div class="exception-editor">
-                    <div>
-                        <label for="exception-schedule" class="form-label">Schedule</label>
-                        <select id="exception-schedule" class="form-select" @bind="_selectedWindowId">
-                            @foreach (var window in OrderedWindows)
-                            {
-                                <option value="@window.Id">@window.Name</option>
-                            }
-                        </select>
-                    </div>
                     <div>
                         <label for="exception-date" class="form-label">Date (DD/MM/YYYY)</label>
                         <input id="exception-date" class="form-control" type="date" @bind="_newExceptionDate" disabled="@(!_canEditSchedules)" />
@@ -115,12 +102,11 @@
                     <div class="alert @(_exceptionError ? "alert-danger" : "alert-success")" role="status">@_exceptionStatus</div>
                 }
 
-                var selected = SelectedWindow;
-                @if (selected is not null && (selected.ExcludedDates.Count > 0 || selected.AnnualExcludedDates.Count > 0))
+                @if (_settings.AutomationExcludedDates.Count > 0 || _settings.AnnualAutomationExcludedDates.Count > 0)
                 {
                     <div class="exception-list" aria-label="Excluded dates">
-                        @foreach (var exception in selected.ExcludedDates.Select(date => (Date: date, IsAnnual: false))
-                            .Concat(selected.AnnualExcludedDates.Select(date => (Date: date, IsAnnual: true)))
+                        @foreach (var exception in _settings.AutomationExcludedDates.Select(date => (Date: date, IsAnnual: false))
+                            .Concat(_settings.AnnualAutomationExcludedDates.Select(date => (Date: date, IsAnnual: true)))
                             .OrderBy(item => item.Date.Month).ThenBy(item => item.Date.Day).ThenBy(item => item.Date.Year))
                         {
                             <article class="exception-card">
@@ -140,7 +126,7 @@
                 }
                 else
                 {
-                    <EmptyState IconName="calendar" Title="No excluded dates" Description="This schedule currently runs on every matching recurrence date." />
+                    <EmptyState IconName="calendar" Title="No excluded dates" Description="Automatic playback is allowed on every scheduled date. Add a date exception to keep holidays quiet." />
                 }
             }
         </section>
@@ -158,7 +144,6 @@
 
     private string _activeTab = "scenes";
     private SonosSettings? _settings;
-    private string? _selectedWindowId;
     private DateTime? _newExceptionDate;
     private enum ExceptionRecurrence { Once, Yearly }
     private ExceptionRecurrence _newExceptionRecurrence;
@@ -168,6 +153,8 @@
     private bool _canEditSchedules;
     private bool _redirectedAlias;
     private AutomationRuntimeSnapshot Snapshot => RuntimeStatus.Snapshot;
+    private bool DateExceptionActive => !Snapshot.HasError
+        && _settings?.ExcludesAutomationDate(DateOnly.FromDateTime(AppTimeZone.Now.DateTime)) == true;
     private static readonly IReadOnlyList<WorkspaceTabItem> AutomationTabs =
     [
         new("scenes", "Scenes"),
@@ -201,24 +188,14 @@
     private async Task LoadSettingsAsync()
     {
         _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        _settings.ScheduleWindows ??= new();
-        foreach (var window in _settings.ScheduleWindows)
-        {
-            window.ExcludedDates ??= new();
-            window.AnnualExcludedDates ??= new();
-        }
-        _selectedWindowId ??= OrderedWindows.FirstOrDefault()?.Id;
+        _settings.NormalizeAutomationDateExceptions();
     }
-
-    private IEnumerable<ScheduleWindow> OrderedWindows => _settings?.ScheduleWindows.OrderBy(window => window.Priority).ThenBy(window => window.Name) ?? Enumerable.Empty<ScheduleWindow>();
-    private ScheduleWindow? SelectedWindow => _settings?.ScheduleWindows.FirstOrDefault(window => window.Id == _selectedWindowId);
 
     private async Task AddExceptionAsync()
     {
-        var window = SelectedWindow;
-        if (!_canEditSchedules || window is null || !_newExceptionDate.HasValue || _settings is null) return;
+        if (!_canEditSchedules || !_newExceptionDate.HasValue || _settings is null) return;
         var date = DateOnly.FromDateTime(_newExceptionDate.Value);
-        var dates = NewExceptionIsAnnual ? window.AnnualExcludedDates : window.ExcludedDates;
+        var dates = NewExceptionIsAnnual ? _settings.AnnualAutomationExcludedDates : _settings.AutomationExcludedDates;
         if (dates.Any(existing => NewExceptionIsAnnual
             ? existing.Month == date.Month && existing.Day == date.Day
             : existing == date))
@@ -227,21 +204,18 @@
             return;
         }
         dates.Add(date);
-        window.LastModifiedUtc = DateTime.UtcNow;
         await _uow.ISettingsRepo.WriteSettings(_settings);
         _newExceptionDate = null;
         ShowExceptionStatus(NewExceptionIsAnnual
-            ? $"{FormatExceptionDate(date, true)} is excluded from {window.Name} every year."
-            : $"{FormatExceptionDate(date, false)} was excluded from {window.Name} once.");
+            ? $"{FormatExceptionDate(date, true)} pauses all schedules every year."
+            : $"{FormatExceptionDate(date, false)} pauses all schedules once.");
     }
 
     private async Task RemoveExceptionAsync(DateOnly date, bool isAnnual)
     {
-        var window = SelectedWindow;
-        if (!_canEditSchedules || window is null || _settings is null) return;
-        var dates = isAnnual ? window.AnnualExcludedDates : window.ExcludedDates;
+        if (!_canEditSchedules || _settings is null) return;
+        var dates = isAnnual ? _settings.AnnualAutomationExcludedDates : _settings.AutomationExcludedDates;
         dates.Remove(date);
-        window.LastModifiedUtc = DateTime.UtcNow;
         await _uow.ISettingsRepo.WriteSettings(_settings);
         ShowExceptionStatus(isAnnual
             ? $"The yearly exception for {FormatExceptionDate(date, true)} was removed."

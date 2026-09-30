@@ -150,6 +150,11 @@ public partial class IndexPage : IAsyncDisposable
             return "Waiting for the scheduler to prepare and check your schedules.";
         }
 
+        if (_settings?.ExcludesAutomationDate(DateOnly.FromDateTime(AppTimeZone.Now.DateTime)) == true)
+        {
+            return "All schedules are paused for today's date exception. Manual playback is available.";
+        }
+
         if (!runtime.IsRunning)
         {
             return "The scheduler is ready. No automation is currently running; playback is under manual control.";
@@ -234,7 +239,7 @@ public partial class IndexPage : IAsyncDisposable
                 continue;
             }
 
-            if (window.ExcludesDate(date))
+            if (_settings?.ExcludesAutomationDate(date) == true || window.ExcludesDate(date))
             {
                 continue;
             }

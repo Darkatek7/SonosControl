@@ -176,6 +176,65 @@ public class AutomationSchedulerServiceTests
             Times.Exactly(2));
     }
 
+    [Theory]
+    [InlineData(2026)]
+    [InlineData(2027)]
+    public async Task EvaluateNowAsync_GlobalHoliday_DoesNotApplyAnyScene(int year)
+    {
+        var time = new ManualTimeProvider(new DateTimeOffset(year, 12, 25, 10, 0, 0, TimeSpan.Zero));
+        var settings = Settings(
+            Window("weekday", "scene-a", new TimeOnly(9, 0), new TimeOnly(12, 0), 10),
+            Window("fallback", "scene-b", new TimeOnly(9, 0), new TimeOnly(12, 0), 20));
+        settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
+        var repo = new Mock<ISettingsRepo>();
+        repo.Setup(value => value.GetSettings()).ReturnsAsync(settings);
+        var scenes = new Mock<ISceneOrchestrationService>();
+        var connector = new Mock<ISonosConnectorRepo>();
+        using var fixture = CreateScheduler(repo.Object, connector.Object, scenes.Object, time);
+
+        await fixture.Service.EvaluateNowAsync();
+
+        scenes.Verify(service => service.ApplySceneByIdAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(service => service.PausePlaying(It.IsAny<string>()), Times.Never);
+        Assert.Null(fixture.Status.Snapshot.ActiveScheduleName);
+    }
+
+    [Fact]
+    public async Task EvaluateNowAsync_GlobalHoliday_StopsOvernightPlaybackAtLocalMidnightAndResumesNextDay()
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Vienna");
+        // 22:30 UTC is 23:30 in Vienna on Christmas Eve.
+        var time = new ManualTimeProvider(new DateTimeOffset(2027, 12, 24, 22, 30, 0, TimeSpan.Zero));
+        var overnight = Window("overnight", "scene-a", new TimeOnly(22, 0), new TimeOnly(2, 0), 10);
+        overnight.FadeOutSeconds = 30;
+        var settings = Settings(overnight);
+        settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
+        var repo = new Mock<ISettingsRepo>();
+        repo.Setup(value => value.GetSettings()).ReturnsAsync(settings);
+        var connector = new Mock<ISonosConnectorRepo>();
+        connector.Setup(value => value.PausePlaying("10.0.0.1")).Returns(Task.CompletedTask);
+        var scenes = new Mock<ISceneOrchestrationService>();
+        scenes.Setup(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
+        using var fixture = CreateScheduler(repo.Object, connector.Object, scenes.Object, time, timeZone: timeZone);
+
+        await fixture.Service.EvaluateNowAsync();
+        Assert.Equal("overnight", fixture.Status.Snapshot.ActiveScheduleName);
+
+        // Christmas begins locally, while it is still December 24 in UTC.
+        time.SetUtcNow(new DateTimeOffset(2027, 12, 24, 23, 0, 0, TimeSpan.Zero));
+        await fixture.Service.EvaluateNowAsync();
+        await fixture.Service.EvaluateNowAsync();
+        connector.Verify(value => value.PausePlaying("10.0.0.1"), Times.Once);
+        connector.Verify(value => value.SetSpeakerVolume(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Null(fixture.Status.Snapshot.ActiveScheduleName);
+
+        time.SetUtcNow(new DateTimeOffset(2027, 12, 26, 22, 0, 0, TimeSpan.Zero));
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Exactly(2));
+        Assert.Equal("overnight", fixture.Status.Snapshot.ActiveScheduleName);
+    }
+
     private static SchedulerFixture CreateScheduler(
         ISettingsRepo settingsRepo,
         ISonosConnectorRepo connector,
