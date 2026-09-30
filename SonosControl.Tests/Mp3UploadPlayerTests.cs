@@ -18,7 +18,7 @@ public sealed class Mp3UploadPlayerTests : IDisposable
     [InlineData(true)]
     public void UploadAndPlay_UsesSelectedSpeaker_AndDeletesUploadWhenPlaybackFails(bool failPlayback)
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var uploads = Mp3UploadServiceTests.CreateService(_root);
         ctx.Services.AddSingleton(uploads);
         var connector = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
@@ -27,7 +27,7 @@ public sealed class Mp3UploadPlayerTests : IDisposable
         var uow = new Mock<IUnitOfWork>();
         uow.SetupGet(u => u.ISonosConnectorRepo).Returns(connector.Object);
         ctx.Services.AddSingleton(uow.Object);
-        var cut = ctx.RenderComponent<Mp3UploadPlayer>(p => p
+        var cut = ctx.Render<Mp3UploadPlayer>(p => p
             .Add(c => c.Speakers, new[]
             {
                 new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.1" },
@@ -50,10 +50,10 @@ public sealed class Mp3UploadPlayerTests : IDisposable
     [Fact]
     public void Upload_RejectsWrongExtension_AndHasAccessibleControls()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.Services.AddSingleton(Mp3UploadServiceTests.CreateService(_root));
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
-        var cut = ctx.RenderComponent<Mp3UploadPlayer>();
+        var cut = ctx.Render<Mp3UploadPlayer>();
         foreach (var id in new[] { "mp3-file", "mp3-speaker", "mp3-retention" })
         {
             Assert.NotNull(cut.Find($"label[for='{id}']"));

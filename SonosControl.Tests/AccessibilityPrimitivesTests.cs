@@ -15,7 +15,7 @@ public class AccessibilityPrimitivesTests
     [Fact]
     public void WorkspaceTabs_ExposeTabSemanticsAndRovingTabIndex()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
         var selected = string.Empty;
@@ -26,7 +26,7 @@ public class AccessibilityPrimitivesTests
             new("library", "Library")
         ];
 
-        var cut = ctx.RenderComponent<WorkspaceTabs>(parameters => parameters
+        var cut = ctx.Render<WorkspaceTabs>(parameters => parameters
             .Add(component => component.Items, items)
             .Add(component => component.ActiveKey, "now")
             .Add(component => component.IdPrefix, "quality")
@@ -54,12 +54,12 @@ public class AccessibilityPrimitivesTests
     [Fact]
     public void AccessibleDialog_HasNameFocusTrapAndEscapeClose()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
         var closed = false;
 
-        var cut = ctx.RenderComponent<AccessibleDialog>(parameters => parameters
+        var cut = ctx.Render<AccessibleDialog>(parameters => parameters
             .Add(component => component.Visible, true)
             .Add(component => component.Title, "Edit source")
             .Add(component => component.CloseLabel, "Close source editor")
@@ -89,10 +89,10 @@ public class AccessibilityPrimitivesTests
     [Fact]
     public void EmptyState_DefaultsToH2AndHidesDecorativeIcon()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
 
-        var cut = ctx.RenderComponent<EmptyState>(parameters => parameters
+        var cut = ctx.Render<EmptyState>(parameters => parameters
             .Add(component => component.Title, "Nothing queued")
             .Add(component => component.IconName, "queue"));
 

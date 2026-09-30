@@ -19,14 +19,14 @@ public class NowPlayingHeroTests
     [Fact]
     public async Task Hero_RendersAlbumArtLiveStateAndAccessibleControls()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         var connectorRepo = ConfigureServices(
             ctx,
             isPlaying: true,
             albumArtUrl: "https://images.example.test/midnight-city.jpg");
         await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
 
-        var cut = ctx.RenderComponent<NowPlayingHero>();
+        var cut = ctx.Render<NowPlayingHero>();
 
         Assert.Contains("np-hero--has-art", cut.Find("[data-qa='now-playing-hero']").ClassList);
         Assert.Single(cut.FindAll(".np-hero img"));
@@ -47,11 +47,11 @@ public class NowPlayingHeroTests
     [Fact]
     public async Task Hero_UsesDecorativeFallbackWhenArtworkIsUnavailable()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureServices(ctx, isPlaying: false, albumArtUrl: null);
         await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
 
-        var cut = ctx.RenderComponent<NowPlayingHero>();
+        var cut = ctx.Render<NowPlayingHero>();
 
         Assert.Contains("np-hero--no-art", cut.Find("[data-qa='now-playing-hero']").ClassList);
         Assert.Empty(cut.FindAll(".np-hero img"));
@@ -69,22 +69,22 @@ public class NowPlayingHeroTests
     [Fact]
     public async Task Hero_SpinsFallbackWhilePlaybackIsActive()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         ConfigureServices(ctx, isPlaying: true, albumArtUrl: null);
         await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
 
-        var cut = ctx.RenderComponent<NowPlayingHero>();
+        var cut = ctx.Render<NowPlayingHero>();
 
         Assert.Contains("is-spinning", cut.Find(".np-hero__record").ClassList);
         Assert.Equal("Pause playback", cut.Find("[data-qa='home-player-toggle']").GetAttribute("aria-label"));
     }
 
     private static Mock<ISonosConnectorRepo> ConfigureServices(
-        TestContext ctx,
+        BunitContext ctx,
         bool isPlaying,
         string? albumArtUrl)
     {
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 

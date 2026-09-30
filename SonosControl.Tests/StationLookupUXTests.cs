@@ -20,10 +20,10 @@ public class StationLookupUXTests
     [Fact]
     public void StationLookup_HasAccessibleSearchInput()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         using var resources = ConfigureServices(ctx);
 
-        var cut = ctx.RenderComponent<StationLookup>();
+        var cut = ctx.Render<StationLookup>();
 
         // Check for label
         var label = cut.Find("label[for='stationSearch']");
@@ -51,9 +51,9 @@ public class StationLookupUXTests
         }
     }
 
-    private static TestResources ConfigureServices(TestContext ctx)
+    private static TestResources ConfigureServices(BunitContext ctx)
     {
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
         auth.SetRoles("admin");
 
@@ -83,10 +83,10 @@ public class StationLookupUXTests
     [Fact]
     public void StationLookup_ClearButton_Interaction()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
         using var resources = ConfigureServices(ctx);
 
-        var cut = ctx.RenderComponent<StationLookup>();
+        var cut = ctx.Render<StationLookup>();
 
         // Initially no clear button
         var clearBtnBefore = cut.FindAll(".lookup-clear-button");

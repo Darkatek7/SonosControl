@@ -15,8 +15,8 @@ public class UserEditTests
     [Fact]
     public void Account_MissingResolvedUserStopsWithVisibleRecoveryAction()
     {
-        using var ctx = new TestContext();
-        var auth = ctx.AddTestAuthorization();
+        using var ctx = new BunitContext();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("missing-user");
         auth.SetRoles("operator");
         ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
@@ -36,7 +36,7 @@ public class UserEditTests
             .ReturnsAsync((ApplicationUser?)null);
         ctx.Services.AddSingleton(userManager.Object);
 
-        var cut = ctx.RenderComponent<UserEdit>();
+        var cut = ctx.Render<UserEdit>();
 
         cut.WaitForAssertion(() =>
         {

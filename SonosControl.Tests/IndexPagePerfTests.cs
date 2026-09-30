@@ -21,7 +21,7 @@ using SonosControl.Web.Models;
 
 namespace SonosControl.Tests
 {
-    public class IndexPagePerfTests : TestContext
+    public class IndexPagePerfTests : BunitContext
     {
         private Mock<IUnitOfWork> _mockUow;
         private Mock<ISonosConnectorRepo> _mockSonosRepo;
@@ -104,7 +104,7 @@ namespace SonosControl.Tests
             _mockSonosRepo.Setup(s => s.StartPlaying(It.IsAny<string>()))
                 .Returns(async () => await Task.Delay(delayTime));
 
-            var cut = RenderComponent<GlobalPlayerBar>();
+            var cut = Render<GlobalPlayerBar>();
 
             // Wait for OnInitializedAsync
             cut.WaitForState(() => cut.Instance != null);

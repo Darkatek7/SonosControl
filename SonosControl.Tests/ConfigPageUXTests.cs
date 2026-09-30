@@ -19,12 +19,12 @@ public class ConfigPageUXTests
     [Fact]
     public void ConfigPage_WebhookInputs_HaveAccessibilityAttributes()
     {
-        using var ctx = new TestContext();
+        using var ctx = new BunitContext();
 
         // --- Setup Dependencies ---
 
         // Auth
-        var auth = ctx.AddTestAuthorization();
+        var auth = ctx.AddAuthorization();
         auth.SetAuthorized("admin");
         auth.SetRoles("admin");
 
@@ -57,7 +57,7 @@ public class ConfigPageUXTests
         ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
 
         // --- Render ---
-        var cut = ctx.RenderComponent<ConfigPage>();
+        var cut = ctx.Render<ConfigPage>();
 
         // --- Verify Discord Webhook UX ---
 

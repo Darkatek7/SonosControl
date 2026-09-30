@@ -53,12 +53,12 @@ public class RecommendationsControllerTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var payload = Assert.IsType<RecommendationsController.RecommendationResponse>(ok.Value);
 
-        var timeItem = Assert.Single(payload.TimeOfDayRecommendations.Where(x => x.Name == "Antenne Vorarlberg"));
+        var timeItem = Assert.Single(payload.TimeOfDayRecommendations, x => x.Name == "Antenne Vorarlberg");
         Assert.Equal("Station", timeItem.MediaType);
         Assert.Equal(2, timeItem.PlayCount);
         Assert.Equal(300d, timeItem.Score, 3);
 
-        var teamItem = Assert.Single(payload.TeamTrending.Where(x => x.Name == "Antenne Vorarlberg"));
+        var teamItem = Assert.Single(payload.TeamTrending, x => x.Name == "Antenne Vorarlberg");
         Assert.Equal("Station", teamItem.MediaType);
         Assert.Equal(2, teamItem.PlayCount);
         Assert.Equal(300d, teamItem.Score, 3);
