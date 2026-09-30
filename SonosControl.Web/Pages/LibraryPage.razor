@@ -70,6 +70,7 @@
         }
         else
         {
+        var hasSavedSources = AllSources.Any();
         <section class="library-tools" aria-label="Filter saved sources">
             <label class="library-search-field" for="library-page-search">
                 <Icon Name="search" Size="16" />
@@ -89,9 +90,17 @@
         </section>
 
         var sources = FilteredSources.ToList();
-        @if (sources.Count == 0)
+        @if (!hasSavedSources)
         {
-            <EmptyState IconName="music" Title="No saved sources found" Description="Add a source or change the current filters." />
+            <EmptyState IconName="music" Title="No saved sources yet" Description="Add your first source to start building your library.">
+                <button type="button" class="btn btn-primary" @onclick="OpenCreateDialog"><Icon Name="plus" Size="16" /> Add source</button>
+            </EmptyState>
+        }
+        else if (sources.Count == 0)
+        {
+            <EmptyState IconName="music" Title="No matching sources" Description="Try a different search or reset the filters to see all saved sources.">
+                <button type="button" class="btn btn-outline-primary" @onclick="ResetFilters">Reset filters</button>
+            </EmptyState>
         }
         else
         {
@@ -259,6 +268,12 @@
 
     private void SelectTab(string tab) => Navigation.NavigateTo($"/library?tab={tab}");
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
+
+    private void ResetFilters()
+    {
+        _search = string.Empty;
+        _typeFilter = "all";
+    }
 
     private async Task LoadSettingsAsync()
     {

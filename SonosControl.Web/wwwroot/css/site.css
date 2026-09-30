@@ -1458,7 +1458,10 @@ h3[tabindex="-1"]:focus {
 
 @media (max-width: 575.98px) {
     .workspace-page { padding-top: 0.8rem; padding-bottom: 6.5rem; }
-    .workspace-header { align-items: stretch; flex-direction: column; }
+    .workspace-header { align-items: stretch; flex-direction: column; gap: 0.65rem; margin-bottom: 0.75rem; }
+    .workspace-header h1 { margin: 0; }
+    .workspace-header p { font-size: 0.8rem; line-height: 1.35; }
+    .workspace-header .workspace-eyebrow { display: none; }
     .workspace-primary-action { width: 100%; }
     .app-dialog-backdrop { align-items: end; padding: 0; }
     .app-dialog { width: 100%; max-width: none; max-height: 100dvh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 1.2rem 1.2rem 0 0; }
@@ -1479,7 +1482,7 @@ h3[tabindex="-1"]:focus {
     }
     .player-surface--compact .global-player-bar__art { width: 2.8rem; height: 2.8rem; }
     .player-surface--compact .global-player-bar__eyebrow,
-    .player-surface--compact .global-player-bar__meta > span:last-child { display: none; }
+    .player-surface--compact .global-player-bar__source { display: none; }
     .player-surface--compact .global-player-bar__center { gap: 0.2rem; }
     .player-surface--compact .global-player-bar__center .global-player-bar__control:first-child,
     .player-surface--compact .global-player-bar__room { display: none; }
@@ -1956,6 +1959,10 @@ h3[tabindex="-1"]:focus {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.global-player-bar__meta .global-player-bar__active-room {
+    display: none;
 }
 
 .global-player-bar__meta strong {
@@ -3471,10 +3478,14 @@ html:not([data-theme='dark']) .auth-brand-panel {
     }
 
     .player-surface--compact .global-player-bar__eyebrow,
-    .player-surface--compact .global-player-bar__meta > span:last-child,
+    .player-surface--compact .global-player-bar__source,
     .player-surface--compact .global-player-bar__room,
     .player-surface--compact .global-player-bar__center .global-player-bar__control:first-child {
         display: none;
+    }
+
+    .player-surface--compact .global-player-bar__meta .global-player-bar__active-room {
+        display: block;
     }
 
     .player-surface--compact .global-player-bar__center {

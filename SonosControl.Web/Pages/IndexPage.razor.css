@@ -783,11 +783,40 @@
     }
 }
 
-@media (max-width: 420px) {
-    .home-intro h1 {
-        font-size: 1.55rem;
+@media (max-width: 575.98px) {
+    .home-stage {
+        padding: 0;
+        gap: var(--spacing-sm);
     }
 
+    .home-intro {
+        gap: var(--spacing-xs);
+    }
+
+    .home-intro__copy .home-eyebrow,
+    .home-intro__sub {
+        display: none;
+    }
+
+    .home-intro__status {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--spacing-xs) var(--spacing-sm);
+    }
+
+    .home-status-pill {
+        min-height: 1.5rem;
+        padding-inline: var(--spacing-sm);
+    }
+
+    .home-intro h1 {
+        font-size: 1.55rem;
+        margin: 0;
+    }
+}
+
+@media (max-width: 420px) {
     .rooms-section__head,
     .library__head {
         align-items: flex-start;
