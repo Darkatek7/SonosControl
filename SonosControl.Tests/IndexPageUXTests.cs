@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Bunit;
 using Bunit.TestDoubles;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -127,7 +128,7 @@ public class IndexPageUXTests
         {
             IP_Adress = string.Empty,
             Speakers = new List<SonosSpeaker>(),
-            Stations = new List<TuneInStation>(),
+            Stations = [new TuneInStation { Name = "Setup Radio", Url = "https://radio.example.test/setup" }],
             SpotifyTracks = new List<SpotifyObject>(),
             YouTubeCollections = new List<YouTubeObject>(),
             YouTubeMusicCollections = new List<YouTubeMusicObject>()
@@ -147,6 +148,15 @@ public class IndexPageUXTests
             Assert.Empty(cut.FindAll("[data-qa='room-card']"));
             Assert.Contains("No rooms configured", cut.Markup);
             Assert.Single(cut.FindAll("a[href='/administration/devices']"));
+            Assert.Contains("home-primary-grid--empty", cut.Find(".home-primary-grid").ClassList);
+            Assert.NotNull(cut.Find("button[aria-label='Play Setup Radio']").GetAttribute("disabled"));
+        });
+
+        var library = ctx.RenderComponent<LibraryPage>();
+        library.WaitForAssertion(() =>
+        {
+            Assert.Contains("Set up a speaker first", library.Find(".library-setup-notice").TextContent);
+            Assert.NotNull(library.Find("button[aria-label='Play Setup Radio']").GetAttribute("disabled"));
         });
     }
 
@@ -325,6 +335,33 @@ public class IndexPageUXTests
             Assert.Single(cut.FindAll(".app-dialog[role='dialog']"));
             Assert.NotNull(cut.Find("#source-type"));
             Assert.Equal(4, cut.FindAll("#source-type option").Count);
+        });
+    }
+
+    [Fact]
+    public void LibraryPage_Mp3Upload_HasDedicatedTabAndQueryRoute()
+    {
+        using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
+        var cut = ctx.RenderComponent<LibraryPage>();
+        Assert.Empty(cut.FindAll("#mp3-file"));
+        cut.Find("#library-tab-mp3").Click();
+        Assert.EndsWith("/library?tab=mp3", ctx.Services.GetRequiredService<NavigationManager>().Uri);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("true", cut.Find("#library-tab-mp3").GetAttribute("aria-selected"));
+            Assert.NotNull(cut.Find("#library-panel-mp3 #mp3-file"));
+            Assert.Empty(cut.FindAll("#library-page-search"));
+            Assert.Empty(cut.FindAll("button.workspace-primary-action"));
+        });
+
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/library?tab=saved");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("#mp3-file"));
+            Assert.NotNull(cut.Find("#library-page-search"));
         });
     }
 
@@ -682,6 +719,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton<ApplicationDbContext>(dbContext);
         ctx.Services.AddScoped<UserFavouriteSourceService>();
         ctx.Services.AddScoped<HomeLibraryService>();
+        ctx.Services.AddSingleton(Mp3UploadServiceTests.CreateService(Path.GetTempPath()));
 
         var settings = settingsOverride ?? new SonosSettings
         {

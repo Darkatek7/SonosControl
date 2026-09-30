@@ -131,6 +131,10 @@
     min-width: 0;
 }
 
+.home-primary-grid--empty {
+    align-items: start;
+}
+
 .home-panel {
     background: var(--surface-1);
     border: 1px solid var(--border-subtle);
@@ -410,6 +414,13 @@
     background: color-mix(in srgb, var(--brand-primary) 12%, var(--surface-2));
     border: 1px solid color-mix(in srgb, var(--brand-primary) 16%, var(--border-subtle));
     border-radius: var(--radius-xl);
+}
+
+.home-empty--rooms {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: var(--spacing-md);
+    gap: var(--spacing-sm);
 }
 
 .home-empty strong,

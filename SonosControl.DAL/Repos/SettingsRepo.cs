@@ -273,6 +273,7 @@ namespace SonosControl.DAL.Repos
                 {
                     window.DaysOfWeek ??= new();
                     window.ExcludedDates ??= new();
+                    window.AnnualExcludedDates ??= new();
                 }
 
                 foreach (var scene in settings.Scenes)

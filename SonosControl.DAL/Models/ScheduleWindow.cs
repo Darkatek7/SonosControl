@@ -21,8 +21,13 @@ public class ScheduleWindow
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public List<DateOnly> ExcludedDates { get; set; } = new();
+    public List<DateOnly> AnnualExcludedDates { get; set; } = new();
     public string? SceneId { get; set; }
     public int FadeInSeconds { get; set; }
     public int FadeOutSeconds { get; set; }
     public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+
+    public bool ExcludesDate(DateOnly date) =>
+        ExcludedDates?.Contains(date) == true
+        || AnnualExcludedDates?.Any(excluded => excluded.Month == date.Month && excluded.Day == date.Day) == true;
 }

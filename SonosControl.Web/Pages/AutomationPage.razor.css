@@ -10,7 +10,7 @@
 .exception-panel { padding: 1rem; border: 1px solid var(--border-color); border-radius: 1rem; background: var(--surface-elevated); }
 .exception-panel__header h2 { margin: 0; font-size: 1.15rem; }
 .exception-panel__header p { margin: 0.25rem 0 0; color: var(--text-muted); }
-.exception-editor { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 0.7fr) auto; align-items: end; gap: 0.75rem; margin: 1rem 0; }
+.exception-editor { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 0.7fr) minmax(9rem, 0.5fr) auto; align-items: end; gap: 0.75rem; margin: 1rem 0; }
 .exception-editor .btn { min-height: 2.75rem; }
 .exception-readonly-note { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); }
 .exception-list { display: grid; gap: 0.55rem; }
@@ -18,4 +18,5 @@
 .exception-card > div { display: grid; }
 .exception-card span { color: var(--text-muted); font-size: 0.78rem; }
 .exception-card .btn { min-height: 2.75rem; }
+@media (max-width: 991.98px) { .exception-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767.98px) { .automation-live-strip, .exception-editor { grid-template-columns: 1fr; } .automation-health { align-self: flex-start; } }

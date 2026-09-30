@@ -219,7 +219,7 @@ public partial class IndexPage : IAsyncDisposable
                 continue;
             }
 
-            if (window.ExcludedDates?.Contains(date) == true)
+            if (window.ExcludesDate(date))
             {
                 continue;
             }
