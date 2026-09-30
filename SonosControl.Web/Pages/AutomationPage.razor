@@ -19,16 +19,16 @@
             <h1>Automation</h1>
             <p>Build reusable room scenes, arrange schedules, and exclude individual dates.</p>
         </div>
-        <div class="automation-health @GetHealthClass()" role="status">
+        <div class="automation-health @Snapshot.StatusClass" role="status">
             <span class="automation-health__dot" aria-hidden="true"></span>
-            <span>@GetHealthLabel()</span>
+            <span>@Snapshot.StatusLabel</span>
         </div>
     </header>
 
-    @if (Snapshot.Phase == AutomationRuntimePhase.Failed)
+    @if (Snapshot.HasError)
     {
         <div class="alert alert-danger" role="alert">
-            <strong>Automation is paused.</strong> @Snapshot.Error
+            <strong>@Snapshot.StatusLabel.</strong> @Snapshot.FailureMessage
         </div>
     }
     else if (Snapshot.Warnings.Count > 0)
@@ -40,7 +40,7 @@
     }
 
     <section class="automation-live-strip" aria-label="Live automation status">
-        <div><span>Live now</span><strong>@(Snapshot.ActiveScheduleName ?? "Manual control")</strong></div>
+        <div><span>Live now</span><strong>@(Snapshot.IsRunning ? Snapshot.ActiveScheduleName : Snapshot.StatusLabel)</strong></div>
         <div><span>Last checked</span><strong>@FormatEvaluationTime()</strong></div>
     </section>
 
@@ -261,8 +261,6 @@
     private void SelectTab(string tab) => Navigation.NavigateTo($"/automation?tab={tab}");
     private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
-    private string GetHealthClass() => Snapshot.Phase == AutomationRuntimePhase.Failed ? "is-error" : Snapshot.Phase == AutomationRuntimePhase.Ready ? "is-ready" : "is-pending";
-    private string GetHealthLabel() => Snapshot.Phase == AutomationRuntimePhase.Failed ? "Automation paused" : Snapshot.Phase == AutomationRuntimePhase.Ready ? "Scheduler ready" : "Preparing automation";
     private string FormatEvaluationTime() => Snapshot.LastEvaluationUtc is { } value ? AppTimeZone.Format(value, "HH:mm:ss") : "Not yet";
     private void ShowExceptionStatus(string message, bool error = false) { _exceptionStatus = message; _exceptionError = error; }
     private void OnRuntimeStatusChanged() => _ = InvokeAsync(StateHasChanged);

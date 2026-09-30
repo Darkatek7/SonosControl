@@ -25,6 +25,51 @@ namespace SonosControl.Tests;
 public class IndexPageUXTests
 {
     [Fact]
+    public async Task HomeAndAutomation_FollowRuntimeStatusInsteadOfMatchingSchedule()
+    {
+        using var ctx = new BunitContext();
+        var settings = new SonosSettings
+        {
+            IP_Adress = "1.2.3.4",
+            Speakers = [new SonosSpeaker { Name = "Living Room", IpAddress = "1.2.3.4" }],
+            ScheduleWindows = [new ScheduleWindow { Name = "Morning Radio", RecurrenceType = ScheduleRecurrenceType.Daily, StartTime = new TimeOnly(0, 0), StopTime = new TimeOnly(0, 0) }]
+        };
+        using var resources = ConfigureServices(ctx, [], [], [], settings);
+        var runtime = ctx.Services.GetRequiredService<AutomationRuntimeStatus>();
+        var home = ctx.Render<IndexPage>();
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/automation?tab=exceptions");
+        var automation = ctx.Render<AutomationPage>();
+
+        Assert.Equal("Preparing automation", home.Find(".home-status-pill").TextContent.Trim());
+        await home.InvokeAsync(() => runtime.SetReady(SonosSettings.CurrentSettingsSchemaVersion));
+        home.WaitForAssertion(() => Assert.Contains("Scheduler ready", home.Find(".home-status-pill").TextContent));
+
+        await home.InvokeAsync(() => runtime.RecordEvaluation("Morning Radio", DateTimeOffset.UtcNow));
+        home.WaitForAssertion(() =>
+        {
+            Assert.Contains("Automation running", home.Find(".home-status-pill").TextContent);
+            Assert.Contains("Automation running", automation.Find(".automation-health").TextContent);
+            Assert.Contains("Morning Radio", home.Find(".home-footer__card--automation").TextContent);
+        });
+
+        await home.InvokeAsync(() => runtime.RecordEvaluation("Morning Radio", DateTimeOffset.UtcNow, "The room could not be reached."));
+        home.WaitForAssertion(() =>
+        {
+            Assert.Contains("Automation error", home.Find(".home-status-pill").TextContent);
+            Assert.DoesNotContain("is-active", home.Find(".home-status-pill").ClassList);
+            Assert.Contains("The room could not be reached.", home.Find(".home-footer__card--automation").TextContent);
+            Assert.Contains("The room could not be reached.", automation.Find("[role='alert']").TextContent);
+        });
+
+        await home.InvokeAsync(() => runtime.SetFailed(0, "Settings need attention."));
+        home.WaitForAssertion(() =>
+        {
+            Assert.Contains("Automation paused", home.Find(".home-status-pill").TextContent);
+            Assert.Contains("Automation paused", automation.Find(".automation-health").TextContent);
+        });
+    }
+
+    [Fact]
     public void IndexPage_RendersEverydayHierarchy_WithoutEmbeddedPlayer()
     {
         using var ctx = new BunitContext();
@@ -149,7 +194,11 @@ public class IndexPageUXTests
             Assert.Contains("No rooms configured", cut.Markup);
             Assert.Single(cut.FindAll("a[href='/administration/devices']"));
             Assert.Contains("home-primary-grid--empty", cut.Find(".home-primary-grid").ClassList);
-            Assert.NotNull(cut.Find("button[aria-label='Play Setup Radio']").GetAttribute("disabled"));
+            Assert.Equal(3, cut.FindAll(".home-setup__steps li").Count);
+            Assert.Empty(cut.FindAll(".home-quick-library button"));
+            Assert.Empty(cut.FindAll(".home-intro__status"));
+            Assert.Empty(cut.FindAll(".rooms-stat"));
+            Assert.DoesNotContain("Everything sounds good", cut.Markup);
         });
 
         var library = ctx.Render<LibraryPage>();
@@ -219,6 +268,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
+        ctx.Services.AddSingleton(new AutomationRuntimeStatus());
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())
@@ -295,6 +345,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
+        ctx.Services.AddSingleton(new AutomationRuntimeStatus());
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())
@@ -516,6 +567,10 @@ public class IndexPageUXTests
             Timestamp = DateTime.UtcNow
         });
         resources.DbContext.SaveChanges();
+
+        var runtime = ctx.Services.GetRequiredService<AutomationRuntimeStatus>();
+        runtime.SetReady(SonosSettings.CurrentSettingsSchemaVersion);
+        runtime.RecordEvaluation("Morning Radio", DateTimeOffset.UtcNow);
 
         var cut = ctx.Render<IndexPage>();
 
@@ -765,6 +820,7 @@ public class IndexPageUXTests
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddScoped<PlaybackUiStateService>();
+        ctx.Services.AddSingleton(new AutomationRuntimeStatus());
 
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())

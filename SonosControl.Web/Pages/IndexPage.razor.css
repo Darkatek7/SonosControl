@@ -115,6 +115,48 @@
     animation: none;
 }
 
+.home-status-pill.is-error {
+    color: var(--brand-danger);
+    background: var(--surface-2);
+    border-color: var(--brand-danger);
+}
+
+.home-setup > p {
+    margin: 0 0 var(--spacing-md);
+    color: var(--text-secondary);
+}
+
+.home-setup__steps {
+    display: grid;
+    gap: var(--spacing-md);
+    margin: 0 0 var(--spacing-lg);
+    padding-left: 1.5rem;
+}
+
+.home-setup__steps li::marker {
+    color: var(--brand-primary);
+    font-weight: 700;
+}
+
+.home-setup__steps strong,
+.home-setup__steps span {
+    display: block;
+}
+
+.home-setup__steps span,
+.home-setup-library p,
+.home-setup-health {
+    margin: var(--spacing-2xs) 0 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.home-setup-library {
+    display: grid;
+    justify-items: start;
+    gap: var(--spacing-md);
+}
+
 @keyframes home-status-pulse {
     0%, 100% { opacity: 0.72; transform: scale(0.86); }
     50% { opacity: 1; transform: scale(1); }

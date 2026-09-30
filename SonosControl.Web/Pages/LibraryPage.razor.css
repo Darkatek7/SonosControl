@@ -17,7 +17,22 @@
 .source-card__favourite:disabled { cursor: wait; opacity: 0.6; }
 .source-card__actions { grid-column: 1 / -1; display: flex; align-self: end; justify-content: flex-end; gap: 0.45rem; }
 .source-card__actions .btn { min-height: 2.75rem; }
-@media (max-width: 575.98px) { .library-tools { grid-template-columns: 1fr; } .source-card__actions { display: grid; grid-template-columns: 1fr 2.75rem 2.75rem; } }
+.source-card__more { position: relative; }
+.source-card__more summary { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; list-style: none; cursor: pointer; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); color: var(--text-secondary); }
+.source-card__more summary::-webkit-details-marker { display: none; }
+.source-card__more summary:hover, .source-card__more summary:focus-visible { color: var(--brand-primary); background: var(--surface-2); }
+.source-card__menu { position: absolute; right: 0; bottom: calc(100% + 0.35rem); z-index: 10; display: grid; gap: 0.4rem; min-width: 10rem; padding: 0.6rem; background: var(--surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+.source-card__menu .btn { justify-content: flex-start; gap: 0.5rem; }
+@media (max-width: 575.98px) {
+    .library-tools { grid-template-columns: 1fr; }
+    .source-card-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+    .source-card { grid-template-columns: minmax(0, 1fr) 2.75rem auto; grid-template-rows: 1fr; align-items: center; gap: 0.4rem; block-size: 7rem; padding: 0.75rem; border-radius: var(--radius-lg); }
+    .source-card__icon, .source-card__body p { display: none; }
+    .source-card__body h2 { margin: 0.2rem 0 0; font-family: var(--font-family-base); font-size: 1rem; line-height: 1.3; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+    .source-card__actions { grid-column: auto; align-self: center; gap: 0.3rem; }
+    .source-card__actions > .btn { display: grid; place-items: center; width: 2.75rem; padding: 0; }
+    .source-card__play-label { display: none; }
+}
 @media (max-width: 575.98px) {
     .library-page ::deep .workspace-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
     .library-page ::deep .workspace-tab { padding-inline: 0.5rem; white-space: normal; }

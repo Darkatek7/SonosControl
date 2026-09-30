@@ -20,6 +20,7 @@
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
 @inject ConfiguredTimeZoneService AppTimeZone
 @inject HomeLibraryService HomeLibrary
+@inject AutomationRuntimeStatus RuntimeStatus
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Home - SonosControl</PageTitle>
@@ -29,7 +30,10 @@
     <div class="home-shell" data-qa="home-dashboard">
         @{
             var nowLocal = AppTimeZone.Now;
-            var activeWindow = ScheduleWindowEvaluator.SelectActiveWindow(_settings.ScheduleWindows, nowLocal);
+            var runtime = RuntimeStatus.Snapshot;
+            var activeWindow = runtime.IsRunning
+                ? _settings.ScheduleWindows.FirstOrDefault(window => window.Name == runtime.ActiveScheduleName)
+                : null;
             var activeScene = GetScene(activeWindow?.SceneId);
             var nextWindow = GetNextScheduleWindow(nowLocal, activeWindow);
             var healthSummary = GetDeviceHealthSummary();
@@ -51,15 +55,18 @@
                 <div class="home-intro__copy">
                     <span class="home-eyebrow">Today</span>
                     <h1>@Greeting</h1>
-                    <p class="home-intro__sub">Your rooms, favourite sources, and next automation at a glance.</p>
+                    <p class="home-intro__sub">@(_settings.Speakers.Any() ? "Your rooms, favourite sources, and next automation at a glance." : "Start listening in three simple steps.")</p>
                 </div>
-                <div class="home-intro__status" aria-live="polite">
-                    <span class="home-status-pill @(activeWindow is null ? "is-idle" : "is-active")">
-                        <span class="home-status-pill__dot" aria-hidden="true"></span>
-                        @(activeWindow is null ? "Manual control" : "Automation running")
-                    </span>
-                    <small>@RefreshTelemetryLabel</small>
-                </div>
+                @if (_settings.Speakers.Any())
+                {
+                    <div class="home-intro__status" aria-live="polite">
+                        <span class="home-status-pill @runtime.StatusClass @(runtime.IsRunning ? "is-active" : "is-idle")">
+                            <span class="home-status-pill__dot" aria-hidden="true"></span>
+                            @runtime.StatusLabel
+                        </span>
+                        <small>@RefreshTelemetryLabel</small>
+                    </div>
+                }
             </header>
 
             @if (_settings.Speakers.Any())
@@ -76,9 +83,12 @@
                         <h2 id="home-rooms-heading">Speakers</h2>
                     </div>
                     <div class="rooms-section__health" aria-label="Speaker health summary">
-                        <span class="rooms-stat is-online"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Online</strong> Online</span>
-                        <span class="rooms-stat is-offline"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Offline</strong> Offline</span>
-                        <span class="rooms-stat is-unknown"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Unknown</strong> Unknown</span>
+                        @if (_settings.Speakers.Any())
+                        {
+                            <span class="rooms-stat is-online"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Online</strong> Online</span>
+                            <span class="rooms-stat is-offline"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Offline</strong> Offline</span>
+                            <span class="rooms-stat is-unknown"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Unknown</strong> Unknown</span>
+                        }
                         <AuthorizeView Roles="admin,superadmin">
                             <Authorized>
                                 @if (_settings.Speakers.Any())
@@ -127,12 +137,13 @@
                 }
                 else
                 {
-                    <div class="home-empty home-empty--rooms">
-                        <span class="home-empty__icon" aria-hidden="true"><Icon Name="speaker" Size="26" /></span>
-                        <div>
-                            <strong>No rooms configured</strong>
-                            <span>Add a Sonos speaker to start controlling music from Home.</span>
-                        </div>
+                    <div class="home-setup" data-qa="home-setup">
+                        <p>No rooms configured</p>
+                        <ol class="home-setup__steps">
+                            <li><strong>Add a speaker</strong><span>Connect your first Sonos room.</span></li>
+                            <li><strong>Choose a source</strong><span>Save a radio station or music link in Library.</span></li>
+                            <li><strong>Press play</strong><span>Select your room and start listening.</span></li>
+                        </ol>
                         <AuthorizeView Roles="admin,superadmin">
                             <Authorized>
                                 <a class="btn btn-sm btn-primary" href="/administration/devices">Configure devices</a>
@@ -157,7 +168,14 @@
                 </header>
 
                 <div class="library__list">
-                    @if (libraryItems.Any())
+                    @if (!_settings.Speakers.Any())
+                    {
+                        <div class="home-setup-library">
+                            <p>Your favourite sources will appear here once a room is configured.</p>
+                            <a class="btn btn-outline-secondary" href="/library">Explore Library</a>
+                        </div>
+                    }
+                    else if (libraryItems.Any())
                     {
                         @foreach (var item in libraryItems)
                         {
@@ -205,8 +223,8 @@
                 <ChildContent>
                 <div class="home-window @(activeWindow is null ? "is-idle" : "")">
                     <div>
-                        <h4>@(activeWindow?.Name ?? "Manual control")</h4>
-                        <p>@GetActiveAutomationDescription(activeWindow, activeScene)</p>
+                        <h4>@(runtime.IsRunning ? runtime.ActiveScheduleName : runtime.StatusLabel)</h4>
+                        <p>@(_settings.Speakers.Any() || runtime.HasError ? GetActiveAutomationDescription(runtime, activeWindow, activeScene) : "After adding a room, create scenes and schedules to play music automatically.")</p>
                         @if (activeWindow is not null)
                         {
                             <div class="home-chips">
@@ -216,12 +234,15 @@
                             </div>
                         }
                     </div>
-                    <div class="home-handoff">
-                        <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
-                        <span>@(activeWindow is null ? "no active window" : "until handoff")</span>
-                    </div>
+                    @if (activeWindow is not null)
+                    {
+                        <div class="home-handoff">
+                            <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
+                            <span>until handoff</span>
+                        </div>
+                    }
                 </div>
-                @if (nextWindow is not null)
+                @if (nextWindow is not null && _settings.Speakers.Any())
                 {
                     <div class="home-next">
                         <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
@@ -253,6 +274,10 @@
                                 </li>
                             }
                         </ul>
+                    }
+                    else if (!_settings.Speakers.Any())
+                    {
+                        <p class="home-setup-health">Device health will appear after you add your first room.</p>
                     }
                     else
                     {

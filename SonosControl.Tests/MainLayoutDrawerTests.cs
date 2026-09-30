@@ -144,6 +144,7 @@ public class MainLayoutDrawerTests
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
+        ctx.Services.AddSingleton(TimeProvider.System);
         ctx.Services.AddScoped<PlaybackUiStateService>();
 
         var userStore = new Mock<IUserStore<ApplicationUser>>();
