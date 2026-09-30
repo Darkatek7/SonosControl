@@ -41,6 +41,9 @@ var settingsDataDirectory = string.IsNullOrWhiteSpace(configuredSettingsDataDire
     : Path.GetFullPath(configuredSettingsDataDirectory);
 builder.Services.AddSingleton<ISettingsRepo>(_ => new SettingsRepo(settingsDataDirectory));
 builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSection("Playback"));
+builder.Services.Configure<Mp3UploadOptions>(builder.Configuration.GetSection("Mp3Upload"));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<Mp3UploadService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
 builder.Services.AddSingleton<IYouTubeToolRunner, YouTubeToolRunner>();
@@ -63,6 +66,7 @@ if (builder.Configuration.GetValue("BackgroundServices:Enabled", true))
     builder.Services.AddHostedService<DeviceHealthMonitorService>();
     builder.Services.AddHostedService<YouTubePlaybackMaintenanceService>();
     builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
+    builder.Services.AddHostedService<Mp3UploadCleanupService>();
 }
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();

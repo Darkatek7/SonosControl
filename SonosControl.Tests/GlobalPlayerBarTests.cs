@@ -129,11 +129,125 @@ public class GlobalPlayerBarTests
         Assert.Equal(44, playbackState.Volume);
     }
 
+    [Theory]
+    [InlineData("play")]
+    [InlineData("pause")]
+    [InlineData("skip")]
+    public async Task GlobalPlayerBar_FailedCommand_ShowsErrorAndRetriesOriginalAction(string command)
+    {
+        using var ctx = new TestContext();
+        var connectorRepo = ConfigureServices(ctx);
+        var wasPlaying = command != "play";
+        connectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(wasPlaying);
+        if (command == "play")
+            connectorRepo.SetupSequence(repo => repo.StartPlaying("10.0.0.1"))
+                .ThrowsAsync(new InvalidOperationException("Internal device details"))
+                .Returns(Task.CompletedTask);
+        else if (command == "pause")
+            connectorRepo.SetupSequence(repo => repo.PausePlaying("10.0.0.1"))
+                .ThrowsAsync(new InvalidOperationException("Internal device details"))
+                .Returns(Task.CompletedTask);
+        else
+            connectorRepo.SetupSequence(repo => repo.NextTrack("10.0.0.1"))
+                .ThrowsAsync(new InvalidOperationException("Internal device details"))
+                .Returns(Task.CompletedTask);
+
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        cut.Find(command == "skip" ? "[data-qa='global-player-next']" : ".global-player-bar__play").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("Check the speaker connection", cut.Find("[data-qa='playback-command-error']").TextContent);
+            Assert.DoesNotContain("Internal device details", cut.Markup);
+        });
+
+        // A background refresh must neither hide the error nor change the retry intent.
+        connectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(!wasPlaying);
+        await cut.InvokeAsync(() => ctx.Services.GetRequiredService<PlaybackUiStateService>().RefreshAsync());
+        cut.Find("[data-qa='playback-command-error'] button").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-qa='playback-command-error']")));
+        if (command == "play")
+        {
+            connectorRepo.Verify(repo => repo.StartPlaying("10.0.0.1"), Times.Exactly(2));
+            connectorRepo.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+        }
+        else if (command == "pause")
+        {
+            connectorRepo.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Exactly(2));
+            connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>()), Times.Never);
+        }
+        else
+        {
+            connectorRepo.Verify(repo => repo.NextTrack("10.0.0.1"), Times.Exactly(2));
+        }
+    }
+
+    [Fact]
+    public async Task PlaybackState_ChangingRoom_DiscardsFailedCommand()
+    {
+        using var ctx = new TestContext();
+        var connectorRepo = ConfigureServices(ctx);
+        connectorRepo.Setup(repo => repo.NextTrack("10.0.0.1")).ThrowsAsync(new InvalidOperationException("Offline"));
+        var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await state.InitializeAsync();
+        await state.SkipNextAsync();
+        Assert.NotNull(state.PlaybackErrorMessage);
+
+        await state.SetActiveSpeakerAsync("10.0.0.2");
+        await state.RetryLastPlaybackCommandAsync();
+
+        Assert.Null(state.PlaybackErrorMessage);
+        connectorRepo.Verify(repo => repo.NextTrack("10.0.0.1"), Times.Once);
+        connectorRepo.Verify(repo => repo.NextTrack("10.0.0.2"), Times.Never);
+    }
+
+    [Fact]
+    public void GlobalPlayerBar_WithoutSpeakers_DisablesPlaybackAndOffersSetup()
+    {
+        using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connectorRepo = ConfigureServices(ctx, withSpeakers: false);
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+
+        Assert.Contains("Set up a speaker first", cut.Find(".player-surface__open").TextContent);
+        Assert.Single(cut.FindAll(".player-surface__expand"));
+        Assert.NotNull(cut.Find(".global-player-bar__play").GetAttribute("disabled"));
+        Assert.NotNull(cut.Find("[data-qa='global-player-sync']").GetAttribute("disabled"));
+        Assert.NotNull(cut.Find("#global-player-volume-number").GetAttribute("disabled"));
+
+        cut.Find(".player-surface__open").Click();
+        Assert.Equal("/administration/devices", cut.Find(".player-sheet__setup a").GetAttribute("href"));
+        Assert.All(cut.FindAll(".player-sheet__transport button"), button => Assert.NotNull(button.GetAttribute("disabled")));
+        Assert.NotNull(cut.Find("#player-sheet-volume-slider").GetAttribute("disabled"));
+        connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void GlobalPlayerBar_FailedCommand_CanBeRetriedInsideExpandedPlayer()
+    {
+        using var ctx = new TestContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connectorRepo = ConfigureServices(ctx);
+        connectorRepo.SetupSequence(repo => repo.NextTrack("10.0.0.1"))
+            .ThrowsAsync(new InvalidOperationException("Offline"))
+            .Returns(Task.CompletedTask);
+        var cut = ctx.RenderComponent<GlobalPlayerBar>();
+        cut.Find("[data-qa='global-player-next']").Click();
+        cut.Find(".player-surface__open").Click();
+
+        Assert.Single(cut.FindAll("[data-qa='playback-command-error']"));
+        cut.Find(".player-sheet [data-qa='playback-command-error'] button").Click();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-qa='playback-command-error']")));
+        connectorRepo.Verify(repo => repo.NextTrack("10.0.0.1"), Times.Exactly(2));
+    }
+
     private static Mock<ISonosConnectorRepo> ConfigureServices(
         TestContext ctx,
         List<TuneInStation>? stations = null,
         string currentStationUri = "http://stream.example/live",
-        string activeSpeakerIp = "10.0.0.1")
+        string activeSpeakerIp = "10.0.0.1",
+        bool withSpeakers = true)
     {
         var auth = ctx.AddTestAuthorization();
         auth.SetAuthorized("tester");
@@ -150,11 +264,11 @@ public class GlobalPlayerBarTests
             Volume = 25,
             MaxVolume = 80,
             Stations = stations ?? new List<TuneInStation>(),
-            Speakers =
+            Speakers = withSpeakers ?
             [
                 new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" },
                 new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.2" }
-            ]
+            ] : []
         };
 
         var settingsRepo = new Mock<ISettingsRepo>();

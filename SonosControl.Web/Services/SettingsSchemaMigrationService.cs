@@ -343,6 +343,7 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             var window = existingWindows[index];
             window.DaysOfWeek ??= new();
             window.ExcludedDates ??= new();
+            window.AnnualExcludedDates ??= new();
             window.Priority = 2000 + index;
 
             if (window.IsEnabled && (string.IsNullOrWhiteSpace(window.SceneId) || !validSceneIds.Contains(window.SceneId)))
@@ -460,6 +461,7 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
         {
             window.DaysOfWeek ??= new();
             window.ExcludedDates ??= new();
+            window.AnnualExcludedDates ??= new();
             if (!window.IsEnabled || (!string.IsNullOrWhiteSpace(window.SceneId) && sceneIds.Contains(window.SceneId)))
             {
                 continue;

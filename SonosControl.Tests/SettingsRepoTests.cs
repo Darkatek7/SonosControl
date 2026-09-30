@@ -55,6 +55,59 @@ public class SettingsRepoTests
     }
 
     [Fact]
+    public async Task WriteAndReadSettings_PreservesOneTimeAndAnnualExceptions()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            using (var repo = new SettingsRepo(tempDir))
+            {
+                await repo.WriteSettings(new SonosSettings
+                {
+                    ScheduleWindows = [new ScheduleWindow
+                    {
+                        ExcludedDates = [new DateOnly(2026, 12, 24)],
+                        AnnualExcludedDates = [new DateOnly(2026, 12, 25)]
+                    }]
+                });
+            }
+
+            using var reader = new SettingsRepo(tempDir);
+            var settings = await reader.GetSettings();
+            var window = Assert.Single(settings!.ScheduleWindows);
+            Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(window.ExcludedDates));
+            Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(window.AnnualExcludedDates));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task GetSettings_LegacyExceptions_RemainOneTime()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "config.json"),
+                """{"ScheduleWindows":[{"ExcludedDates":["2026-12-25"]}]}""");
+            using var repo = new SettingsRepo(tempDir);
+
+            var settings = await repo.GetSettings();
+            var window = Assert.Single(settings!.ScheduleWindows);
+            Assert.Empty(window.AnnualExcludedDates);
+            Assert.True(window.ExcludesDate(new DateOnly(2026, 12, 25)));
+            Assert.False(window.ExcludesDate(new DateOnly(2027, 12, 25)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
     public async Task GetSettings_EnsuresDailySchedulesValuesInitialized()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());

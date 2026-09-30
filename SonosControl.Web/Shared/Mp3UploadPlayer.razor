@@ -1,0 +1,125 @@
+@using SonosControl.Web.Services
+@implements IDisposable
+@inject Mp3UploadService Uploads
+@inject ILogger<Mp3UploadPlayer> Logger
+
+<SectionCard Title="Upload MP3" Subtitle="Upload a temporary audio file and play it on a speaker." Icon="music" Id="mp3-upload-heading">
+    <ChildContent>
+        <div class="row g-3" aria-busy="@(_busy ? "true" : "false")">
+            <div class="col-12">
+                <label for="mp3-file" class="form-label">MP3 file</label>
+                <InputFile id="mp3-file" class="form-control" accept=".mp3,audio/mpeg" OnChange="SelectFile" disabled="@_busy" aria-describedby="mp3-upload-help" />
+                <p id="mp3-upload-help" class="form-text mb-0">Maximum @(Uploads.MaxFileSizeBytes / (1024 * 1024)) MB. Automatic deletion starts from upload completion; expired files cannot be played again.</p>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="mp3-speaker" class="form-label">Speaker</label>
+                <select id="mp3-speaker" class="form-select" @bind="_speakerIp" disabled="@_busy">
+                    <option value="">Select a speaker</option>
+                    @foreach (var speaker in Speakers.OrderBy(s => s.Name))
+                    {
+                        <option value="@speaker.IpAddress">@speaker.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="mp3-retention" class="form-label">Delete after (minutes)</label>
+                <input id="mp3-retention" class="form-control" type="number" min="1" max="@Mp3UploadService.MaxRetentionMinutes" @bind="_retentionMinutes" disabled="@_busy" />
+            </div>
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" @onclick="UploadAndPlayAsync" disabled="@(_busy || _file is null || string.IsNullOrWhiteSpace(_speakerIp))">
+                    @if (_busy)
+                    {
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    }
+                    @(_busy ? "Uploading and starting playback…" : "Upload and play")
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(_message))
+            {
+                <div class="col-12">
+                    <div class="alert @(_error ? "alert-danger" : "alert-success") mb-0" role="status" aria-live="polite">@_message</div>
+                </div>
+            }
+        </div>
+    </ChildContent>
+</SectionCard>
+
+@code {
+    [Parameter] public IReadOnlyList<SonosSpeaker> Speakers { get; set; } = Array.Empty<SonosSpeaker>();
+    [Parameter] public string? ActiveSpeakerIp { get; set; }
+    private readonly CancellationTokenSource _lifetime = new();
+    private IBrowserFile? _file;
+    private string _speakerIp = string.Empty;
+    private int _retentionMinutes;
+    private bool _busy;
+    private bool _error;
+    private string? _message;
+
+    protected override void OnInitialized() => _retentionMinutes = Uploads.DefaultRetentionMinutes;
+
+    protected override void OnParametersSet()
+    {
+        if (!Speakers.Any(s => s.IpAddress == _speakerIp))
+        {
+            _speakerIp = Speakers.FirstOrDefault(s => s.IpAddress == ActiveSpeakerIp)?.IpAddress
+                ?? Speakers.FirstOrDefault()?.IpAddress ?? string.Empty;
+        }
+    }
+
+    private void SelectFile(InputFileChangeEventArgs args)
+    {
+        _file = args.File;
+        _message = null;
+        if (!string.Equals(Path.GetExtension(_file.Name), ".mp3", StringComparison.OrdinalIgnoreCase)
+            || _file.Size <= 0 || _file.Size > Uploads.MaxFileSizeBytes)
+        {
+            _file = null;
+            _error = true;
+            _message = "Choose a non-empty MP3 within the upload size limit.";
+        }
+    }
+
+    private async Task UploadAndPlayAsync()
+    {
+        if (_busy || _file is null) return;
+        if (!Speakers.Any(s => s.IpAddress == _speakerIp))
+        {
+            _error = true;
+            _message = "Select a configured speaker before uploading.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+        UploadedMp3? upload = null;
+        try
+        {
+            await using var stream = _file.OpenReadStream(Uploads.MaxFileSizeBytes, _lifetime.Token);
+            upload = await Uploads.SaveAsync(stream, _file.Name, _retentionMinutes, _lifetime.Token);
+            await _uow.ISonosConnectorRepo.PlayAudioFileAsync(_speakerIp, upload.StreamUrl, upload.Title, _lifetime.Token);
+            _error = false;
+            _message = $"Playing {upload.Title}. Automatically deleted after {_retentionMinutes} minutes (cleanup runs every {Uploads.CleanupInterval.TotalMinutes:0} minute(s)).";
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            if (upload is not null) Uploads.Delete(upload.Id);
+        }
+        catch (Exception ex)
+        {
+            if (upload is not null) Uploads.Delete(upload.Id);
+            Logger.LogWarning(ex, "MP3 upload or playback failed");
+            _error = true;
+            _message = ex is InvalidOperationException ? ex.Message : "Upload or playback failed. Check the speaker connection and try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+}

@@ -68,7 +68,7 @@
             }
         </div>
 
-        <div class="home-primary-grid">
+        <div class="home-primary-grid @(!_settings.Speakers.Any() ? "home-primary-grid--empty" : null)">
             <section class="rooms-section home-panel" aria-labelledby="home-rooms-heading">
                 <header class="rooms-section__head">
                     <div>
@@ -174,7 +174,7 @@
                                         <span class="library__suggested">Suggested · @FormatMediaTypeLabel(item.MediaType)</span>
                                     }
                                 </div>
-                                <button type="button" class="library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" disabled="@(_loadingMediaUrl == item.Url)">
+                                <button type="button" class="library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" title="@(!_settings.Speakers.Any() ? "Set up a speaker first" : $"Play {item.Name}")" disabled="@(!_settings.Speakers.Any() || _loadingMediaUrl == item.Url)">
                                     @if (_loadingMediaUrl == item.Url) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
                                     else { <Icon Name="play" Size="13" /> }
                                 </button>

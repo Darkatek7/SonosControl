@@ -274,6 +274,7 @@
         {
             window.DaysOfWeek ??= new();
             window.ExcludedDates ??= new();
+            window.AnnualExcludedDates ??= new();
         }
     }
 
@@ -577,6 +578,7 @@
             StartDate = source.StartDate,
             EndDate = source.EndDate,
             ExcludedDates = source.ExcludedDates?.ToList() ?? new(),
+            AnnualExcludedDates = source.AnnualExcludedDates?.ToList() ?? new(),
             SceneId = source.SceneId,
             FadeInSeconds = source.FadeInSeconds,
             FadeOutSeconds = source.FadeOutSeconds,
