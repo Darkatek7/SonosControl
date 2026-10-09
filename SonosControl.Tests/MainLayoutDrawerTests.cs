@@ -1,6 +1,7 @@
 using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
 using SonosControl.Web.Models;
+using SonosControl.Web.Pages;
 using SonosControl.Web.Services;
 using SonosControl.Web.Shared;
 using Xunit;
@@ -125,12 +127,95 @@ public class MainLayoutDrawerTests
         Assert.Equal(expectsAdministration, links.Contains("Administration"));
     }
 
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/library")]
+    [InlineData("/administration/devices")]
+    public async Task MainLayout_TogglesDockAndClearance_WhenFirstAndLastSpeakerChange(string route)
+    {
+        using var ctx = new BunitContext();
+        var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
+        ConfigureAuthAndTheme(ctx, settings);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo(route);
+        var cut = ctx.Render<MainLayout>(p => p.Add(layout => layout.Body, builder => builder.AddMarkupContent(0, "<p>Body</p>")));
+        var playback = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        Assert.Empty(cut.FindAll("[data-qa='global-player-bar']"));
+        Assert.Contains("app-shell--without-player", cut.Find(".app-shell").ClassList);
+        Assert.NotEmpty(cut.FindAll(".app-sidebar, #account-menu"));
+
+        settings.Speakers.Add(new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" });
+        await cut.InvokeAsync(playback.InitializeAsync);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[data-qa='global-player-bar']"));
+            Assert.DoesNotContain("app-shell--without-player", cut.Find(".app-shell").ClassList);
+        });
+        cut.Find(".player-surface__open").Click();
+        Assert.Single(cut.FindAll(".player-sheet"));
+
+        settings.Speakers.Clear();
+        await cut.InvokeAsync(playback.InitializeAsync);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[data-qa='global-player-bar'], .player-sheet"));
+            Assert.Contains("app-shell--without-player", cut.Find(".app-shell").ClassList);
+        });
+    }
+
+    [Theory]
+    [InlineData("manual")]
+    [InlineData("import")]
+    [InlineData("import-all")]
+    public void DevicesPage_UpdatesMountedLayout_AfterAddingAndRemovingLastSpeaker(string method)
+    {
+        using var ctx = new BunitContext();
+        var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
+        ConfigureAuthAndTheme(ctx, settings);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var discovery = new Mock<ISonosDeviceDiscoveryService>();
+        discovery.Setup(service => service.DiscoverAsync(It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<SonosSpeaker> { new() { Name = "Office", IpAddress = "192.0.2.10", Uuid = "uuid:office" } });
+        ctx.Services.AddSingleton(discovery.Object);
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
+        var layout = ctx.Render<MainLayout>();
+        var devices = ctx.Render<DevicesPage>();
+        Assert.Empty(layout.FindAll("[data-qa='global-player-bar']"));
+
+        if (method == "manual")
+        {
+            devices.Find("#manual-speaker-name").Change("Office");
+            devices.Find("#manual-speaker-ip").Change("192.0.2.10");
+            devices.Find(".devices-manual-form button").Click();
+        }
+        else
+        {
+            devices.Find(".devices-hero__actions .btn-primary").Click();
+            devices.Find(method == "import" ? ".devices-table button" : ".devices-import-all").Click();
+        }
+        layout.WaitForAssertion(() => Assert.Single(layout.FindAll("[data-qa='global-player-bar']")));
+        Assert.Single(settings.Speakers);
+        devices.Find("button[aria-label='Remove Office']").Click();
+        devices.Find(".app-dialog__actions .btn-danger").Click();
+        layout.WaitForAssertion(() => Assert.Empty(layout.FindAll("[data-qa='global-player-bar']")));
+        Assert.Empty(settings.Speakers);
+    }
+
     private static void ConfigureAuthAndTheme(BunitContext ctx, params string[] roles)
+    {
+        ConfigureAuthAndTheme(ctx, new SonosSettings
+        {
+            IP_Adress = "10.0.0.1",
+            Speakers = [new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" }]
+        }, roles);
+    }
+
+    private static void ConfigureAuthAndTheme(BunitContext ctx, SonosSettings settings, params string[] roles)
     {
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo
             .Setup(repo => repo.GetSettings())
-            .ReturnsAsync(new SonosSettings());
+            .ReturnsAsync(settings);
 
         var sonosRepo = new Mock<ISonosConnectorRepo>();
 

@@ -801,6 +801,11 @@ public partial class IndexPage : IAsyncDisposable
     {
         _ = InvokeAsync(async () =>
         {
+            if (_settings is not null)
+            {
+                _settings.Speakers = PlaybackState.Speakers.ToList();
+            }
+
             if (_settings is not null
                 && !string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)
                 && !string.Equals(_settings.IP_Adress, PlaybackState.ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase))

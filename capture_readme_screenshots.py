@@ -186,7 +186,12 @@ def try_login(page, base_url: str, username: str, password: str) -> tuple[bool, 
 
 def ensure_expected_heading(page, expected_text: str):
     main_content = page.locator("article.content")
-    expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
+    if expected_text == "Favourites":
+        heading = main_content.get_by_role("heading", name="Favourites", exact=True).or_(
+            main_content.get_by_role("heading", name="Connect your first speaker", exact=True))
+        expect(heading.first).to_be_visible(timeout=10000)
+    else:
+        expect(main_content.get_by_text(expected_text).first).to_be_visible(timeout=10000)
 
 
 def apply_theme(page, theme: str):

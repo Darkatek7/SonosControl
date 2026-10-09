@@ -3,6 +3,7 @@
 @inject ISonosDeviceDiscoveryService DiscoveryService
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject PlaybackUiStateService PlaybackState
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 <PageTitle>Devices - Sonos Control</PageTitle>
@@ -325,6 +326,7 @@
         });
 
         await _uow.ISettingsRepo.WriteSettings(_settings);
+        await PlaybackState.InitializeAsync();
         ShowStatus($"Imported {speaker.Name}.");
     }
 
@@ -355,6 +357,7 @@
         if (imported > 0)
         {
             await _uow.ISettingsRepo.WriteSettings(_settings);
+            await PlaybackState.InitializeAsync();
         }
 
         ShowStatus(imported > 0 ? $"Imported {imported} speaker(s)." : "No new speakers to import.");
@@ -399,6 +402,7 @@
         var speaker = new SonosSpeaker { Name = _manualName.Trim(), IpAddress = _manualIp.Trim(), StartupVolume = _manualStartupVolume.HasValue ? Math.Clamp(_manualStartupVolume.Value, 0, 100) : null };
         _settings.Speakers.Add(speaker);
         await _uow.ISettingsRepo.WriteSettings(_settings);
+        await PlaybackState.InitializeAsync();
         _manualName = string.Empty;
         _manualIp = string.Empty;
         _manualStartupVolume = null;
@@ -414,6 +418,7 @@
         var name = _pendingRemoval.Name;
         _settings.Speakers.Remove(_pendingRemoval);
         await _uow.ISettingsRepo.WriteSettings(_settings);
+        await PlaybackState.InitializeAsync();
         _pendingRemoval = null;
         ShowStatus($"Removed {name}.");
     }

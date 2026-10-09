@@ -1,4 +1,8 @@
 import os
+import html
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import platform
 import re
 import shutil
@@ -40,6 +44,36 @@ ROUTES = [
 ]
 
 
+class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def respond(self, body):
+        payload = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/xml; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self):
+        self.respond('<root><device><friendlyName>Test room</friendlyName><UDN>uuid:RINCON_SMOKE</UDN><serviceList/></device></root>')
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        action = self.headers.get("SOAPACTION", "").strip('"').split("#")[-1]
+        metadata = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist></item></DIDL-Lite>'
+        fields = {
+            "GetVolume": "<CurrentVolume>34</CurrentVolume>",
+            "GetTransportInfo": "<CurrentTransportState>PAUSED_PLAYBACK</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
+            "GetPositionInfo": f"<Track>1</Track><TrackDuration>00:04:00</TrackDuration><TrackMetaData>{html.escape(metadata)}</TrackMetaData><TrackURI>http://127.0.0.1:1400/stream</TrackURI><RelTime>00:01:00</RelTime>",
+            "GetMediaInfo": "<CurrentURI>http://127.0.0.1:1400/stream</CurrentURI>",
+            "Browse": "<Result></Result><NumberReturned>0</NumberReturned><TotalMatches>0</TotalMatches><UpdateID>1</UpdateID>",
+        }.get(action, "")
+        service = "RenderingControl" if "Volume" in action else "AVTransport"
+        self.respond(f'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:{action}Response xmlns:u="urn:schemas-upnp-org:service:{service}:1">{fields}</u:{action}Response></s:Body></s:Envelope>')
+
+
 def is_server_reachable():
     try:
         with urlopen(f"{BASE_URL}/auth/login", timeout=3):
@@ -59,7 +93,7 @@ def wait_for_server_ready(timeout_seconds, process=None):
     return False
 
 
-def start_local_server():
+def start_local_server(with_speaker=False):
     artifacts_dir = Path("artifacts")
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "mobile_smoke_server.log"
@@ -67,6 +101,15 @@ def start_local_server():
     runtime_dir = Path(tempfile.mkdtemp(prefix="sonoscontrol-smoke-", dir=artifacts_dir)).resolve()
     settings_dir = runtime_dir / "settings"
     settings_dir.mkdir(parents=True, exist_ok=True)
+    settings = {
+        "SettingsSchemaVersion": 2,
+        "IP_Adress": "127.0.0.1" if with_speaker else "",
+        "Speakers": [{"Name": "Test room", "IpAddress": "127.0.0.1", "Uuid": "RINCON_SMOKE"}] if with_speaker else [],
+        "Volume": 34,
+        "Stations": [{"Name": "Test radio", "Url": "http://127.0.0.1:1400/stream"}],
+        "SpotifyTracks": [], "YouTubeCollections": [], "YouTubeMusicCollections": [],
+    }
+    (settings_dir / "config.json").write_text(json.dumps(settings), encoding="utf-8")
 
     process = subprocess.Popen(
         ["dotnet", "run", "--project", "SonosControl.Web", "--no-build", "--urls", BASE_URL],
@@ -76,16 +119,13 @@ def start_local_server():
         shell=False,
         env={
             **os.environ,
-            "BackgroundServices__Enabled": os.getenv("BackgroundServices__Enabled", "false"),
+            "BackgroundServices__Enabled": "false",
             "Settings__DataDirectory": str(settings_dir),
             "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
             "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
             "ADMIN_EMAIL": os.getenv("ADMIN_EMAIL", "admin@smoke.invalid"),
             "ADMIN_PASSWORD": os.getenv("ADMIN_PASSWORD", "Test1234."),
-            "DataProtection__KeysDirectory": os.getenv(
-                "DataProtection__KeysDirectory",
-                str((Path(__file__).resolve().parent / "artifacts" / "mobile_smoke_dataprotection_keys").resolve()),
-            ),
+            "DataProtection__KeysDirectory": str(runtime_dir / "keys"),
         },
     )
     return process, log_stream, log_path, runtime_dir
@@ -151,6 +191,28 @@ def assert_global_player_visible(page):
     expect(player).to_have_class(re.compile(r"\bplayer-surface--compact\b"))
 
 
+def assert_player_state(page, with_speaker):
+    if with_speaker:
+        assert_global_player_visible(page)
+        assert_bottom_player_does_not_cover_content(page)
+        expect(page.locator(".app-shell--without-player")).to_have_count(0)
+    else:
+        expect(page.locator("[data-qa='global-player-bar'], .player-sheet")).to_have_count(0)
+        expect(page.locator(".app-shell--without-player")).to_have_count(1)
+        padding = page.locator("article.content").evaluate("element => parseFloat(getComputedStyle(element).paddingBottom)")
+        assert padding < 80, "Empty configuration must not reserve a playback dock."
+
+
+def assert_home_onboarding(page):
+    expect(page.locator("[data-qa='home-setup']")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Connect your first speaker", exact=True)).to_be_visible()
+    expect(page.locator(".home-primary-grid, .home-quick-library, .home-footer, .home-intro")).to_have_count(0)
+    expect(page.locator(".home-setup__steps li")).to_have_count(3)
+    action = page.get_by_role("link", name="Set up speakers", exact=True)
+    expect(action).to_have_attribute("href", "/administration/devices")
+    assert action.bounding_box()["height"] >= 44
+
+
 def assert_bottom_player_does_not_cover_content(page):
     spacing = page.evaluate(
         """
@@ -186,15 +248,9 @@ def assert_bottom_player_does_not_cover_content(page):
 
 
 def apply_theme(page, theme):
-    page.evaluate(
-        """
-        theme => {
-            document.documentElement.dataset.theme = theme;
-            document.documentElement.style.colorScheme = theme;
-        }
-        """,
-        theme,
-    )
+    page.evaluate("theme => window.sonosTheme.apply(theme)", theme)
+    # Let the existing color transitions settle before inspecting or capturing.
+    page.wait_for_timeout(250)
 
 
 def assert_home_dashboard_layout(page):
@@ -235,13 +291,18 @@ def assert_library_cards_are_uniform(page):
     assert all(size >= 44 for size in button_sizes), f"Favourite touch targets are too small: {button_sizes}"
 
 
-def verify_responsive_home(page, output_dir):
+def verify_responsive_home(page, output_dir, with_speaker=True):
     for slug, width, height in VIEWPORTS:
         for theme in THEMES:
             page.set_viewport_size({"width": width, "height": height})
             page.goto(f"{BASE_URL}/", wait_until="networkidle")
             apply_theme(page, theme)
-            assert_global_player_visible(page)
+            assert_player_state(page, with_speaker)
+            if not with_speaker:
+                assert_home_onboarding(page)
+                assert_no_horizontal_overflow(page)
+                page.screenshot(path=str(output_dir / f"home_{slug}_{theme}_setup.png"), full_page=True)
+                continue
             assert_home_dashboard_layout(page)
             if width >= 1200:
                 expect(page.locator("#global-player-volume-number")).to_be_visible(timeout=10000)
@@ -329,92 +390,79 @@ def try_login(page, username, password):
     return False, page.url, error_text
 
 
+def verify_application(playwright, output_dir, expected_speaker_state=None):
+    browser = launch_chromium(playwright)
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    try:
+        page = context.new_page()
+        browser_errors = []
+        page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
+        page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
+        login_attempt_errors = []
+        for username, password in get_login_attempts():
+            succeeded, current_url, error_text = try_login(page, username, password)
+            if succeeded:
+                break
+            login_attempt_errors.append(f"{username}@{current_url} ({error_text or 'no error message'})")
+        else:
+            page.screenshot(path=str(output_dir / "mobile_login_failure.png"), full_page=True)
+            raise AssertionError("Unable to log in. Set MOBILE_SMOKE_USERNAME and MOBILE_SMOKE_PASSWORD. " + "; ".join(login_attempt_errors))
+
+        expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
+        with_speaker = page.locator("[data-qa='home-setup']").count() == 0
+        if expected_speaker_state is not None:
+            assert with_speaker == expected_speaker_state, "Isolated speaker fixture did not match the expected configuration."
+        verify_responsive_home(page, output_dir, with_speaker)
+        for viewport_slug, width, height in VIEWPORTS:
+            page.set_viewport_size({"width": width, "height": height})
+            for theme in THEMES:
+                for route, slug, expected_text in ROUTES:
+                    page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
+                    apply_theme(page, theme)
+                    if route == "/" and not with_speaker:
+                        assert_home_onboarding(page)
+                    else:
+                        expect(page.locator("article.content").get_by_text(expected_text, exact=True).first).to_be_visible(timeout=10000)
+                    assert_player_state(page, with_speaker)
+                    if width < 992:
+                        verify_drawer(page)
+                    assert_no_horizontal_overflow(page)
+                    if route == "/library":
+                        assert_library_cards_are_uniform(page)
+                    suffix = "" if with_speaker else "_setup"
+                    page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}_{theme}{suffix}.png"), full_page=True)
+        assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
+        print(f"UI smoke passed: {len(VIEWPORTS)} viewports × {len(THEMES)} themes × {len(ROUTES)} routes; configured speaker={with_speaker}.")
+    finally:
+        context.close()
+        browser.close()
+
+
 def run():
-    server_process = None
-    server_log_stream = None
-    server_log_path = None
-    runtime_dir = None
-    started_local_server = False
-
-    if AUTO_START_SERVER and not is_server_reachable():
-        server_process, server_log_stream, server_log_path, runtime_dir = start_local_server()
-        started_local_server = True
-        if not wait_for_server_ready(SERVER_START_TIMEOUT_SECONDS, process=server_process):
-            exit_code = server_process.poll()
-            stop_local_server(server_process, server_log_stream, runtime_dir)
-            raise RuntimeError(
-                f"Timed out waiting for {BASE_URL} (server exit code: {exit_code}). "
-                f"Check server log: {server_log_path}"
-            )
-
-    if not is_server_reachable():
-        raise RuntimeError(
-            f"App is not reachable at {BASE_URL}. Start the app or enable auto-start."
-        )
-
-    with sync_playwright() as p:
-        try:
-            browser = launch_chromium(p)
-            context = browser.new_context(viewport={"width": 390, "height": 844})
-            page = context.new_page()
-            browser_errors = []
-            page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
-            page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
-
-            output_dir = Path("mobile_smoke_screenshots")
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            login_attempt_errors = []
-            login_succeeded = False
-            for username, password in get_login_attempts():
-                login_succeeded, current_url, error_text = try_login(page, username, password)
-                if login_succeeded:
-                    break
-
-                login_attempt_errors.append(
-                    f"{username}@{current_url} ({error_text or 'no error message'})"
-                )
-
-            if not login_succeeded:
-                page.screenshot(path=str(output_dir / "mobile_login_failure.png"), full_page=True)
-                attempts_description = "; ".join(login_attempt_errors) or "none"
-                raise AssertionError(
-                    "Unable to log in. Set MOBILE_SMOKE_USERNAME and MOBILE_SMOKE_PASSWORD. "
-                    f"Attempt results: {attempts_description}"
-                )
-
-            verify_responsive_home(page, output_dir)
-
-            for viewport_slug, width, height in VIEWPORTS:
-                page.set_viewport_size({"width": width, "height": height})
-                for theme in THEMES:
-                    for route, slug, expected_text in ROUTES:
-                        page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
-                        apply_theme(page, theme)
-                        main_content = page.locator("article.content")
-                        expect(main_content.get_by_text(expected_text, exact=True).first).to_be_visible(timeout=10000)
-
-                        assert_global_player_visible(page)
-                        if width < 992:
-                            verify_drawer(page)
-                        assert_no_horizontal_overflow(page)
-                        assert_bottom_player_does_not_cover_content(page)
-                        if route == "/library":
-                            assert_library_cards_are_uniform(page)
-
-                        page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}_{theme}.png"), full_page=True)
-
-            assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
-
-            context.close()
-            browser.close()
-            print(
-                f"UI smoke passed: {len(VIEWPORTS)} viewports × {len(THEMES)} themes × "
-                f"{len(ROUTES)} primary routes; isolated runtime={started_local_server}."
-            )
-        finally:
-            if started_local_server:
-                stop_local_server(server_process, server_log_stream, runtime_dir)
+    output_dir = Path("mobile_smoke_screenshots")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as playwright:
+        if is_server_reachable():
+            verify_application(playwright, output_dir)
+            return
+        if not AUTO_START_SERVER:
+            raise RuntimeError(f"App is not reachable at {BASE_URL}. Start the app or enable auto-start.")
+        for with_speaker in [False, True]:
+            speaker = None
+            process = log_stream = runtime_dir = None
+            try:
+                if with_speaker:
+                    speaker = ThreadingHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
+                    threading.Thread(target=speaker.serve_forever, daemon=True).start()
+                process, log_stream, log_path, runtime_dir = start_local_server(with_speaker)
+                if not wait_for_server_ready(SERVER_START_TIMEOUT_SECONDS, process):
+                    raise RuntimeError(f"Timed out waiting for {BASE_URL} (exit code: {process.poll()}). Check {log_path}")
+                verify_application(playwright, output_dir, with_speaker)
+            finally:
+                stop_local_server(process, log_stream, runtime_dir)
+                if speaker is not None:
+                    speaker.shutdown()
+                    speaker.server_close()
 
 
 if __name__ == "__main__":

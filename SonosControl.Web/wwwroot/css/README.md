@@ -16,6 +16,7 @@
 - Navigation, the global player dock, menus, and dialogs use translucent materials with 24 px backdrop blur and a WebKit-prefixed equivalent.
 - Content cards use the stronger card material; fields, select options, and nested tables remain solid. Do not add backdrop blur to every row or nested control.
 - The player dock uses `--player-inset` for its outside margin and `--player-reserve` for content clearance. Mobile safe areas are applied to the dock position and page padding. Drawers and dialogs render above the dock.
+- With no configured speakers, Home renders one large onboarding surface and the app hides the player dock. `app-shell--without-player` restores normal bottom padding; offline configured speakers retain the dashboard and dock.
 - Existing responsive layouts and playback controls remain intact. Buttons respond on press; hover movement is limited to fine pointers.
 
 ## Accessibility and fallbacks

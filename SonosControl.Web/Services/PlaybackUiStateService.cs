@@ -74,6 +74,9 @@ public sealed class PlaybackUiStateService
         }
         else
         {
+            CancelPendingVolumeUpdate();
+            IsPlaying = false;
+            IsStale = false;
             ActiveSpeakerIp = "";
             ActiveSpeakerName = "No speaker";
             ClearPlaybackError();
@@ -81,6 +84,7 @@ public sealed class PlaybackUiStateService
 
         MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
         Volume = Math.Clamp(_settings.Volume, 0, MaxVolume);
+        NotifyStateChanged();
         await RefreshAsync();
     }
 
