@@ -11,18 +11,18 @@ namespace SonosControl.Web.Controllers;
 [Authorize(Roles = "admin,superadmin")]
 public sealed class DevicesController : ControllerBase
 {
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
     private readonly ISonosDeviceDiscoveryService _discoveryService;
     private readonly IDeviceHealthSnapshotStore _healthSnapshotStore;
     private readonly ActionLogger _actionLogger;
 
     public DevicesController(
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo,
         ISonosDeviceDiscoveryService discoveryService,
         IDeviceHealthSnapshotStore healthSnapshotStore,
         ActionLogger actionLogger)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
         _discoveryService = discoveryService;
         _healthSnapshotStore = healthSnapshotStore;
         _actionLogger = actionLogger;
@@ -44,7 +44,7 @@ public sealed class DevicesController : ControllerBase
         var timeout = TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 1, 20));
         var discovered = await _discoveryService.DiscoverAsync(timeout, cancellationToken);
 
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.Speakers ??= new();
 
         var existingIps = settings.Speakers.Select(s => s.IpAddress).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -69,7 +69,7 @@ public sealed class DevicesController : ControllerBase
 
         if (imported > 0)
         {
-            await _uow.ISettingsRepo.WriteSettings(settings);
+            await _settingsRepo.SaveChangesAsync(settings);
         }
 
         await _actionLogger.LogAsync("SpeakersDiscovered", $"Discovered {discovered.Count} speakers, imported {imported}.");

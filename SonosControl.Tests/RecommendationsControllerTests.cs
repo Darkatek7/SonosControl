@@ -115,10 +115,7 @@ public class RecommendationsControllerTests
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(x => x.ISettingsRepo).Returns(settingsRepo.Object);
-
-        return new RecommendationsController(db, uow.Object);
+        return new RecommendationsController(db, settingsRepo.Object);
     }
 
     private static ApplicationDbContext CreateDbContext()

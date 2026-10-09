@@ -1,300 +1,217 @@
 using Newtonsoft.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
-using SonosControl.DAL.Models.Json;
-using System.Threading;
-using System.Linq;
 
-namespace SonosControl.DAL.Repos
+namespace SonosControl.DAL.Repos;
+
+public sealed class SettingsReadException : IOException
 {
-    public class SettingsRepo : ISettingsRepo, IDisposable
+    public SettingsReadException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+public class SettingsRepo : ISettingsRepo, IDisposable
+{
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private readonly string _directoryPath;
+    private readonly string _filePath;
+
+    public SettingsRepo(string? directoryPath = null)
     {
-        private static readonly SemaphoreSlim _semaphore = new(1, 1);
-        private static readonly JsonSerializerSettings SerializerSettings = new()
+        _directoryPath = Path.GetFullPath(string.IsNullOrWhiteSpace(directoryPath) ? "./Data" : directoryPath);
+        _filePath = Path.Combine(_directoryPath, "config.json");
+        Directory.CreateDirectory(_directoryPath);
+    }
+
+    public async Task<SonosSettings?> GetSettings()
+    {
+        await Gate.WaitAsync();
+        try { return SettingsChanges.Track(await ReadAsync(CancellationToken.None)); }
+        finally { Gate.Release(); }
+    }
+
+    public async Task<SonosSettings> UpdateSettingsAsync(Action<SonosSettings> update, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        await Gate.WaitAsync(cancellationToken);
+        try
         {
-            Formatting = Formatting.Indented,
-            Converters = { new DateOnlyJsonConverter() },
-            ObjectCreationHandling = ObjectCreationHandling.Replace
-        };
-
-        private volatile string? _cachedJson;
-        private FileSystemWatcher? _watcher;
-        private readonly bool _cachingEnabled = false;
-        private readonly string _directoryPath;
-        private readonly string _filePath;
-
-        public SettingsRepo(string? directoryPath = null)
-        {
-            _directoryPath = Path.GetFullPath(
-                string.IsNullOrWhiteSpace(directoryPath) ? "./Data" : directoryPath);
-            _filePath = Path.Combine(_directoryPath, "config.json");
-
-            // Ensure directory exists
-            if (!Directory.Exists(_directoryPath))
+            var settings = await ReadAsync(cancellationToken);
+            var before = SettingsChanges.Serialize(settings);
+            update(settings);
+            Normalize(settings);
+            var after = SettingsChanges.Serialize(settings);
+            if (before != after)
             {
-                Directory.CreateDirectory(_directoryPath);
+                CreateVersionedBackupIfPresent(throwOnFailure: true);
+                await PersistAsync(after, cancellationToken);
             }
-
-            try
-            {
-                _watcher = new FileSystemWatcher(_directoryPath);
-                _watcher.Filter = "config.json";
-                _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
-                _watcher.Changed += OnChanged;
-                _watcher.Created += OnChanged;
-                _watcher.Renamed += OnRenamed;
-                _watcher.EnableRaisingEvents = true;
-                _cachingEnabled = true;
-            }
-            catch (Exception)
-            {
-                // If watcher fails to initialize (e.g. permission issues), we disable caching
-                // to fall back to polling behavior (reading from disk every time).
-                _cachingEnabled = false;
-            }
+            return SettingsChanges.Track(SettingsChanges.Deserialize(after));
         }
+        finally { Gate.Release(); }
+    }
 
-        private void OnChanged(object sender, FileSystemEventArgs e) => InvalidateCache();
-        private void OnRenamed(object sender, RenamedEventArgs e) => InvalidateCache();
+    public async Task SaveChangesAsync(SonosSettings? settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var changes = SettingsChanges.Capture(settings);
+        await UpdateSettingsAsync(changes.Apply);
+        SettingsChanges.Accept(settings, changes);
+    }
 
-        private void InvalidateCache()
+    public async Task<string?> ReplaceSettingsAsync(SonosSettings settings, string label = "replacement", CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var candidate = SettingsChanges.Deserialize(SettingsChanges.Serialize(settings));
+        Normalize(candidate);
+        var json = SettingsChanges.Serialize(candidate);
+        await Gate.WaitAsync(cancellationToken);
+        try
         {
-            _cachedJson = null;
+            // Preserve even an unreadable JSON document during an explicit restore.
+            var backup = CreateVersionedBackupIfPresent(label, throwOnFailure: true);
+            await PersistAsync(json, cancellationToken);
+            return backup;
         }
+        finally { Gate.Release(); }
+    }
 
-        public async Task WriteSettings(SonosSettings? settings)
+    public async Task<string?> CreateVersionedBackupAsync(string label, CancellationToken cancellationToken = default)
+    {
+        await Gate.WaitAsync(cancellationToken);
+        try { return CreateVersionedBackupIfPresent(label, throwOnFailure: true); }
+        finally { Gate.Release(); }
+    }
+
+    private async Task<SonosSettings> ReadAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            await _semaphore.WaitAsync();
-            try
-            {
-                if (!Directory.Exists(_directoryPath))
-                    Directory.CreateDirectory(_directoryPath);
-
-                string jsonString;
-                try
-                {
-                    settings?.NormalizeAutomationDateExceptions();
-                    jsonString = JsonConvert.SerializeObject(settings, SerializerSettings);
-                }
-                catch (JsonException ex)
-                {
-                    throw new InvalidOperationException("Failed to serialize settings.", ex);
-                }
-
-                CreateVersionedBackupIfPresent();
-
-                var tempFile = Path.GetTempFileName();
-                await File.WriteAllTextAsync(tempFile, jsonString);
-                await ReplaceFileWithRetryAsync(tempFile, _filePath);
-
-                // Update cache only if caching is enabled
-                if (_cachingEnabled)
-                {
-                    _cachedJson = jsonString;
-                }
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
+            var json = await File.ReadAllTextAsync(_filePath, cancellationToken);
+            var settings = SettingsChanges.Deserialize(json);
+            Normalize(settings);
+            return settings;
         }
-
-        public async Task<string?> CreateVersionedBackupAsync(
-            string label,
-            CancellationToken cancellationToken = default)
+        catch (FileNotFoundException) { return new SonosSettings(); }
+        catch (DirectoryNotFoundException) { return new SonosSettings(); }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            await _semaphore.WaitAsync(cancellationToken);
-            try
-            {
-                return CreateVersionedBackupIfPresent(label, throwOnFailure: true);
-            }
-            finally
-            {
-                _semaphore.Release();
-            }
-        }
-
-        private string? CreateVersionedBackupIfPresent(string? label = null, bool throwOnFailure = false)
-        {
-            if (!File.Exists(_filePath))
-            {
-                return null;
-            }
-
-            try
-            {
-                var backupDirectory = Path.Combine(_directoryPath, "backups");
-                Directory.CreateDirectory(backupDirectory);
-
-                var safeLabel = string.IsNullOrWhiteSpace(label)
-                    ? null
-                    : string.Concat(label.Trim().ToLowerInvariant().Select(character =>
-                        char.IsLetterOrDigit(character) || character == '-' ? character : '-')).Trim('-');
-                var labelSegment = string.IsNullOrWhiteSpace(safeLabel) ? string.Empty : $"{safeLabel}-";
-                var backupFile = Path.Combine(
-                    backupDirectory,
-                    $"config-{labelSegment}{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.json");
-                File.Copy(_filePath, backupFile, overwrite: false);
-
-                var existingBackups = Directory.GetFiles(backupDirectory, "config-*.json")
-                    .Select(path => new FileInfo(path))
-                    .OrderByDescending(file => file.CreationTimeUtc)
-                    .ToList();
-
-                foreach (var staleFile in existingBackups.Skip(30))
-                {
-                    try
-                    {
-                        staleFile.Delete();
-                    }
-                    catch
-                    {
-                        // Keep write path resilient; stale backup cleanup is best effort.
-                    }
-                }
-
-                return Path.GetFileName(backupFile);
-            }
-            catch when (!throwOnFailure)
-            {
-                // Backup/versioning is best effort and must not block settings writes.
-                return null;
-            }
-        }
-
-        private static async Task ReplaceFileWithRetryAsync(string sourcePath, string destinationPath)
-        {
-            const int maxAttempts = 5;
-            for (var attempt = 1; attempt <= maxAttempts; attempt++)
-            {
-                try
-                {
-                    File.Move(sourcePath, destinationPath, overwrite: true);
-                    return;
-                }
-                catch (Exception ex) when (attempt < maxAttempts && (ex is IOException || ex is UnauthorizedAccessException))
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt));
-                }
-            }
-
-            // Last attempt without swallowing exceptions.
-            File.Move(sourcePath, destinationPath, overwrite: true);
-        }
-
-        public async Task<SonosSettings?> GetSettings()
-        {
-            string jsonToUse;
-
-            // Try to use cache first (only if enabled)
-            if (_cachingEnabled && _cachedJson != null)
-            {
-                jsonToUse = _cachedJson;
-            }
-            else
-            {
-                await _semaphore.WaitAsync();
-                try
-                {
-                    // Double check
-                    if (_cachingEnabled && _cachedJson != null)
-                    {
-                        jsonToUse = _cachedJson;
-                    }
-                    else
-                    {
-                        bool success = false;
-                        if (!File.Exists(_filePath))
-                        {
-                            jsonToUse = "{}";
-                            // If file doesn't exist, we can cache the empty state.
-                            // If file is created later, watcher will fire.
-                            success = true;
-                        }
-                        else
-                        {
-                            try
-                            {
-                                jsonToUse = await File.ReadAllTextAsync(_filePath);
-                                success = true;
-                            }
-                            catch (IOException)
-                            {
-                                // Temporary failure (locked file). Do not cache.
-                                jsonToUse = "{}";
-                                success = false;
-                            }
-                        }
-
-                        if (_cachingEnabled && success)
-                        {
-                            _cachedJson = jsonToUse;
-                        }
-                    }
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
-            }
-
-            try
-            {
-                var settings = JsonConvert.DeserializeObject<SonosSettings?>(jsonToUse, SerializerSettings);
-
-                if (settings == null)
-                    return new();
-
-                settings.Stations ??= new();
-                settings.SpotifyTracks ??= new();
-                settings.YouTubeCollections ??= new();
-                settings.YouTubeMusicCollections ??= new();
-                settings.DailySchedules ??= new();
-                settings.ActiveDays ??= new();
-                settings.HolidaySchedules ??= new();
-                settings.Scenes ??= new();
-                settings.ScheduleWindows ??= new();
-                settings.AutomationRules ??= new();
-                settings.QueueSnapshots ??= new();
-                settings.DeviceHealthStatuses ??= new();
-                settings.Jukebox ??= new();
-                settings.JukeboxSuggestions ??= new();
-
-                foreach (var suggestion in settings.JukeboxSuggestions)
-                {
-                    suggestion.Votes ??= new();
-                }
-
-                foreach (var key in settings.DailySchedules.Keys)
-                {
-                    settings.DailySchedules[key] ??= new DaySchedule();
-                }
-
-                foreach (var window in settings.ScheduleWindows)
-                {
-                    window.DaysOfWeek ??= new();
-                    window.ExcludedDates ??= new();
-                    window.AnnualExcludedDates ??= new();
-                }
-
-                foreach (var scene in settings.Scenes)
-                {
-                    scene.SpeakerIps ??= new();
-                    scene.Actions ??= new();
-                }
-
-                settings.NormalizeAutomationDateExceptions();
-                return settings;
-            }
-            catch (JsonException)
-            {
-                return new();
-            }
-        }
-
-        public void Dispose()
-        {
-            _watcher?.Dispose();
+            throw new SettingsReadException("The settings file is invalid or cannot be read. Restore a valid backup before saving changes.", ex);
         }
     }
+
+    private async Task PersistAsync(string json, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(_directoryPath);
+        var temporaryPath = Path.Combine(_directoryPath, $".config-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
+            // Validate the complete staged document before the atomic replacement.
+            SettingsChanges.Deserialize(await File.ReadAllTextAsync(temporaryPath, cancellationToken));
+            const int maxAttempts = 5;
+            for (var attempt = 1; ; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try { File.Move(temporaryPath, _filePath, overwrite: true); break; }
+                catch (Exception ex) when (attempt < maxAttempts && ex is IOException or UnauthorizedAccessException)
+                { await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken); }
+            }
+        }
+        finally { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
+    }
+
+    private static void Normalize(SonosSettings settings)
+    {
+        settings.MaxVolume = Math.Clamp(settings.MaxVolume, 0, 100);
+        settings.Volume = Math.Clamp(settings.Volume, 0, settings.MaxVolume);
+        settings.Stations ??= new();
+        settings.SpotifyTracks ??= new();
+        settings.YouTubeCollections ??= new();
+        settings.YouTubeMusicCollections ??= new();
+        settings.DailySchedules ??= new();
+        settings.ActiveDays ??= new();
+        settings.HolidaySchedules ??= new();
+        settings.Scenes ??= new();
+        settings.ScheduleWindows ??= new();
+        settings.AutomationRules ??= new();
+        settings.QueueSnapshots ??= new();
+        settings.DeviceHealthStatuses ??= new();
+        settings.Jukebox ??= new();
+        settings.JukeboxSuggestions ??= new();
+
+        foreach (var suggestion in settings.JukeboxSuggestions)
+        {
+            suggestion.Votes ??= new();
+        }
+
+        foreach (var key in settings.DailySchedules.Keys)
+        {
+            settings.DailySchedules[key] ??= new DaySchedule();
+        }
+
+        foreach (var window in settings.ScheduleWindows)
+        {
+            window.DaysOfWeek ??= new();
+            window.ExcludedDates ??= new();
+            window.AnnualExcludedDates ??= new();
+        }
+
+        foreach (var scene in settings.Scenes)
+        {
+            scene.SpeakerIps ??= new();
+            scene.Actions ??= new();
+        }
+
+        settings.NormalizeAutomationDateExceptions();
+    }
+
+    private string? CreateVersionedBackupIfPresent(string? label = null, bool throwOnFailure = false)
+    {
+        if (!File.Exists(_filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var backupDirectory = Path.Combine(_directoryPath, "backups");
+            Directory.CreateDirectory(backupDirectory);
+
+            var safeLabel = string.IsNullOrWhiteSpace(label)
+                ? null
+                : string.Concat(label.Trim().ToLowerInvariant().Select(character =>
+                    char.IsLetterOrDigit(character) || character == '-' ? character : '-')).Trim('-');
+            var labelSegment = string.IsNullOrWhiteSpace(safeLabel) ? string.Empty : $"{safeLabel}-";
+            var backupFile = Path.Combine(
+                backupDirectory,
+                $"config-{labelSegment}{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}.json");
+            File.Copy(_filePath, backupFile, overwrite: false);
+
+            var existingBackups = Directory.GetFiles(backupDirectory, "config-*.json")
+                .Select(path => new FileInfo(path))
+                .OrderByDescending(file => file.CreationTimeUtc)
+                .ToList();
+
+            foreach (var staleFile in existingBackups.Skip(30))
+            {
+                try
+                {
+                    staleFile.Delete();
+                }
+                catch
+                {
+                    // Keep write path resilient; stale backup cleanup is best effort.
+                }
+            }
+
+            return Path.GetFileName(backupFile);
+        }
+        catch when (!throwOnFailure)
+        {
+            // Backup/versioning is best effort and must not block settings writes.
+            return null;
+        }
+    }
+
+    public void Dispose() { }
 }

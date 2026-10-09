@@ -1,4 +1,5 @@
-﻿@* Routed through AdministrationPage. *@
+﻿@inject ISettingsRepo _settingsRepo
+@* Routed through AdministrationPage. *@
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @using SonosControl.Web.Shared
@@ -8,7 +9,6 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using SonosControl.Web.Data
 @inject ApplicationDbContext Db
-@inject IUnitOfWork _uow
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 <PageTitle>User Management</PageTitle>
@@ -341,7 +341,7 @@
             isLoading = false;
         }
 
-        _settings = await _uow.ISettingsRepo.GetSettings();
+        _settings = await _settingsRepo.GetSettings();
         allowUserRegistration = _settings?.AllowUserRegistration ?? true;
     }
 
@@ -357,7 +357,7 @@
         if (_settings is not null)
         {
             _settings.AllowUserRegistration = allowUserRegistration;
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await _settingsRepo.SaveChangesAsync(_settings);
             await AddLog(allowUserRegistration ? "Registration enabled" : "Registration disabled");
         }
     }

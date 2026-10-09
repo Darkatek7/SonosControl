@@ -62,7 +62,6 @@ public partial class IndexPage : IAsyncDisposable
     private Task SetActiveVolume(int volume) => PlaybackState.SetVolumeAsync(volume);
     private Task TogglePlayback() => PlaybackState.TogglePlaybackAsync();
 
-
     private int MaxVolumeLimit => Math.Clamp(_settings?.MaxVolume ?? 100, 0, 100);
 
     private bool isAuthenticated;
@@ -498,8 +497,8 @@ public partial class IndexPage : IAsyncDisposable
     {
         try
         {
-            var isPlayingTask = _uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
-            var rawStationUrlTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress, cancellationToken);
+            var isPlayingTask = _sonosConnectorRepo.IsPlaying(speaker.IpAddress);
+            var rawStationUrlTask = _sonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress, cancellationToken);
             await Task.WhenAll(isPlayingTask, rawStationUrlTask);
 
             var isPlaying = await isPlayingTask;
@@ -586,39 +585,7 @@ public partial class IndexPage : IAsyncDisposable
         => rawStationUrl?.Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase).Trim() ?? string.Empty;
 
     private static bool IsSameStoredMedia(string currentUri, string? storedUrl)
-    {
-        var current = NormalizeMediaUriForMatching(currentUri);
-        var stored = NormalizeMediaUriForMatching(storedUrl);
-
-        return !string.IsNullOrWhiteSpace(current)
-            && !string.IsNullOrWhiteSpace(stored)
-            && (current.Contains(stored, StringComparison.OrdinalIgnoreCase)
-                || stored.Contains(current, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string NormalizeMediaUriForMatching(string? uri)
-    {
-        if (string.IsNullOrWhiteSpace(uri))
-        {
-            return string.Empty;
-        }
-
-        var normalized = uri.Trim()
-            .Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
-
-        var queryIndex = normalized.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-        {
-            normalized = normalized[..queryIndex];
-        }
-
-        normalized = normalized.Trim().Trim('/');
-        return normalized.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? normalized[4..]
-            : normalized;
-    }
+        => MediaIdentity.Matches(currentUri, storedUrl);
 
     private void ShowCommandStatus(string message, bool isError = false, int autoHideMs = 3500)
     {
@@ -707,24 +674,24 @@ public partial class IndexPage : IAsyncDisposable
             switch (mediaType)
             {
                 case "station":
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(targetSpeakerIp, url);
+                    await _sonosConnectorRepo.SetTuneInStationAsync(targetSpeakerIp, url);
                     await AddLog("Station Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"Station changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "spotify":
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(targetSpeakerIp, url);
+                    await _sonosConnectorRepo.PlaySpotifyTrackAsync(targetSpeakerIp, url);
                     await AddLog("Spotify Track Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"Spotify track changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "youtube":
                     var youTubeEntry = FindYouTubeEntry(url);
                     var youTubeOptions = GetYouTubePlaybackOptions(youTubeEntry, url);
-                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
+                    await _sonosConnectorRepo.PlayYouTubeAudioAsync(targetSpeakerIp, url, youTubeOptions.Mode, youTubeOptions.PreferredQueueLength);
                     await AddLog("YouTube Video Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube video changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
                 case "youtubemusic":
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, url, _settings.AutoPlayStationUrl);
+                    await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(targetSpeakerIp, url, _settings.AutoPlayStationUrl);
                     await AddLog("YouTube Music Changed", $"URL: {url}");
                     await NotificationService.SendNotificationAsync($"YouTube Music changed to {displayName} on {targetSpeakerIp}", await GetCurrentUserAsync());
                     break;
@@ -733,7 +700,7 @@ public partial class IndexPage : IAsyncDisposable
                     return;
             }
 
-            await _uow.ISonosConnectorRepo.StartPlaying(targetSpeakerIp);
+            await _sonosConnectorRepo.StartPlaying(targetSpeakerIp);
             ShowCommandStatus("Playback command sent.");
         }
         catch (Exception ex)
@@ -783,7 +750,7 @@ public partial class IndexPage : IAsyncDisposable
             return;
         }
 
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.YouTubeCollections ??= new List<YouTubeObject>();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
         _homeLibraryItems = await HomeLibrary.GetQuickAccessAsync(_settings, 6);
@@ -852,7 +819,7 @@ public partial class IndexPage : IAsyncDisposable
         {
             if (string.IsNullOrEmpty(speaker.Uuid))
             {
-                var uuid = await _uow.ISonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress);
+                var uuid = await _sonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress);
                 if (!string.IsNullOrEmpty(uuid))
                 {
                     speaker.Uuid = uuid;
@@ -871,7 +838,7 @@ public partial class IndexPage : IAsyncDisposable
     {
         try
         {
-            _settings!.Volume = await _uow.ISonosConnectorRepo.GetVolume(SelectedSpeakerIp);
+            _settings!.Volume = await _sonosConnectorRepo.GetVolume(SelectedSpeakerIp);
         }
         catch
         {
@@ -882,7 +849,7 @@ public partial class IndexPage : IAsyncDisposable
         if (_settings!.Volume > maxVolumeLimit)
         {
             _settings.Volume = maxVolumeLimit;
-            await _uow.ISonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
+            await _sonosConnectorRepo.SetVolume(SelectedSpeakerIp, maxVolumeLimit);
         }
 
         await SaveSettings();
@@ -895,7 +862,7 @@ public partial class IndexPage : IAsyncDisposable
     }
 
     private Task SaveSettings()
-        => _uow.ISettingsRepo.WriteSettings(_settings!);
+        => _settingsRepo.SaveChangesAsync(_settings!);
 
     public async ValueTask DisposeAsync()
     {

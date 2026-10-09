@@ -1,9 +1,11 @@
-﻿@* Routed through LibraryPage. *@
+﻿@inject ISonosConnectorRepo _sonosConnectorRepo
+@inject ISettingsRepo _settingsRepo
+@inject ILogger<StationLookup> Logger
+@* Routed through LibraryPage. *@
 @using System.Net.Http.Json
 @using System.Linq
 @using System.Text
 @using SonosControl.DAL.Interfaces
-@inject IUnitOfWork _uow
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IHttpClientFactory HttpClientFactory
@@ -238,7 +240,7 @@
 
         if (isAuthenticated)
         {
-            _settings = await _uow.ISettingsRepo.GetSettings();
+            _settings = await _settingsRepo.GetSettings();
         }
     }
 
@@ -376,9 +378,15 @@
 
             try
             {
-                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
-                Console.WriteLine($@"Station {url} played successfully.");
+                await _sonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
+                Logger.LogDebug("Station {StationUrl} played on {SpeakerIp}.", url, _settings.IP_Adress);
                 await AddLog("Playing Station", $"station: {url}");
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                addStationErrorMessage = "The station could not be played. Check the speaker connection and try again.";
+                Logger.LogWarning(ex, "Station playback failed on {SpeakerIp}.", _settings.IP_Adress);
             }
             finally
             {
@@ -458,7 +466,7 @@
     private async Task SaveSettings()
     {
         if (_settings is null) return;
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
     }
 
     private async Task AddLog(string action, string? details = null)

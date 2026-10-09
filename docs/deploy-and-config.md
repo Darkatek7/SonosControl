@@ -94,6 +94,30 @@ Configure these values in `appsettings.json` or with environment variables:
 - Runtime config file: `SonosControl.Web/Data/config.json` (not tracked)
 - Template file: `SonosControl.Web/Data/config.template.json` (tracked)
 
+Run one app instance per configuration directory. Settings updates read the latest
+document, apply only edited fields or identified entries, and normalize and save
+under one process-wide lock. Independent edits are preserved; the last saved edit
+wins for the same field. An old editor cannot recreate an entry that was deleted.
+Reload the page if an entry was removed while you were editing it. Autosave keeps
+its debounce and offers a retry after a failed save.
+
+Only a missing `config.json` starts with defaults. Invalid JSON or an unreadable
+file produces an explicit error and makes the settings health check unhealthy.
+Automation does not overwrite such a file with defaults. Correct file permissions
+or restore a valid backup through Administration → Backups.
+
+Changed settings are staged in a temporary file in the configuration directory
+and atomically replace the active file. Unchanged updates do not write another
+file or create another backup. Backups keep the existing JSON format, with up to
+30 versioned files in `Data/backups`. A failed backup or replacement leaves the
+active configuration untouched; temporary files are removed.
+
+Import and restore explicitly replace the whole configuration. Incoming settings
+are migrated and checked before replacement, including legacy and schema-v2
+documents. The safety backup and replacement use the same settings lock. A
+restore can replace damaged JSON and preserves it in the safety backup. Navigate
+to another page after restoring to refresh the layout's settings error state.
+
 At minimum, verify:
 1. Speaker IP is set correctly.
 2. Start and stop times match your timezone.
@@ -106,3 +130,9 @@ At minimum, verify:
 - `artifacts/` stores short-lived YouTube audio fallback files and temporary MP3 uploads inside the container bind mount.
 
 For production, back up all three regularly.
+
+Scene timers are held in memory. A new scene cancels earlier timers on its target
+speakers, including when the new scene has no timer. Timers on other speakers
+continue. Scene commands and timer expiry are serialized per speaker across
+service scopes. Shutdown cancels pending timers and awaits running timer commands;
+timers are not restored after an app restart.

@@ -1,3 +1,5 @@
+@inject ISonosConnectorRepo _sonosConnectorRepo
+@inject ILogger<GlobalPlayerBar> Logger
 @implements IDisposable
 @using SonosControl.Web.Services
 @inject PlaybackUiStateService PlaybackState
@@ -64,6 +66,10 @@
             </button>
             <label class="visually-hidden" for="@SpeakerSelectId">Active speaker</label>
             <select id="@SpeakerSelectId" class="form-select form-select-sm global-player-bar__speaker" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" aria-label="Active speaker" disabled="@(!PlaybackState.HasActiveSpeaker)">
+                @if (_groupError is not null)
+                {
+                    <div class="alert alert-warning" role="alert">@_groupError</div>
+                }
                 @if (!PlaybackState.HasActiveSpeaker) { <option value="">No speaker</option> }
                 @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
             </select>
@@ -105,6 +111,10 @@
                 <PlaybackCommandFeedback Message="@PlaybackState.PlaybackErrorMessage"
                                          Disabled="@(PlaybackState.IsLoading || PlaybackState.IsSkipping)"
                                          OnRetry="PlaybackState.RetryLastPlaybackCommandAsync" />
+                @if (_groupError is not null)
+                {
+                    <div class="alert alert-warning" role="alert">@_groupError</div>
+                }
                 @if (!PlaybackState.HasActiveSpeaker)
                 {
                     <div class="player-sheet__setup" role="status">
@@ -133,7 +143,11 @@
                     <div>
                         <label for="player-sheet-room" class="form-label">Room</label>
                         <select id="player-sheet-room" class="form-select" value="@PlaybackState.ActiveSpeakerIp" @onchange="HandleSpeakerChanged" disabled="@(!PlaybackState.HasActiveSpeaker)">
-                            @if (!PlaybackState.HasActiveSpeaker) { <option value="">No speaker</option> }
+                            @if (_groupError is not null)
+                {
+                    <div class="alert alert-warning" role="alert">@_groupError</div>
+                }
+                @if (!PlaybackState.HasActiveSpeaker) { <option value="">No speaker</option> }
                             @foreach (var speaker in PlaybackState.Speakers) { <option value="@speaker.IpAddress">@speaker.Name</option> }
                         </select>
                     </div>
@@ -206,6 +220,7 @@
     private bool _isCommandBusy;
     private bool _isQueueLoading;
     private string? _queueError;
+    private string? _groupError;
     private List<SonosQueueItem> _queueItems = new();
     private int _queueTotal;
     private int _timerMinutes = 60;
@@ -255,7 +270,7 @@
         try
         {
             var start = reset ? 0 : _queueItems.Count;
-            var page = await _uow.ISonosConnectorRepo.GetQueue(PlaybackState.ActiveSpeakerIp, start, QueuePageSize);
+            var page = await _sonosConnectorRepo.GetQueue(PlaybackState.ActiveSpeakerIp, start, QueuePageSize);
             if (reset) _queueItems.Clear();
             _queueItems.AddRange(page.Items);
             _queueTotal = page.TotalMatches;
@@ -273,12 +288,19 @@
     private async Task GroupAllAsync()
     {
         if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        _groupError = null;
         _isCommandBusy = true;
         try
         {
             var slaves = PlaybackState.Speakers.Where(speaker => speaker.IpAddress != PlaybackState.ActiveSpeakerIp).Select(speaker => speaker.IpAddress);
-            await _uow.ISonosConnectorRepo.CreateGroup(PlaybackState.ActiveSpeakerIp, slaves);
+            await _sonosConnectorRepo.CreateGroup(PlaybackState.ActiveSpeakerIp, slaves);
             await PlaybackState.RefreshAsync();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _groupError = "The speaker group could not be changed. Check the connection and try again.";
+            Logger.LogWarning(ex, "Speaker grouping failed for {SpeakerIp}.", PlaybackState.ActiveSpeakerIp);
         }
         finally { _isCommandBusy = false; }
     }
@@ -286,8 +308,15 @@
     private async Task UngroupAsync()
     {
         if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        _groupError = null;
         _isCommandBusy = true;
-        try { await _uow.ISonosConnectorRepo.UngroupSpeaker(PlaybackState.ActiveSpeakerIp); await PlaybackState.RefreshAsync(); }
+        try { await _sonosConnectorRepo.UngroupSpeaker(PlaybackState.ActiveSpeakerIp); await PlaybackState.RefreshAsync(); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _groupError = "The speaker group could not be changed. Check the connection and try again.";
+            Logger.LogWarning(ex, "Speaker grouping failed for {SpeakerIp}.", PlaybackState.ActiveSpeakerIp);
+        }
         finally { _isCommandBusy = false; }
     }
 
@@ -313,7 +342,7 @@
         {
             await Task.Delay(TimeSpan.FromMinutes(minutes), TimerClock, token);
             token.ThrowIfCancellationRequested();
-            await _uow.ISonosConnectorRepo.PausePlaying(speakerIp);
+            await _sonosConnectorRepo.PausePlaying(speakerIp);
             if (PlaybackState.ActiveSpeakerIp == speakerIp) await PlaybackState.RefreshAsync();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }

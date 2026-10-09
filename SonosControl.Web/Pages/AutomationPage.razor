@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @page "/automation"
 @page "/scenes"
 @page "/schedule-windows"
@@ -187,7 +188,7 @@
 
     private async Task LoadSettingsAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.NormalizeAutomationDateExceptions();
     }
 
@@ -204,7 +205,7 @@
             return;
         }
         dates.Add(date);
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         _newExceptionDate = null;
         ShowExceptionStatus(NewExceptionIsAnnual
             ? $"{FormatExceptionDate(date, true)} pauses all schedules every year."
@@ -216,7 +217,7 @@
         if (!_canEditSchedules || _settings is null) return;
         var dates = isAnnual ? _settings.AnnualAutomationExcludedDates : _settings.AutomationExcludedDates;
         dates.Remove(date);
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         ShowExceptionStatus(isAnnual
             ? $"The yearly exception for {FormatExceptionDate(date, true)} was removed."
             : $"The one-time exception for {FormatExceptionDate(date, false)} was removed.");

@@ -11,16 +11,18 @@ namespace SonosControl.Web.Controllers;
 [Authorize(Roles = "admin,operator,superadmin")]
 public sealed class SchedulesController : ControllerBase
 {
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly SettingsEditingService _editing;
     private readonly ActionLogger _actionLogger;
     private readonly ConfiguredTimeZoneService _appTimeZone;
 
     public SchedulesController(
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo, SettingsEditingService editing,
         ActionLogger actionLogger,
         ConfiguredTimeZoneService appTimeZone)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _editing = editing;
         _actionLogger = actionLogger;
         _appTimeZone = appTimeZone;
     }
@@ -28,7 +30,7 @@ public sealed class SchedulesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ScheduleWindow>>> GetAll()
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.ScheduleWindows ??= new();
 
         var windows = settings.ScheduleWindows
@@ -42,7 +44,7 @@ public sealed class SchedulesController : ControllerBase
     [HttpGet("active")]
     public async Task<ActionResult<ScheduleWindow>> GetActive()
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.ScheduleWindows ??= new();
 
         var now = _appTimeZone.Now;
@@ -60,155 +62,44 @@ public sealed class SchedulesController : ControllerBase
     [Authorize(Roles = "admin,superadmin")]
     public async Task<ActionResult<ScheduleWindow>> Create([FromBody] ScheduleWindow window)
     {
-        if (window is null)
+        if (window is null) return BadRequest("ScheduleWindow payload is required.");
+        try
         {
-            return BadRequest("Schedule payload is required.");
+            window.Id = string.IsNullOrWhiteSpace(window.Id) ? Guid.NewGuid().ToString("N") : window.Id.Trim();
+            var saved = await _editing.SaveWindowAsync(window, create: true);
+            var result = saved.ScheduleWindows.Single(item => item.Id == window.Id);
+            await _actionLogger.LogAsync("ScheduleWindowCreated", $"{result.Name} ({result.Id})");
+            return CreatedAtAction(nameof(GetAll), new { id = result.Id }, result);
         }
-
-        var validation = ValidateWindow(window);
-        if (validation is not null)
-        {
-            return BadRequest(validation);
-        }
-
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.ScheduleWindows ??= new();
-        settings.Scenes ??= new();
-        var sceneValidation = ValidateSceneReference(window, settings);
-        if (sceneValidation is not null)
-        {
-            return BadRequest(sceneValidation);
-        }
-
-        window.Id = string.IsNullOrWhiteSpace(window.Id) ? Guid.NewGuid().ToString("N") : window.Id.Trim();
-        window.LastModifiedUtc = DateTime.UtcNow;
-        settings.ScheduleWindows.Add(window);
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("ScheduleWindowCreated", $"{window.Name} ({window.Id})");
-
-        return CreatedAtAction(nameof(GetAll), new { id = window.Id }, window);
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
 
     [HttpPut("{id}")]
     [Authorize(Roles = "admin,superadmin")]
     public async Task<ActionResult<ScheduleWindow>> Update(string id, [FromBody] ScheduleWindow window)
     {
-        if (window is null)
+        if (window is null) return BadRequest("ScheduleWindow payload is required.");
+        try
         {
-            return BadRequest("Schedule payload is required.");
+            window.Id = id;
+            var saved = await _editing.SaveWindowAsync(window, create: false);
+            var result = saved.ScheduleWindows.Single(item => item.Id == id);
+            await _actionLogger.LogAsync("ScheduleWindowUpdated", $"{result.Name} ({result.Id})");
+            return Ok(result);
         }
-
-        var validation = ValidateWindow(window);
-        if (validation is not null)
-        {
-            return BadRequest(validation);
-        }
-
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.ScheduleWindows ??= new();
-        settings.Scenes ??= new();
-        var sceneValidation = ValidateSceneReference(window, settings);
-        if (sceneValidation is not null)
-        {
-            return BadRequest(sceneValidation);
-        }
-
-        var existing = settings.ScheduleWindows.FirstOrDefault(w => string.Equals(w.Id, id, StringComparison.OrdinalIgnoreCase));
-        if (existing is null)
-        {
-            return NotFound();
-        }
-
-        existing.Name = window.Name;
-        existing.IsEnabled = window.IsEnabled;
-        existing.Priority = window.Priority;
-        existing.StartTime = window.StartTime;
-        existing.StopTime = window.StopTime;
-        existing.RecurrenceType = window.RecurrenceType;
-        existing.DaysOfWeek = window.DaysOfWeek ?? new();
-        existing.StartDate = window.StartDate;
-        existing.EndDate = window.EndDate;
-        existing.ExcludedDates = window.ExcludedDates?.Distinct().OrderBy(date => date).ToList() ?? new();
-        existing.AnnualExcludedDates = window.AnnualExcludedDates?
-            .DistinctBy(date => (date.Month, date.Day))
-            .OrderBy(date => date.Month).ThenBy(date => date.Day).ToList() ?? new();
-        existing.SceneId = window.SceneId;
-        existing.FadeInSeconds = Math.Max(0, window.FadeInSeconds);
-        existing.FadeOutSeconds = Math.Max(0, window.FadeOutSeconds);
-        existing.LastModifiedUtc = DateTime.UtcNow;
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("ScheduleWindowUpdated", $"{existing.Name} ({existing.Id})");
-
-        return Ok(existing);
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "admin,superadmin")]
     public async Task<IActionResult> Delete(string id)
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.ScheduleWindows ??= new();
-
-        var existing = settings.ScheduleWindows.FirstOrDefault(w => string.Equals(w.Id, id, StringComparison.OrdinalIgnoreCase));
-        if (existing is null)
+        try
         {
-            return NotFound();
+            await _editing.DeleteWindowAsync(id);
+            await _actionLogger.LogAsync("ScheduleWindowDeleted", id);
+            return NoContent();
         }
-
-        settings.ScheduleWindows.Remove(existing);
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("ScheduleWindowDeleted", $"{existing.Name} ({existing.Id})");
-
-        return NoContent();
-    }
-
-    private static string? ValidateWindow(ScheduleWindow window)
-    {
-        if (string.IsNullOrWhiteSpace(window.Name))
-        {
-            return "Schedule window name is required.";
-        }
-
-        if (window.Priority < 0 || window.Priority > 1000)
-        {
-            return "Schedule window priority must be between 0 and 1000.";
-        }
-
-        if (window.RecurrenceType == ScheduleRecurrenceType.CustomDays
-            && (window.DaysOfWeek is null || window.DaysOfWeek.Count == 0))
-        {
-            return "Custom day recurrence requires at least one day.";
-        }
-
-        if (window.StartDate.HasValue && window.EndDate.HasValue && window.EndDate < window.StartDate)
-        {
-            return "EndDate must be on or after StartDate.";
-        }
-
-        if (window.FadeInSeconds < 0 || window.FadeOutSeconds < 0)
-        {
-            return "Fade values cannot be negative.";
-        }
-
-        return null;
-    }
-
-    private static string? ValidateSceneReference(ScheduleWindow window, SonosSettings settings)
-    {
-        if (!window.IsEnabled)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(window.SceneId))
-        {
-            return "An enabled schedule must reference a scene.";
-        }
-
-        return settings.Scenes.Any(scene => scene.Enabled && string.Equals(scene.Id, window.SceneId, StringComparison.OrdinalIgnoreCase))
-            ? null
-            : "An enabled schedule must reference an existing enabled scene.";
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
 }

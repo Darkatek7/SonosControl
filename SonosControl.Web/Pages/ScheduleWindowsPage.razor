@@ -1,3 +1,5 @@
+@inject SettingsEditingService SettingsEditor
+@inject ISettingsRepo _settingsRepo
 @* Routed through AutomationPage. *@
 @using SonosControl.Web.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -267,7 +269,7 @@
 
     private async Task LoadSettingsAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.ScheduleWindows ??= new();
         _settings.Scenes ??= new();
         foreach (var window in _settings.ScheduleWindows)
@@ -311,55 +313,14 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_editingWindow.Name))
-        {
-            ShowStatus("Window name is required.", true);
-            return;
-        }
-
-        if (_editingWindow.RecurrenceType == ScheduleRecurrenceType.CustomDays && !_editingWindow.DaysOfWeek.Any())
-        {
-            ShowStatus("Select at least one custom day.", true);
-            return;
-        }
-
-        if (_editingWindow.StartDate.HasValue && _editingWindow.EndDate.HasValue && _editingWindow.EndDate < _editingWindow.StartDate)
-        {
-            ShowStatus("End date must be on or after start date.", true);
-            return;
-        }
-
-        if (_editingWindow.IsEnabled
-            && (string.IsNullOrWhiteSpace(_editingWindow.SceneId)
-                || !_settings.Scenes.Any(scene => scene.Enabled && scene.Id == _editingWindow.SceneId)))
-        {
-            ShowStatus("An enabled schedule must reference an enabled scene.", true);
-            return;
-        }
-
         _isSaving = true;
         try
         {
-            _editingWindow.Priority = Math.Clamp(_editingWindow.Priority, 0, 1000);
-            _editingWindow.FadeInSeconds = Math.Clamp(_editingWindow.FadeInSeconds, 0, 600);
-            _editingWindow.FadeOutSeconds = Math.Clamp(_editingWindow.FadeOutSeconds, 0, 600);
             _editingWindow.LastModifiedUtc = DateTime.UtcNow;
 
-            var existing = _settings.ScheduleWindows.FirstOrDefault(w => string.Equals(w.Id, _editingWindow.Id, StringComparison.OrdinalIgnoreCase));
-            if (existing is null)
-            {
-                _editingWindow.Id = string.IsNullOrWhiteSpace(_editingWindow.Id) ? Guid.NewGuid().ToString("N") : _editingWindow.Id;
-                _settings.ScheduleWindows.Add(CloneWindow(_editingWindow));
-                _selectedWindowId = _editingWindow.Id;
-            }
-            else
-            {
-                var index = _settings.ScheduleWindows.IndexOf(existing);
-                _settings.ScheduleWindows[index] = CloneWindow(_editingWindow);
-                _selectedWindowId = _editingWindow.Id;
-            }
-
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            var original = _settings.ScheduleWindows.FirstOrDefault(item => string.Equals(item.Id, _editingWindow.Id, StringComparison.OrdinalIgnoreCase));
+            _settings = await SettingsEditor.SaveWindowAsync(_editingWindow, original is null, original);
+            _selectedWindowId = _editingWindow.Id;
             ShowStatus("Schedule window saved.");
             await LoadSettingsAsync();
 
@@ -407,8 +368,7 @@
             return;
         }
 
-        _settings.ScheduleWindows.RemoveAll(w => string.Equals(w.Id, window.Id, StringComparison.OrdinalIgnoreCase));
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _settings = await SettingsEditor.DeleteWindowAsync(window.Id);
         ShowStatus("Schedule window deleted.");
 
         if (string.Equals(_selectedWindowId, window.Id, StringComparison.OrdinalIgnoreCase))
@@ -474,12 +434,12 @@
         (ordered[currentIndex], ordered[targetIndex]) = (ordered[targetIndex], ordered[currentIndex]);
         for (var index = 0; index < ordered.Count; index++)
         {
-            ordered[index].Priority = (index + 1) * 100;
+            ordered[index].Priority = ordered.Count <= 1 ? 0 : (int)((long)index * 1000 / (ordered.Count - 1));
             ordered[index].LastModifiedUtc = DateTime.UtcNow;
         }
 
         _settings.ScheduleWindows = ordered;
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         ShowStatus($"{window.Name} moved to position {targetIndex + 1}.");
     }
 

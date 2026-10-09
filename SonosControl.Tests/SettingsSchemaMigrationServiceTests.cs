@@ -248,7 +248,7 @@ public class SettingsSchemaMigrationServiceTests
     }
 
     [Fact]
-    public async Task Migration_VerificationFailure_RollsBackOriginalConfiguration()
+    public async Task Migration_StagingFailure_LeavesOriginalConfigurationUntouched()
     {
         var settings = LegacySettings();
         settings.ActiveDays = [DayOfWeek.Monday];
@@ -261,7 +261,7 @@ public class SettingsSchemaMigrationServiceTests
         Assert.False(result.Success);
         Assert.Same(settings, repository.Current);
         Assert.Equal(0, repository.Current!.SettingsSchemaVersion);
-        Assert.Equal(2, repository.WriteCount);
+        Assert.Equal(0, repository.WriteCount);
         Assert.Equal(AutomationRuntimePhase.Failed, status.Snapshot.Phase);
     }
 
@@ -313,18 +313,24 @@ public class SettingsSchemaMigrationServiceTests
         public bool ThrowOnWrite { get; set; }
         public bool ThrowOnBackup { get; set; }
         public bool FailVerificationAfterWrite { get; set; }
-        private bool _returnNullOnNextRead;
+        public Task<SonosSettings?> GetSettings() => Task.FromResult(Current);
 
-        public Task<SonosSettings?> GetSettings()
+        public async Task<SonosSettings> UpdateSettingsAsync(Action<SonosSettings> update, CancellationToken cancellationToken = default)
         {
-            if (_returnNullOnNextRead)
+            var candidate = SettingsChanges.Deserialize(SettingsChanges.Serialize(Current!));
+            var before = SettingsChanges.Serialize(candidate);
+            update(candidate);
+            if (before != SettingsChanges.Serialize(candidate))
             {
-                _returnNullOnNextRead = false;
-                return Task.FromResult<SonosSettings?>(null);
+                await CreateVersionedBackupAsync("pre-v2-migration", cancellationToken);
+                if (ThrowOnWrite || FailVerificationAfterWrite) throw new IOException("Simulated staging failure.");
+                Current = candidate;
+                WriteCount++;
             }
-
-            return Task.FromResult(Current);
+            return candidate;
         }
+        public Task SaveChangesAsync(SonosSettings? settings) => throw new NotSupportedException();
+        public Task<string?> ReplaceSettingsAsync(SonosSettings settings, string label = "replacement", CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<string?> CreateVersionedBackupAsync(string label, CancellationToken cancellationToken = default)
         {
@@ -337,23 +343,5 @@ public class SettingsSchemaMigrationServiceTests
             return Task.FromResult<string?>($"config-{label}.json");
         }
 
-        public Task WriteSettings(SonosSettings? settings)
-        {
-            if (ThrowOnWrite)
-            {
-                throw new IOException("Simulated settings write failure.");
-            }
-
-            Current = settings;
-            WriteCount++;
-            if (FailVerificationAfterWrite
-                && settings?.SettingsSchemaVersion == SonosSettings.CurrentSettingsSchemaVersion)
-            {
-                FailVerificationAfterWrite = false;
-                _returnNullOnNextRead = true;
-            }
-
-            return Task.CompletedTask;
-        }
     }
 }

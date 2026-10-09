@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
@@ -23,22 +22,23 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
     private const int MaxRecoveryRetryCount = 10;
     private const int MaxRecoveryRetryDelaySeconds = 300;
 
-    private readonly IUnitOfWork _uow;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly ISonosConnectorRepo _sonosConnectorRepo;
     private readonly INotificationService _notificationService;
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<SceneOrchestrationService> _logger;
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _sceneTimerCancellations = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SceneTimerService _sceneTimers;
 
     public SceneOrchestrationService(
-        IUnitOfWork uow,
-        IServiceScopeFactory scopeFactory,
+        ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
+        SceneTimerService sceneTimers,
         INotificationService notificationService,
         ActionLogger actionLogger,
         ILogger<SceneOrchestrationService> logger)
     {
-        _uow = uow;
-        _scopeFactory = scopeFactory;
+        _settingsRepo = settingsRepo;
+        _sonosConnectorRepo = sonosConnectorRepo;
+        _sceneTimers = sceneTimers;
         _notificationService = notificationService;
         _actionLogger = actionLogger;
         _logger = logger;
@@ -65,7 +65,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             return new SceneApplyResult(false, "Scene id is required.", null, Array.Empty<string>());
         }
 
-        var settings = await _uow.ISettingsRepo.GetSettings();
+        var settings = await _settingsRepo.GetSettings();
         if (settings is null)
         {
             return new SceneApplyResult(false, "Settings could not be loaded.", sceneId, Array.Empty<string>());
@@ -92,7 +92,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         bool allowRecovery,
         CancellationToken cancellationToken)
     {
-        var settings = await _uow.ISettingsRepo.GetSettings();
+        var settings = await _settingsRepo.GetSettings();
         if (settings is null)
         {
             return new SceneApplyResult(false, "Settings could not be loaded.", scene.Id, Array.Empty<string>());
@@ -109,16 +109,17 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
         try
         {
+            await using var lease = await _sceneTimers.BeginSceneAsync(targetSpeakers, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            await Task.WhenAll(targetSpeakers.Select(ip => _uow.ISonosConnectorRepo.UngroupSpeaker(ip, cancellationToken)));
+            await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, cancellationToken)));
 
             foreach (var ip in targetSpeakers)
             {
                 var volume = ResolveVolume(scene, settings, ip);
                 if (volume.HasValue)
                 {
-                    await _uow.ISonosConnectorRepo.SetSpeakerVolume(ip, Math.Clamp(volume.Value, 0, settings.MaxVolume), cancellationToken);
+                    await _sonosConnectorRepo.SetSpeakerVolume(ip, Math.Clamp(volume.Value, 0, settings.MaxVolume), cancellationToken);
                 }
             }
 
@@ -128,7 +129,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             if (scene.IsSyncedPlayback && targetSpeakers.Count > 1)
             {
                 var slaveIps = targetSpeakers.Where(ip => !string.Equals(ip, masterIp, StringComparison.OrdinalIgnoreCase));
-                var grouped = await _uow.ISonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                var grouped = await _sonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
                 playbackTargets = grouped ? new List<string> { masterIp } : targetSpeakers;
             }
 
@@ -159,6 +160,9 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                     throw new InvalidOperationException($"Scene '{scene.Name}' playback failed with an unknown error.");
                 }
 
+                // A fallback source uses the current group under the same leases.
+                // A recovery scene acquires its own (possibly different) target speakers.
+                if (sourceFailureRule?.ActionType == AutomationActionType.ApplyScene) await lease.DisposeAsync();
                 var recovered = await TryRecoverPlaybackAsync(
                     scene,
                     settings,
@@ -184,7 +188,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 $"Scene '{scene.Name}' applied on {targetSpeakers.Count} speaker(s).",
                 performedBy);
 
-            ScheduleSceneTimerIfNeeded(scene, targetSpeakers);
+            if (!recoveryActivated || sourceFailureRule?.ActionType == AutomationActionType.PlayFallbackSource) _sceneTimers.Schedule(scene.Id, scene.Name, targetSpeakers, scene.TimerMinutes);
             return new SceneApplyResult(true, "Scene applied.", scene.Id, targetSpeakers, recoveryActivated);
         }
         catch (OperationCanceledException)
@@ -332,7 +336,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
         if (selectionMode == SceneSourceSelectionMode.Resume)
         {
-            await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
+            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
             return;
         }
 
@@ -342,26 +346,26 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
         if (selectionMode == SceneSourceSelectionMode.Random && string.IsNullOrWhiteSpace(sourceUrl))
         {
-            await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
+            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
             return;
         }
 
         switch (scene.SourceType)
         {
             case SceneSourceType.None:
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.StartPlaying(ip)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
                 return;
             case SceneSourceType.Station:
                 EnsureSourceUrl(scene, sourceUrl);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.SetTuneInStationAsync(ip, sourceUrl!, cancellationToken)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.SetTuneInStationAsync(ip, sourceUrl!, cancellationToken)));
                 return;
             case SceneSourceType.Spotify:
                 EnsureSourceUrl(scene, sourceUrl);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.PlaySpotifyTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
                 return;
             case SceneSourceType.YouTubeMusic:
                 EnsureSourceUrl(scene, sourceUrl);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(ip, sourceUrl!, settings.AutoPlayStationUrl, cancellationToken)));
                 return;
             case SceneSourceType.YouTube:
                 EnsureSourceUrl(scene, sourceUrl);
@@ -369,7 +373,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                     .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), sourceUrl!.Trim(), StringComparison.OrdinalIgnoreCase));
                 var playbackMode = YouTubePlaybackModeResolver.GetEffectiveMode(sourceUrl, youTubeEntry?.PlaybackMode);
                 var preferredQueueLength = YouTubePlaybackModeResolver.GetEffectiveQueueLength(youTubeEntry?.PreferredQueueLength);
-                await Task.WhenAll(playbackTargets.Select(ip => _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(ip, sourceUrl!, playbackMode, preferredQueueLength, cancellationToken)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.PlayYouTubeAudioAsync(ip, sourceUrl!, playbackMode, preferredQueueLength, cancellationToken)));
                 return;
             default:
                 throw new InvalidOperationException($"Unsupported source type '{scene.SourceType}'.");
@@ -435,9 +439,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                     SourceSelectionMode = SceneSourceSelectionMode.Specific,
                     SourceType = recoveryRule.FallbackSourceType,
                     SourceUrl = recoveryRule.FallbackUrl,
-                    IsSyncedPlayback = scene.IsSyncedPlayback,
-                    SpeakerIps = playbackTargets.ToList(),
-                    Actions = scene.Actions
+                    IsSyncedPlayback = scene.IsSyncedPlayback
                 };
 
                 await ExecutePlaybackAsync(fallbackScene, playbackTargets, settings, cancellationToken);
@@ -475,51 +477,4 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
     }
 
-    private void ScheduleSceneTimerIfNeeded(Scene scene, IReadOnlyList<string> targetSpeakers)
-    {
-        if (!scene.TimerMinutes.HasValue || scene.TimerMinutes <= 0 || !targetSpeakers.Any())
-        {
-            return;
-        }
-
-        if (_sceneTimerCancellations.TryRemove(scene.Id, out var existing))
-        {
-            existing.Cancel();
-            existing.Dispose();
-        }
-
-        var cts = new CancellationTokenSource();
-        _sceneTimerCancellations[scene.Id] = cts;
-        var token = cts.Token;
-        var minutes = scene.TimerMinutes.Value;
-        var speakerIps = targetSpeakers.ToList();
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(minutes), token);
-                using var scope = _scopeFactory.CreateScope();
-                var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-                var actionLogger = scope.ServiceProvider.GetRequiredService<ActionLogger>();
-
-                await Task.WhenAll(speakerIps.Select(ip => uow.ISonosConnectorRepo.PausePlaying(ip)));
-                await actionLogger.LogAsync("SceneTimerCompleted", $"{scene.Name} ({scene.Id}) paused after {minutes} minute(s).");
-            }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Scene timer failed for {SceneId}.", scene.Id);
-            }
-            finally
-            {
-                if (_sceneTimerCancellations.TryRemove(scene.Id, out var removal))
-                {
-                    removal.Dispose();
-                }
-            }
-        }, token);
-    }
 }

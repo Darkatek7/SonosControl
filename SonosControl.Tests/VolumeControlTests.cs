@@ -15,7 +15,8 @@ public class VolumeControlTests
     public void VolumeControl_SynchronizesInputsAndClampsTypedValues()
     {
         using var ctx = new BunitContext();
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        RepositoryTestServices.Register(ctx.Services);
         var changedValue = -1;
         var cut = ctx.Render<VolumeControl>(parameters => parameters
             .Add(component => component.Value, 25)
@@ -51,7 +52,8 @@ public class VolumeControlTests
     public void RoomCard_UsesPlaybackVolumeAndConfiguredMaximum()
     {
         using var ctx = new BunitContext();
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        RepositoryTestServices.Register(ctx.Services);
         var changedValue = -1;
         var speaker = new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" };
         var health = new DeviceHealthStatus

@@ -15,7 +15,7 @@ public class SettingsAutosaveCoordinatorTests
         using var coordinator = new SettingsAutosaveCoordinator(
             repository,
             NullLogger<SettingsAutosaveCoordinator>.Instance);
-        var settings = new SonosSettings { Volume = 10 };
+        var settings = SettingsChanges.Track(new SonosSettings { Volume = 10 });
 
         var first = coordinator.QueueSaveAsync(settings);
         settings.Volume = 20;
@@ -37,7 +37,8 @@ public class SettingsAutosaveCoordinatorTests
         using var coordinator = new SettingsAutosaveCoordinator(
             repository,
             NullLogger<SettingsAutosaveCoordinator>.Instance);
-        var settings = new SonosSettings { Volume = 42 };
+        var settings = SettingsChanges.Track(new SonosSettings());
+        settings.Volume = 42;
 
         await coordinator.QueueSaveAsync(settings, immediate: true);
 
@@ -61,7 +62,18 @@ public class SettingsAutosaveCoordinatorTests
         public Task<string?> CreateVersionedBackupAsync(string label, CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(null);
 
-        public Task WriteSettings(SonosSettings? settings)
+        public Task<string?> ReplaceSettingsAsync(SonosSettings settings, string label = "replacement", CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+
+        public async Task<SonosSettings> UpdateSettingsAsync(Action<SonosSettings> update, CancellationToken cancellationToken = default)
+        {
+            var current = Writes.LastOrDefault() ?? new SonosSettings();
+            var candidate = SettingsChanges.Deserialize(SettingsChanges.Serialize(current));
+            update(candidate);
+            await SaveChangesAsync(candidate);
+            return candidate;
+        }
+
+        public Task SaveChangesAsync(SonosSettings? settings)
         {
             if (FailNextWrite)
             {

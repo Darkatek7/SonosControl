@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.JSInterop
@@ -92,7 +93,8 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
         _userThemePreference = ThemeService.CurrentPreference;
-        _allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
+        try { _allowRegistration = (await _settingsRepo.GetSettings())?.AllowUserRegistration ?? true; }
+        catch (SonosControl.DAL.Repos.SettingsReadException) { _allowRegistration = false; }
     }
 
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)

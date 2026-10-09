@@ -159,12 +159,11 @@ public sealed class PlaybackMonitorServiceTests
                 .ReturnsAsync("spotify:track:demo");
             var settingsRepo = new Mock<ISettingsRepo>();
             settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings);
-            var uow = new Mock<IUnitOfWork>();
-            uow.SetupGet(unit => unit.ISettingsRepo).Returns(settingsRepo.Object);
-            uow.SetupGet(unit => unit.ISonosConnectorRepo).Returns(Connector.Object);
+
             var databaseName = Guid.NewGuid().ToString();
             _provider = new ServiceCollection()
-                .AddSingleton(uow.Object)
+                .AddSingleton(settingsRepo.Object)
+                .AddSingleton(Connector.Object)
                 .AddDbContext<ApplicationDbContext>(options => options.UseInMemoryDatabase(databaseName))
                 .BuildServiceProvider();
             _monitor = new PlaybackMonitorService(_provider.GetRequiredService<IServiceScopeFactory>(),

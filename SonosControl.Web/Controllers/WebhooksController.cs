@@ -16,20 +16,22 @@ public sealed class WebhooksController : ControllerBase
     private static readonly ConcurrentDictionary<string, IdempotencyEntry> IdempotencyKeys = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly IConfiguration _configuration;
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly ISonosConnectorRepo _sonosConnectorRepo;
     private readonly ISceneOrchestrationService _sceneOrchestrationService;
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<WebhooksController> _logger;
 
     public WebhooksController(
         IConfiguration configuration,
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
         ISceneOrchestrationService sceneOrchestrationService,
         ActionLogger actionLogger,
         ILogger<WebhooksController> logger)
     {
         _configuration = configuration;
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _sonosConnectorRepo = sonosConnectorRepo;
         _sceneOrchestrationService = sceneOrchestrationService;
         _actionLogger = actionLogger;
         _logger = logger;
@@ -167,13 +169,13 @@ public sealed class WebhooksController : ControllerBase
             switch (action)
             {
                 case "play":
-                    await _uow.ISonosConnectorRepo.StartPlaying(speakerIp);
+                    await _sonosConnectorRepo.StartPlaying(speakerIp);
                     break;
                 case "pause":
-                    await _uow.ISonosConnectorRepo.PausePlaying(speakerIp);
+                    await _sonosConnectorRepo.PausePlaying(speakerIp);
                     break;
                 case "next":
-                    await _uow.ISonosConnectorRepo.NextTrack(speakerIp, cancellationToken);
+                    await _sonosConnectorRepo.NextTrack(speakerIp, cancellationToken);
                     break;
             }
 
@@ -205,20 +207,20 @@ public sealed class WebhooksController : ControllerBase
             return BadRequest("sourceType must be station, spotify, or youtube.");
         }
 
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
 
         try
         {
             switch (sourceType)
             {
                 case "station":
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(request.SpeakerIp, request.SourceUrl, cancellationToken);
+                    await _sonosConnectorRepo.SetTuneInStationAsync(request.SpeakerIp, request.SourceUrl, cancellationToken);
                     break;
                 case "spotify":
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(request.SpeakerIp, request.SourceUrl, settings.AutoPlayStationUrl, cancellationToken);
+                    await _sonosConnectorRepo.PlaySpotifyTrackAsync(request.SpeakerIp, request.SourceUrl, settings.AutoPlayStationUrl, cancellationToken);
                     break;
                 case "youtube":
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(request.SpeakerIp, request.SourceUrl, settings.AutoPlayStationUrl, cancellationToken);
+                    await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(request.SpeakerIp, request.SourceUrl, settings.AutoPlayStationUrl, cancellationToken);
                     break;
             }
 

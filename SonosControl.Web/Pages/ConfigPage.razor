@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @* Routed through AdministrationPage. *@
 @implements IDisposable
 @using SonosControl.DAL.Models
@@ -269,7 +270,7 @@ else
             _autosave.StateChanged += OnAutosaveStateChanged;
         }
 
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         NormalizeCollections(_settings);
     }
 
@@ -342,7 +343,7 @@ else
         }
         else
         {
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await _settingsRepo.SaveChangesAsync(_settings);
         }
     }
 

@@ -28,6 +28,7 @@ public class IndexPageUXTests
     public async Task HomeAndAutomation_FollowRuntimeStatusInsteadOfMatchingSchedule()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings
         {
             IP_Adress = "1.2.3.4",
@@ -73,6 +74,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersEverydayHierarchy_WithoutEmbeddedPlayer()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
@@ -99,6 +101,7 @@ public class IndexPageUXTests
     public void LibraryPage_SearchesAndFiltersEverySourceType()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         var stations = Enumerable.Range(1, 8)
             .Select(index => new TuneInStation { Name = $"Station {index}", Url = $"http://station-{index}.example/stream" })
@@ -152,6 +155,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersEmptyState_WhenLibraryIsEmpty()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
         var cut = ctx.Render<IndexPage>();
@@ -172,6 +176,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersFocusedOnboarding_WhenNoRoomsExist(string role, bool canConfigure)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings
         {
             IP_Adress = string.Empty,
@@ -219,6 +224,7 @@ public class IndexPageUXTests
     public async Task IndexPage_SwitchesBetweenOnboardingAndDashboard_WhenSpeakerConfigurationChanges()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
         using var resources = ConfigureServices(ctx, [], [], [], settings);
         var cut = ctx.Render<IndexPage>();
@@ -247,6 +253,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersGroupedSpeakers_Correctly()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         var master = new SonosSpeaker { Name = "Living Room", IpAddress = "192.168.1.10", Uuid = "uuid:RINCON_1234567890ABCDEF" };
         var slave = new SonosSpeaker { Name = "Kitchen", IpAddress = "192.168.1.11", Uuid = "uuid:RINCON_0000000000000000" };
@@ -274,7 +281,9 @@ public class IndexPageUXTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
@@ -290,12 +299,7 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.GetCurrentStationAsync(slave.IpAddress, It.IsAny<CancellationToken>()))
             .ReturnsAsync($"x-rincon-group:{master.Uuid}");
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
@@ -326,6 +330,7 @@ public class IndexPageUXTests
     public void IndexPage_CollapsesGroupedSpeaker_WhenChildReportsPlaying()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         var master = new SonosSpeaker { Name = "Office Pair", IpAddress = "192.168.1.20", Uuid = "uuid:RINCON_ABCDEF1234567890" };
         var slave = new SonosSpeaker { Name = "Office Right", IpAddress = "192.168.1.21", Uuid = "uuid:RINCON_0000000000000001" };
@@ -351,7 +356,9 @@ public class IndexPageUXTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
@@ -367,12 +374,7 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.GetCurrentStationAsync(slave.IpAddress, It.IsAny<CancellationToken>()))
             .ReturnsAsync($"x-rincon-group:{master.Uuid}");
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
@@ -402,6 +404,7 @@ public class IndexPageUXTests
     public void LibraryPage_HasAccessibleTabsSearchAndExplicitSourceType()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
 
@@ -427,6 +430,7 @@ public class IndexPageUXTests
     public void LibraryPage_Mp3Upload_HasDedicatedTabAndQueryRoute()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         using var resources = ConfigureServices(ctx, new List<TuneInStation>(), new List<SpotifyObject>(), new List<YouTubeMusicObject>());
         var cut = ctx.Render<LibraryPage>();
@@ -454,6 +458,7 @@ public class IndexPageUXTests
     public void LibraryPage_TogglesFavourite_WithAccessibleHeartButton()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         using var resources = ConfigureServices(
             ctx,
             new List<TuneInStation>
@@ -492,6 +497,7 @@ public class IndexPageUXTests
     public void LibraryPage_ShowsFavouriteError_WhenCurrentUserCannotBeResolved()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         using var resources = ConfigureServices(
             ctx,
             new List<TuneInStation>
@@ -519,6 +525,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersDashboard_WithAutomationRoomsQuickLibraryAndWarnings()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         var scene = new Scene
         {
@@ -636,6 +643,7 @@ public class IndexPageUXTests
     public void IndexPage_RendersDeviceWarningDetails()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var healthStore = new DeviceHealthSnapshotStore();
         healthStore.Replace(new[]
         {
@@ -669,6 +677,7 @@ public class IndexPageUXTests
     public async Task LibraryPage_PlaySource_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         var settings = new SonosSettings
         {
@@ -716,6 +725,7 @@ public class IndexPageUXTests
     public void LibraryPage_YouTubeEditor_UpdatesSelectedEntryWithoutPlaying()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
         var settings = new SonosSettings
@@ -826,7 +836,9 @@ public class IndexPageUXTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(settings.Volume);
@@ -844,12 +856,7 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(r => r.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton(healthStore ?? new DeviceHealthSnapshotStore());

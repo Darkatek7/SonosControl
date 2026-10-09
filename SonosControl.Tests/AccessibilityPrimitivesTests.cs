@@ -16,8 +16,9 @@ public class AccessibilityPrimitivesTests
     public void WorkspaceTabs_ExposeTabSemanticsAndRovingTabIndex()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
         var selected = string.Empty;
         IReadOnlyList<WorkspaceTabItem> items =
         [
@@ -55,8 +56,9 @@ public class AccessibilityPrimitivesTests
     public void AccessibleDialog_HasNameFocusTrapAndEscapeClose()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
         var closed = false;
 
         var cut = ctx.Render<AccessibleDialog>(parameters => parameters
@@ -90,7 +92,8 @@ public class AccessibilityPrimitivesTests
     public void EmptyState_DefaultsToH2AndHidesDecorativeIcon()
     {
         using var ctx = new BunitContext();
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        RepositoryTestServices.Register(ctx.Services);
 
         var cut = ctx.Render<EmptyState>(parameters => parameters
             .Add(component => component.Title, "Nothing queued")

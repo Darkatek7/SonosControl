@@ -31,6 +31,10 @@
             </div>
         </div>
 
+        @if (ViewBag.SettingsError != null)
+        {
+            <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.SettingsError Sign in to restore a backup.</div>
+        }
         @if (ViewBag.Error != null)
         {
             <div class="alert alert-danger text-center py-2" role="alert">@ViewBag.Error</div>

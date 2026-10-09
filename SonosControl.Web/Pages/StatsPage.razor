@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @* Routed through InsightsPage. *@
 @using System.Globalization
 @using SonosControl.Web.Data
@@ -199,7 +200,7 @@
                 .Where(playback => playback.StartTime < _loadedAtUtc && playback.DurationSeconds > 0
                     && playback.StartTime.AddSeconds(playback.DurationSeconds) > start)
                 .ToListAsync();
-            var settings = _uow.ISettingsRepo is { } repo ? await repo.GetSettings() : null;
+            var settings = _settingsRepo is { } repo ? await repo.GetSettings() : null;
             _insights = ListeningInsights.Create(history, settings ?? new SonosSettings(), AppTimeZone, _loadedAtUtc, _dayCount);
         }
         catch (Exception exception)

@@ -11,12 +11,14 @@ namespace SonosControl.Web.Controllers;
 [Authorize(Roles = "admin,operator,superadmin")]
 public sealed class QueueController : ControllerBase
 {
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly ISonosConnectorRepo _sonosConnectorRepo;
     private readonly ActionLogger _actionLogger;
 
-    public QueueController(IUnitOfWork uow, ActionLogger actionLogger)
+    public QueueController(ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo, ActionLogger actionLogger)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _sonosConnectorRepo = sonosConnectorRepo;
         _actionLogger = actionLogger;
     }
 
@@ -28,7 +30,7 @@ public sealed class QueueController : ControllerBase
             return BadRequest("speakerIp is required.");
         }
 
-        var page = await _uow.ISonosConnectorRepo.GetQueue(speakerIp, Math.Max(0, startIndex), Math.Clamp(count, 1, 500), cancellationToken);
+        var page = await _sonosConnectorRepo.GetQueue(speakerIp, Math.Max(0, startIndex), Math.Clamp(count, 1, 500), cancellationToken);
         return Ok(page);
     }
 
@@ -87,7 +89,7 @@ public sealed class QueueController : ControllerBase
     [HttpGet("snapshots")]
     public async Task<ActionResult<IReadOnlyList<QueueSnapshot>>> GetSnapshots()
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.QueueSnapshots ??= new();
         return Ok(settings.QueueSnapshots.OrderByDescending(s => s.CreatedUtc).ToList());
     }
@@ -117,7 +119,7 @@ public sealed class QueueController : ControllerBase
             }).ToList()
         };
 
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.QueueSnapshots ??= new();
         settings.QueueSnapshots.Add(snapshot);
         settings.QueueSnapshots = settings.QueueSnapshots
@@ -125,7 +127,7 @@ public sealed class QueueController : ControllerBase
             .Take(40)
             .ToList();
 
-        await _uow.ISettingsRepo.WriteSettings(settings);
+        await _settingsRepo.SaveChangesAsync(settings);
         await _actionLogger.LogAsync("QueueSnapshotSaved", $"{snapshot.Name} ({snapshot.Id}) from {snapshot.SpeakerIp}");
         return Ok(snapshot);
     }
@@ -139,7 +141,7 @@ public sealed class QueueController : ControllerBase
             return BadRequest("speakerIp is required.");
         }
 
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.QueueSnapshots ??= new();
 
         var snapshot = settings.QueueSnapshots.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -167,7 +169,7 @@ public sealed class QueueController : ControllerBase
     [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> DeleteSnapshot(string id)
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.QueueSnapshots ??= new();
 
         var snapshot = settings.QueueSnapshots.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -177,7 +179,7 @@ public sealed class QueueController : ControllerBase
         }
 
         settings.QueueSnapshots.Remove(snapshot);
-        await _uow.ISettingsRepo.WriteSettings(settings);
+        await _settingsRepo.SaveChangesAsync(settings);
         await _actionLogger.LogAsync("QueueSnapshotDeleted", $"{snapshot.Name} ({snapshot.Id})");
         return NoContent();
     }
@@ -190,7 +192,7 @@ public sealed class QueueController : ControllerBase
 
         while (true)
         {
-            var page = await _uow.ISonosConnectorRepo.GetQueue(speakerIp, start, pageSize, cancellationToken);
+            var page = await _sonosConnectorRepo.GetQueue(speakerIp, start, pageSize, cancellationToken);
             if (page.Items.Count == 0)
             {
                 break;
@@ -209,7 +211,7 @@ public sealed class QueueController : ControllerBase
 
     private async Task RebuildQueueAsync(string speakerIp, IReadOnlyCollection<SonosQueueItem> items, CancellationToken cancellationToken)
     {
-        await _uow.ISonosConnectorRepo.ClearQueue(speakerIp, cancellationToken);
+        await _sonosConnectorRepo.ClearQueue(speakerIp, cancellationToken);
 
         foreach (var item in items)
         {
@@ -218,7 +220,7 @@ public sealed class QueueController : ControllerBase
                 continue;
             }
 
-            await _uow.ISonosConnectorRepo.AddUriToQueue(speakerIp, item.ResourceUri, metadata: null, enqueueAsNext: false, cancellationToken);
+            await _sonosConnectorRepo.AddUriToQueue(speakerIp, item.ResourceUri, metadata: null, enqueueAsNext: false, cancellationToken);
         }
     }
 

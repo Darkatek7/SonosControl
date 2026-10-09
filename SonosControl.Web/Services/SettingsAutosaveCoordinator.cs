@@ -1,4 +1,3 @@
-using System.Text.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 
@@ -14,18 +13,14 @@ public enum SettingsSaveState
 public sealed class SettingsAutosaveCoordinator : IDisposable
 {
     private static readonly TimeSpan DefaultDebounce = TimeSpan.FromMilliseconds(350);
-    private static readonly JsonSerializerOptions CloneOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly ISettingsRepo _settingsRepo;
     private readonly ILogger<SettingsAutosaveCoordinator> _logger;
     private readonly object _sync = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private CancellationTokenSource? _debounceCts;
-    private SonosSettings? _pendingSettings;
-    private SonosSettings? _lastFailedSettings;
+    private SettingsChanges? _pendingChanges;
+    private SonosSettings? _pendingSource;
+    private SettingsChanges? _lastFailedChanges;
     private long _generation;
 
     public SettingsAutosaveCoordinator(ISettingsRepo settingsRepo, ILogger<SettingsAutosaveCoordinator> logger)
@@ -46,7 +41,8 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
         long generation;
         lock (_sync)
         {
-            _pendingSettings = Clone(settings);
+            _pendingChanges = SettingsChanges.Capture(settings);
+            _pendingSource = settings;
             generation = ++_generation;
             _debounceCts?.Cancel();
             _debounceCts?.Dispose();
@@ -60,13 +56,15 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
 
     public Task RetryAsync()
     {
-        SonosSettings? retry;
         lock (_sync)
         {
-            retry = _lastFailedSettings is null ? null : Clone(_lastFailedSettings);
+            if (_lastFailedChanges is null) return Task.CompletedTask;
+            _pendingChanges = _lastFailedChanges;
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = new CancellationTokenSource();
+            return SaveGenerationAsync(++_generation, TimeSpan.Zero, _debounceCts.Token);
         }
-
-        return retry is null ? Task.CompletedTask : QueueSaveAsync(retry, immediate: true);
     }
 
     private async Task SaveGenerationAsync(long generation, TimeSpan delay, CancellationToken cancellationToken)
@@ -81,7 +79,8 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
             await _writeLock.WaitAsync(cancellationToken);
             try
             {
-                SonosSettings? snapshot;
+                SettingsChanges? changes;
+                SonosSettings? source;
                 lock (_sync)
                 {
                     if (generation != _generation)
@@ -89,20 +88,22 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
                         return;
                     }
 
-                    snapshot = _pendingSettings is null ? null : Clone(_pendingSettings);
+                    changes = _pendingChanges;
+                    source = _pendingSource;
                 }
 
-                if (snapshot is null)
+                if (changes is null)
                 {
                     return;
                 }
 
-                await _settingsRepo.WriteSettings(snapshot);
+                await _settingsRepo.UpdateSettingsAsync(changes.Apply, cancellationToken);
+                if (source is not null) SettingsChanges.Accept(source, changes);
                 lock (_sync)
                 {
                     if (generation == _generation)
                     {
-                        _lastFailedSettings = null;
+                        _lastFailedChanges = null;
                         SetState(SettingsSaveState.Saved, null);
                     }
                 }
@@ -120,7 +121,8 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
         {
             lock (_sync)
             {
-                _lastFailedSettings = _pendingSettings is null ? null : Clone(_pendingSettings);
+                if (generation != _generation) return;
+                _lastFailedChanges = _pendingChanges;
                 SetState(SettingsSaveState.Error, ex.Message);
             }
 
@@ -135,13 +137,6 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
         StateChanged?.Invoke();
     }
 
-    private static SonosSettings Clone(SonosSettings source)
-    {
-        var json = JsonSerializer.Serialize(source, CloneOptions);
-        return JsonSerializer.Deserialize<SonosSettings>(json, CloneOptions)
-               ?? throw new InvalidOperationException("Settings could not be prepared for saving.");
-    }
-
     public void Dispose()
     {
         lock (_sync)
@@ -151,6 +146,6 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
             _debounceCts = null;
         }
 
-        _writeLock.Dispose();
+        // In-flight saves still release the gate after disposal.
     }
 }

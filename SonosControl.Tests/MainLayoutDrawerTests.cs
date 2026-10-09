@@ -24,6 +24,7 @@ public class MainLayoutDrawerTests
     public void MainLayout_DesktopHeader_ShowsPageContextAndConsolidatedProfileMenu()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
@@ -42,6 +43,7 @@ public class MainLayoutDrawerTests
     public void NavMenu_GroupsLinksIntoMainAdministrationAndThemeSections()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx);
 
         var cut = ctx.Render<NavMenu>();
@@ -54,6 +56,7 @@ public class MainLayoutDrawerTests
     public void MainLayout_MobileMenuButton_TogglesDrawerState()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
@@ -79,6 +82,7 @@ public class MainLayoutDrawerTests
     public void NavMenu_NavigationClick_InvokesOnNavigate()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx);
 
         var navigateCalls = 0;
@@ -98,6 +102,7 @@ public class MainLayoutDrawerTests
     public void NavMenu_CloseButton_HasAriaLabel()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx);
 
         var cut = ctx.Render<NavMenu>(parameters => parameters
@@ -115,6 +120,7 @@ public class MainLayoutDrawerTests
     public void NavMenu_OnlyShowsAdministrationToAdministrativeRoles(string role, bool expectsAdministration)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureAuthAndTheme(ctx, role);
 
         var cut = ctx.Render<NavMenu>();
@@ -134,6 +140,7 @@ public class MainLayoutDrawerTests
     public async Task MainLayout_TogglesDockAndClearance_WhenFirstAndLastSpeakerChange(string route)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
         ConfigureAuthAndTheme(ctx, settings);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -170,6 +177,7 @@ public class MainLayoutDrawerTests
     public void DevicesPage_UpdatesMountedLayout_AfterAddingAndRemovingLastSpeaker(string method)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
         ConfigureAuthAndTheme(ctx, settings);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -201,6 +209,43 @@ public class MainLayoutDrawerTests
         Assert.Empty(settings.Speakers);
     }
 
+    [Fact]
+    public void DamagedSettingsShowRecoveryLink_AndNavigationAfterRestoreClearsTheError()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureAuthAndTheme(ctx);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var repository = Mock.Get(ctx.Services.GetRequiredService<ISettingsRepo>());
+        repository.Setup(repo => repo.GetSettings()).ThrowsAsync(new SonosControl.DAL.Repos.SettingsReadException("Damaged configuration"));
+        var layout = ctx.Render<MainLayout>();
+        Assert.Contains("Damaged configuration", layout.Find("article.content [role='alert']").TextContent);
+        Assert.Equal("/settings-backups", layout.Find("article.content [role='alert'] a").GetAttribute("href"));
+        Assert.Empty(layout.FindAll("[data-qa='global-player-bar']"));
+        repository.Setup(repo => repo.GetSettings()).ReturnsAsync(new SonosSettings());
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/library");
+        layout.WaitForAssertion(() => Assert.Empty(layout.FindAll("article.content [role='alert']")));
+    }
+
+    [Fact]
+    public void NavigationPreservesThePlayerAndItsSleepTimer()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureAuthAndTheme(ctx);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var layout = ctx.Render<MainLayout>();
+        var player = layout.FindComponent<GlobalPlayerBar>().Instance;
+        layout.Find(".player-surface__open").Click();
+        layout.Find(".player-sheet__timer .input-group button").Click();
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("/library");
+        layout.WaitForAssertion(() =>
+        {
+            Assert.Same(player, layout.FindComponent<GlobalPlayerBar>().Instance);
+            Assert.Contains("pauses at", layout.Find(".player-sheet__timer").TextContent);
+        });
+    }
+
     private static void ConfigureAuthAndTheme(BunitContext ctx, params string[] roles)
     {
         ConfigureAuthAndTheme(ctx, new SonosSettings
@@ -219,13 +264,9 @@ public class MainLayoutDrawerTests
 
         var sonosRepo = new Mock<ISonosConnectorRepo>();
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(uow => uow.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(uow => uow.ISonosConnectorRepo).Returns(sonosRepo.Object);
-
         ctx.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseInMemoryDatabase($"main-layout-tests-{Guid.NewGuid()}"));
-        ctx.Services.AddSingleton(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, sonosRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));

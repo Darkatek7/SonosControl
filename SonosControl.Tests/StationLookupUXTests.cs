@@ -21,6 +21,7 @@ public class StationLookupUXTests
     public void StationLookup_HasAccessibleSearchInput()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         using var resources = ConfigureServices(ctx);
 
         var cut = ctx.Render<StationLookup>();
@@ -67,13 +68,10 @@ public class StationLookupUXTests
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-
         var httpClientFactory = new Mock<IHttpClientFactory>();
         httpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(new HttpClient());
 
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, Mock.Of<ISonosConnectorRepo>(), Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<IHttpClientFactory>(httpClientFactory.Object);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
 
@@ -84,6 +82,7 @@ public class StationLookupUXTests
     public void StationLookup_ClearButton_Interaction()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         using var resources = ConfigureServices(ctx);
 
         var cut = ctx.Render<StationLookup>();

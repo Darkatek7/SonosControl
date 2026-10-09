@@ -1,4 +1,6 @@
-﻿@* Routed through LibraryPage. *@
+﻿@inject ISonosConnectorRepo _sonosConnectorRepo
+@inject ISettingsRepo _settingsRepo
+@* Routed through LibraryPage. *@
 @using Microsoft.EntityFrameworkCore
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
@@ -248,7 +250,7 @@
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _currentUserName = auth.User.Identity?.Name ?? "Unknown";
 
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.Speakers ??= new();
         if (_settings.Speakers.Any())
         {
@@ -267,7 +269,7 @@
         {
             var effectiveDays = Math.Clamp(_windowDays, 7, 120);
             _windowDays = effectiveDays;
-            var settings = _settings ?? await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+            var settings = _settings ?? await _settingsRepo.GetSettings() ?? new SonosSettings();
             var resolver = RecommendationMediaResolver.Create(settings);
 
             var from = DateTime.UtcNow.AddDays(-effectiveDays);
@@ -434,22 +436,22 @@
             switch (item.MediaType.ToLowerInvariant())
             {
                 case "station":
-                    await _uow.ISonosConnectorRepo.SetTuneInStationAsync(_selectedSpeakerIp, item.SourceUrl);
+                    await _sonosConnectorRepo.SetTuneInStationAsync(_selectedSpeakerIp, item.SourceUrl);
                     break;
                 case "spotify":
-                    await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
+                    await _sonosConnectorRepo.PlaySpotifyTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
                     break;
                 case "youtube":
                     var youTubeEntry = _settings?.YouTubeCollections?
                         .FirstOrDefault(entry => string.Equals(entry.Url?.Trim(), item.SourceUrl.Trim(), StringComparison.OrdinalIgnoreCase));
-                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(
+                    await _sonosConnectorRepo.PlayYouTubeAudioAsync(
                         _selectedSpeakerIp,
                         item.SourceUrl,
                         YouTubePlaybackModeResolver.GetEffectiveMode(item.SourceUrl, youTubeEntry?.PlaybackMode),
                         YouTubePlaybackModeResolver.GetEffectiveQueueLength(youTubeEntry?.PreferredQueueLength));
                     break;
                 case "youtubemusic":
-                    await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
+                    await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(_selectedSpeakerIp, item.SourceUrl, _settings?.AutoPlayStationUrl);
                     break;
                 default:
                     ShowStatus("Unsupported recommendation type.", true);
