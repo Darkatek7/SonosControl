@@ -298,24 +298,16 @@ public class GlobalPlayerBarTests
     }
 
     [Fact]
-    public void GlobalPlayerBar_WithoutSpeakers_DisablesPlaybackAndOffersSetup()
+    public void GlobalPlayerBar_WithoutSpeakers_RendersNoPlaybackControls()
     {
         using var ctx = new BunitContext();
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx, withSpeakers: false);
         var cut = ctx.Render<GlobalPlayerBar>();
 
-        Assert.Contains("Set up a speaker first", cut.Find(".player-surface__open").TextContent);
-        Assert.Single(cut.FindAll(".player-surface__expand"));
-        Assert.NotNull(cut.Find(".global-player-bar__play").GetAttribute("disabled"));
-        Assert.NotNull(cut.Find("[data-qa='global-player-sync']").GetAttribute("disabled"));
-        Assert.NotNull(cut.Find("#global-player-volume-number").GetAttribute("disabled"));
-
-        cut.Find(".player-surface__open").Click();
-        Assert.Equal("/administration/devices", cut.Find(".player-sheet__setup a").GetAttribute("href"));
-        Assert.All(cut.FindAll(".player-sheet__transport button"), button => Assert.NotNull(button.GetAttribute("disabled")));
-        Assert.NotNull(cut.Find("#player-sheet-volume-slider").GetAttribute("disabled"));
+        Assert.Empty(cut.FindAll("[data-qa='global-player-bar'], .player-sheet, button, select, input"));
         connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>()), Times.Never);
+        connectorRepo.Verify(repo => repo.GetVolume(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

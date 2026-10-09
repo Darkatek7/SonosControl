@@ -28,10 +28,19 @@ artifacts/ui-smoke-venv/bin/python verify_mobile_smoke.py
 
 The auto-start path creates disposable settings and SQLite directories under
 `artifacts`, disables background services, and checks all primary pages in
-light and dark themes at 390, 768, and 1280 pixels. It also fails on browser
+light and dark themes at 390, 768, and 1280 pixels in two configurations:
+empty setup and a configured simulated speaker. The simulation uses only
+loopback port 1400; keep that port free for the auto-start check. Empty setup
+must show the large Home onboarding, no playback dock on any route, and no
+reserved dock clearance. The configured fixture must retain the dashboard,
+dock, volume controls, and expanded player. Checks also fail on browser
 console errors, horizontal overflow, or content hidden behind the player.
 The floating player must stay at its configured bottom inset, and mobile
 content clearance includes both the dock height and the inset.
+
+When targeting an already running app, the runner checks its current
+configuration without changing settings. Use an unused app port with
+auto-start enabled to exercise both isolated configurations.
 
 Optional:
 ```bash

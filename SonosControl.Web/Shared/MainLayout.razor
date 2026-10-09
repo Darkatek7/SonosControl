@@ -13,10 +13,11 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject SonosControl.Web.Services.ThemeService ThemeService
 @inject IJSRuntime JSRuntime
+@inject SonosControl.Web.Services.PlaybackUiStateService PlaybackState
 
 <PageTitle>SonosControl</PageTitle>
 
-<div class="app-shell">
+<div class="app-shell @(_hasConfiguredSpeakers ? null : "app-shell--without-player")">
     <aside id="app-sidebar"
            class="app-sidebar @(_isDrawerOpen ? "is-open" : string.Empty)"
            tabindex="-1"
@@ -132,6 +133,8 @@
     private string? firstName;
     private bool isAuthenticated;
     private bool _allowRegistration = true;
+    private bool _hasConfiguredSpeakers;
+    private bool _playbackSubscriptionRegistered;
 
     [CascadingParameter(Name = "AntiforgeryToken")]
     public string? AntiforgeryToken { get; set; }
@@ -181,6 +184,9 @@
 
         if (isAuthenticated)
         {
+            _hasConfiguredSpeakers = PlaybackState.Speakers.Count > 0;
+            PlaybackState.StateChanged += HandlePlaybackStateChanged;
+            _playbackSubscriptionRegistered = true;
             var appUser = await UserManager.GetUserAsync(user);
             firstName = appUser?.FirstName ?? user.Identity?.Name;
         }
@@ -193,6 +199,14 @@
             Navigation.LocationChanged += HandleLocationChanged;
             _navigationSubscriptionRegistered = true;
         }
+    }
+
+    private void HandlePlaybackStateChanged()
+    {
+        var hasSpeakers = PlaybackState.Speakers.Count > 0;
+        if (_hasConfiguredSpeakers == hasSpeakers) return;
+        _hasConfiguredSpeakers = hasSpeakers;
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task ToggleDrawerAsync()
@@ -354,6 +368,11 @@
 
     void IDisposable.Dispose()
     {
+        if (_playbackSubscriptionRegistered)
+        {
+            PlaybackState.StateChanged -= HandlePlaybackStateChanged;
+        }
+
         if (_navigationSubscriptionRegistered)
         {
             Navigation.LocationChanged -= HandleLocationChanged;

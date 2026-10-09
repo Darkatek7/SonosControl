@@ -49,7 +49,7 @@ On Windows, the PowerShell wrapper is also supported:
 .\run-mobile-smoke.ps1
 ```
 
-On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. Auto-start uses isolated temporary settings, SQLite, and Data Protection paths under `artifacts`, disables background services, and never reads configured Sonos addresses. The floating player is checked against its configured bottom inset; content clearance must include both its height and that inset.
+On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. Auto-start uses isolated temporary settings, SQLite, and Data Protection paths under `artifacts`, disables background services, and never reads configured Sonos addresses. Auto-start verifies two configurations: an empty setup and a simulated speaker on loopback port 1400. The empty configuration must have no player or dock clearance; the configured state checks the player against its bottom inset and reserves both its height and that inset. A caller-supplied running app is checked in its current configuration without modifying it.
 
 ```powershell
 markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md

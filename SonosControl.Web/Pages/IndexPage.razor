@@ -50,248 +50,251 @@
             </div>
         }
 
-        <div class="home-stage">
-            <header class="home-intro">
-                <div class="home-intro__copy">
-                    <span class="home-eyebrow">Today</span>
-                    <h1>@Greeting</h1>
-                    <p class="home-intro__sub">@(_settings.Speakers.Any() ? "Your rooms, favourite sources, and next automation at a glance." : "Start listening in three simple steps.")</p>
-                </div>
-                @if (_settings.Speakers.Any())
-                {
-                    <div class="home-intro__status" aria-live="polite">
-                        <span class="home-status-pill @runtime.StatusClass @(runtime.IsRunning ? "is-active" : "is-idle")">
-                            <span class="home-status-pill__dot" aria-hidden="true"></span>
-                            @runtime.StatusLabel
-                        </span>
-                        <small>@RefreshTelemetryLabel</small>
-                    </div>
-                }
-            </header>
-
-            @if (_settings.Speakers.Any())
-            {
-                <NowPlayingHero />
-            }
-        </div>
-
-        <div class="home-primary-grid @(!_settings.Speakers.Any() ? "home-primary-grid--empty" : null)">
-            <section class="rooms-section home-panel" aria-labelledby="home-rooms-heading">
-                <header class="rooms-section__head">
-                    <div>
-                        <span class="home-eyebrow">Rooms</span>
-                        <h2 id="home-rooms-heading">Speakers</h2>
-                    </div>
-                    <div class="rooms-section__health" aria-label="Speaker health summary">
-                        @if (_settings.Speakers.Any())
-                        {
-                            <span class="rooms-stat is-online"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Online</strong> Online</span>
-                            <span class="rooms-stat is-offline"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Offline</strong> Offline</span>
-                            <span class="rooms-stat is-unknown"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Unknown</strong> Unknown</span>
-                        }
+        @if (!_settings.Speakers.Any())
+        {
+            <section class="home-onboarding" data-qa="home-setup" aria-labelledby="home-setup-heading">
+                <div class="home-onboarding__hero">
+                    <div class="home-onboarding__copy">
+                        <span class="home-eyebrow">Welcome to SonosControl</span>
+                        <h1 id="home-setup-heading">Connect your first speaker</h1>
+                        <p>Add a Sonos room to start listening. Your music, favourites and automation will follow.</p>
                         <AuthorizeView Roles="admin,superadmin">
                             <Authorized>
-                                @if (_settings.Speakers.Any())
-                                {
-                                    <a class="rooms-section__link" href="/administration/devices">@_settings.Speakers.Count configured</a>
-                                }
-                            </Authorized>
-                        </AuthorizeView>
-                    </div>
-                </header>
-                @if (_settings.Speakers.Any())
-                {
-                    <div class="room-grid">
-                        @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
-                        {
-                            var status = healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var value) ? value : null;
-                            var isActive = string.Equals(speaker.IpAddress, PlaybackState.ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
-                            <RoomCard Speaker="speaker"
-                                      Health="status"
-                                      IsActive="isActive"
-                                      ActiveVolume="@PlaybackState.Volume"
-                                      MaxVolume="@PlaybackState.MaxVolume"
-                                      IsPlaybackLoading="PlaybackState.IsLoading"
-                                      OnSetActive="@(() => SetActiveSpeaker(speaker.IpAddress))"
-                                      OnVolumeChanged="SetActiveVolume"
-                                      OnTogglePlayback="TogglePlayback" />
-                        }
-                    </div>
-                    @if (_speakerStatuses.Any(s => s.GroupMembers.Any()))
-                    {
-                        <div class="room-groups" aria-label="Grouped speakers">
-                            <span class="room-groups__label"><Icon Name="link" Size="14" /> Groups</span>
-                            @foreach (var root in _speakerStatuses.Where(s => s.GroupMembers.Any()).OrderBy(s => s.Name))
-                            {
-                                <div class="room-groups__item">
-                                    <span class="room-groups__dot @(root.IsPlaying ? "is-online" : "is-unknown")" aria-hidden="true"></span>
-                                    <strong>@root.Name</strong>
-                                    <span>@string.Join(", ", root.GroupMembers)</span>
-                                    <span class="badge rounded-pill text-uppercase @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
-                                        @(root.IsPlaying ? "Playing" : "Paused")
-                                    </span>
-                                </div>
-                            }
-                        </div>
-                    }
-                }
-                else
-                {
-                    <div class="home-setup" data-qa="home-setup">
-                        <p>No rooms configured</p>
-                        <ol class="home-setup__steps">
-                            <li><strong>Add a speaker</strong><span>Connect your first Sonos room.</span></li>
-                            <li><strong>Choose a source</strong><span>Save a radio station or music link in Library.</span></li>
-                            <li><strong>Press play</strong><span>Select your room and start listening.</span></li>
-                        </ol>
-                        <AuthorizeView Roles="admin,superadmin">
-                            <Authorized>
-                                <a class="btn btn-sm btn-primary" href="/administration/devices">Configure devices</a>
+                                <a class="btn btn-primary home-onboarding__action" href="/administration/devices">Set up speakers <Icon Name="speaker" Size="18" /></a>
                             </Authorized>
                             <NotAuthorized>
-                                <small>Ask an administrator to configure a room.</small>
+                                <p class="home-onboarding__notice">Ask an administrator to configure a room.</p>
                             </NotAuthorized>
                         </AuthorizeView>
                     </div>
-                }
-            </section>
-
-            <section class="library home-quick-library home-panel" aria-labelledby="home-favourites-heading">
-                <header class="library__head">
-                    <div>
-                        <span class="home-eyebrow">Quick access</span>
-                        <h2 id="home-favourites-heading">Favourites</h2>
+                    <div class="home-onboarding__visual" aria-hidden="true">
+                        <div class="home-onboarding__orbit"></div>
+                        <div class="home-onboarding__speaker"><Icon Name="speaker" Size="88" /></div>
+                        <span class="home-onboarding__note"><Icon Name="music" Size="24" /></span>
                     </div>
-                    <a class="btn btn-sm btn-outline-secondary" href="/library">
-                        <span>View library</span>
-                    </a>
+                </div>
+                <ol class="home-setup__steps">
+                    <li><span class="home-setup__number" aria-hidden="true">01</span><div><strong>Add a speaker</strong><span>Connect your first Sonos room.</span></div></li>
+                    <li><span class="home-setup__number" aria-hidden="true">02</span><div><strong>Choose a source</strong><span>Save a radio station or music link in Library.</span></div></li>
+                    <li><span class="home-setup__number" aria-hidden="true">03</span><div><strong>Press play</strong><span>Select your room and start listening.</span></div></li>
+                </ol>
+            </section>
+        }
+        else
+        {
+            <div class="home-stage">
+                <header class="home-intro">
+                    <div class="home-intro__copy">
+                        <span class="home-eyebrow">Today</span>
+                        <h1>@Greeting</h1>
+                        <p class="home-intro__sub">Your rooms, favourite sources, and next automation at a glance.</p>
+                    </div>
+                    @if (_settings.Speakers.Any())
+                    {
+                        <div class="home-intro__status" aria-live="polite">
+                            <span class="home-status-pill @runtime.StatusClass @(runtime.IsRunning ? "is-active" : "is-idle")">
+                                <span class="home-status-pill__dot" aria-hidden="true"></span>
+                                @runtime.StatusLabel
+                            </span>
+                            <small>@RefreshTelemetryLabel</small>
+                        </div>
+                    }
                 </header>
 
-                <div class="library__list">
-                    @if (!_settings.Speakers.Any())
-                    {
-                        <div class="home-setup-library">
-                            <p>Your favourite sources will appear here once a room is configured.</p>
-                            <a class="btn btn-outline-secondary" href="/library">Explore Library</a>
-                        </div>
-                    }
-                    else if (libraryItems.Any())
-                    {
-                        @foreach (var item in libraryItems)
-                        {
-                            <div class="library__item">
-                                <span class="library__item-icon library__item-icon--@item.MediaType"><Icon Name="@GetMediaIcon(item.MediaType)" Size="17" /></span>
-                                <div class="library__item-meta">
-                                    <strong title="@item.Name">@item.Name</strong>
-                                    @if (item.IsFavourite)
-                                    {
-                                        <span>@FormatMediaTypeLabel(item.MediaType)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="library__suggested">Suggested · @FormatMediaTypeLabel(item.MediaType)</span>
-                                    }
-                                </div>
-                                <button type="button" class="library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" title="@(!_settings.Speakers.Any() ? "Set up a speaker first" : $"Play {item.Name}")" disabled="@(!_settings.Speakers.Any() || _loadingMediaUrl == item.Url)">
-                                    @if (_loadingMediaUrl == item.Url) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
-                                    else { <Icon Name="play" Size="13" /> }
-                                </button>
-                            </div>
-                        }
-                    }
-                    else
-                    {
-                        <div class="home-empty home-empty--library">
-                            <span class="home-empty__icon" aria-hidden="true"><Icon Name="music" Size="26" /></span>
-                            <div>
-                                <strong>Your quick access is waiting</strong>
-                                <span>Save a source in Library and it will appear here.</span>
-                            </div>
-                            <a class="btn btn-sm btn-outline-primary" href="/library">Open Library</a>
-                        </div>
-                    }
-                </div>
-            </section>
-        </div>
-
-        <div class="home-footer">
-            <div class="home-footer__card home-footer__card--automation">
-                <SectionCard Title="Active Automation" Eyebrow="Schedule" Icon="schedule" Id="home-automation-card">
-                <HeaderExtras>
-                    <a class="btn btn-sm btn-outline-secondary" href="/automation?tab=schedules">View schedules</a>
-                </HeaderExtras>
-                <ChildContent>
-                <div class="home-window @(activeWindow is null ? "is-idle" : "")">
-                    <div>
-                        <h4>@(runtime.IsRunning ? runtime.ActiveScheduleName : runtime.StatusLabel)</h4>
-                        <p>@(_settings.Speakers.Any() || runtime.HasError ? GetActiveAutomationDescription(runtime, activeWindow, activeScene) : "After adding a room, create scenes and schedules to play music automatically.")</p>
-                        @if (activeWindow is not null)
-                        {
-                            <div class="home-chips">
-                                <span class="home-chip">Scene: @(activeScene?.Name ?? "None")</span>
-                                <span class="home-chip">Fade @activeWindow.FadeOutSeconds</span>
-                                <span class="home-chip">@GetSpeakerTargetSummary(activeScene)</span>
-                            </div>
-                        }
-                    </div>
-                    @if (activeWindow is not null)
-                    {
-                        <div class="home-handoff">
-                            <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
-                            <span>until handoff</span>
-                        </div>
-                    }
-                </div>
-                @if (nextWindow is not null && _settings.Speakers.Any())
+                @if (_settings.Speakers.Any())
                 {
-                    <div class="home-next">
-                        <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
-                        <div>
-                            <strong>@nextWindow.Name</strong>
-                            <span>@GetSceneName(nextWindow.SceneId) · @GetWindowTimeRange(nextWindow)</span>
-                        </div>
-                        <span class="home-next__badge">Next</span>
-                    </div>
+                    <NowPlayingHero />
                 }
-                </ChildContent>
-                </SectionCard>
             </div>
 
-            <div class="home-footer__card home-footer__card--health @(deviceWarnings.Any() ? "has-warnings" : "is-clear")">
-                <SectionCard Title="Device warnings" Eyebrow="Rooms" Icon="@(deviceWarnings.Any() ? "alert" : "check")" Id="home-device-warnings-card">
-                    <ChildContent>
-                    @if (deviceWarnings.Any())
-                    {
-                        <ul class="home-activity">
-                            @foreach (var speaker in deviceWarnings)
+            <div class="home-primary-grid">
+                <section class="rooms-section home-panel" aria-labelledby="home-rooms-heading">
+                    <header class="rooms-section__head">
+                        <div>
+                            <span class="home-eyebrow">Rooms</span>
+                            <h2 id="home-rooms-heading">Speakers</h2>
+                        </div>
+                        <div class="rooms-section__health" aria-label="Speaker health summary">
+                            @if (_settings.Speakers.Any())
                             {
-                                <li class="home-activity__row">
-                                    <div>
-                                        <strong>@speaker.Name</strong>
-                                        <span>@(healthSummary.ByIp.ContainsKey(speaker.IpAddress) ? "Offline" : "No health snapshot") · @speaker.IpAddress</span>
-                                    </div>
-                                    <span class="home-activity__alert" aria-hidden="true"><Icon Name="alert" Size="17" /></span>
-                                </li>
+                                <span class="rooms-stat is-online"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Online</strong> Online</span>
+                                <span class="rooms-stat is-offline"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Offline</strong> Offline</span>
+                                <span class="rooms-stat is-unknown"><span class="rooms-stat__dot" aria-hidden="true"></span><strong>@healthSummary.Unknown</strong> Unknown</span>
                             }
-                        </ul>
-                    }
-                    else if (!_settings.Speakers.Any())
+                            <AuthorizeView Roles="admin,superadmin">
+                                <Authorized>
+                                    @if (_settings.Speakers.Any())
+                                    {
+                                        <a class="rooms-section__link" href="/administration/devices">@_settings.Speakers.Count configured</a>
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
+                    </header>
+                    @if (_settings.Speakers.Any())
                     {
-                        <p class="home-setup-health">Device health will appear after you add your first room.</p>
-                    }
-                    else
-                    {
-                        <div class="home-health-ok">
-                            <span class="home-health-ok__icon" aria-hidden="true"><Icon Name="check" Size="23" /></span>
-                            <div>
-                                <strong>Everything sounds good</strong>
-                                <span>All configured rooms are reporting normally.</span>
+                        <div class="room-grid">
+                            @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
+                            {
+                                var status = healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var value) ? value : null;
+                                var isActive = string.Equals(speaker.IpAddress, PlaybackState.ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
+                                <RoomCard Speaker="speaker"
+                                          Health="status"
+                                          IsActive="isActive"
+                                          ActiveVolume="@PlaybackState.Volume"
+                                          MaxVolume="@PlaybackState.MaxVolume"
+                                          IsPlaybackLoading="PlaybackState.IsLoading"
+                                          OnSetActive="@(() => SetActiveSpeaker(speaker.IpAddress))"
+                                          OnVolumeChanged="SetActiveVolume"
+                                          OnTogglePlayback="TogglePlayback" />
+                            }
+                        </div>
+                        @if (_speakerStatuses.Any(s => s.GroupMembers.Any()))
+                        {
+                            <div class="room-groups" aria-label="Grouped speakers">
+                                <span class="room-groups__label"><Icon Name="link" Size="14" /> Groups</span>
+                                @foreach (var root in _speakerStatuses.Where(s => s.GroupMembers.Any()).OrderBy(s => s.Name))
+                                {
+                                    <div class="room-groups__item">
+                                        <span class="room-groups__dot @(root.IsPlaying ? "is-online" : "is-unknown")" aria-hidden="true"></span>
+                                        <strong>@root.Name</strong>
+                                        <span>@string.Join(", ", root.GroupMembers)</span>
+                                        <span class="badge rounded-pill text-uppercase @(root.IsPlaying ? "text-bg-success" : "text-bg-secondary")">
+                                            @(root.IsPlaying ? "Playing" : "Paused")
+                                        </span>
+                                    </div>
+                                }
                             </div>
+                        }
+                    }
+                </section>
+
+                <section class="library home-quick-library home-panel" aria-labelledby="home-favourites-heading">
+                    <header class="library__head">
+                        <div>
+                            <span class="home-eyebrow">Quick access</span>
+                            <h2 id="home-favourites-heading">Favourites</h2>
+                        </div>
+                        <a class="btn btn-sm btn-outline-secondary" href="/library">
+                            <span>View library</span>
+                        </a>
+                    </header>
+
+                    <div class="library__list">
+                        @if (libraryItems.Any())
+                        {
+                            @foreach (var item in libraryItems)
+                            {
+                                <div class="library__item">
+                                    <span class="library__item-icon library__item-icon--@item.MediaType"><Icon Name="@GetMediaIcon(item.MediaType)" Size="17" /></span>
+                                    <div class="library__item-meta">
+                                        <strong title="@item.Name">@item.Name</strong>
+                                        @if (item.IsFavourite)
+                                        {
+                                            <span>@FormatMediaTypeLabel(item.MediaType)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="library__suggested">Suggested · @FormatMediaTypeLabel(item.MediaType)</span>
+                                        }
+                                    </div>
+                                    <button type="button" class="library__play" @onclick="() => PlayMediaItem(item.Url, item.MediaType)" aria-label="@($"Play {item.Name}")" title="@(!_settings.Speakers.Any() ? "Set up a speaker first" : $"Play {item.Name}")" disabled="@(!_settings.Speakers.Any() || _loadingMediaUrl == item.Url)">
+                                        @if (_loadingMediaUrl == item.Url) { <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> }
+                                        else { <Icon Name="play" Size="13" /> }
+                                    </button>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="home-empty home-empty--library">
+                                <span class="home-empty__icon" aria-hidden="true"><Icon Name="music" Size="26" /></span>
+                                <div>
+                                    <strong>Your quick access is waiting</strong>
+                                    <span>Save a source in Library and it will appear here.</span>
+                                </div>
+                                <a class="btn btn-sm btn-outline-primary" href="/library">Open Library</a>
+                            </div>
+                        }
+                    </div>
+                </section>
+            </div>
+
+            <div class="home-footer">
+                <div class="home-footer__card home-footer__card--automation">
+                    <SectionCard Title="Active Automation" Eyebrow="Schedule" Icon="schedule" Id="home-automation-card">
+                    <HeaderExtras>
+                        <a class="btn btn-sm btn-outline-secondary" href="/automation?tab=schedules">View schedules</a>
+                    </HeaderExtras>
+                    <ChildContent>
+                    <div class="home-window @(activeWindow is null ? "is-idle" : "")">
+                        <div>
+                            <h4>@(runtime.IsRunning ? runtime.ActiveScheduleName : runtime.StatusLabel)</h4>
+                            <p>@(_settings.Speakers.Any() || runtime.HasError ? GetActiveAutomationDescription(runtime, activeWindow, activeScene) : "After adding a room, create scenes and schedules to play music automatically.")</p>
+                            @if (activeWindow is not null)
+                            {
+                                <div class="home-chips">
+                                    <span class="home-chip">Scene: @(activeScene?.Name ?? "None")</span>
+                                    <span class="home-chip">Fade @activeWindow.FadeOutSeconds</span>
+                                    <span class="home-chip">@GetSpeakerTargetSummary(activeScene)</span>
+                                </div>
+                            }
+                        </div>
+                        @if (activeWindow is not null)
+                        {
+                            <div class="home-handoff">
+                                <strong>@GetAutomationHandoffLabel(activeWindow, nowLocal)</strong>
+                                <span>until handoff</span>
+                            </div>
+                        }
+                    </div>
+                    @if (nextWindow is not null && _settings.Speakers.Any())
+                    {
+                        <div class="home-next">
+                            <time>@nextWindow.StartTime.ToString("HH\\:mm")</time>
+                            <div>
+                                <strong>@nextWindow.Name</strong>
+                                <span>@GetSceneName(nextWindow.SceneId) · @GetWindowTimeRange(nextWindow)</span>
+                            </div>
+                            <span class="home-next__badge">Next</span>
                         </div>
                     }
                     </ChildContent>
-                </SectionCard>
+                    </SectionCard>
+                </div>
+
+                <div class="home-footer__card home-footer__card--health @(deviceWarnings.Any() ? "has-warnings" : "is-clear")">
+                    <SectionCard Title="Device warnings" Eyebrow="Rooms" Icon="@(deviceWarnings.Any() ? "alert" : "check")" Id="home-device-warnings-card">
+                        <ChildContent>
+                        @if (deviceWarnings.Any())
+                        {
+                            <ul class="home-activity">
+                                @foreach (var speaker in deviceWarnings)
+                                {
+                                    <li class="home-activity__row">
+                                        <div>
+                                            <strong>@speaker.Name</strong>
+                                            <span>@(healthSummary.ByIp.ContainsKey(speaker.IpAddress) ? "Offline" : "No health snapshot") · @speaker.IpAddress</span>
+                                        </div>
+                                        <span class="home-activity__alert" aria-hidden="true"><Icon Name="alert" Size="17" /></span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <div class="home-health-ok">
+                                <span class="home-health-ok__icon" aria-hidden="true"><Icon Name="check" Size="23" /></span>
+                                <div>
+                                    <strong>Everything sounds good</strong>
+                                    <span>All configured rooms are reporting normally.</span>
+                                </div>
+                            </div>
+                        }
+                        </ChildContent>
+                    </SectionCard>
+                </div>
             </div>
-        </div>
+        }
     </div>
 }

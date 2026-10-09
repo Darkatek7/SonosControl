@@ -3808,3 +3808,8 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: v
     .global-player-bar__sync:hover:not(:disabled) { transform: none; }
     .app-dialog { animation: none; }
 }
+
+/* Empty configuration has no playback dock to reserve space for. */
+.app-shell--without-player .app-content-wrapper .content {
+    padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom));
+}

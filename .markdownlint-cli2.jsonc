@@ -1,5 +1,6 @@
 {
   // Keep document globs aligned with .github/workflows/docs-quality.yml and AGENTS.md.
+  // The testing guide covers both empty setup and configured UI-smoke states.
   "config": {
     "default": true,
     "MD013": false,

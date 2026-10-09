@@ -165,8 +165,11 @@ public class IndexPageUXTests
         });
     }
 
-    [Fact]
-    public void IndexPage_RendersSpeakerSetupStateWithoutPlaybackHero_WhenNoRoomsExist()
+    [Theory]
+    [InlineData("admin", true)]
+    [InlineData("superadmin", true)]
+    [InlineData("operator", false)]
+    public void IndexPage_RendersFocusedOnboarding_WhenNoRoomsExist(string role, bool canConfigure)
     {
         using var ctx = new BunitContext();
         var settings = new SonosSettings
@@ -183,7 +186,8 @@ public class IndexPageUXTests
             settings.Stations,
             settings.SpotifyTracks,
             settings.YouTubeMusicCollections,
-            settings);
+            settings,
+            role: role);
 
         var cut = ctx.Render<IndexPage>();
 
@@ -191,9 +195,11 @@ public class IndexPageUXTests
         {
             Assert.Empty(cut.FindAll("[data-qa='now-playing-hero']"));
             Assert.Empty(cut.FindAll("[data-qa='room-card']"));
-            Assert.Contains("No rooms configured", cut.Markup);
-            Assert.Single(cut.FindAll("a[href='/administration/devices']"));
-            Assert.Contains("home-primary-grid--empty", cut.Find(".home-primary-grid").ClassList);
+            Assert.Equal("Connect your first speaker", cut.Find("h1").TextContent);
+            Assert.Single(cut.FindAll("[data-qa='home-setup']"));
+            Assert.Equal(canConfigure ? 1 : 0, cut.FindAll("a[href='/administration/devices']").Count);
+            Assert.Equal(!canConfigure, cut.Markup.Contains("Ask an administrator"));
+            Assert.Empty(cut.FindAll(".home-primary-grid, .home-quick-library, .home-footer, .home-intro"));
             Assert.Equal(3, cut.FindAll(".home-setup__steps li").Count);
             Assert.Empty(cut.FindAll(".home-quick-library button"));
             Assert.Empty(cut.FindAll(".home-intro__status"));
@@ -206,6 +212,34 @@ public class IndexPageUXTests
         {
             Assert.Contains("Set up a speaker first", library.Find(".library-setup-notice").TextContent);
             Assert.NotNull(library.Find("button[aria-label='Play Setup Radio']").GetAttribute("disabled"));
+        });
+    }
+
+    [Fact]
+    public async Task IndexPage_SwitchesBetweenOnboardingAndDashboard_WhenSpeakerConfigurationChanges()
+    {
+        using var ctx = new BunitContext();
+        var settings = new SonosSettings { IP_Adress = string.Empty, Speakers = [] };
+        using var resources = ConfigureServices(ctx, [], [], [], settings);
+        var cut = ctx.Render<IndexPage>();
+        var playback = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-qa='home-setup']")));
+
+        settings.Speakers.Add(new SonosSpeaker { Name = "Office", IpAddress = "1.2.3.4" });
+        await cut.InvokeAsync(playback.InitializeAsync);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[data-qa='home-setup']"));
+            Assert.Single(cut.FindAll("[data-qa='room-card']"));
+            Assert.Single(cut.FindAll(".home-quick-library"));
+        });
+
+        settings.Speakers.Clear();
+        await cut.InvokeAsync(playback.InitializeAsync);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[data-qa='home-setup']"));
+            Assert.Empty(cut.FindAll("[data-qa='now-playing-hero'], .home-quick-library, .home-footer"));
         });
     }
 
@@ -625,6 +659,7 @@ public class IndexPageUXTests
         cut.WaitForAssertion(() =>
         {
             Assert.NotEmpty(cut.FindAll(".home-activity__row strong"));
+            Assert.Empty(cut.FindAll("[data-qa='home-setup']"));
             Assert.Contains("Living Room", cut.Find(".home-activity__row strong").TextContent);
             Assert.Contains("Offline · 1.2.3.4", cut.Markup);
         });
@@ -758,11 +793,12 @@ public class IndexPageUXTests
         SonosSettings? settingsOverride = null,
         IDeviceHealthSnapshotStore? healthStore = null,
         string? connectorCurrentStation = null,
-        List<YouTubeObject>? youTubeVideos = null)
+        List<YouTubeObject>? youTubeVideos = null,
+        string role = "admin")
     {
         var auth = ctx.AddAuthorization();
         auth.SetAuthorized("tester");
-        auth.SetRoles("admin");
+        auth.SetRoles(role);
         ctx.JSInterop.SetupVoid("window.sonosUi.setBodyScrollLock", _ => true);
 
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
