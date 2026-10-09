@@ -5,7 +5,7 @@
 .library-search-field { position: relative; display: flex; align-items: center; }
 .library-search-field ::deep svg { position: absolute; left: 0.9rem; z-index: 1; }
 .library-search-field .form-control { padding-left: 2.6rem; }
-.source-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; gap: 1rem; block-size: 14rem; padding: 1.25rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-1); box-shadow: var(--shadow-xs); }
+.source-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto; gap: 1rem; block-size: 14rem; padding: 1.25rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--material-card); box-shadow: var(--shadow-xs); }
 .source-card__icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: var(--radius-lg); color: var(--brand-primary); background: var(--surface-2); }
 .source-card__body { min-width: 0; }
 .source-card__body h2 { display: -webkit-box; margin: 0.2rem 0 0.45rem; overflow: hidden; font-size: 1.35rem; font-weight: 600; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }

@@ -14,8 +14,8 @@
 
 .profile-hero,
 .profile-panel {
-    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
-    border-radius: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
     background: var(--surface-elevated);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
     min-width: 0;
@@ -40,7 +40,7 @@
 .profile-hero p {
     margin: 0.75rem 0 0;
     max-width: 38rem;
-    color: color-mix(in srgb, var(--text-secondary) 88%, #fff 12%);
+    color: var(--text-secondary);
 }
 
 .profile-identity-card {

@@ -17,6 +17,7 @@
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
     "SECURITY.md",
-    "docs/**/*.md"
+    "docs/**/*.md",
+    "SonosControl.Web/wwwroot/css/README.md"
   ]
 }

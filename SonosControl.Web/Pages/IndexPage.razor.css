@@ -105,7 +105,7 @@
 
 .home-status-pill.is-active {
     color: white;
-    background: var(--brand-primary);
+    background: var(--brand-fill);
     border: 1px solid var(--brand-primary);
     box-shadow: none;
 }
@@ -178,8 +178,8 @@
 }
 
 .home-panel {
-    background: var(--surface-1);
-    border: 1px solid var(--border-subtle);
+    background: var(--material-card);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-sm);
 }
@@ -342,10 +342,12 @@
     transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
 }
 
-.library__item:hover {
-    transform: translateX(2px);
-    background: color-mix(in srgb, var(--brand-primary) 8%, var(--surface-2));
-    border-color: color-mix(in srgb, var(--brand-primary) 16%, var(--border-subtle));
+@media (hover: hover) and (pointer: fine) {
+    .library__item:hover {
+        transform: translateX(2px);
+        background: color-mix(in srgb, var(--brand-primary) 8%, var(--surface-2));
+        border-color: color-mix(in srgb, var(--brand-primary) 16%, var(--border-subtle));
+}
 }
 
 .library__item-icon {
@@ -408,16 +410,18 @@
     padding: 0;
     color: white;
     cursor: pointer;
-    background: var(--brand-primary);
+    background: var(--brand-fill);
     border: 1px solid color-mix(in srgb, white 12%, transparent);
     border-radius: 999px;
     box-shadow: 0 5px 14px color-mix(in srgb, var(--brand-primary) 22%, transparent);
     transition: transform var(--transition-fast), filter var(--transition-fast);
 }
 
-.library__play:hover:not(:disabled) {
-    transform: scale(1.06);
-    filter: brightness(1.08);
+@media (hover: hover) and (pointer: fine) {
+    .library__play:hover:not(:disabled) {
+        transform: scale(1.06);
+        filter: brightness(1.08);
+}
 }
 
 .library__play:focus-visible {
@@ -504,7 +508,7 @@
     right: var(--radius-xl);
     left: var(--radius-xl);
     height: 2px;
-    background: var(--brand-primary);
+    background: var(--brand-fill);
     border-radius: 999px;
     pointer-events: none;
 }
@@ -614,7 +618,7 @@
     margin-top: var(--spacing-md);
     padding: var(--spacing-md);
     background: color-mix(in srgb, var(--surface-2) 60%, transparent);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
 }
 
@@ -732,43 +736,6 @@
     margin-top: var(--spacing-2xs);
     color: var(--text-muted);
     font-size: var(--font-size-sm);
-}
-
-[data-theme='dark'] .home-panel {
-    background: var(--surface-elevated);
-    border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
-}
-
-[data-theme='dark'] .rooms-section {
-    background: color-mix(in srgb, var(--brand-primary) 5%, var(--surface-elevated));
-    border-color: color-mix(in srgb, var(--brand-primary) 24%, var(--border-strong));
-}
-
-[data-theme='dark'] .home-quick-library {
-    background: color-mix(in srgb, var(--brand-accent) 4%, var(--surface-elevated));
-    border-color: color-mix(in srgb, var(--brand-accent) 22%, var(--border-strong));
-}
-
-[data-theme='dark'] .library__item {
-    background: color-mix(in srgb, var(--brand-primary) 6%, var(--surface-2));
-    border-color: color-mix(in srgb, var(--brand-primary) 8%, transparent);
-}
-
-[data-theme='dark'] .library__item-icon {
-    color: var(--brand-accent);
-}
-
-[data-theme='dark'] .library__item-icon--spotify {
-    color: var(--brand-success);
-}
-
-[data-theme='dark'] .library__item-icon--youtube,
-[data-theme='dark'] .library__item-icon--youtubemusic {
-    color: var(--brand-danger);
-}
-
-[data-theme='dark'] .home-handoff strong {
-    color: var(--brand-accent);
 }
 
 @media (max-width: 1199.98px) {

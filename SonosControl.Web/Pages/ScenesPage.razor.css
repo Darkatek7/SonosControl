@@ -11,9 +11,9 @@
 
 .scenes-panel,
 .scenes-editor-card {
-    border: 1px solid color-mix(in srgb, var(--border-strong) 70%, #000 30%);
+    border: 1px solid var(--glass-border);
     background: var(--surface-elevated);
-    border-radius: 1rem;
+    border-radius: var(--radius-xl);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
     min-width: 0;
 }

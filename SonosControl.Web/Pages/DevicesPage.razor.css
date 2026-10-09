@@ -13,7 +13,7 @@
 .devices-health-strip,
 .devices-panel {
     border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent);
-    border-radius: 1rem;
+    border-radius: var(--radius-xl);
     background: var(--surface-elevated);
     box-shadow: 0 12px 30px rgba(33, 26, 47, 0.08), 0 2px 8px rgba(124, 77, 204, 0.06);
     min-width: 0;
@@ -38,7 +38,7 @@
 .devices-hero p {
     max-width: 52rem;
     margin: 0.75rem 0 0;
-    color: color-mix(in srgb, var(--text-secondary) 88%, #fff 12%);
+    color: var(--text-secondary);
 }
 
 .devices-hero__actions {
