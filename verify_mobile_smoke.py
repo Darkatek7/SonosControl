@@ -162,7 +162,9 @@ def assert_bottom_player_does_not_cover_content(page):
             const playerStyle = window.getComputedStyle(player);
             const paddingBottom = Number.parseFloat(window.getComputedStyle(content).paddingBottom) || 0;
             return {
-                bottomGap: Math.abs(window.innerHeight - playerRect.bottom),
+                bottomGap: window.innerHeight - playerRect.bottom,
+                bottomInset: Number.parseFloat(playerStyle.bottom) || 0,
+                bottomMargin: Number.parseFloat(playerStyle.marginBottom) || 0,
                 paddingBottom,
                 playerHeight: playerRect.height,
                 position: playerStyle.position
@@ -171,11 +173,16 @@ def assert_bottom_player_does_not_cover_content(page):
         """
     )
     assert spacing is not None, "Global bottom player or content region missing."
-    assert spacing["bottomGap"] <= 2, "Global player is not anchored to the bottom viewport edge."
+    assert spacing["position"] in ("fixed", "sticky"), "Global player must stay anchored while scrolling."
+    assert (
+        spacing["bottomInset"] - 2 <= spacing["bottomGap"]
+        <= spacing["bottomInset"] + spacing["bottomMargin"] + 2
+    ), "Global player is not anchored at its configured dock inset."
     if spacing["position"] == "fixed":
+        assert abs(spacing["bottomGap"] - spacing["bottomInset"]) <= 2, "Fixed player drifted from its dock inset."
         assert (
-            spacing["paddingBottom"] + 4 >= spacing["playerHeight"]
-        ), "Main content does not reserve enough space for the global bottom player."
+            spacing["paddingBottom"] + 4 >= spacing["playerHeight"] + spacing["bottomGap"]
+        ), "Main content does not reserve the global player's height and dock inset."
 
 
 def apply_theme(page, theme):
@@ -266,7 +273,7 @@ def verify_drawer(page):
     expect(page.get_by_role("link", name="Automation", exact=True)).to_be_visible(timeout=5000)
     expect(page.get_by_role("link", name="Insights", exact=True)).to_be_visible(timeout=5000)
     page.locator("button.nav-drawer-close").click()
-    page.wait_for_timeout(150)
+    expect(page.locator("#app-sidebar")).not_to_be_visible(timeout=5000)
 
 
 def get_login_attempts():

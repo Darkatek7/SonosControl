@@ -30,6 +30,8 @@ The auto-start path creates disposable settings and SQLite directories under
 `artifacts`, disables background services, and checks all primary pages in
 light and dark themes at 390, 768, and 1280 pixels. It also fails on browser
 console errors, horizontal overflow, or content hidden behind the player.
+The floating player must stay at its configured bottom inset, and mobile
+content clearance includes both the dock height and the inset.
 
 Optional:
 ```bash
@@ -42,7 +44,11 @@ python3 verify_mobile_smoke.py
 
 On macOS, the runner auto-detects Google Chrome at
 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If Chrome is
-installed elsewhere, set `PLAYWRIGHT_CHROME_PATH`.
+installed elsewhere, set `PLAYWRIGHT_CHROME_PATH`. If the installed Chrome
+cannot start, install a separate test browser with
+`artifacts/ui-smoke-venv/bin/python -m playwright install chromium` and set
+`PLAYWRIGHT_CHROME_PATH` to that browser's executable. This does not require
+changing the smoke scripts.
 
 Windows:
 ```powershell

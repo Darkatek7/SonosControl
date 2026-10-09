@@ -2,6 +2,14 @@
     "use strict";
 
     const ui = window.sonosUi = window.sonosUi || {};
+    ui._scrollLockCount = ui._scrollLockCount || 0;
+    ui.setBodyScrollLock = function (locked) {
+        ui._scrollLockCount = Math.max(0, ui._scrollLockCount + (locked ? 1 : -1));
+        const shouldLock = ui._scrollLockCount > 0;
+        document.documentElement.classList.toggle("scroll-locked", shouldLock);
+        document.body.classList.toggle("scroll-locked", shouldLock);
+    };
+
     const focusTraps = new WeakMap();
     const focusableSelector = [
         "a[href]",

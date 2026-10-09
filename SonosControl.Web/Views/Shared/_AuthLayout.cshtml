@@ -1,17 +1,28 @@
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@using Microsoft.AspNetCore.Identity
+@using SonosControl.Web.Models
+@inject UserManager<ApplicationUser> UserManager
 @{
     Layout = null;
     var pageTitle = ViewData["Title"] as string ?? "SonosControl";
+    var themePreference = ThemePreferenceMode.System.ToIdentifier();
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        var appUser = await UserManager.GetUserAsync(User);
+        themePreference = appUser?.ThemePreference ?? themePreference;
+    }
 }
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>@pageTitle</title>
+    <script src="~/js/sonos-theme.js" data-preference="@themePreference" asp-append-version="true"></script>
     <link rel="icon" type="image/png" href="~/favicon.png" />
     <link rel="stylesheet" href="~/css/bootstrap/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="auth-page">
     @RenderBody()

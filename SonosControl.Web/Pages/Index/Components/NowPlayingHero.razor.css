@@ -4,8 +4,8 @@
     min-height: 31rem;
     overflow: hidden;
     color: var(--text-primary);
-    background: var(--surface-1);
-    border: 1px solid var(--border-subtle);
+    background: var(--material-card);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     box-shadow: var(--shadow-md);
 }
@@ -19,7 +19,7 @@
 .np-hero__art img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .np-hero__art-fallback {
@@ -135,7 +135,7 @@
     color: #fff;
     background:
         radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.18), transparent 38%),
-        color-mix(in srgb, var(--brand-primary) 82%, #27103d);
+        color-mix(in srgb, var(--brand-fill) 82%, #27103d);
     box-shadow:
         0 0 0 0.35rem rgba(0, 0, 0, 0.28),
         inset 0 0 1.5rem rgba(255, 255, 255, 0.12);
@@ -189,8 +189,9 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: var(--spacing-xl);
-    padding: clamp(2rem, 5vw, 4.5rem);
+    gap: var(--spacing-lg);
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    background: var(--gradient-glass);
 }
 
 .np-hero__status-line {
@@ -239,10 +240,10 @@
 .np-hero__title {
     margin: 0;
     overflow-wrap: anywhere;
-    font-size: clamp(2.25rem, 4.5vw, 4.9rem);
+    font-size: clamp(2.25rem, 3.4vw, 3.75rem);
     font-weight: 600;
     letter-spacing: -0.045em;
-    line-height: 0.98;
+    line-height: 1.06;
 }
 
 .np-hero__source {
@@ -290,8 +291,8 @@
     width: 4rem;
     height: 4rem;
     color: #fff;
-    background: var(--brand-primary);
-    border-color: var(--brand-primary);
+    background: var(--brand-fill);
+    border-color: var(--brand-fill);
 }
 
 .np-hero__btn:hover:not(:disabled) {
@@ -300,8 +301,8 @@
 }
 
 .np-hero__play:hover:not(:disabled) {
-    background: var(--brand-primary-strong);
-    border-color: var(--brand-primary-strong);
+    background: var(--brand-fill-hover);
+    border-color: var(--brand-fill-hover);
 }
 
 .np-hero__btn:focus-visible,
@@ -328,42 +329,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-}
-
-[data-theme='dark'] .np-hero {
-    background: color-mix(in srgb, var(--brand-primary) 7%, var(--surface-1));
-    border-color: color-mix(in srgb, var(--brand-primary) 42%, var(--border-strong));
-    box-shadow:
-        var(--shadow-md),
-        0 0 0 1px color-mix(in srgb, var(--brand-accent) 10%, transparent);
-}
-
-[data-theme='dark'] .np-hero__art,
-[data-theme='dark'] .np-hero__art-fallback {
-    background: color-mix(in srgb, var(--brand-primary) 24%, var(--surface-2));
-}
-
-[data-theme='dark'] .np-hero__record-kicker {
-    color: var(--brand-accent);
-}
-
-[data-theme='dark'] .np-hero__content {
-    background: color-mix(in srgb, var(--brand-primary) 5%, var(--surface-1));
-    border-left: 1px solid color-mix(in srgb, var(--brand-accent) 18%, var(--border-subtle));
-}
-
-[data-theme='dark'] .np-hero__room .form-select {
-    background-color: color-mix(in srgb, var(--brand-primary) 8%, var(--surface-2));
-    border-color: color-mix(in srgb, var(--brand-primary) 28%, var(--border-subtle));
-}
-
-[data-theme='dark'] .np-hero__btn {
-    background: color-mix(in srgb, var(--brand-primary) 6%, transparent);
-    border-color: color-mix(in srgb, var(--brand-accent) 35%, var(--border-strong));
-}
-
-[data-theme='dark'] .np-hero__volume {
-    border-top-color: color-mix(in srgb, var(--brand-accent) 22%, var(--border-subtle));
 }
 
 @media (max-width: 991.98px) {
@@ -395,11 +360,6 @@
 
     .np-hero__content {
         padding: var(--spacing-xl) var(--spacing-lg);
-    }
-
-    [data-theme='dark'] .np-hero__content {
-        border-top: 1px solid color-mix(in srgb, var(--brand-accent) 18%, var(--border-subtle));
-        border-left: 0;
     }
 
     .np-hero__title {

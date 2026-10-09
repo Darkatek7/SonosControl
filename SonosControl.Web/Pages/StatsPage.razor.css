@@ -6,7 +6,7 @@
 .listening-controls .form-select { width: auto; min-height: 2.75rem; }
 .listening-controls .btn { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; }
 .listening-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
-.listening-metric, .listening-panel { min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-1); padding: 1.25rem; }
+.listening-metric, .listening-panel { min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--material-card); padding: 1.25rem; }
 .listening-metric { display: flex; flex-direction: column; gap: 0.45rem; }
 .listening-metric--total { border-top: 3px solid var(--brand-primary); padding-top: calc(1.25rem - 2px); }
 .listening-metric > span { color: var(--text-secondary); font-size: 0.85rem; }
@@ -55,7 +55,7 @@
 .listening-method ::deep svg { flex-shrink: 0; margin-top: 0.15rem; }
 .listening-method strong { color: var(--text-secondary); font-weight: 550; }
 .listening-method p { margin: 0.35rem 0 0.5rem; max-width: 80rem; line-height: 1.6; }
-.listening-empty, .listening-status { padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--surface-1); text-align: center; }
+.listening-empty, .listening-status { padding: 1.5rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); background: var(--material-card); text-align: center; }
 .listening-empty > p { color: var(--text-muted); font-size: 0.85rem; margin: 1rem 0 0; }
 @media (max-width: 767.98px) {
     .listening-toolbar { align-items: flex-start; flex-direction: column; }

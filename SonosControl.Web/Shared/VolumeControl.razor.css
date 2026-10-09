@@ -1,6 +1,6 @@
 .volume-control {
     display: grid;
-    grid-template-columns: minmax(5rem, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.5rem;
     width: 100%;
@@ -9,7 +9,7 @@
 
 .volume-control__range {
     width: 100%;
-    min-width: 5rem;
+    min-width: 0;
     margin: 0;
     accent-color: var(--brand-primary);
 }
