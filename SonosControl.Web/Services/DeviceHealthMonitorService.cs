@@ -98,10 +98,11 @@ public sealed class DeviceHealthMonitorService : BackgroundService
     private async Task RefreshStatusesAsync(CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        var settingsRepo = scope.ServiceProvider.GetRequiredService<ISettingsRepo>();
+        var sonosConnectorRepo = scope.ServiceProvider.GetRequiredService<ISonosConnectorRepo>();
         var actionLogger = scope.ServiceProvider.GetRequiredService<ActionLogger>();
 
-        var settings = await uow.ISettingsRepo.GetSettings();
+        var settings = await settingsRepo.GetSettings();
         if (settings?.Speakers is null || settings.Speakers.Count == 0)
         {
             _snapshotStore.Replace(Array.Empty<DeviceHealthStatus>());
@@ -113,7 +114,7 @@ public sealed class DeviceHealthMonitorService : BackgroundService
 
         foreach (var speaker in settings.Speakers)
         {
-            var status = await ProbeSpeakerAsync(speaker, uow, previous, cancellationToken);
+            var status = await ProbeSpeakerAsync(speaker, sonosConnectorRepo, previous, cancellationToken);
             currentStatuses.Add(status);
 
             if (previous.TryGetValue(status.SpeakerIp, out var oldStatus)
@@ -129,7 +130,7 @@ public sealed class DeviceHealthMonitorService : BackgroundService
 
     private async Task<DeviceHealthStatus> ProbeSpeakerAsync(
         SonosSpeaker speaker,
-        IUnitOfWork uow,
+        ISonosConnectorRepo sonosConnectorRepo,
         IReadOnlyDictionary<string, DeviceHealthStatus> previous,
         CancellationToken cancellationToken)
     {
@@ -156,10 +157,10 @@ public sealed class DeviceHealthMonitorService : BackgroundService
 
         try
         {
-            var playingTask = uow.ISonosConnectorRepo.IsPlaying(speaker.IpAddress);
-            var volumeTask = uow.ISonosConnectorRepo.GetVolume(speaker.IpAddress);
+            var playingTask = sonosConnectorRepo.IsPlaying(speaker.IpAddress);
+            var volumeTask = sonosConnectorRepo.GetVolume(speaker.IpAddress);
             var uuidTask = string.IsNullOrWhiteSpace(speaker.Uuid)
-                ? uow.ISonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress, cancellationToken)
+                ? sonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress, cancellationToken)
                 : Task.FromResult<string?>(speaker.Uuid);
 
             await Task.WhenAll(playingTask, volumeTask, uuidTask);

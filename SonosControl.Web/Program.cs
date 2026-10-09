@@ -14,7 +14,6 @@ using SonosControl.Web.Models; // For ApplicationUser
 using SonosControl.Web.Data;   // For ApplicationDbContext
 using Radzen;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -44,7 +43,12 @@ builder.Services.Configure<YouTubePlaybackOptions>(builder.Configuration.GetSect
 builder.Services.Configure<Mp3UploadOptions>(builder.Configuration.GetSection("Mp3Upload"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<Mp3UploadService>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // Changed to Scoped
+builder.Services.AddScoped<SonosSoapTransport>();
+builder.Services.AddScoped<ISonosConnectorRepo, SonosConnectorRepo>();
+builder.Services.AddScoped<IHolidayRepo, HolidayRepo>();
+builder.Services.AddScoped<SettingsEditingService>();
+builder.Services.AddSingleton<SceneTimerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SceneTimerService>());
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
 builder.Services.AddSingleton<IYouTubeToolRunner, YouTubeToolRunner>();
 builder.Services.AddSingleton<YouTubePlaybackService>();
@@ -167,7 +171,13 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-Frame-Options", "SAMEORIGIN");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
     context.Response.Headers.Append("Permissions-Policy", "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()");
-    await next();
+    try { await next(); }
+    catch (SettingsReadException ex) when (!context.Response.HasStarted)
+    {
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+    }
 });
 
 app.UseHttpsRedirection();

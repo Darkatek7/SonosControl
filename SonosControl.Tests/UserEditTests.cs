@@ -16,10 +16,11 @@ public class UserEditTests
     public void Account_MissingResolvedUserStopsWithVisibleRecoveryAction()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var auth = ctx.AddAuthorization();
         auth.SetAuthorized("missing-user");
         auth.SetRoles("operator");
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
 
         var userStore = new Mock<IUserStore<ApplicationUser>>();
         var userManager = new Mock<UserManager<ApplicationUser>>(

@@ -11,16 +11,18 @@ namespace SonosControl.Web.Controllers;
 [Authorize(Roles = "admin,operator,superadmin")]
 public sealed class ScenesController : ControllerBase
 {
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly SettingsEditingService _editing;
     private readonly ISceneOrchestrationService _sceneOrchestrationService;
     private readonly ActionLogger _actionLogger;
 
     public ScenesController(
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo, SettingsEditingService editing,
         ISceneOrchestrationService sceneOrchestrationService,
         ActionLogger actionLogger)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _editing = editing;
         _sceneOrchestrationService = sceneOrchestrationService;
         _actionLogger = actionLogger;
     }
@@ -28,7 +30,7 @@ public sealed class ScenesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<Scene>>> GetAll()
     {
-        var settings = await _uow.ISettingsRepo.GetSettings();
+        var settings = await _settingsRepo.GetSettings();
         settings ??= new SonosSettings();
         settings.Scenes ??= new();
 
@@ -38,7 +40,7 @@ public sealed class ScenesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult<Scene>> GetById(string id)
     {
-        var settings = await _uow.ISettingsRepo.GetSettings();
+        var settings = await _settingsRepo.GetSettings();
         var scene = settings?.Scenes?.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
         if (scene is null)
         {
@@ -52,108 +54,46 @@ public sealed class ScenesController : ControllerBase
     [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<ActionResult<Scene>> Create([FromBody] Scene scene)
     {
-        if (scene is null)
+        if (scene is null) return BadRequest("Scene payload is required.");
+        try
         {
-            return BadRequest("Scene payload is required.");
+            scene.Id = string.IsNullOrWhiteSpace(scene.Id) ? Guid.NewGuid().ToString("N") : scene.Id.Trim();
+            var saved = await _editing.SaveSceneAsync(scene, create: true);
+            var result = saved.Scenes.Single(item => item.Id == scene.Id);
+            await _actionLogger.LogAsync("SceneCreated", $"{result.Name} ({result.Id})");
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
-
-        if (string.IsNullOrWhiteSpace(scene.Name))
-        {
-            return BadRequest("Scene name is required.");
-        }
-
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.Scenes ??= new();
-
-        if (settings.Scenes.Any(s => string.Equals(s.Name, scene.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            return Conflict($"A scene named '{scene.Name}' already exists.");
-        }
-
-        scene.Id = string.IsNullOrWhiteSpace(scene.Id) ? Guid.NewGuid().ToString("N") : scene.Id.Trim();
-        scene.LastModifiedUtc = DateTime.UtcNow;
-        settings.Scenes.Add(scene);
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("SceneCreated", $"{scene.Name} ({scene.Id})");
-
-        return CreatedAtAction(nameof(GetById), new { id = scene.Id }, scene);
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
 
     [HttpPut("{id}")]
     [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<ActionResult<Scene>> Update(string id, [FromBody] Scene scene)
     {
-        if (scene is null)
+        if (scene is null) return BadRequest("Scene payload is required.");
+        try
         {
-            return BadRequest("Scene payload is required.");
+            scene.Id = id;
+            var saved = await _editing.SaveSceneAsync(scene, create: false);
+            var result = saved.Scenes.Single(item => item.Id == id);
+            await _actionLogger.LogAsync("SceneUpdated", $"{result.Name} ({result.Id})");
+            return Ok(result);
         }
-
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.Scenes ??= new();
-
-        var existing = settings.Scenes.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
-        if (existing is null)
-        {
-            return NotFound();
-        }
-
-        var duplicateNameExists = settings.Scenes.Any(s =>
-            !string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(s.Name, scene.Name, StringComparison.OrdinalIgnoreCase));
-        if (duplicateNameExists)
-        {
-            return Conflict($"A scene named '{scene.Name}' already exists.");
-        }
-
-        existing.Name = scene.Name;
-        existing.Description = scene.Description;
-        existing.Enabled = scene.Enabled;
-        existing.SourceSelectionMode = scene.SourceSelectionMode;
-        existing.SourceType = scene.SourceType;
-        existing.SourceUrl = scene.SourceUrl;
-        existing.IsSyncedPlayback = scene.IsSyncedPlayback;
-        existing.MasterSpeakerIp = scene.MasterSpeakerIp;
-        existing.TimerMinutes = scene.TimerMinutes;
-        existing.SpeakerIps = scene.SpeakerIps ?? new();
-        existing.Actions = scene.Actions ?? new();
-        existing.LastModifiedUtc = DateTime.UtcNow;
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("SceneUpdated", $"{existing.Name} ({existing.Id})");
-
-        return Ok(existing);
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "admin,operator,superadmin")]
     public async Task<IActionResult> Delete(string id)
     {
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
-        settings.Scenes ??= new();
-
-        var scene = settings.Scenes.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
-        if (scene is null)
+        try
         {
-            return NotFound();
+            await _editing.DeleteSceneAsync(id);
+            await _actionLogger.LogAsync("SceneDeleted", id);
+            return NoContent();
         }
-
-        settings.Scenes.Remove(scene);
-
-        settings.ScheduleWindows ??= new();
-        foreach (var window in settings.ScheduleWindows.Where(w => string.Equals(w.SceneId, id, StringComparison.OrdinalIgnoreCase)))
-        {
-            window.SceneId = null;
-            window.IsEnabled = false;
-            window.LastModifiedUtc = DateTime.UtcNow;
-        }
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("SceneDeleted", $"{scene.Name} ({scene.Id})");
-
-        return NoContent();
+        catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
-
     [HttpPost("{id}/apply")]
     public async Task<ActionResult<SceneApplyResult>> Apply(string id, CancellationToken cancellationToken)
     {

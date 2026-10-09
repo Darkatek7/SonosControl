@@ -20,6 +20,7 @@ public class ConfigPageUXTests
     public void ConfigPage_WebhookInputs_HaveAccessibilityAttributes()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         // --- Setup Dependencies ---
 
@@ -45,16 +46,13 @@ public class ConfigPageUXTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings>())).Returns(Task.CompletedTask);
 
         // UoW Mock
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        // We don't need connector repo for this specific test part, but good to have if init runs
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(Mock.Of<ISonosConnectorRepo>());
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
 
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        // We don't need connector repo for this specific test part, but good to have if init runs
+
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, Mock.Of<ISonosConnectorRepo>(), Mock.Of<IHolidayRepo>());
 
         // --- Render ---
         var cut = ctx.Render<ConfigPage>();

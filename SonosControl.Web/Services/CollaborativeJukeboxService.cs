@@ -41,36 +41,44 @@ public sealed record JukeboxOperationResult(
 
 public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
 {
+    private static readonly SemaphoreSlim Operations = new(1, 1);
     private const int MaxSuggestionsPerHourUpperBound = 50;
     private const int MaxVotesPerHourUpperBound = 200;
     private const int MaxRetentionDays = 90;
     private const int MaxSuggestionHistory = 500;
 
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly ISonosConnectorRepo _sonosConnectorRepo;
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<CollaborativeJukeboxService> _logger;
 
     public CollaborativeJukeboxService(
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
         ActionLogger actionLogger,
         ILogger<CollaborativeJukeboxService> logger)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _sonosConnectorRepo = sonosConnectorRepo;
         _actionLogger = actionLogger;
         _logger = logger;
     }
 
     public async Task<JukeboxState> GetStateAsync(CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var settings = await LoadSettingsAsync(cancellationToken);
-
-        if (Cleanup(settings))
+        await Operations.WaitAsync(cancellationToken);
+        try
         {
-            await _uow.ISettingsRepo.WriteSettings(settings);
-        }
+            cancellationToken.ThrowIfCancellationRequested();
+            var settings = await LoadSettingsAsync(cancellationToken);
 
-        return BuildState(settings);
+            if (Cleanup(settings))
+            {
+                await _settingsRepo.SaveChangesAsync(settings);
+            }
+
+            return BuildState(settings);
+        }
+        finally { Operations.Release(); }
     }
 
     public async Task<JukeboxOperationResult> SuggestAsync(
@@ -80,58 +88,63 @@ public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
         string? performedBy,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(resourceUri))
+        await Operations.WaitAsync(cancellationToken);
+        try
         {
-            return new JukeboxOperationResult(false, "Resource URI is required.");
+            if (string.IsNullOrWhiteSpace(resourceUri))
+            {
+                return new JukeboxOperationResult(false, "Resource URI is required.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = NormalizeUser(performedBy);
+            var settings = await LoadSettingsAsync(cancellationToken);
+
+            if (!settings.Jukebox.Enabled)
+            {
+                return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
+            }
+
+            Cleanup(settings);
+
+            var now = DateTime.UtcNow;
+            var suggestionLimit = Math.Clamp(settings.Jukebox.MaxSuggestionsPerUserPerHour, 1, MaxSuggestionsPerHourUpperBound);
+            var suggestionsLastHour = settings.JukeboxSuggestions.Count(s =>
+                string.Equals(s.SuggestedBy, user, StringComparison.OrdinalIgnoreCase)
+                && s.SuggestedUtc >= now.AddHours(-1));
+            if (suggestionsLastHour >= suggestionLimit)
+            {
+                return new JukeboxOperationResult(false, $"Suggestion limit reached ({suggestionLimit}/hour).");
+            }
+
+            var normalizedUri = resourceUri.Trim();
+            var duplicatePending = settings.JukeboxSuggestions.Any(s =>
+                !s.IsPlayed
+                && string.Equals(s.ResourceUri, normalizedUri, StringComparison.OrdinalIgnoreCase));
+            if (duplicatePending)
+            {
+                return new JukeboxOperationResult(false, "This URI is already queued in Jukebox.");
+            }
+
+            var suggestion = new JukeboxSuggestion
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                ResourceUri = normalizedUri,
+                Title = NormalizeOptional(title),
+                Artist = NormalizeOptional(artist),
+                SuggestedBy = user,
+                SuggestedUtc = now
+            };
+
+            settings.JukeboxSuggestions.Add(suggestion);
+            TrimSuggestionHistory(settings.JukeboxSuggestions);
+
+            await _settingsRepo.SaveChangesAsync(settings);
+            await _actionLogger.LogAsync("JukeboxSuggested", $"{suggestion.Title ?? suggestion.ResourceUri} by {user}");
+
+            return new JukeboxOperationResult(true, "Suggestion added.", CloneSuggestion(suggestion));
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        var user = NormalizeUser(performedBy);
-        var settings = await LoadSettingsAsync(cancellationToken);
-
-        if (!settings.Jukebox.Enabled)
-        {
-            return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
-        }
-
-        Cleanup(settings);
-
-        var now = DateTime.UtcNow;
-        var suggestionLimit = Math.Clamp(settings.Jukebox.MaxSuggestionsPerUserPerHour, 1, MaxSuggestionsPerHourUpperBound);
-        var suggestionsLastHour = settings.JukeboxSuggestions.Count(s =>
-            string.Equals(s.SuggestedBy, user, StringComparison.OrdinalIgnoreCase)
-            && s.SuggestedUtc >= now.AddHours(-1));
-        if (suggestionsLastHour >= suggestionLimit)
-        {
-            return new JukeboxOperationResult(false, $"Suggestion limit reached ({suggestionLimit}/hour).");
-        }
-
-        var normalizedUri = resourceUri.Trim();
-        var duplicatePending = settings.JukeboxSuggestions.Any(s =>
-            !s.IsPlayed
-            && string.Equals(s.ResourceUri, normalizedUri, StringComparison.OrdinalIgnoreCase));
-        if (duplicatePending)
-        {
-            return new JukeboxOperationResult(false, "This URI is already queued in Jukebox.");
-        }
-
-        var suggestion = new JukeboxSuggestion
-        {
-            Id = Guid.NewGuid().ToString("N"),
-            ResourceUri = normalizedUri,
-            Title = NormalizeOptional(title),
-            Artist = NormalizeOptional(artist),
-            SuggestedBy = user,
-            SuggestedUtc = now
-        };
-
-        settings.JukeboxSuggestions.Add(suggestion);
-        TrimSuggestionHistory(settings.JukeboxSuggestions);
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("JukeboxSuggested", $"{suggestion.Title ?? suggestion.ResourceUri} by {user}");
-
-        return new JukeboxOperationResult(true, "Suggestion added.", CloneSuggestion(suggestion));
+        finally { Operations.Release(); }
     }
 
     public async Task<JukeboxOperationResult> VoteAsync(
@@ -139,59 +152,64 @@ public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
         string? performedBy,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(suggestionId))
+        await Operations.WaitAsync(cancellationToken);
+        try
         {
-            return new JukeboxOperationResult(false, "Suggestion id is required.");
+            if (string.IsNullOrWhiteSpace(suggestionId))
+            {
+                return new JukeboxOperationResult(false, "Suggestion id is required.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = NormalizeUser(performedBy);
+            var settings = await LoadSettingsAsync(cancellationToken);
+
+            if (!settings.Jukebox.Enabled)
+            {
+                return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
+            }
+
+            Cleanup(settings);
+
+            var suggestion = settings.JukeboxSuggestions.FirstOrDefault(s =>
+                string.Equals(s.Id, suggestionId, StringComparison.OrdinalIgnoreCase));
+            if (suggestion is null || suggestion.IsPlayed)
+            {
+                return new JukeboxOperationResult(false, "Suggestion not found.");
+            }
+
+            suggestion.Votes ??= new();
+            var alreadyVoted = suggestion.Votes.Any(v =>
+                string.Equals(v.UserName, user, StringComparison.OrdinalIgnoreCase));
+            if (alreadyVoted)
+            {
+                return new JukeboxOperationResult(false, "You already voted for this suggestion.");
+            }
+
+            var now = DateTime.UtcNow;
+            var voteLimit = Math.Clamp(settings.Jukebox.MaxVotesPerUserPerHour, 1, MaxVotesPerHourUpperBound);
+            var votesLastHour = settings.JukeboxSuggestions
+                .SelectMany(s => s.Votes ?? Enumerable.Empty<JukeboxVote>())
+                .Count(v =>
+                    string.Equals(v.UserName, user, StringComparison.OrdinalIgnoreCase)
+                    && v.VotedUtc >= now.AddHours(-1));
+            if (votesLastHour >= voteLimit)
+            {
+                return new JukeboxOperationResult(false, $"Vote limit reached ({voteLimit}/hour).");
+            }
+
+            suggestion.Votes.Add(new JukeboxVote
+            {
+                UserName = user,
+                VotedUtc = now
+            });
+
+            await _settingsRepo.SaveChangesAsync(settings);
+            await _actionLogger.LogAsync("JukeboxVoted", $"{user} voted for {suggestion.Id}");
+
+            return new JukeboxOperationResult(true, "Vote submitted.", CloneSuggestion(suggestion));
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        var user = NormalizeUser(performedBy);
-        var settings = await LoadSettingsAsync(cancellationToken);
-
-        if (!settings.Jukebox.Enabled)
-        {
-            return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
-        }
-
-        Cleanup(settings);
-
-        var suggestion = settings.JukeboxSuggestions.FirstOrDefault(s =>
-            string.Equals(s.Id, suggestionId, StringComparison.OrdinalIgnoreCase));
-        if (suggestion is null || suggestion.IsPlayed)
-        {
-            return new JukeboxOperationResult(false, "Suggestion not found.");
-        }
-
-        suggestion.Votes ??= new();
-        var alreadyVoted = suggestion.Votes.Any(v =>
-            string.Equals(v.UserName, user, StringComparison.OrdinalIgnoreCase));
-        if (alreadyVoted)
-        {
-            return new JukeboxOperationResult(false, "You already voted for this suggestion.");
-        }
-
-        var now = DateTime.UtcNow;
-        var voteLimit = Math.Clamp(settings.Jukebox.MaxVotesPerUserPerHour, 1, MaxVotesPerHourUpperBound);
-        var votesLastHour = settings.JukeboxSuggestions
-            .SelectMany(s => s.Votes ?? Enumerable.Empty<JukeboxVote>())
-            .Count(v =>
-                string.Equals(v.UserName, user, StringComparison.OrdinalIgnoreCase)
-                && v.VotedUtc >= now.AddHours(-1));
-        if (votesLastHour >= voteLimit)
-        {
-            return new JukeboxOperationResult(false, $"Vote limit reached ({voteLimit}/hour).");
-        }
-
-        suggestion.Votes.Add(new JukeboxVote
-        {
-            UserName = user,
-            VotedUtc = now
-        });
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("JukeboxVoted", $"{user} voted for {suggestion.Id}");
-
-        return new JukeboxOperationResult(true, "Vote submitted.", CloneSuggestion(suggestion));
+        finally { Operations.Release(); }
     }
 
     public async Task<JukeboxOperationResult> PlayTopSuggestionAsync(
@@ -199,58 +217,64 @@ public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
         string? performedBy,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var user = NormalizeUser(performedBy);
-        var settings = await LoadSettingsAsync(cancellationToken);
-
-        if (!settings.Jukebox.Enabled)
-        {
-            return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
-        }
-
-        Cleanup(settings);
-
-        var targetSpeakerIp = ResolveTargetSpeakerIp(speakerIp, settings);
-        if (string.IsNullOrWhiteSpace(targetSpeakerIp))
-        {
-            return new JukeboxOperationResult(false, "A configured speaker is required.");
-        }
-
-        var winner = GetPendingOrdered(settings.JukeboxSuggestions).FirstOrDefault();
-        if (winner is null)
-        {
-            return new JukeboxOperationResult(false, "No pending Jukebox suggestions.");
-        }
-
-        if (string.IsNullOrWhiteSpace(winner.ResourceUri))
-        {
-            return new JukeboxOperationResult(false, "Winning suggestion has no playable URI.");
-        }
-
+        await Operations.WaitAsync(cancellationToken);
         try
         {
-            await _uow.ISonosConnectorRepo.AddUriToQueue(
-                targetSpeakerIp,
-                winner.ResourceUri,
-                metadata: null,
-                enqueueAsNext: true,
-                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var user = NormalizeUser(performedBy);
+            var settings = await LoadSettingsAsync(cancellationToken);
+
+            if (!settings.Jukebox.Enabled)
+            {
+                return new JukeboxOperationResult(false, "Collaborative Jukebox is disabled.");
+            }
+
+            Cleanup(settings);
+
+            var targetSpeakerIp = ResolveTargetSpeakerIp(speakerIp, settings);
+            if (string.IsNullOrWhiteSpace(targetSpeakerIp))
+            {
+                return new JukeboxOperationResult(false, "A configured speaker is required.");
+            }
+
+            var winner = GetPendingOrdered(settings.JukeboxSuggestions).FirstOrDefault();
+            if (winner is null)
+            {
+                return new JukeboxOperationResult(false, "No pending Jukebox suggestions.");
+            }
+
+            if (string.IsNullOrWhiteSpace(winner.ResourceUri))
+            {
+                return new JukeboxOperationResult(false, "Winning suggestion has no playable URI.");
+            }
+
+            try
+            {
+                await _sonosConnectorRepo.AddUriToQueue(
+                    targetSpeakerIp,
+                    winner.ResourceUri,
+                    metadata: null,
+                    enqueueAsNext: true,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enqueue winning Jukebox suggestion {SuggestionId}.", winner.Id);
+                return new JukeboxOperationResult(false, $"Could not enqueue winner: {ex.Message}");
+            }
+
+            winner.IsPlayed = true;
+            winner.PlayedUtc = DateTime.UtcNow;
+            winner.PlayedOnSpeakerIp = targetSpeakerIp;
+
+            await _settingsRepo.SaveChangesAsync(settings);
+            await _actionLogger.LogAsync("JukeboxPlayed", $"{winner.Id} queued next on {targetSpeakerIp} by {user}");
+
+            return new JukeboxOperationResult(true, "Winning suggestion queued as next track.", CloneSuggestion(winner));
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to enqueue winning Jukebox suggestion {SuggestionId}.", winner.Id);
-            return new JukeboxOperationResult(false, $"Could not enqueue winner: {ex.Message}");
-        }
-
-        winner.IsPlayed = true;
-        winner.PlayedUtc = DateTime.UtcNow;
-        winner.PlayedOnSpeakerIp = targetSpeakerIp;
-
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("JukeboxPlayed", $"{winner.Id} queued next on {targetSpeakerIp} by {user}");
-
-        return new JukeboxOperationResult(true, "Winning suggestion queued as next track.", CloneSuggestion(winner));
+        finally { Operations.Release(); }
     }
 
     public async Task<JukeboxOperationResult> RemoveSuggestionAsync(
@@ -258,28 +282,33 @@ public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
         string? performedBy,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(suggestionId))
+        await Operations.WaitAsync(cancellationToken);
+        try
         {
-            return new JukeboxOperationResult(false, "Suggestion id is required.");
+            if (string.IsNullOrWhiteSpace(suggestionId))
+            {
+                return new JukeboxOperationResult(false, "Suggestion id is required.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = NormalizeUser(performedBy);
+            var settings = await LoadSettingsAsync(cancellationToken);
+            Cleanup(settings);
+
+            var suggestion = settings.JukeboxSuggestions.FirstOrDefault(s =>
+                string.Equals(s.Id, suggestionId, StringComparison.OrdinalIgnoreCase));
+            if (suggestion is null)
+            {
+                return new JukeboxOperationResult(false, "Suggestion not found.");
+            }
+
+            settings.JukeboxSuggestions.Remove(suggestion);
+            await _settingsRepo.SaveChangesAsync(settings);
+            await _actionLogger.LogAsync("JukeboxSuggestionRemoved", $"{suggestion.Id} removed by {user}");
+
+            return new JukeboxOperationResult(true, "Suggestion removed.", CloneSuggestion(suggestion));
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        var user = NormalizeUser(performedBy);
-        var settings = await LoadSettingsAsync(cancellationToken);
-        Cleanup(settings);
-
-        var suggestion = settings.JukeboxSuggestions.FirstOrDefault(s =>
-            string.Equals(s.Id, suggestionId, StringComparison.OrdinalIgnoreCase));
-        if (suggestion is null)
-        {
-            return new JukeboxOperationResult(false, "Suggestion not found.");
-        }
-
-        settings.JukeboxSuggestions.Remove(suggestion);
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("JukeboxSuggestionRemoved", $"{suggestion.Id} removed by {user}");
-
-        return new JukeboxOperationResult(true, "Suggestion removed.", CloneSuggestion(suggestion));
+        finally { Operations.Release(); }
     }
 
     public async Task<JukeboxOperationResult> UpdateSettingsAsync(
@@ -287,26 +316,31 @@ public sealed class CollaborativeJukeboxService : ICollaborativeJukeboxService
         string? performedBy,
         CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var user = NormalizeUser(performedBy);
-        var settings = await LoadSettingsAsync(cancellationToken);
+        await Operations.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var user = NormalizeUser(performedBy);
+            var settings = await LoadSettingsAsync(cancellationToken);
 
-        settings.Jukebox.Enabled = updatedSettings.Enabled;
-        settings.Jukebox.MaxSuggestionsPerUserPerHour = Math.Clamp(updatedSettings.MaxSuggestionsPerUserPerHour, 1, MaxSuggestionsPerHourUpperBound);
-        settings.Jukebox.MaxVotesPerUserPerHour = Math.Clamp(updatedSettings.MaxVotesPerUserPerHour, 1, MaxVotesPerHourUpperBound);
-        settings.Jukebox.PlayedSuggestionRetentionDays = Math.Clamp(updatedSettings.PlayedSuggestionRetentionDays, 1, MaxRetentionDays);
+            settings.Jukebox.Enabled = updatedSettings.Enabled;
+            settings.Jukebox.MaxSuggestionsPerUserPerHour = Math.Clamp(updatedSettings.MaxSuggestionsPerUserPerHour, 1, MaxSuggestionsPerHourUpperBound);
+            settings.Jukebox.MaxVotesPerUserPerHour = Math.Clamp(updatedSettings.MaxVotesPerUserPerHour, 1, MaxVotesPerHourUpperBound);
+            settings.Jukebox.PlayedSuggestionRetentionDays = Math.Clamp(updatedSettings.PlayedSuggestionRetentionDays, 1, MaxRetentionDays);
 
-        Cleanup(settings);
-        await _uow.ISettingsRepo.WriteSettings(settings);
-        await _actionLogger.LogAsync("JukeboxSettingsUpdated", $"Updated by {user}");
+            Cleanup(settings);
+            await _settingsRepo.SaveChangesAsync(settings);
+            await _actionLogger.LogAsync("JukeboxSettingsUpdated", $"Updated by {user}");
 
-        return new JukeboxOperationResult(true, "Jukebox settings updated.");
+            return new JukeboxOperationResult(true, "Jukebox settings updated.");
+        }
+        finally { Operations.Release(); }
     }
 
     private async Task<SonosSettings> LoadSettingsAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         settings.Jukebox ??= new();
         settings.JukeboxSuggestions ??= new();
         settings.Speakers ??= new();

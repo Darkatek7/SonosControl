@@ -19,6 +19,7 @@ public class AutomationDateExceptionsTests
     public void AddException_SavesSelectedRepeatOption(bool isAnnual)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         var repo = ConfigureServices(ctx, settings);
         var cut = RenderExceptions(ctx);
@@ -40,7 +41,7 @@ public class AutomationDateExceptionsTests
             var card = cut.Find(".exception-card");
             Assert.Equal(isAnnual ? "Every year" : "Once", card.QuerySelector("span")!.TextContent);
             Assert.Equal(isAnnual ? "25/12" : "25/12/2026", card.QuerySelector("strong")!.TextContent);
-            repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
+            repo.Verify(repository => repository.SaveChangesAsync(settings), Times.Once);
         });
     }
 
@@ -48,6 +49,7 @@ public class AutomationDateExceptionsTests
     public void AddAnnualException_RejectsSameDayAndMonthInAnotherYear()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings);
@@ -59,13 +61,14 @@ public class AutomationDateExceptionsTests
 
         Assert.Single(settings.AnnualAutomationExcludedDates);
         Assert.Contains("already has an exception", cut.Find(".alert-danger").TextContent);
-        repo.Verify(repository => repository.WriteSettings(It.IsAny<SonosSettings?>()), Times.Never);
+        repo.Verify(repository => repository.SaveChangesAsync(It.IsAny<SonosSettings?>()), Times.Never);
     }
 
     [Fact]
     public void RemoveAnnualException_PreservesOneTimeExceptionForSameDate()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         var date = new DateOnly(2026, 12, 25);
         settings.AutomationExcludedDates = [date];
@@ -80,7 +83,7 @@ public class AutomationDateExceptionsTests
             Assert.Empty(settings.AnnualAutomationExcludedDates);
             Assert.Equal(date, Assert.Single(settings.AutomationExcludedDates));
             Assert.Single(cut.FindAll(".exception-card"));
-            repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
+            repo.Verify(repository => repository.SaveChangesAsync(settings), Times.Once);
         });
     }
 
@@ -88,6 +91,7 @@ public class AutomationDateExceptionsTests
     public void Operator_CanViewRepeatOptionsButCannotChangeExceptions()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         settings.AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)];
         var repo = ConfigureServices(ctx, settings, "operator");
@@ -98,13 +102,14 @@ public class AutomationDateExceptionsTests
         Assert.True(cut.Find(".exception-editor button").HasAttribute("disabled"));
         Assert.Contains("Every year", cut.Find(".exception-card").TextContent);
         Assert.Empty(cut.FindAll(".exception-card button"));
-        repo.Verify(repository => repository.WriteSettings(It.IsAny<SonosSettings?>()), Times.Never);
+        repo.Verify(repository => repository.SaveChangesAsync(It.IsAny<SonosSettings?>()), Times.Never);
     }
 
     [Fact]
     public void EditSchedule_PreservesGlobalExceptions()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         settings.ScheduleWindows[0].IsEnabled = false;
         settings.AutomationExcludedDates = [new DateOnly(2026, 12, 24)];
@@ -119,7 +124,7 @@ public class AutomationDateExceptionsTests
         {
             Assert.Equal(new DateOnly(2026, 12, 24), Assert.Single(settings.AutomationExcludedDates));
             Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.AnnualAutomationExcludedDates));
-            repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
+            repo.Verify(repository => repository.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()), Times.Once);
         });
     }
 
@@ -127,6 +132,7 @@ public class AutomationDateExceptionsTests
     public void AddException_WithoutSchedules_SavesGlobalDate()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = new SonosSettings();
         var repo = ConfigureServices(ctx, settings);
         var cut = RenderExceptions(ctx);
@@ -137,7 +143,7 @@ public class AutomationDateExceptionsTests
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.AutomationExcludedDates));
-            repo.Verify(repository => repository.WriteSettings(settings), Times.Once);
+            repo.Verify(repository => repository.SaveChangesAsync(settings), Times.Once);
         });
     }
 
@@ -145,6 +151,7 @@ public class AutomationDateExceptionsTests
     public void LegacyWindowExceptions_AreShownAsGlobalAndCanBeRemoved()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var settings = CreateSettings();
         settings.ScheduleWindows[0].AnnualExcludedDates = [new DateOnly(2026, 12, 25)];
         ConfigureServices(ctx, settings);
@@ -181,10 +188,11 @@ public class AutomationDateExceptionsTests
         auth.SetRoles(role);
         var repo = new Mock<ISettingsRepo>();
         repo.Setup(repository => repository.GetSettings()).ReturnsAsync(settings);
-        repo.Setup(repository => repository.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(unit => unit.ISettingsRepo).Returns(repo.Object);
-        ctx.Services.AddSingleton(uow.Object);
+        repo.Setup(repository => repository.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        repo.Setup(repository => repository.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+
+        RepositoryTestServices.Register(ctx.Services, repo.Object, Mock.Of<ISonosConnectorRepo>(), Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton(new AutomationRuntimeStatus());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         return repo;

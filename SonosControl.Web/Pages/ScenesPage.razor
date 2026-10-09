@@ -1,3 +1,5 @@
+@inject SettingsEditingService SettingsEditor
+@inject ISettingsRepo _settingsRepo
 @* Routed through AutomationPage. *@
 @using System.Globalization
 @using SonosControl.Web.Services
@@ -309,7 +311,7 @@
 
     private async Task LoadSettingsAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.Scenes ??= new();
         _settings.Speakers ??= new();
         _settings.Stations ??= new();
@@ -404,27 +406,6 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_editingScene.Name))
-        {
-            ShowStatus("Scene name is required.", true);
-            return;
-        }
-
-        if (_editingScene.SourceSelectionMode != SceneSourceSelectionMode.Resume
-            && _editingScene.SourceType == SceneSourceType.None)
-        {
-            ShowStatus("Choose a source type or use Resume current source.", true);
-            return;
-        }
-
-        if (_editingScene.SourceSelectionMode == SceneSourceSelectionMode.Specific
-            && _editingScene.SourceType != SceneSourceType.None
-            && string.IsNullOrWhiteSpace(_editingScene.SourceUrl))
-        {
-            ShowStatus("Source URL is required for non-empty source type.", true);
-            return;
-        }
-
         _isSaving = true;
         try
         {
@@ -450,21 +431,9 @@
                 .ToList();
             _editingScene.LastModifiedUtc = DateTime.UtcNow;
 
-            var existing = _settings.Scenes.FirstOrDefault(s => string.Equals(s.Id, _editingScene.Id, StringComparison.OrdinalIgnoreCase));
-            if (existing is null)
-            {
-                _editingScene.Id = string.IsNullOrWhiteSpace(_editingScene.Id) ? Guid.NewGuid().ToString("N") : _editingScene.Id;
-                _settings.Scenes.Add(CloneScene(_editingScene));
-                _selectedSceneId = _editingScene.Id;
-            }
-            else
-            {
-                var index = _settings.Scenes.IndexOf(existing);
-                _settings.Scenes[index] = CloneScene(_editingScene);
-                _selectedSceneId = _editingScene.Id;
-            }
-
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            var original = _settings.Scenes.FirstOrDefault(item => string.Equals(item.Id, _editingScene.Id, StringComparison.OrdinalIgnoreCase));
+            _settings = await SettingsEditor.SaveSceneAsync(_editingScene, original is null, original);
+            _selectedSceneId = _editingScene.Id;
             ShowStatus("Scene saved.");
             await LoadSettingsAsync();
 
@@ -513,12 +482,7 @@
             return;
         }
 
-        _settings.Scenes.RemoveAll(s => string.Equals(s.Id, scene.Id, StringComparison.OrdinalIgnoreCase));
-        foreach (var window in _settings.ScheduleWindows.Where(window => string.Equals(window.SceneId, scene.Id, StringComparison.OrdinalIgnoreCase)))
-        {
-            window.IsEnabled = false;
-        }
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _settings = await SettingsEditor.DeleteSceneAsync(scene.Id);
         ShowStatus("Scene deleted. Linked schedules were disabled.");
 
         if (string.Equals(_selectedSceneId, scene.Id, StringComparison.OrdinalIgnoreCase))

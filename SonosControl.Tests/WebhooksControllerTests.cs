@@ -121,7 +121,7 @@ public class WebhooksControllerTests
         private const string ConfiguredApiKey = "test-webhook-key";
         private readonly ApplicationDbContext _db;
         private readonly IConfiguration _configuration;
-        private readonly IUnitOfWork _unitOfWork;
+        private readonly ISettingsRepo _settingsRepo;
         private readonly ActionLogger _actionLogger;
 
         public WebhookFixture()
@@ -131,10 +131,7 @@ public class WebhooksControllerTests
             settingsRepo.Setup(repository => repository.GetSettings())
                 .ReturnsAsync(new SonosSettings());
 
-            var unitOfWork = new Mock<IUnitOfWork>();
-            unitOfWork.SetupGet(value => value.ISonosConnectorRepo).Returns(ConnectorRepo.Object);
-            unitOfWork.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-            _unitOfWork = unitOfWork.Object;
+            _settingsRepo = settingsRepo.Object;
 
             _configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
@@ -156,7 +153,7 @@ public class WebhooksControllerTests
         {
             var controller = new WebhooksController(
                 _configuration,
-                _unitOfWork,
+                _settingsRepo, ConnectorRepo.Object,
                 Mock.Of<ISceneOrchestrationService>(),
                 _actionLogger,
                 NullLogger<WebhooksController>.Instance);

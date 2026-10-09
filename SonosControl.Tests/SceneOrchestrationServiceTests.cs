@@ -74,19 +74,14 @@ public class SceneOrchestrationServiceTests
             .Callback(() => fallbackAttempts++)
             .Returns(Task.CompletedTask);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var notificationService = new Mock<INotificationService>();
         notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
 
         var (actionLogger, db) = CreateActionLogger();
         var service = new SceneOrchestrationService(
-            uow.Object,
-            Mock.Of<IServiceScopeFactory>(),
+            settingsRepo.Object, connectorRepo.Object,
+            RepositoryTestServices.CreateTimers(),
             notificationService.Object,
             actionLogger,
             NullLogger<SceneOrchestrationService>.Instance);
@@ -155,19 +150,14 @@ public class SceneOrchestrationServiceTests
             .Callback(() => primaryAttempts++)
             .ThrowsAsync(new InvalidOperationException("Primary source unavailable"));
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var notificationService = new Mock<INotificationService>();
         notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
 
         var (actionLogger, db) = CreateActionLogger();
         var service = new SceneOrchestrationService(
-            uow.Object,
-            Mock.Of<IServiceScopeFactory>(),
+            settingsRepo.Object, connectorRepo.Object,
+            RepositoryTestServices.CreateTimers(),
             notificationService.Object,
             actionLogger,
             NullLogger<SceneOrchestrationService>.Instance);
@@ -223,19 +213,14 @@ public class SceneOrchestrationServiceTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var notificationService = new Mock<INotificationService>();
         notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
 
         var (actionLogger, db) = CreateActionLogger();
         var service = new SceneOrchestrationService(
-            uow.Object,
-            Mock.Of<IServiceScopeFactory>(),
+            settingsRepo.Object, connectorRepo.Object,
+            RepositoryTestServices.CreateTimers(),
             notificationService.Object,
             actionLogger,
             NullLogger<SceneOrchestrationService>.Instance);
@@ -294,19 +279,14 @@ public class SceneOrchestrationServiceTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var notificationService = new Mock<INotificationService>();
         notificationService.Setup(service => service.SendNotificationAsync(It.IsAny<string>(), It.IsAny<string?>()))
             .Returns(Task.CompletedTask);
 
         var (actionLogger, db) = CreateActionLogger();
         var service = new SceneOrchestrationService(
-            uow.Object,
-            Mock.Of<IServiceScopeFactory>(),
+            settingsRepo.Object, connectorRepo.Object,
+            RepositoryTestServices.CreateTimers(),
             notificationService.Object,
             actionLogger,
             NullLogger<SceneOrchestrationService>.Instance);

@@ -39,21 +39,18 @@ public sealed class SettingsBackupService : ISettingsBackupService
     };
 
     private readonly ISettingsRepo _settingsRepo;
-    private readonly ISettingsSchemaMigrationService _migrationService;
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<SettingsBackupService> _logger;
     private readonly string _backupDirectory;
 
     public SettingsBackupService(
         ISettingsRepo settingsRepo,
-        ISettingsSchemaMigrationService migrationService,
         ActionLogger actionLogger,
         ILogger<SettingsBackupService> logger,
         IWebHostEnvironment environment,
         IConfiguration configuration)
     {
         _settingsRepo = settingsRepo;
-        _migrationService = migrationService;
         _actionLogger = actionLogger;
         _logger = logger;
         var configuredDataDirectory = configuration["Settings:DataDirectory"];
@@ -156,41 +153,24 @@ public sealed class SettingsBackupService : ISettingsBackupService
         string actionName,
         CancellationToken cancellationToken)
     {
-        var previousSettings = await _settingsRepo.GetSettings();
-        var safetyBackup = await _settingsRepo.CreateVersionedBackupAsync(backupLabel, cancellationToken);
-
+        // Prepare the candidate without touching the active document. Atomic staging
+        // in the repository keeps a failed import from requiring a stale rollback.
         try
         {
-            await _settingsRepo.WriteSettings(importedSettings);
-            var migration = await _migrationService.MigrateIfRequiredAsync(cancellationToken);
-            if (!migration.Success)
-            {
-                throw new SettingsBackupException("The settings document could not be migrated safely.");
-            }
-
+            SettingsSchemaMigrationService.PrepareForPersistence(importedSettings);
+            if (importedSettings.Scenes.Select(scene => scene.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != importedSettings.Scenes.Count
+                || importedSettings.ScheduleWindows.Select(window => window.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != importedSettings.ScheduleWindows.Count)
+                throw new SettingsBackupException("Scene and schedule IDs must be unique.");
+            foreach (var scene in importedSettings.Scenes) SettingsEditingService.ValidateScene(scene, importedSettings);
+            foreach (var window in importedSettings.ScheduleWindows) SettingsEditingService.ValidateWindow(window, importedSettings);
+            var safetyBackup = await _settingsRepo.ReplaceSettingsAsync(importedSettings, backupLabel, cancellationToken);
             await _actionLogger.LogAsync(actionName, $"{sourceName}; safety backup: {safetyBackup ?? "not required"}");
             _logger.LogInformation("Settings restored from {SourceName}; safety backup {SafetyBackup}.", sourceName, safetyBackup);
             return new SettingsRestoreResult(sourceName, safetyBackup);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is not SettingsBackupException)
         {
-            if (previousSettings is not null)
-            {
-                try
-                {
-                    await _settingsRepo.WriteSettings(previousSettings);
-                }
-                catch (Exception rollbackException)
-                {
-                    _logger.LogCritical(rollbackException, "Settings rollback failed after import of {SourceName}.", sourceName);
-                }
-            }
-
-            if (ex is SettingsBackupException)
-            {
-                throw;
-            }
-
             throw new SettingsBackupException("The settings document could not be applied safely.", innerException: ex);
         }
     }

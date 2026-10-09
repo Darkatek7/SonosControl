@@ -23,7 +23,7 @@ namespace SonosControl.Tests
 {
     public class IndexPagePerfTests : BunitContext
     {
-        private Mock<IUnitOfWork> _mockUow;
+
         private Mock<ISonosConnectorRepo> _mockSonosRepo;
         private Mock<ISettingsRepo> _mockSettingsRepo;
         private ApplicationDbContext _db;
@@ -32,7 +32,8 @@ namespace SonosControl.Tests
 
         public IndexPagePerfTests()
         {
-            _mockUow = new Mock<IUnitOfWork>();
+            RepositoryTestServices.AddDefaults(Services);
+
             _mockSonosRepo = new Mock<ISonosConnectorRepo>();
             _mockSettingsRepo = new Mock<ISettingsRepo>();
             _mockNotificationService = new Mock<INotificationService>();
@@ -45,10 +46,7 @@ namespace SonosControl.Tests
 
             _mockAuthProvider = new Mock<AuthenticationStateProvider>();
 
-            _mockUow.Setup(u => u.ISonosConnectorRepo).Returns(_mockSonosRepo.Object);
-            _mockUow.Setup(u => u.ISettingsRepo).Returns(_mockSettingsRepo.Object);
-
-            Services.AddSingleton(_mockUow.Object);
+            RepositoryTestServices.Register(Services, _mockSettingsRepo.Object, _mockSonosRepo.Object, Mock.Of<IHolidayRepo>());
             Services.AddSingleton(_db);
             Services.AddSingleton(_mockAuthProvider.Object);
             Services.AddSingleton(_mockNotificationService.Object);
@@ -89,6 +87,8 @@ namespace SonosControl.Tests
 
             var settings = new SonosSettings { Speakers = speakers, IP_Adress = "192.168.1.101" };
             _mockSettingsRepo.Setup(s => s.GetSettings()).ReturnsAsync(settings);
+            _mockSettingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
 
             // Current speaker is playing a station
             _mockSonosRepo.Setup(s => s.GetCurrentStationAsync("192.168.1.101", It.IsAny<CancellationToken>()))

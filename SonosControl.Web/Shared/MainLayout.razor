@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @inherits LayoutComponentBase
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
@@ -118,18 +119,31 @@
 
         <section class="app-content-wrapper">
             <article class="content px-4">
-                @Body
+                @if (_settingsReadError is not null)
+                {
+                    <div class="alert alert-danger" role="alert">@_settingsReadError <a href="/settings-backups">Restore settings</a></div>
+                }
+                <ErrorBoundary @key="Navigation.Uri">
+                    <ChildContent>@Body</ChildContent>
+                    <ErrorContent Context="error">
+                        <div class="alert alert-danger" role="alert">The page could not be loaded. Check the settings file or <a href="/settings-backups">restore a backup</a>.</div>
+                    </ErrorContent>
+                </ErrorBoundary>
             </article>
         </section>
 
-        @if (isAuthenticated)
+        @if (isAuthenticated && _settingsReadError is null)
         {
-            <GlobalPlayerBar />
+            <ErrorBoundary @ref="_playerErrorBoundary">
+                <GlobalPlayerBar />
+            </ErrorBoundary>
         }
     </main>
 </div>
 
 @code {
+    private ErrorBoundary? _playerErrorBoundary;
+    private string? _settingsReadError;
     private string? firstName;
     private bool isAuthenticated;
     private bool _allowRegistration = true;
@@ -180,7 +194,7 @@
         var user = authState.User;
 
         isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-        _allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
+        await RefreshSettingsStateAsync();
 
         if (isAuthenticated)
         {
@@ -198,6 +212,21 @@
         {
             Navigation.LocationChanged += HandleLocationChanged;
             _navigationSubscriptionRegistered = true;
+        }
+    }
+
+    private async Task RefreshSettingsStateAsync()
+    {
+        try
+        {
+            _allowRegistration = (await _settingsRepo.GetSettings())?.AllowUserRegistration ?? true;
+            _settingsReadError = null;
+            _playerErrorBoundary?.Recover();
+        }
+        catch (SonosControl.DAL.Repos.SettingsReadException ex)
+        {
+            _settingsReadError = ex.Message;
+            _allowRegistration = false;
         }
     }
 
@@ -284,11 +313,19 @@
 
         if (_isDrawerOpen)
         {
-            _ = InvokeAsync(CloseDrawerAsync);
+            _ = InvokeAsync(async () =>
+            {
+                await RefreshSettingsStateAsync();
+                await CloseDrawerAsync();
+            });
             return;
         }
 
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshSettingsStateAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task ChangeThemeAsync(ThemePreferenceMode mode)

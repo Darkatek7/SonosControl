@@ -6,6 +6,11 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using SonosControl.Web.Data;
+using SonosControl.Web.Services;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.DAL.Repos;
@@ -574,7 +579,7 @@ public class SonosConnectorRepoTests
         var settingsRepo = new Mock<ISettingsRepo>().Object;
         var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
-        await repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream");
+        await Assert.ThrowsAsync<HttpRequestException>(() => repo.SetTuneInStationAsync("1.2.3.4", "example.com/stream"));
 
         Assert.Equal(2, handler.Requests.Count);
         Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
@@ -587,12 +592,12 @@ public class SonosConnectorRepoTests
     public async Task PlaySpotifyTrackAsync_Success_UsesFallbackAndStartsPlayback()
     {
         var handler = new QueueHttpMessageHandler();
-        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
-        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("<root><UDN>uuid:RINCON_ABC123</UDN></root>")
         });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         var client = new HttpClient(handler);
         var settingsRepo = new Mock<ISettingsRepo>().Object;
@@ -602,14 +607,14 @@ public class SonosConnectorRepoTests
 
         Assert.Equal(4, handler.Requests.Count);
 
-        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[1].SoapAction);
 
-        var fallbackRequest = handler.Requests[1];
+        var fallbackRequest = handler.Requests[2];
         Assert.Equal(HttpMethod.Post, fallbackRequest.Method);
         Assert.NotNull(fallbackRequest.Body);
         Assert.Contains("fallback-station", fallbackRequest.Body);
 
-        var deviceDescriptionRequest = handler.Requests[2];
+        var deviceDescriptionRequest = handler.Requests[0];
         Assert.Equal(HttpMethod.Get, deviceDescriptionRequest.Method);
         Assert.Equal("http://1.2.3.4:1400/xml/device_description.xml", deviceDescriptionRequest.Uri!.ToString());
 
@@ -622,21 +627,21 @@ public class SonosConnectorRepoTests
     public async Task PlaySpotifyTrackAsync_Failure_DoesNotStartPlayback()
     {
         var handler = new QueueHttpMessageHandler();
-        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("<root><UDN>uuid:RINCON_ABC123</UDN></root>")
         });
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
         handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
         var client = new HttpClient(handler);
         var settingsRepo = new Mock<ISettingsRepo>().Object;
         var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), settingsRepo);
 
-        await repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345");
+        await Assert.ThrowsAsync<HttpRequestException>(() => repo.PlaySpotifyTrackAsync("1.2.3.4", "https://open.spotify.com/track/12345"));
 
         Assert.Equal(3, handler.Requests.Count);
-        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[0].SoapAction);
-        Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+        Assert.Equal("\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"", handler.Requests[1].SoapAction);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
         Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
         Assert.Equal(0, repo.StartPlayingCallCount);
     }
@@ -695,7 +700,7 @@ public class SonosConnectorRepoTests
 
         var settings = new SonosControl.DAL.Models.SonosSettings { Speakers = speakers };
         mockSettingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        mockSettingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosControl.DAL.Models.SonosSettings>())).Returns(Task.CompletedTask);
+        mockSettingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosControl.DAL.Models.SonosSettings>())).Returns(Task.CompletedTask);
 
         var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), mockSettingsRepo.Object);
 
@@ -708,7 +713,7 @@ public class SonosConnectorRepoTests
         Assert.Equal(2, result.Count());
 
         // Verify WriteSettings was called to save the fetched UUID
-        mockSettingsRepo.Verify(r => r.WriteSettings(It.Is<SonosControl.DAL.Models.SonosSettings>(s =>
+        mockSettingsRepo.Verify(r => r.SaveChangesAsync(It.Is<SonosControl.DAL.Models.SonosSettings>(s =>
             s.Speakers.First(sp => sp.IpAddress == "5.6.7.8").Uuid == "uuid:RINCON_000002"
         )), Times.Once);
 
@@ -719,4 +724,149 @@ public class SonosConnectorRepoTests
         // Request 2: Get Device Description (GetRinconIdAsync) for Slave
         Assert.Equal("http://5.6.7.8:1400/xml/device_description.xml", handler.Requests[1].Uri!.ToString());
     }
+    [Theory]
+    [InlineData("clear")]
+    [InlineData("next")]
+    [InlineData("ungroup")]
+    public async Task MutatingCommands_PropagateSoapFaults(string command)
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Client</faultcode></s:Fault></s:Body></s:Envelope>")
+        });
+        using var client = new HttpClient(handler);
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        Task Invoke() => command switch
+        {
+            "clear" => repo.ClearQueue("1.2.3.4"),
+            "next" => repo.NextTrack("1.2.3.4"),
+            _ => repo.UngroupSpeaker("1.2.3.4")
+        };
+        await Assert.ThrowsAsync<HttpRequestException>(Invoke);
+        Assert.Equal(0, repo.StartPlayingCallCount);
+    }
+
+    [Fact]
+    public async Task InvalidSourceAndCancellation_DoNotSendAnyDeviceCommands()
+    {
+        var handler = new QueueHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.PlaySpotifyTrackAsync("1.2.3.4", "invalid"));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.PlaySpotifyTrackAsync("1.2.3.4", "https://example.com/track/123"));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.PlayYouTubeMusicTrackAsync("1.2.3.4", "ytm:unknown:id"));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.PlayYouTubeMusicTrackAsync("1.2.3.4", "https://example.com/watch?v=abc123"));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.SetTuneInStationAsync("1.2.3.4", "not a URL"));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => repo.NextTrack("1.2.3.4", cancellation.Token));
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task GroupingWithoutRequiredIdFailsBeforeCommandsAreSent()
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<root />") });
+        using var client = new HttpClient(handler);
+        var repo = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => repo.CreateGroup("1.2.3.4", ["5.6.7.8"]));
+        Assert.Equal(HttpMethod.Get, Assert.Single(handler.Requests).Method);
+        Assert.Equal(0, repo.StartPlayingCallCount);
+    }
+
+    [Fact]
+    public async Task RealHttpFailuresTriggerSceneRetriesAndFallback()
+    {
+        var handler = new QueueHttpMessageHandler();
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+            handler.Enqueue(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        }
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK));
+        using var client = new HttpClient(handler);
+        var scene = new Scene { Id = "main", Name = "Main", SpeakerIps = ["1.2.3.4"], SourceType = SceneSourceType.Station, SourceUrl = "example.com/primary" };
+        var settings = new SonosSettings
+        {
+            Scenes = [scene],
+            AutomationRules = [new AutomationRule
+            {
+                TriggerType = AutomationTriggerType.SourceFailure, ActionType = AutomationActionType.PlayFallbackSource,
+                FallbackSourceType = SceneSourceType.Station, FallbackUrl = "example.com/fallback", RetryCount = 2, RetryDelaySeconds = 0
+            }]
+        };
+        var repository = new Mock<ISettingsRepo>();
+        repository.Setup(r => r.GetSettings()).ReturnsAsync(settings);
+        var realConnector = new TestableSonosConnectorRepo(new TestHttpClientFactory(client), repository.Object);
+        var connector = new Mock<ISonosConnectorRepo>();
+        connector.Setup(c => c.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string ip, string uri, CancellationToken token) => realConnector.SetTuneInStationAsync(ip, uri, token));
+        using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        await using var timers = RepositoryTestServices.CreateTimers();
+        var orchestration = new SceneOrchestrationService(repository.Object, connector.Object, timers,
+            Mock.Of<INotificationService>(), new ActionLogger(db, new HttpContextAccessor()), NullLogger<SceneOrchestrationService>.Instance);
+        var result = await orchestration.ApplySceneByIdAsync("main");
+        Assert.True(result.Success);
+        Assert.True(result.RecoveryActivated);
+        Assert.Equal(3, handler.Requests.Count(request => request.Body?.Contains("example.com/primary") == true));
+        Assert.Single(handler.Requests, request => request.Body?.Contains("example.com/fallback") == true);
+        Assert.Equal(1, realConnector.StartPlayingCallCount);
+    }
+
+    [Theory]
+    [InlineData("pause")]
+    [InlineData("stop")]
+    [InlineData("play")]
+    [InlineData("volume")]
+    public async Task PlaybackAndVolumeCommandsAlsoRejectHttp200SoapFaults(string command)
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Client</faultcode></s:Fault></s:Body></s:Envelope>")
+        });
+        using var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        Task Invoke() => command switch
+        {
+            "pause" => repo.PausePlaying("1.2.3.4"),
+            "stop" => repo.StopPlaying("1.2.3.4"),
+            "play" => repo.StartPlaying("1.2.3.4"),
+            _ => repo.SetVolume("1.2.3.4", 25)
+        };
+        await Assert.ThrowsAsync<HttpRequestException>(Invoke);
+        if (command == "volume")
+        {
+            Assert.Contains("RenderingControl:1#SetVolume", Assert.Single(handler.Requests).SoapAction);
+            Assert.Contains("<DesiredVolume>25</DesiredVolume>", handler.Requests[0].Body);
+        }
+    }
+
+    [Theory]
+    [InlineData("queue")]
+    [InlineData("metadata")]
+    [InlineData("playing")]
+    [InlineData("volume")]
+    public async Task ReadCommandsDoNotHideSoapFaultsAsEmptyResults(string command)
+    {
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body><s:Fault><faultcode>s:Client</faultcode></s:Fault></s:Body></s:Envelope>")
+        });
+        using var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        Task Invoke() => command switch
+        {
+            "queue" => repo.GetQueue("1.2.3.4"),
+            "metadata" => repo.GetTrackInfoAsync("1.2.3.4"),
+            "playing" => repo.IsPlaying("1.2.3.4"),
+            _ => repo.GetVolume("1.2.3.4")
+        };
+        await Assert.ThrowsAsync<HttpRequestException>(Invoke);
+    }
+
 }

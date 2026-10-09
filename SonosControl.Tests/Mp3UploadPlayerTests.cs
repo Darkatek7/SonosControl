@@ -19,14 +19,14 @@ public sealed class Mp3UploadPlayerTests : IDisposable
     public void UploadAndPlay_UsesSelectedSpeaker_AndDeletesUploadWhenPlaybackFails(bool failPlayback)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var uploads = Mp3UploadServiceTests.CreateService(_root);
         ctx.Services.AddSingleton(uploads);
         var connector = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
         connector.Setup(c => c.PlayAudioFileAsync("10.0.0.2", It.IsAny<string>(), "song", It.IsAny<CancellationToken>()))
             .Returns(failPlayback ? Task.FromException(new HttpRequestException("offline")) : Task.CompletedTask);
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(u => u.ISonosConnectorRepo).Returns(connector.Object);
-        ctx.Services.AddSingleton(uow.Object);
+
+        RepositoryTestServices.Register(ctx.Services, Mock.Of<ISettingsRepo>(), connector.Object, Mock.Of<IHolidayRepo>());
         var cut = ctx.Render<Mp3UploadPlayer>(p => p
             .Add(c => c.Speakers, new[]
             {
@@ -51,8 +51,9 @@ public sealed class Mp3UploadPlayerTests : IDisposable
     public void Upload_RejectsWrongExtension_AndHasAccessibleControls()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.Services.AddSingleton(Mp3UploadServiceTests.CreateService(_root));
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
         var cut = ctx.Render<Mp3UploadPlayer>();
         foreach (var id in new[] { "mp3-file", "mp3-speaker", "mp3-retention" })
         {

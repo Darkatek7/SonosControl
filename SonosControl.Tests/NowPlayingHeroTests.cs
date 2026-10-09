@@ -20,6 +20,7 @@ public class NowPlayingHeroTests
     public async Task Hero_RendersAlbumArtLiveStateAndAccessibleControls()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(
             ctx,
             isPlaying: true,
@@ -48,6 +49,7 @@ public class NowPlayingHeroTests
     public async Task Hero_UsesDecorativeFallbackWhenArtworkIsUnavailable()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureServices(ctx, isPlaying: false, albumArtUrl: null);
         await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
 
@@ -70,6 +72,7 @@ public class NowPlayingHeroTests
     public async Task Hero_SpinsFallbackWhilePlaybackIsActive()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureServices(ctx, isPlaying: true, albumArtUrl: null);
         await ctx.Services.GetRequiredService<PlaybackUiStateService>().InitializeAsync();
 
@@ -110,7 +113,9 @@ public class NowPlayingHeroTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(repo => repo.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(repo => repo.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(repo => repo.GetVolume("10.0.0.1")).ReturnsAsync(settings.Volume);
@@ -128,11 +133,7 @@ public class NowPlayingHeroTests
         connectorRepo.Setup(repo => repo.StartPlaying("10.0.0.1")).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.PausePlaying("10.0.0.1")).Returns(Task.CompletedTask);
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(uow => uow.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(uow => uow.ISonosConnectorRepo).Returns(connectorRepo.Object);
-
-        ctx.Services.AddSingleton(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddScoped<PlaybackUiStateService>();

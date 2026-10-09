@@ -9,12 +9,12 @@ namespace SonosControl.Web.Controllers
     public class AuthController : Controller
     {
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IUnitOfWork _uow;
+        private readonly ISettingsRepo _settingsRepo;
 
-        public AuthController(SignInManager<ApplicationUser> signInManager, IUnitOfWork uow)
+        public AuthController(SignInManager<ApplicationUser> signInManager, ISettingsRepo settingsRepo)
         {
             _signInManager = signInManager;
-            _uow = uow;
+            _settingsRepo = settingsRepo;
         }
 
         [HttpGet("login")]
@@ -27,8 +27,17 @@ namespace SonosControl.Web.Controllers
                 _ => null
             };
             ViewBag.Registered = registered == "1";
-            var settings = await _uow.ISettingsRepo.GetSettings();
-            ViewBag.AllowRegistration = settings?.AllowUserRegistration ?? true;
+            try
+            {
+                var settings = await _settingsRepo.GetSettings();
+                ViewBag.AllowRegistration = settings?.AllowUserRegistration ?? true;
+            }
+            catch (SonosControl.DAL.Repos.SettingsReadException ex)
+            {
+                // Keep administrator login available for explicit configuration recovery.
+                ViewBag.AllowRegistration = false;
+                ViewBag.SettingsError = ex.Message;
+            }
             return View();
         }
 
@@ -61,7 +70,7 @@ namespace SonosControl.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register()
         {
-            var settings = await _uow.ISettingsRepo.GetSettings();
+            var settings = await _settingsRepo.GetSettings();
             if (settings?.AllowUserRegistration == false)
             {
                 return Forbid();

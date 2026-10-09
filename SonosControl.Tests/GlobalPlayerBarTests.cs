@@ -20,6 +20,7 @@ public class GlobalPlayerBarTests
     public async Task SleepTimer_PausesOriginalRoomAfterRoomSelectionChanges()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
         var callbacks = ConfigureTimerClock(ctx);
@@ -43,6 +44,7 @@ public class GlobalPlayerBarTests
     public async Task SleepTimer_RestartKeepsNewRoomAndIgnoresOldTimer()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
         var callbacks = ConfigureTimerClock(ctx);
@@ -69,6 +71,7 @@ public class GlobalPlayerBarTests
     public async Task SleepTimer_CancelOrDisposePreventsPlaybackCommand(bool dispose)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
         var callbacks = ConfigureTimerClock(ctx);
@@ -87,6 +90,7 @@ public class GlobalPlayerBarTests
     public async Task SleepTimer_FailureShowsActionableFeedback()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
         connector.Setup(repo => repo.PausePlaying(It.IsAny<string>())).ThrowsAsync(new InvalidOperationException("Offline"));
@@ -97,6 +101,22 @@ public class GlobalPlayerBarTests
         await cut.InvokeAsync(callbacks[0]);
 
         cut.WaitForAssertion(() => Assert.Contains("Check the speaker connection", cut.Find(".player-sheet__timer [role='alert']").TextContent));
+    }
+
+    [Fact]
+    public void GroupFailureKeepsPlayerAvailableAndShowsFeedback()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var connector = ConfigureServices(ctx);
+        connector.Setup(repo => repo.CreateGroup(It.IsAny<string>(), It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("SOAP fault"));
+        var cut = ctx.Render<GlobalPlayerBar>();
+        cut.Find(".player-surface__open").Click();
+        cut.FindAll(".player-sheet__actions button").Single(button => button.TextContent.Contains("Group all")).Click();
+        cut.WaitForAssertion(() => Assert.Contains("Check the connection", cut.Find(".player-sheet [role='alert']").TextContent));
+        Assert.Single(cut.FindAll(".global-player-bar"));
     }
 
     private static List<Action> ConfigureTimerClock(BunitContext ctx)
@@ -115,6 +135,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
 
         var cut = ctx.Render<GlobalPlayerBar>();
@@ -135,6 +156,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_SyncButton_IsEnabledAfterInitialRefresh()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
 
         var cut = ctx.Render<GlobalPlayerBar>();
@@ -160,6 +182,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_ResolvesSavedStationNameFromCurrentUri()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureServices(
             ctx,
             stations:
@@ -170,7 +193,7 @@ public class GlobalPlayerBarTests
                     Url = "https://breakz-2012-high.rautemusik.fm/stream/mp3"
                 }
             ],
-            currentStationUri: "x-rincon-mp3radio://breakz-2012-high.rautemusik.fm/?ref=rb-djclubcharts");
+            currentStationUri: "x-rincon-mp3radio://breakz-2012-high.rautemusik.fm/stream/mp3");
 
         var cut = ctx.Render<GlobalPlayerBar>();
 
@@ -185,6 +208,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_PlayerSheet_UsesActiveSpeakerAndNumericVolume()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ConfigureServices(ctx, activeSpeakerIp: "10.0.0.2");
 
@@ -211,6 +235,7 @@ public class GlobalPlayerBarTests
     public async Task PlaybackState_CoalescesRapidVolumeUpdatesAndPersistsFinalValue()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
         await playbackState.InitializeAsync();
@@ -231,6 +256,7 @@ public class GlobalPlayerBarTests
     public async Task GlobalPlayerBar_FailedCommand_ShowsErrorAndRetriesOriginalAction(string command)
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         var wasPlaying = command != "play";
         connectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(wasPlaying);
@@ -282,6 +308,7 @@ public class GlobalPlayerBarTests
     public async Task PlaybackState_ChangingRoom_DiscardsFailedCommand()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         connectorRepo.Setup(repo => repo.NextTrack("10.0.0.1")).ThrowsAsync(new InvalidOperationException("Offline"));
         var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
@@ -301,6 +328,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_WithoutSpeakers_RendersNoPlaybackControls()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx, withSpeakers: false);
         var cut = ctx.Render<GlobalPlayerBar>();
@@ -314,6 +342,7 @@ public class GlobalPlayerBarTests
     public void GlobalPlayerBar_FailedCommand_CanBeRetriedInsideExpandedPlayer()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx);
         connectorRepo.SetupSequence(repo => repo.NextTrack("10.0.0.1"))
@@ -360,7 +389,9 @@ public class GlobalPlayerBarTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(repo => repo.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(repo => repo.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(repo => repo.GetVolume(It.IsAny<string>())).ReturnsAsync(settings.Volume);
@@ -379,11 +410,7 @@ public class GlobalPlayerBarTests
         connectorRepo.Setup(repo => repo.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SonosQueuePage(Array.Empty<SonosQueueItem>(), 0, 0, 0));
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(uow => uow.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(uow => uow.ISonosConnectorRepo).Returns(connectorRepo.Object);
-
-        ctx.Services.AddSingleton(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton(Mock.Of<ILogger<PlaybackUiStateService>>());
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));

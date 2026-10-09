@@ -10,14 +10,24 @@ namespace SonosControl.Tests;
 public class AuthControllerTests
 {
     [Fact]
+    public async Task DamagedSettingsKeepAdministratorLoginAvailableForRecovery()
+    {
+        var repository = new Mock<ISettingsRepo>();
+        repository.Setup(repo => repo.GetSettings()).ThrowsAsync(new SonosControl.DAL.Repos.SettingsReadException("Damaged configuration"));
+        var controller = new AuthController(null!, repository.Object);
+        Assert.IsType<ViewResult>(await controller.Login());
+        Assert.False((bool)controller.ViewBag.AllowRegistration);
+        Assert.Equal("Damaged configuration", (string)controller.ViewBag.SettingsError);
+    }
+
+    [Fact]
     public async Task Login_LockedOutErrorShowsActionableMessage()
     {
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repository => repository.GetSettings())
             .ReturnsAsync(new SonosSettings { AllowUserRegistration = true });
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        var controller = new AuthController(null!, unitOfWork.Object);
+
+        var controller = new AuthController(null!, settingsRepo.Object);
 
         var result = await controller.Login(error: "lockedout");
 

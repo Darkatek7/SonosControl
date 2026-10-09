@@ -248,13 +248,8 @@ public class AutomationSchedulerServiceTests
             .Options;
         var db = new ApplicationDbContext(databaseOptions);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(connector);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var services = new ServiceCollection();
-        services.AddSingleton(uow.Object);
+        RepositoryTestServices.Register(services, settingsRepo, connector, Mock.Of<IHolidayRepo>());
         services.AddSingleton(scenes);
         services.AddSingleton(db);
         services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor());

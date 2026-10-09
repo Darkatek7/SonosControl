@@ -107,13 +107,14 @@ public class StatsPageTests
     private static BunitContext CreateContext()
     {
         var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         var auth = ctx.AddAuthorization();
         auth.SetAuthorized("admin");
         auth.SetRoles("admin");
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         ctx.Services.AddSingleton(new ApplicationDbContext(options));
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
         ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         ctx.Services.AddLogging();
         return ctx;

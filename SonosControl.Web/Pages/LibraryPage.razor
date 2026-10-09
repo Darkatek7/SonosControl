@@ -1,3 +1,5 @@
+@inject ISonosConnectorRepo _sonosConnectorRepo
+@inject ISettingsRepo _settingsRepo
 @page "/library"
 @page "/lookup"
 @page "/recommendations"
@@ -282,7 +284,7 @@
 
     private async Task LoadSettingsAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.Stations ??= new();
         _settings.SpotifyTracks ??= new();
         _settings.YouTubeCollections ??= new();
@@ -404,7 +406,7 @@
                 : AllSources.FirstOrDefault(source => source.Key == _editingKey);
             if (_editingKey is not null) RemoveByKey(_editingKey);
             AddDraft(_draft);
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await _settingsRepo.SaveChangesAsync(_settings);
             string? favouriteWarning = null;
             if (originalSource is not null)
             {
@@ -467,7 +469,7 @@
         var source = _pendingDelete;
         var name = source.Name;
         RemoveByKey(source.Key);
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         string? favouriteWarning = null;
         try
         {
@@ -514,18 +516,18 @@
         {
             switch (source.Type)
             {
-                case LibrarySourceType.Radio: await _uow.ISonosConnectorRepo.SetTuneInStationAsync(speakerIp, source.Url); break;
-                case LibrarySourceType.Spotify: await _uow.ISonosConnectorRepo.PlaySpotifyTrackAsync(speakerIp, source.Url); break;
+                case LibrarySourceType.Radio: await _sonosConnectorRepo.SetTuneInStationAsync(speakerIp, source.Url); break;
+                case LibrarySourceType.Spotify: await _sonosConnectorRepo.PlaySpotifyTrackAsync(speakerIp, source.Url); break;
                 case LibrarySourceType.YouTube:
-                    await _uow.ISonosConnectorRepo.PlayYouTubeAudioAsync(
+                    await _sonosConnectorRepo.PlayYouTubeAudioAsync(
                         speakerIp,
                         source.Url,
                         source.PlaybackMode ?? YouTubePlaybackMode.AutoQueueRelated,
                         source.PreferredQueueLength ?? YouTubePlaybackModeResolver.DefaultRelatedQueueLength);
                     break;
-                case LibrarySourceType.YouTubeMusic: await _uow.ISonosConnectorRepo.PlayYouTubeMusicTrackAsync(speakerIp, source.Url, _settings.AutoPlayStationUrl); break;
+                case LibrarySourceType.YouTubeMusic: await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(speakerIp, source.Url, _settings.AutoPlayStationUrl); break;
             }
-            await _uow.ISonosConnectorRepo.StartPlaying(speakerIp);
+            await _sonosConnectorRepo.StartPlaying(speakerIp);
             ShowStatus($"Playing {source.Name}.");
         }
         catch (Exception ex)

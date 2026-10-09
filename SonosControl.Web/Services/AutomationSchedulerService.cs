@@ -86,11 +86,12 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             }
 
             using var scope = _scopeFactory.CreateScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<ISettingsRepo>();
+            var sonosConnectorRepo = scope.ServiceProvider.GetRequiredService<ISonosConnectorRepo>();
             var sceneOrchestration = scope.ServiceProvider.GetRequiredService<ISceneOrchestrationService>();
             var actionLogger = scope.ServiceProvider.GetRequiredService<ActionLogger>();
 
-            var settings = await uow.ISettingsRepo.GetSettings();
+            var settings = await settingsRepo.GetSettings();
             if (settings is null || settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion)
             {
                 return;
@@ -119,7 +120,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                 {
                     var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
                         string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                    await StopWindowPlaybackAsync(oldWindow, settings, uow, actionLogger, cancellationToken,
+                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
                         skipFadeOut: settings.ExcludesAutomationDate(DateOnly.FromDateTime(localNow.DateTime)));
                     _activeWindowId = null;
                     _activeWindowAppliedUtc = default;
@@ -143,7 +144,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                 var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
                     string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
                 var newTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
-                await StopWindowPlaybackAsync(oldWindow, settings, uow, actionLogger, cancellationToken, newTargets);
+                await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken, newTargets);
             }
 
             var result = await sceneOrchestration.ApplySceneByIdAsync(
@@ -161,7 +162,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
             if (activeWindow.FadeInSeconds > 0 && result.TargetSpeakers.Count > 0)
             {
-                await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, uow, cancellationToken);
+                await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, sonosConnectorRepo, cancellationToken);
             }
 
             await actionLogger.LogAsync(
@@ -203,7 +204,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private static async Task StopWindowPlaybackAsync(
         ScheduleWindow? window,
         SonosSettings settings,
-        IUnitOfWork uow,
+        ISonosConnectorRepo sonosConnectorRepo,
         ActionLogger actionLogger,
         CancellationToken cancellationToken,
         IReadOnlyCollection<string>? excludeSpeakerIps = null,
@@ -224,10 +225,10 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
         if (!skipFadeOut && (window?.FadeOutSeconds ?? 0) > 0)
         {
-            await ApplyFadeOutAsync(targetSpeakers, window!.FadeOutSeconds, uow, cancellationToken);
+            await ApplyFadeOutAsync(targetSpeakers, window!.FadeOutSeconds, sonosConnectorRepo, cancellationToken);
         }
 
-        await Task.WhenAll(targetSpeakers.Select(ip => uow.ISonosConnectorRepo.PausePlaying(ip)));
+        await Task.WhenAll(targetSpeakers.Select(ip => sonosConnectorRepo.PausePlaying(ip)));
         await actionLogger.LogAsync(
             "ScheduleStopped",
             window is null ? "Scheduled playback stopped." : $"Schedule '{window.Name}' stopped.");
@@ -271,7 +272,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private static async Task ApplyFadeOutAsync(
         IReadOnlyCollection<string> targetSpeakers,
         int fadeOutSeconds,
-        IUnitOfWork uow,
+        ISonosConnectorRepo sonosConnectorRepo,
         CancellationToken cancellationToken)
     {
         var steps = Math.Clamp(fadeOutSeconds, 2, 20);
@@ -282,7 +283,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             try
             {
-                startingVolumes[ip] = await uow.ISonosConnectorRepo.GetVolume(ip);
+                startingVolumes[ip] = await sonosConnectorRepo.GetVolume(ip);
             }
             catch
             {
@@ -297,7 +298,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             await Task.WhenAll(targetSpeakers.Select(ip =>
             {
                 var start = startingVolumes.TryGetValue(ip, out var value) ? value : 10;
-                return uow.ISonosConnectorRepo.SetSpeakerVolume(
+                return sonosConnectorRepo.SetSpeakerVolume(
                     ip,
                     Math.Max(0, (int)Math.Round(start * ratio)),
                     cancellationToken);
@@ -309,7 +310,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private static async Task ApplyFadeInAsync(
         IReadOnlyCollection<string> targetSpeakers,
         int fadeInSeconds,
-        IUnitOfWork uow,
+        ISonosConnectorRepo sonosConnectorRepo,
         CancellationToken cancellationToken)
     {
         var steps = Math.Clamp(fadeInSeconds, 2, 20);
@@ -320,7 +321,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             try
             {
-                targetVolumes[ip] = await uow.ISonosConnectorRepo.GetVolume(ip);
+                targetVolumes[ip] = await sonosConnectorRepo.GetVolume(ip);
             }
             catch
             {
@@ -329,7 +330,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         }
 
         await Task.WhenAll(targetSpeakers.Select(ip =>
-            uow.ISonosConnectorRepo.SetSpeakerVolume(ip, 1, cancellationToken)));
+            sonosConnectorRepo.SetSpeakerVolume(ip, 1, cancellationToken)));
 
         for (var step = 1; step <= steps; step++)
         {
@@ -338,7 +339,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             await Task.WhenAll(targetSpeakers.Select(ip =>
             {
                 var target = targetVolumes.TryGetValue(ip, out var value) ? value : 15;
-                return uow.ISonosConnectorRepo.SetSpeakerVolume(
+                return sonosConnectorRepo.SetSpeakerVolume(
                     ip,
                     Math.Max(1, (int)Math.Round(target * ratio)),
                     cancellationToken);

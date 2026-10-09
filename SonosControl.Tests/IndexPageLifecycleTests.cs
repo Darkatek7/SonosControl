@@ -29,11 +29,9 @@ public class IndexPageLifecycleTests
                 return string.Empty;
             });
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo.Object);
-
         var page = new IndexPage();
-        SetGeneratedProperty(page, "_uow", unitOfWork.Object);
+        SetGeneratedProperty(page, "_settingsRepo", Mock.Of<ISettingsRepo>());
+        SetGeneratedProperty(page, "_sonosConnectorRepo", connectorRepo.Object);
         SetGeneratedProperty(
             page,
             "Configuration",

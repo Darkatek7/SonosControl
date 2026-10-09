@@ -872,8 +872,8 @@ public sealed class YouTubePlaybackService : IYouTubePlaybackService
     private async Task MaintainSessionAsync(SessionState session, CancellationToken cancellationToken)
     {
         using var scope = _scopeFactory.CreateScope();
-        var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var repo = uow.ISonosConnectorRepo;
+        var sonosConnectorRepo = scope.ServiceProvider.GetRequiredService<ISonosConnectorRepo>();
+        var repo = sonosConnectorRepo;
         var currentStation = await repo.GetCurrentStationAsync(session.SpeakerIp!, cancellationToken);
 
         if (!IsQueueTransport(currentStation))

@@ -14,7 +14,7 @@ public class SettingsRepoTests
         try
         {
             using var repo = new SettingsRepo(tempDir);
-            await repo.WriteSettings(new SonosSettings { Volume = 37 });
+            await repo.ReplaceSettingsAsync(new SonosSettings { Volume = 37 });
 
             var fileName = await repo.CreateVersionedBackupAsync("pre-restore");
 
@@ -40,7 +40,7 @@ public class SettingsRepoTests
         {
             using var repo = new SettingsRepo(Path.Combine(tempDir, "Data"));
             var settings = new SonosSettings { IP_Adress = "1.2.3.4", Volume = 42 };
-            await repo.WriteSettings(settings);
+            await repo.ReplaceSettingsAsync(settings);
 
             var result = await repo.GetSettings();
 
@@ -62,7 +62,7 @@ public class SettingsRepoTests
         {
             using (var repo = new SettingsRepo(tempDir))
             {
-                await repo.WriteSettings(new SonosSettings
+                await repo.ReplaceSettingsAsync(new SonosSettings
                 {
                     AutomationExcludedDates = [new DateOnly(2026, 12, 24)],
                     AnnualAutomationExcludedDates = [new DateOnly(2026, 12, 25)]
@@ -119,7 +119,7 @@ public class SettingsRepoTests
             Assert.Empty(settings.ScheduleWindows[0].AnnualExcludedDates);
             settings.AnnualAutomationExcludedDates.Clear();
 
-            await repo.WriteSettings(settings);
+            await repo.ReplaceSettingsAsync(settings);
             using var reader = new SettingsRepo(tempDir);
             var reloaded = await reader.GetSettings();
             Assert.Empty(reloaded!.AnnualAutomationExcludedDates);
@@ -173,7 +173,7 @@ public class SettingsRepoTests
                 tasks.Add(Task.Run(async () =>
                 {
                     var settings = new SonosSettings { IP_Adress = $"10.0.0.{index}" };
-                    await repo.WriteSettings(settings);
+                    await repo.ReplaceSettingsAsync(settings);
                 }));
 
                 tasks.Add(Task.Run(async () =>
@@ -215,7 +215,7 @@ public class SettingsRepoTests
     }
 
     [Fact]
-    public async Task GetSettings_ReturnsNewWhenJsonCorrupted()
+    public async Task GetSettings_ThrowsWhenJsonCorrupted()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
@@ -227,11 +227,7 @@ public class SettingsRepoTests
             var configPath = Path.Combine(dataDir, "config.json");
             await File.WriteAllTextAsync(configPath, "{ invalid json }");
 
-            var result = await repo.GetSettings();
-
-            Assert.NotNull(result);
-            Assert.Equal("10.0.0.0", result!.IP_Adress);
-            Assert.Equal(10, result.Volume);
+            await Assert.ThrowsAsync<SettingsReadException>(() => repo.GetSettings());
         }
         finally
         {

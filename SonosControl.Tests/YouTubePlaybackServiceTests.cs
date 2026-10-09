@@ -245,11 +245,8 @@ public class YouTubePlaybackServiceTests
     private static IServiceScopeFactory CreateScopeFactory(ISonosConnectorRepo connectorRepo)
     {
         var services = new ServiceCollection();
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(value => value.ISonosConnectorRepo).Returns(connectorRepo);
-        unitOfWork.SetupGet(value => value.ISettingsRepo).Returns(Mock.Of<ISettingsRepo>());
-        unitOfWork.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-        services.AddScoped(_ => unitOfWork.Object);
+
+        services.AddSingleton(connectorRepo);
         var provider = services.BuildServiceProvider();
         return provider.GetRequiredService<IServiceScopeFactory>();
     }

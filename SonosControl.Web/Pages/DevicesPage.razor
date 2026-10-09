@@ -1,3 +1,4 @@
+@inject ISettingsRepo _settingsRepo
 @* Routed through AdministrationPage. *@
 @using SonosControl.Web.Services
 @inject ISonosDeviceDiscoveryService DiscoveryService
@@ -283,7 +284,7 @@
 
     private async Task LoadSettingsAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.Speakers ??= new();
     }
 
@@ -325,7 +326,7 @@
             Uuid = speaker.Uuid
         });
 
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         await PlaybackState.InitializeAsync();
         ShowStatus($"Imported {speaker.Name}.");
     }
@@ -356,7 +357,7 @@
 
         if (imported > 0)
         {
-            await _uow.ISettingsRepo.WriteSettings(_settings);
+            await _settingsRepo.SaveChangesAsync(_settings);
             await PlaybackState.InitializeAsync();
         }
 
@@ -373,7 +374,7 @@
             return;
         }
         speaker.Name = name;
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         ShowStatus($"Updated {speaker.Name}.");
     }
 
@@ -381,7 +382,7 @@
     {
         if (_settings is null) return;
         speaker.StartupVolume = int.TryParse(value?.ToString(), out var parsed) ? Math.Clamp(parsed, 0, 100) : null;
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         ShowStatus($"Startup volume updated for {speaker.Name}.");
     }
 
@@ -401,7 +402,7 @@
         }
         var speaker = new SonosSpeaker { Name = _manualName.Trim(), IpAddress = _manualIp.Trim(), StartupVolume = _manualStartupVolume.HasValue ? Math.Clamp(_manualStartupVolume.Value, 0, 100) : null };
         _settings.Speakers.Add(speaker);
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         await PlaybackState.InitializeAsync();
         _manualName = string.Empty;
         _manualIp = string.Empty;
@@ -417,7 +418,7 @@
         if (_settings is null || _pendingRemoval is null) return;
         var name = _pendingRemoval.Name;
         _settings.Speakers.Remove(_pendingRemoval);
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        await _settingsRepo.SaveChangesAsync(_settings);
         await PlaybackState.InitializeAsync();
         _pendingRemoval = null;
         ShowStatus($"Removed {name}.");

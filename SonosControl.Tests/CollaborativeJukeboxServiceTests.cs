@@ -153,7 +153,7 @@ public class CollaborativeJukeboxServiceTests
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings())
             .ReturnsAsync(() => currentSettings);
-        settingsRepo.Setup(repo => repo.WriteSettings(It.IsAny<SonosSettings?>()))
+        settingsRepo.Setup(repo => repo.SaveChangesAsync(It.IsAny<SonosSettings?>()))
             .Returns<SonosSettings?>(updated =>
             {
                 currentSettings = updated ?? new SonosSettings();
@@ -169,14 +169,9 @@ public class CollaborativeJukeboxServiceTests
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var uow = new Mock<IUnitOfWork>();
-        uow.SetupGet(value => value.ISettingsRepo).Returns(settingsRepo.Object);
-        uow.SetupGet(value => value.ISonosConnectorRepo).Returns(sonosRepo.Object);
-        uow.SetupGet(value => value.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
         var actionLogger = CreateActionLogger();
         return new CollaborativeJukeboxService(
-            uow.Object,
+            settingsRepo.Object, sonosRepo.Object,
             actionLogger,
             NullLogger<CollaborativeJukeboxService>.Instance);
     }

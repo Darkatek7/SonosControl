@@ -13,12 +13,12 @@ namespace SonosControl.Web.Controllers;
 public sealed class RecommendationsController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
 
-    public RecommendationsController(ApplicationDbContext db, IUnitOfWork uow)
+    public RecommendationsController(ApplicationDbContext db, ISettingsRepo settingsRepo)
     {
         _db = db;
-        _uow = uow;
+        _settingsRepo = settingsRepo;
     }
 
     [HttpGet]
@@ -26,7 +26,7 @@ public sealed class RecommendationsController : ControllerBase
     {
         var effectiveDays = Math.Clamp(days, 7, 120);
         var from = DateTime.UtcNow.AddDays(-effectiveDays);
-        var settings = await _uow.ISettingsRepo.GetSettings() ?? new();
+        var settings = await _settingsRepo.GetSettings() ?? new();
         var resolver = RecommendationMediaResolver.Create(settings);
 
         var playback = _db.PlaybackStats

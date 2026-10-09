@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 
@@ -117,11 +116,6 @@ public interface ISettingsSchemaMigrationService
 
 public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationService
 {
-    private static readonly JsonSerializerOptions CloneOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
     private readonly ISettingsRepo _settingsRepo;
     private readonly AutomationRuntimeStatus _runtimeStatus;
     private readonly ILogger<SettingsSchemaMigrationService> _logger;
@@ -140,101 +134,37 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
     public async Task<SettingsMigrationResult> MigrateIfRequiredAsync(CancellationToken cancellationToken = default)
     {
         await _migrationLock.WaitAsync(cancellationToken);
-        SonosSettings? originalSettings = null;
-        var migratedSettingsWritten = false;
         try
         {
-            var current = await _settingsRepo.GetSettings();
-            if (current is null)
+            var migrated = false;
+            var warnings = new List<string>();
+            var persisted = await _settingsRepo.UpdateSettingsAsync(settings =>
             {
-                const string message = "Settings could not be loaded; automation was not started.";
-                _runtimeStatus.SetFailed(0, message);
-                return new SettingsMigrationResult(false, false, 0, Array.Empty<string>(), message);
-            }
-
-            if (current.SettingsSchemaVersion >= SonosSettings.CurrentSettingsSchemaVersion)
-            {
-                var warnings = ValidateCanonicalSettings(current, disableInvalidWindows: false);
-                _runtimeStatus.SetReady(current.SettingsSchemaVersion, warnings);
-                return new SettingsMigrationResult(true, false, current.SettingsSchemaVersion, warnings);
-            }
-
-            originalSettings = current;
-            await _settingsRepo.CreateVersionedBackupAsync("pre-v2-migration", cancellationToken);
-
-            var migrated = Clone(current);
-            var migrationWarnings = MigrateToVersion2(migrated);
-            var validationWarnings = ValidateCanonicalSettings(migrated, disableInvalidWindows: true);
-            migrationWarnings.AddRange(validationWarnings);
-            migrated.SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion;
-
-            await _settingsRepo.WriteSettings(migrated);
-            migratedSettingsWritten = true;
-
-            var persisted = await _settingsRepo.GetSettings();
-            if (persisted?.SettingsSchemaVersion != SonosSettings.CurrentSettingsSchemaVersion)
-            {
-                throw new InvalidOperationException("The migrated settings could not be verified after writing.");
-            }
-
-            _runtimeStatus.SetReady(persisted.SettingsSchemaVersion, migrationWarnings);
-            _logger.LogInformation(
-                "Settings migrated to schema v{SchemaVersion}. {WarningCount} warning(s).",
-                persisted.SettingsSchemaVersion,
-                migrationWarnings.Count);
-
-            return new SettingsMigrationResult(true, true, persisted.SettingsSchemaVersion, migrationWarnings);
+                migrated = settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion;
+                warnings = PrepareForPersistence(settings);
+            }, cancellationToken);
+            _runtimeStatus.SetReady(persisted.SettingsSchemaVersion, warnings);
+            return new SettingsMigrationResult(true, migrated, persisted.SettingsSchemaVersion, warnings);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            string? rollbackError = null;
-            if (migratedSettingsWritten && originalSettings is not null)
-            {
-                try
-                {
-                    await _settingsRepo.WriteSettings(originalSettings);
-                }
-                catch (Exception rollbackException)
-                {
-                    rollbackError = rollbackException.Message;
-                    _logger.LogCritical(
-                        rollbackException,
-                        "Settings migration failed and the original configuration could not be restored automatically.");
-                }
-            }
-
-            var currentVersion = 0;
-            try
-            {
-                currentVersion = (await _settingsRepo.GetSettings())?.SettingsSchemaVersion ?? 0;
-            }
-            catch
-            {
-                // Preserve the original migration error.
-            }
-
-            var message = rollbackError is null
-                ? $"Settings migration failed: {ex.Message}"
-                : $"Settings migration failed: {ex.Message}. Automatic rollback also failed: {rollbackError}";
-            _runtimeStatus.SetFailed(currentVersion, message);
+            var message = $"Settings migration failed: {ex.Message}";
+            _runtimeStatus.SetFailed(0, message);
             _logger.LogError(ex, "Settings migration failed. Time-based automation remains disabled.");
-            return new SettingsMigrationResult(false, false, currentVersion, Array.Empty<string>(), message);
+            return new SettingsMigrationResult(false, false, 0, Array.Empty<string>(), message);
         }
-        finally
-        {
-            _migrationLock.Release();
-        }
+        finally { _migrationLock.Release(); }
     }
 
-    private static SonosSettings Clone(SonosSettings source)
+    public static List<string> PrepareForPersistence(SonosSettings settings)
     {
-        var json = JsonSerializer.Serialize(source, CloneOptions);
-        return JsonSerializer.Deserialize<SonosSettings>(json, CloneOptions)
-               ?? throw new InvalidOperationException("Settings could not be cloned for migration.");
+        if (settings.SettingsSchemaVersion >= SonosSettings.CurrentSettingsSchemaVersion)
+            return ValidateCanonicalSettings(settings, disableInvalidWindows: false);
+        var warnings = MigrateToVersion2(settings);
+        warnings.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: true));
+        settings.SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion;
+        return warnings;
     }
 
     private static List<string> MigrateToVersion2(SonosSettings settings)

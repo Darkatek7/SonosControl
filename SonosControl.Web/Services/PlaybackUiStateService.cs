@@ -8,7 +8,8 @@ namespace SonosControl.Web.Services;
 
 public sealed class PlaybackUiStateService
 {
-    private readonly IUnitOfWork _uow;
+    private readonly ISettingsRepo _settingsRepo;
+    private readonly ISonosConnectorRepo _sonosConnectorRepo;
     private readonly ILogger<PlaybackUiStateService> _logger;
     private readonly ApplicationDbContext _db;
     private readonly AuthenticationStateProvider _authenticationStateProvider;
@@ -24,13 +25,14 @@ public sealed class PlaybackUiStateService
     private string? _retrySpeakerIp;
 
     public PlaybackUiStateService(
-        IUnitOfWork uow,
+        ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
         ILogger<PlaybackUiStateService> logger,
         ApplicationDbContext db,
         AuthenticationStateProvider authenticationStateProvider,
         INotificationService notificationService)
     {
-        _uow = uow;
+        _settingsRepo = settingsRepo;
+        _sonosConnectorRepo = sonosConnectorRepo;
         _logger = logger;
         _db = db;
         _authenticationStateProvider = authenticationStateProvider;
@@ -58,7 +60,7 @@ public sealed class PlaybackUiStateService
 
     public async Task InitializeAsync()
     {
-        _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         _settings.YouTubeCollections ??= new List<YouTubeObject>();
         _settings.YouTubeMusicCollections ??= new List<YouTubeMusicObject>();
 
@@ -97,12 +99,11 @@ public sealed class PlaybackUiStateService
 
         CancelPendingVolumeUpdate();
         ClearPlaybackError();
-        _settings ??= await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+        _settings ??= await _settingsRepo.GetSettings() ?? new SonosSettings();
         var speaker = _settings.Speakers.FirstOrDefault(s => s.IpAddress == speakerIp);
         ActiveSpeakerIp = speakerIp;
         ActiveSpeakerName = speaker?.Name ?? speakerIp;
-        _settings.IP_Adress = speakerIp;
-        await _uow.ISettingsRepo.WriteSettings(_settings);
+        _settings = await _settingsRepo.UpdateSettingsAsync(current => current.IP_Adress = speakerIp);
         NotifyStateChanged();
         await RefreshAsync();
     }
@@ -125,12 +126,12 @@ public sealed class PlaybackUiStateService
         {
             if (!shouldPlay)
             {
-                await _uow.ISonosConnectorRepo.PausePlaying(speakerIp);
+                await _sonosConnectorRepo.PausePlaying(speakerIp);
                 IsPlaying = false;
             }
             else
             {
-                await _uow.ISonosConnectorRepo.StartPlaying(speakerIp);
+                await _sonosConnectorRepo.StartPlaying(speakerIp);
                 IsPlaying = true;
             }
 
@@ -189,14 +190,16 @@ public sealed class PlaybackUiStateService
                     return;
                 }
 
-                var finalVolume = Volume;
-                await _uow.ISonosConnectorRepo.SetVolume(targetSpeakerIp, finalVolume);
+                var latest = await _settingsRepo.GetSettings();
+                var finalVolume = Math.Clamp(Volume, 0, Math.Clamp(latest?.MaxVolume ?? MaxVolume, 0, 100));
+                await _sonosConnectorRepo.SetVolume(targetSpeakerIp, finalVolume);
 
                 if (generation == Interlocked.Read(ref _volumeGeneration)
                     && string.Equals(targetSpeakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase))
                 {
-                    _settings.Volume = finalVolume;
-                    await _uow.ISettingsRepo.WriteSettings(_settings);
+                    _settings = await _settingsRepo.UpdateSettingsAsync(current => current.Volume = finalVolume);
+                    Volume = _settings.Volume;
+                    MaxVolume = _settings.MaxVolume;
                     IsStale = false;
                 }
             }
@@ -242,7 +245,7 @@ public sealed class PlaybackUiStateService
 
         try
         {
-            await _uow.ISonosConnectorRepo.NextTrack(speakerIp);
+            await _sonosConnectorRepo.NextTrack(speakerIp);
             IsStale = false;
             await RefreshAsync();
         }
@@ -301,7 +304,7 @@ public sealed class PlaybackUiStateService
 
         if (_settings is null)
         {
-            _settings = await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+            _settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         }
 
         if (_settings.Speakers is null || !_settings.Speakers.Any() || string.IsNullOrWhiteSpace(ActiveSpeakerIp))
@@ -374,14 +377,14 @@ public sealed class PlaybackUiStateService
 
         try
         {
-            _settings ??= await _uow.ISettingsRepo.GetSettings() ?? new SonosSettings();
+            _settings ??= await _settingsRepo.GetSettings() ?? new SonosSettings();
             MaxVolume = Math.Clamp(_settings.MaxVolume, 0, 100);
             ActiveSpeakerName = _settings.Speakers.FirstOrDefault(s => s.IpAddress == ActiveSpeakerIp)?.Name ?? ActiveSpeakerIp;
 
-            var volumeTask = _uow.ISonosConnectorRepo.GetVolume(ActiveSpeakerIp);
-            var stationTask = _uow.ISonosConnectorRepo.GetCurrentStationAsync(ActiveSpeakerIp);
-            var trackInfoTask = _uow.ISonosConnectorRepo.GetTrackInfoAsync(ActiveSpeakerIp);
-            var playingTask = _uow.ISonosConnectorRepo.IsPlaying(ActiveSpeakerIp);
+            var volumeTask = _sonosConnectorRepo.GetVolume(ActiveSpeakerIp);
+            var stationTask = _sonosConnectorRepo.GetCurrentStationAsync(ActiveSpeakerIp);
+            var trackInfoTask = _sonosConnectorRepo.GetTrackInfoAsync(ActiveSpeakerIp);
+            var playingTask = _sonosConnectorRepo.IsPlaying(ActiveSpeakerIp);
 
             await Task.WhenAll(volumeTask, stationTask, trackInfoTask, playingTask);
 
@@ -436,39 +439,7 @@ public sealed class PlaybackUiStateService
     }
 
     private static bool IsSameStoredMedia(string currentUri, string? storedUrl)
-    {
-        var current = NormalizeMediaUriForMatching(currentUri);
-        var stored = NormalizeMediaUriForMatching(storedUrl);
-
-        return !string.IsNullOrWhiteSpace(current)
-            && !string.IsNullOrWhiteSpace(stored)
-            && (current.Contains(stored, StringComparison.OrdinalIgnoreCase)
-                || stored.Contains(current, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string NormalizeMediaUriForMatching(string? uri)
-    {
-        if (string.IsNullOrWhiteSpace(uri))
-        {
-            return string.Empty;
-        }
-
-        var normalized = uri.Trim()
-            .Replace("x-rincon-mp3radio://", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
-
-        var queryIndex = normalized.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-        {
-            normalized = normalized[..queryIndex];
-        }
-
-        normalized = normalized.Trim().Trim('/');
-        return normalized.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? normalized[4..]
-            : normalized;
-    }
+        => MediaIdentity.Matches(currentUri, storedUrl);
 
     private void ApplyTrackInfo(SonosTrackInfo? trackInfo)
     {
@@ -491,7 +462,7 @@ public sealed class PlaybackUiStateService
             return false;
         }
 
-        var uuid = await _uow.ISonosConnectorRepo.GetSpeakerUUID(ip);
+        var uuid = await _sonosConnectorRepo.GetSpeakerUUID(ip);
         return !string.IsNullOrWhiteSpace(uuid);
     }
 
@@ -512,7 +483,7 @@ public sealed class PlaybackUiStateService
 
     private async Task ApplyLegacySyncAsync(string masterIp, IEnumerable<string> slaveIps)
     {
-        var currentUri = await _uow.ISonosConnectorRepo.GetCurrentStationAsync(masterIp);
+        var currentUri = await _sonosConnectorRepo.GetCurrentStationAsync(masterIp);
         if (string.IsNullOrWhiteSpace(currentUri) || currentUri.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException($"Could not read current media from master speaker {masterIp}.");
@@ -523,10 +494,10 @@ public sealed class PlaybackUiStateService
             if (currentUri.StartsWith("x-rincon-mp3radio://", StringComparison.OrdinalIgnoreCase)
                 || currentUri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             {
-                await _uow.ISonosConnectorRepo.SetTuneInStationAsync(slaveIp, currentUri);
+                await _sonosConnectorRepo.SetTuneInStationAsync(slaveIp, currentUri);
             }
 
-            await _uow.ISonosConnectorRepo.StartPlaying(slaveIp);
+            await _sonosConnectorRepo.StartPlaying(slaveIp);
         });
 
         await Task.WhenAll(tasks);

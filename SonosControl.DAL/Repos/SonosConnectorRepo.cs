@@ -1,3 +1,6 @@
+using static SonosControl.DAL.Repos.SonosMetadataParser;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,17 +15,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
-using ByteDev.Sonos;
-using ByteDev.Sonos.Models;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
-
 
 namespace SonosControl.DAL.Repos
 {
     public class SonosConnectorRepo : ISonosConnectorRepo
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly SonosSoapTransport _transport;
+        private readonly ILogger<SonosConnectorRepo> _logger;
         private readonly ISettingsRepo _settingsRepo;
         private readonly IYouTubePlaybackService _youTubePlaybackService;
 
@@ -31,8 +33,10 @@ namespace SonosControl.DAL.Repos
         {
         }
 
-        public SonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo, IYouTubePlaybackService youTubePlaybackService)
+        public SonosConnectorRepo(IHttpClientFactory httpClientFactory, ISettingsRepo settingsRepo, IYouTubePlaybackService youTubePlaybackService, SonosSoapTransport? transport = null, ILogger<SonosConnectorRepo>? logger = null)
         {
+            _transport = transport ?? new SonosSoapTransport();
+            _logger = logger ?? NullLogger<SonosConnectorRepo>.Instance;
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             _settingsRepo = settingsRepo ?? throw new ArgumentNullException(nameof(settingsRepo));
             _youTubePlaybackService = youTubePlaybackService ?? throw new ArgumentNullException(nameof(youTubePlaybackService));
@@ -70,143 +74,55 @@ namespace SonosControl.DAL.Repos
                 => Task.CompletedTask;
         }
         public async Task PausePlaying(string ip)
-        {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            await controller.PauseAsync();
-        }
+            => await _transport.SendAsync(CreateClient(), ip, "Pause", string.Empty, CancellationToken.None);
 
         public async Task StopPlaying(string ip)
-        {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            await controller.StopAsync();
-        }
+            => await _transport.SendAsync(CreateClient(), ip, "Stop", string.Empty, CancellationToken.None);
 
         public virtual async Task StartPlaying(string ip)
-        {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            await controller.PlayAsync();
-        }
+            => await _transport.SendAsync(CreateClient(), ip, "Play", "<Speed>1</Speed>", CancellationToken.None);
 
         public async Task<bool> IsPlaying(string ip)
         {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            bool result = false;
-
-            try
-            {
-                result = await controller.GetIsPlayingAsync();
-            }
-            catch
-            {
-            }
-
-            return result;
+            var response = await _transport.SendAsync(CreateClient(), ip, "GetTransportInfo", string.Empty, CancellationToken.None);
+            return string.Equals(RequiredValue(response, "CurrentTransportState"), "PLAYING", StringComparison.OrdinalIgnoreCase);
         }
 
         public async Task<int> GetVolume(string ip)
         {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            var volume = await controller.GetVolumeAsync();
-            return volume.Value;
+            var response = await _transport.SendAsync(CreateClient(), ip, "GetVolume", "<Channel>Master</Channel>", CancellationToken.None, "RenderingControl");
+            if (!int.TryParse(RequiredValue(response, "CurrentVolume"), out var volume) || volume is < 0 or > 100)
+                throw new InvalidDataException("The speaker returned an invalid volume.");
+            return volume;
         }
 
-        public async Task SetVolume(string ip, int volume)
-        {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            SonosVolume sonosVolume = new SonosVolume(volume);
-            await controller.SetVolumeAsync(sonosVolume);
-        }
+        public Task SetVolume(string ip, int volume) => SetSpeakerVolume(ip, volume);
+
         public async Task SetSpeakerVolume(string ip, int volume, CancellationToken cancellationToken = default)
         {
-            SonosController controller = new SonosControllerFactory().Create(ip);
-            SonosVolume sonosVolume = new SonosVolume(volume);
-            await controller.SetVolumeAsync(sonosVolume);
+            if (volume is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(volume), "Volume must be between 0 and 100.");
+            await _transport.SendAsync(CreateClient(), ip, "SetVolume", $"<Channel>Master</Channel><DesiredVolume>{volume}</DesiredVolume>", cancellationToken, "RenderingControl");
         }
 
         public async Task PlayAudioFileAsync(string ip, string audioUrl, string title, CancellationToken cancellationToken = default)
         {
-            if (!Uri.TryCreate(audioUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            {
+            if (!Uri.TryCreate(audioUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
                 throw new ArgumentException("An HTTP or HTTPS audio URL is required.", nameof(audioUrl));
-            }
-
-            var metadata = YouTubeQueueMetadataBuilder.Build(title, audioUrl);
-            var soapRequest = $@"
-                <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                            s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-                  <s:Body>
-                    <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                      <InstanceID>0</InstanceID>
-                      <CurrentURI>{SecurityElement.Escape(audioUrl)}</CurrentURI>
-                      <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
-                    </u:SetAVTransportURI>
-                  </s:Body>
-                </s:Envelope>";
-
-            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-            using var response = await CreateClient().PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            await SetTransportUriAsync(ip, audioUrl, YouTubeQueueMetadataBuilder.Build(title, audioUrl), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public virtual async Task SetTuneInStationAsync(string ip, string stationUri, CancellationToken cancellationToken = default)
         {
+            var currentUri = SonosMediaSourceBuilder.Radio(stationUri);
             await ClearQueue(ip, cancellationToken);
-
-            stationUri = stationUri
-                .Replace("https://", "", StringComparison.OrdinalIgnoreCase)
-                .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
-
-            // Decide which URI to send:
-            //  - If the stationUri already contains "://", use it as-is.
-            //  - Otherwise assume it's a plain TuneIn stream and prefix with x-rincon-mp3radio://
-            string currentUri = stationUri.Contains("://")
-                ? stationUri
-                : $"x-rincon-mp3radio://{stationUri}";
-
-            string soapRequest = $@"
-    <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-      <s:Body>
-        <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-          <InstanceID>0</InstanceID>
-          <CurrentURI>{SecurityElement.Escape(currentUri)}</CurrentURI>
-          <CurrentURIMetaData></CurrentURIMetaData>
-        </u:SetAVTransportURI>
-      </s:Body>
-    </s:Envelope>";
-
+            await SetTransportUriAsync(ip, currentUri, string.Empty, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-
-            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-            content.Headers.Clear();
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-            bool success = false;
-
-            try
-            {
-                var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine("Station set successfully!");
-                success = true;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error setting station: {ex.Message}");
-            }
-
-            if (success)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await StartPlaying(ip);
-            }
+            await StartPlaying(ip);
+            cancellationToken.ThrowIfCancellationRequested();
         }
-
 
         public async Task<string> GetCurrentTrackInfoAsync(string ip, CancellationToken cancellationToken = default)
         {
@@ -229,7 +145,7 @@ namespace SonosControl.DAL.Repos
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
                 var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -255,6 +171,8 @@ namespace SonosControl.DAL.Repos
 
                 return "No metadata available";
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch (Exception ex)
             {
                 return $"Error: {ex.Message}";
@@ -292,7 +210,7 @@ namespace SonosControl.DAL.Repos
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
                 var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -358,16 +276,13 @@ namespace SonosControl.DAL.Repos
 
                 return null;
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting track info: {ex.Message}");
+                _logger.LogDebug(ex, "Could not read track metadata from {SpeakerIp}.", ip);
                 return null;
             }
-        }
-
-        private static string DecodeMetadataText(string? value)
-        {
-            return WebUtility.HtmlDecode(value)?.Trim() ?? string.Empty;
         }
 
         private async Task<SonosTrackInfo?> TryGetYouTubeSessionTrackInfoFallbackAsync(
@@ -448,22 +363,6 @@ namespace SonosControl.DAL.Repos
             };
         }
 
-        private static int? TryParseTrackNumber(string xml)
-        {
-            try
-            {
-                var doc = new XmlDocument();
-                doc.LoadXml(xml);
-                return int.TryParse(doc.GetElementsByTagName("Track").Item(0)?.InnerText, out var trackNumber)
-                    ? trackNumber
-                    : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         public async Task<(TimeSpan Position, TimeSpan Duration)> GetTrackProgressAsync(string ip, CancellationToken cancellationToken = default)
         {
             try
@@ -485,7 +384,7 @@ namespace SonosControl.DAL.Repos
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
                 var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -498,6 +397,8 @@ namespace SonosControl.DAL.Repos
 
                 return (relTime, trackDuration);
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch
             {
                 return (TimeSpan.Zero, TimeSpan.Zero);
@@ -525,7 +426,7 @@ namespace SonosControl.DAL.Repos
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetPositionInfo\"");
 
                 var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -536,12 +437,13 @@ namespace SonosControl.DAL.Repos
                     ? trackNumber
                     : null;
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch
             {
                 return null;
             }
         }
-
 
         public async Task<string> GetCurrentStationAsync(string ip, CancellationToken cancellationToken = default)
         {
@@ -563,7 +465,7 @@ namespace SonosControl.DAL.Repos
                 content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetMediaInfo\"");
 
                 var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var xml = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -578,6 +480,8 @@ namespace SonosControl.DAL.Repos
 
                 return "Unknown Station";
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch (Exception ex)
             {
                 return $"Error: {ex.Message}";
@@ -592,7 +496,7 @@ namespace SonosControl.DAL.Repos
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-            var response = await client.SendAsync(request, cancellationToken);
+            using var response = await client.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode) return null;
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -608,245 +512,32 @@ namespace SonosControl.DAL.Repos
 
         public async Task PlaySpotifyTrackAsync(string ip, string spotifyUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default)
         {
-            var trackMatch = Regex.Match(spotifyUrl, @"track/(?<trackId>[\w\d]+)");
-            var playlistMatch = Regex.Match(spotifyUrl, @"playlist/(?<playlistId>[\w\d]+)");
-            var albumMatch = Regex.Match(spotifyUrl, @"album/(?<albumId>[\w\d]+)"); // Add regex for album
-
+            SonosMediaSourceBuilder.Spotify(spotifyUrl, "validation");
             cancellationToken.ThrowIfCancellationRequested();
-
-            if (!string.IsNullOrWhiteSpace(fallbackStationUri))
-            {
-                await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
-            }
-            else
-            {
-                await ClearQueue(ip, cancellationToken);
-            }
-
-            string? rinconId = await GetRinconIdAsync(ip, cancellationToken);
-            if (rinconId == null)
-            {
-                Console.WriteLine("Could not retrieve RINCON ID.");
-                return;
-            }
-
-            string sonosUri;
-            string metadata;
-
-            if (trackMatch.Success)
-            {
-                string trackId = trackMatch.Groups["trackId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{trackId}";
-
-                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
-                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
-                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                                <item id=""00032020spotify%3atrack%3a{trackId}"" 
-                                      parentID=""00020000spotify"" restricted=""true"">
-                                    <dc:title>Spotify Track</dc:title>
-                                    <upnp:class>object.item.audioItem.musicTrack</upnp:class>
-                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
-                                </item>
-                             </DIDL-Lite>";
-            }
-            else if (playlistMatch.Success)
-            {
-                string playlistId = playlistMatch.Groups["playlistId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{playlistId}";
-
-                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
-                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
-                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                                <item id=""00020000spotify%3aplaylist%3a{playlistId}"" 
-                                      parentID=""00020000spotify"" restricted=""true"">
-                                    <dc:title>Spotify Playlist</dc:title>
-                                    <upnp:class>object.container.playlistContainer</upnp:class>
-                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
-                                </item>
-                             </DIDL-Lite>";
-            }
-            else if (albumMatch.Success)
-            {
-                string albumId = albumMatch.Groups["albumId"].Value;
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:2,spotify:{albumId}";
-
-                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/"" 
-                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/"" 
-                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                                <item id=""00020000spotify%3aalbum%3a{albumId}"" 
-                                      parentID=""00020000spotify"" restricted=""true"">
-                                    <dc:title>Spotify Album</dc:title>
-                                    <upnp:class>object.container.album.musicAlbum</upnp:class>
-                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON2311_X_#Svc2311-0-Token</desc>
-                                </item>
-                             </DIDL-Lite>";
-            }
-            else
-            {
-                Console.WriteLine("Invalid Spotify URL.");
-                return;
-            }
-
-            // Build SOAP request
-            string soapRequest = $@"
-            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-              <s:Body>
-                <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                  <InstanceID>0</InstanceID>
-                  <CurrentURI>{SecurityElement.Escape(sonosUri)}</CurrentURI>
-                  <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
-                </u:SetAVTransportURI>
-              </s:Body>
-            </s:Envelope>";
-
-            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-            string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-            var client = CreateClient();
-            var response = await client.PostAsync(url, content, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"Error setting Spotify playback: {response.ReasonPhrase}");
-                return;
-            }
-
-            Console.WriteLine("Spotify playback started.");
-
+            var rinconId = await GetRinconIdAsync(ip, cancellationToken)
+                ?? throw new InvalidOperationException("Could not retrieve the speaker RINCON ID.");
+            if (!string.IsNullOrWhiteSpace(fallbackStationUri)) await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            else await ClearQueue(ip, cancellationToken);
+            var (uri, metadata) = SonosMediaSourceBuilder.Spotify(spotifyUrl, rinconId);
+            await SetTransportUriAsync(ip, uri, metadata, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public async Task PlayYouTubeMusicTrackAsync(string ip, string youtubeMusicUrl, string? fallbackStationUri = null, CancellationToken cancellationToken = default)
         {
+            SonosMediaSourceBuilder.YouTubeMusic(youtubeMusicUrl, "validation");
             cancellationToken.ThrowIfCancellationRequested();
-
-            if (!string.IsNullOrWhiteSpace(fallbackStationUri))
-            {
-                await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
-            }
-            else
-            {
-                await ClearQueue(ip, cancellationToken);
-            }
-
-            string trimmedUrl = youtubeMusicUrl.Trim();
-            string contentType = "track";
-            string? contentId = null;
-
-            if (trimmedUrl.StartsWith("ytm:", StringComparison.OrdinalIgnoreCase))
-            {
-                var parts = trimmedUrl.Split(':', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 3)
-                {
-                    contentType = parts[1].ToLowerInvariant();
-                    contentId = parts[2];
-                }
-            }
-            else
-            {
-                var playlistMatch = Regex.Match(trimmedUrl, @"[?&]list=(?<id>[A-Za-z0-9_-]+)", RegexOptions.IgnoreCase);
-                var trackMatch = Regex.Match(trimmedUrl, @"[?&]v=(?<id>[A-Za-z0-9_-]{6,})", RegexOptions.IgnoreCase);
-
-                if (playlistMatch.Success)
-                {
-                    contentType = "playlist";
-                    contentId = playlistMatch.Groups["id"].Value;
-                }
-                else if (trackMatch.Success)
-                {
-                    contentType = "track";
-                    contentId = trackMatch.Groups["id"].Value;
-                }
-                else
-                {
-                    var customMatch = Regex.Match(trimmedUrl, @"youtube(?:music)?:(?<type>track|playlist):(?<id>[A-Za-z0-9_-]+)", RegexOptions.IgnoreCase);
-                    if (customMatch.Success)
-                    {
-                        contentType = customMatch.Groups["type"].Value.ToLowerInvariant();
-                        contentId = customMatch.Groups["id"].Value;
-                    }
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(contentId))
-            {
-                Console.WriteLine("Invalid YouTube Music URL.");
-                return;
-            }
-
-            var rinconId = await GetRinconIdAsync(ip, cancellationToken);
-            if (rinconId == null)
-            {
-                Console.WriteLine("Could not retrieve RINCON ID.");
-                return;
-            }
-
-            string escapedId = Uri.EscapeDataString(contentId);
-            string sonosUri;
-            string metadata;
-
-            if (contentType.Equals("playlist", StringComparison.OrdinalIgnoreCase))
-            {
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:playlist:{contentId}";
-                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
-                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
-                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                                <item id=""0006206cyoutubemusic%3aplaylist%3a{escapedId}""
-                                      parentID=""0006206cyoutubemusic"" restricted=""true"">
-                                    <dc:title>YouTube Music Playlist</dc:title>
-                                    <upnp:class>object.container.playlistContainer</upnp:class>
-                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON51463_X_#Svc51463-0-Token</desc>
-                                </item>
-                             </DIDL-Lite>";
-            }
-            else
-            {
-                contentType = "track";
-                sonosUri = $"x-sonos-vli:RINCON_{rinconId}:4,youtubemusic:track:{contentId}";
-                metadata = $@"<DIDL-Lite xmlns:dc=""http://purl.org/dc/elements/1.1/""
-                                               xmlns:upnp=""urn:schemas-upnp-org:metadata-1-0/upnp/""
-                                               xmlns=""urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"">
-                                <item id=""0004206cyoutubemusic%3atrack%3a{escapedId}""
-                                      parentID=""0004206cyoutubemusic"" restricted=""true"">
-                                    <dc:title>YouTube Music Track</dc:title>
-                                    <upnp:class>object.item.audioItem.musicTrack</upnp:class>
-                                    <desc id=""cdudn"" nameSpace=""urn:schemas-rinconnetworks-com:metadata-1-0/"">SA_RINCON51463_X_#Svc51463-0-Token</desc>
-                                </item>
-                             </DIDL-Lite>";
-            }
-
-            string soapRequest = $@"
-            <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                         s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-              <s:Body>
-                <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                  <InstanceID>0</InstanceID>
-                  <CurrentURI>{SecurityElement.Escape(sonosUri)}</CurrentURI>
-                  <CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>
-                </u:SetAVTransportURI>
-              </s:Body>
-            </s:Envelope>";
-
-            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-            string url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-            var client = CreateClient();
-            var response = await client.PostAsync(url, content, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"Error setting YouTube Music playback: {response.ReasonPhrase}");
-                return;
-            }
-
-            Console.WriteLine("YouTube Music playback started.");
-
+            var rinconId = await GetRinconIdAsync(ip, cancellationToken)
+                ?? throw new InvalidOperationException("Could not retrieve the speaker RINCON ID.");
+            if (!string.IsNullOrWhiteSpace(fallbackStationUri)) await SetTuneInStationAsync(ip, fallbackStationUri, cancellationToken);
+            else await ClearQueue(ip, cancellationToken);
+            var (uri, metadata) = SonosMediaSourceBuilder.YouTubeMusic(youtubeMusicUrl, rinconId);
+            await SetTransportUriAsync(ip, uri, metadata, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public async Task PlayYouTubeAudioAsync(
@@ -873,9 +564,10 @@ namespace SonosControl.DAL.Repos
             await SetQueueTransportAsync(ip, cancellationToken);
             await SeekToTrackAsync(ip, 1, cancellationToken);
             await _youTubePlaybackService.ActivateSessionAsync(session.SessionId, ip, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             await StartPlaying(ip);
+            cancellationToken.ThrowIfCancellationRequested();
         }
-
 
         protected virtual async Task<string?> GetRinconIdAsync(string ip, CancellationToken cancellationToken = default)
         {
@@ -895,9 +587,10 @@ namespace SonosControl.DAL.Repos
                     return match.Groups[1].Value;
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching RINCON ID: {ex.Message}");
+                _logger.LogDebug(ex, "Could not read the RINCON ID from {SpeakerIp}.", ip);
             }
 
             return null;
@@ -905,35 +598,7 @@ namespace SonosControl.DAL.Repos
 
         public async Task ClearQueue(string ip, CancellationToken cancellationToken = default)
         {
-            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-
-            var soapEnvelope = @"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
-                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                    <s:Body>
-                        <u:RemoveAllTracksFromQueue xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                            <InstanceID>0</InstanceID>
-                        </u:RemoveAllTracksFromQueue>
-                    </s:Body>
-                </s:Envelope>";
-
-            using var content = new StringContent(soapEnvelope);
-            content.Headers.Clear();
-            content.Headers.Add("SOAPACTION",
-                "\"urn:schemas-upnp-org:service:AVTransport:1#RemoveAllTracksFromQueue\"");
-            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
-
-            try
-            {
-                var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine("Queue cleared successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error clearing queue: {ex.Message}");
-            }
+            await _transport.SendAsync(CreateClient(), ip, "RemoveAllTracksFromQueue", string.Empty, cancellationToken);
         }
 
         public async Task AddUriToQueue(string ip, string uri, string? metadata = null, bool enqueueAsNext = false, CancellationToken cancellationToken = default)
@@ -971,7 +636,7 @@ namespace SonosControl.DAL.Repos
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#AddURIToQueue\"");
 
             var client = CreateClient();
-            var response = await client.PostAsync(url, content, cancellationToken);
+            using var response = await _transport.PostAsync(client, url, content, cancellationToken);
             response.EnsureSuccessStatusCode();
         }
 
@@ -983,25 +648,7 @@ namespace SonosControl.DAL.Repos
                 throw new InvalidOperationException($"Could not resolve the Sonos queue transport for speaker {ip}.");
             }
 
-            var queueUri = $"x-rincon-queue:RINCON_{rinconHex}#0";
-            var soapRequest = $@"
-                <s:Envelope xmlns:s=""http://schemas.xmlsoap.org/soap/envelope/""
-                            s:encodingStyle=""http://schemas.xmlsoap.org/soap/encoding/"">
-                  <s:Body>
-                    <u:SetAVTransportURI xmlns:u=""urn:schemas-upnp-org:service:AVTransport:1"">
-                      <InstanceID>0</InstanceID>
-                      <CurrentURI>{SecurityElement.Escape(queueUri)}</CurrentURI>
-                      <CurrentURIMetaData></CurrentURIMetaData>
-                    </u:SetAVTransportURI>
-                  </s:Body>
-                </s:Envelope>";
-
-            using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-            content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-            var client = CreateClient();
-            var response = await client.PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            await SetTransportUriAsync(ip, $"x-rincon-queue:RINCON_{rinconHex}#0", string.Empty, cancellationToken);
         }
 
         private async Task SeekToTrackAsync(string ip, int trackNumber, CancellationToken cancellationToken)
@@ -1027,10 +674,9 @@ namespace SonosControl.DAL.Repos
             content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#Seek\"");
 
             var client = CreateClient();
-            var response = await client.PostAsync($"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
+            using var response = await _transport.PostAsync(client, $"http://{ip}:1400/MediaRenderer/AVTransport/Control", content, cancellationToken);
             response.EnsureSuccessStatusCode();
         }
-
 
         public async Task<SonosQueuePage> GetQueue(string ip, int startIndex = 0, int count = 100, CancellationToken cancellationToken = default)
         {
@@ -1067,20 +713,18 @@ namespace SonosControl.DAL.Repos
             try
             {
                 var client = CreateClient();
-                using var response = await client.PostAsync(url, content, cancellationToken);
+                using var response = await _transport.PostAsync(client, url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 var queuePage = ParseQueueResponse(responseBody, startIndex, count);
                 return await EnrichQueuePageWithYouTubeSessionMetadataAsync(queuePage, cancellationToken);
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching queue: {ex.Message}");
+                _logger.LogDebug(ex, "Could not read the queue from {SpeakerIp}.", ip);
                 return new SonosQueuePage(Array.Empty<SonosQueueItem>(), startIndex, 0, startIndex);
             }
         }
@@ -1127,256 +771,6 @@ namespace SonosControl.DAL.Repos
             return new SonosQueuePage(enrichedItems, queuePage.StartIndex, queuePage.NumberReturned, queuePage.TotalMatches);
         }
 
-        private static SonosQueuePage ParseQueueResponse(string responseBody, int startIndex, int requestedCount)
-        {
-            var items = new List<SonosQueueItem>();
-            int numberReturned = 0;
-            int totalMatches = 0;
-
-            try
-            {
-                var soapDoc = XDocument.Parse(responseBody);
-                var browseResponse = soapDoc
-                    .Descendants()
-                    .FirstOrDefault(e => e.Name.LocalName == "BrowseResponse");
-
-                if (browseResponse is null)
-                {
-                    return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
-                }
-
-                numberReturned = ParseIntSafe(browseResponse.Elements().FirstOrDefault(e => e.Name.LocalName == "NumberReturned")?.Value);
-                totalMatches = ParseIntSafe(browseResponse.Elements().FirstOrDefault(e => e.Name.LocalName == "TotalMatches")?.Value);
-
-                var resultElement = browseResponse.Elements().FirstOrDefault(e => e.Name.LocalName == "Result");
-                if (resultElement is null)
-                {
-                    return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
-                }
-
-                var didlPayload = resultElement.Value;
-                if (string.IsNullOrWhiteSpace(didlPayload))
-                {
-                    return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
-                }
-
-                XDocument didl;
-                try
-                {
-                    didl = XDocument.Parse(didlPayload);
-                }
-                catch (XmlException)
-                {
-                    var decoded = WebUtility.HtmlDecode(didlPayload);
-                    if (string.IsNullOrWhiteSpace(decoded))
-                    {
-                        return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
-                    }
-
-                    didl = XDocument.Parse(decoded);
-                }
-
-                var itemElements = didl.Root?
-                    .Elements()
-                    .Where(e => e.Name.LocalName == "item")
-                    ?? Enumerable.Empty<XElement>();
-
-                foreach (var element in itemElements)
-                {
-                    var parsedItem = ParseQueueItem(element, startIndex + items.Count);
-                    if (parsedItem is not null)
-                    {
-                        items.Add(parsedItem);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error parsing queue response: {ex.Message}");
-            }
-
-            if (numberReturned == 0)
-            {
-                numberReturned = items.Count;
-            }
-
-            if (totalMatches == 0)
-            {
-                totalMatches = startIndex + items.Count;
-                if (items.Count == requestedCount)
-                {
-                    totalMatches += 1; // Assume more items exist when exactly the requested count was returned
-                }
-            }
-
-            return new SonosQueuePage(items, startIndex, numberReturned, totalMatches);
-        }
-
-        private static SonosQueueItem? ParseQueueItem(XElement element, int index)
-        {
-            string title = GetFirstValue(element, "title", "http://purl.org/dc/elements/1.1/") ?? string.Empty;
-            string? artist = GetFirstValue(element, "artist", "urn:schemas-upnp-org:metadata-1-0/upnp/")
-                ?? GetFirstValue(element, "creator", "http://purl.org/dc/elements/1.1/");
-            string? album = GetFirstValue(element, "album", "urn:schemas-upnp-org:metadata-1-0/upnp/");
-            string? resourceUri = element.Elements().FirstOrDefault(e => e.Name.LocalName == "res")?.Value;
-
-            ApplyStreamContentFallback(element, ref title, ref artist);
-
-            var metadataOverride = ParseResourceMetadata(element.Elements().FirstOrDefault(e => e.Name.LocalName == "resMD"));
-            if (metadataOverride is not null)
-            {
-                if (!string.IsNullOrWhiteSpace(metadataOverride.Value.Title))
-                {
-                    title = metadataOverride.Value.Title;
-                }
-
-                if (!string.IsNullOrWhiteSpace(metadataOverride.Value.Artist))
-                {
-                    artist = metadataOverride.Value.Artist;
-                }
-
-                if (!string.IsNullOrWhiteSpace(metadataOverride.Value.Album))
-                {
-                    album = metadataOverride.Value.Album;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(title))
-            {
-                title = resourceUri ?? "Unknown title";
-            }
-
-            return new SonosQueueItem(index, title.Trim(), artist?.Trim(), album?.Trim(), resourceUri?.Trim());
-        }
-
-        private static bool TryParseYouTubePlaybackUri(string? resourceUri, out string sessionId, out int itemIndex)
-        {
-            sessionId = string.Empty;
-            itemIndex = 0;
-
-            if (string.IsNullOrWhiteSpace(resourceUri))
-            {
-                return false;
-            }
-
-            var match = Regex.Match(
-                resourceUri,
-                @"/api/youtube-audio/(?<sessionId>[A-Za-z0-9]+)/(?<itemIndex>\d+)",
-                RegexOptions.IgnoreCase);
-
-            if (!match.Success)
-            {
-                return false;
-            }
-
-            sessionId = match.Groups["sessionId"].Value;
-            return int.TryParse(match.Groups["itemIndex"].Value, out itemIndex);
-        }
-
-        private static void ApplyStreamContentFallback(XElement element, ref string title, ref string? artist)
-        {
-            var streamContent = element.Elements().FirstOrDefault(e => e.Name.LocalName == "streamContent")?.Value;
-            if (string.IsNullOrWhiteSpace(streamContent))
-            {
-                return;
-            }
-
-            var parts = streamContent.Split(" - ", 2, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 2)
-            {
-                artist ??= parts[0];
-                if (string.IsNullOrWhiteSpace(title))
-                {
-                    title = parts[1];
-                }
-            }
-            else if (string.IsNullOrWhiteSpace(title))
-            {
-                title = streamContent;
-            }
-        }
-
-        private static (string? Title, string? Artist, string? Album)? ParseResourceMetadata(XElement? resMdElement)
-        {
-            if (resMdElement is null)
-            {
-                return null;
-            }
-
-            if (resMdElement.HasElements)
-            {
-                var nestedItem = resMdElement
-                    .Descendants()
-                    .FirstOrDefault(e => e.Name.LocalName == "item");
-
-                if (nestedItem is not null)
-                {
-                    var nestedTitle = GetFirstValue(nestedItem, "title", "http://purl.org/dc/elements/1.1/");
-                    var nestedArtist = GetFirstValue(nestedItem, "artist", "urn:schemas-upnp-org:metadata-1-0/upnp/")
-                        ?? GetFirstValue(nestedItem, "creator", "http://purl.org/dc/elements/1.1/");
-                    var nestedAlbum = GetFirstValue(nestedItem, "album", "urn:schemas-upnp-org:metadata-1-0/upnp/");
-
-                    return (nestedTitle, nestedArtist, nestedAlbum);
-                }
-            }
-
-            var rawMetadata = resMdElement.Value;
-            if (string.IsNullOrWhiteSpace(rawMetadata))
-            {
-                return null;
-            }
-
-            var decoded = (WebUtility.HtmlDecode(rawMetadata) ?? rawMetadata).Trim();
-
-            try
-            {
-                var doc = XDocument.Parse(decoded);
-                var item = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "item");
-                if (item is null)
-                {
-                    return null;
-                }
-
-                var title = GetFirstValue(item, "title", "http://purl.org/dc/elements/1.1/");
-                var artist = GetFirstValue(item, "artist", "urn:schemas-upnp-org:metadata-1-0/upnp/")
-                    ?? GetFirstValue(item, "creator", "http://purl.org/dc/elements/1.1/");
-                var album = GetFirstValue(item, "album", "urn:schemas-upnp-org:metadata-1-0/upnp/");
-
-                return (title, artist, album);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error parsing queue resource metadata: {ex.Message}");
-                return null;
-            }
-        }
-
-        private static string? GetFirstValue(XElement element, string localName, string? ns = null)
-        {
-            if (element is null)
-            {
-                return null;
-            }
-
-            IEnumerable<XElement> candidates;
-            if (string.IsNullOrWhiteSpace(ns))
-            {
-                candidates = element.Elements().Where(e => e.Name.LocalName == localName);
-            }
-            else
-            {
-                candidates = element.Elements(XName.Get(localName, ns));
-            }
-
-            return candidates.FirstOrDefault()?.Value;
-        }
-
-        private static int ParseIntSafe(string? value)
-        {
-            return int.TryParse(value, out var result) ? result : 0;
-        }
-
-
         public async Task PreviousTrack(string ip, CancellationToken cancellationToken = default)
         {
             await PausePlaying(ip);
@@ -1414,109 +808,26 @@ namespace SonosControl.DAL.Repos
 
         public async Task<bool> CreateGroup(string masterIp, IEnumerable<string> slaveIps, CancellationToken cancellationToken = default)
         {
-            var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken);
-            if (masterRinconHex == null)
+            var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken)
+                ?? throw new InvalidOperationException($"Could not retrieve the RINCON ID for {masterIp}.");
+            var groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
+            var groupMetadata = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">RINCON_{masterRinconHex}</desc></item></DIDL-Lite>";
+            foreach (var slaveIp in slaveIps.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"Error: Could not get RINCON ID for master speaker {masterIp}.");
-                return false;
+                if (string.Equals(slaveIp, masterIp, StringComparison.OrdinalIgnoreCase)) continue;
+                await SetTransportUriAsync(slaveIp, groupUri, groupMetadata, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                await StartPlaying(slaveIp);
+                cancellationToken.ThrowIfCancellationRequested();
+                _logger.LogDebug("Speaker {SpeakerIp} joined master {MasterIp}.", slaveIp, masterIp);
             }
-
-            var masterUuid = $"uuid:RINCON_{masterRinconHex}";
-            bool overallSuccess = true;
-
-            foreach (var slaveIp in slaveIps)
-            {
-                if (slaveIp == masterIp) continue; // Skip if slave is also the master
-
-                var slaveUuid = await GetSpeakerUUID(slaveIp, cancellationToken);
-                if (slaveUuid == null)
-                {
-                    Console.WriteLine($"Error: Could not get UUID for slave speaker {slaveIp}. Skipping.");
-                    overallSuccess = false;
-                    continue;
-                }
-
-                // The URI for the slave to join the master's group.
-                // Standard modern format typically includes uuid: prefix.
-                string groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
-
-                // Trying a combination of generic IDs and no SA_ prefix in description.
-                string rinconId = $"RINCON_{masterRinconHex}";
-                string groupMetaData = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">{rinconId}</desc></item></DIDL-Lite>";
-
-                string soapRequest = $@"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
-                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                  <s:Body>
-                    <u:SetAVTransportURI xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                      <InstanceID>0</InstanceID>
-                      <CurrentURI>{groupUri}</CurrentURI>
-                      <CurrentURIMetaData>{SecurityElement.Escape(groupMetaData)}</CurrentURIMetaData>
-                    </u:SetAVTransportURI>
-                  </s:Body>
-                </s:Envelope>";
-
-                Console.WriteLine($"Grouping {slaveIp} to {masterIp}. Metadata: {groupMetaData}");
-
-                try
-                {
-                    var client = CreateClient();
-                    var url = $"http://{slaveIp}:1400/MediaRenderer/AVTransport/Control";
-                    using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-                    content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-                    var response = await client.PostAsync(url, content, cancellationToken);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                        Console.WriteLine($"Error: Speaker {slaveIp} could not join group. Status: {response.StatusCode}. Response: {errorContent}");
-                        overallSuccess = false;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Speaker {slaveIp} joined group with master {masterIp}.");
-                        // Ensure the slave starts playing the group stream
-                        await StartPlaying(slaveIp);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error: Speaker {slaveIp} could not join group: {ex.Message}");
-                    overallSuccess = false;
-                }
-            }
-            return overallSuccess;
+            return true;
         }
 
         public async Task UngroupSpeaker(string ip, CancellationToken cancellationToken = default)
         {
-            string soapRequest = $@"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
-                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                  <s:Body>
-                    <u:SetAVTransportURI xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                      <InstanceID>0</InstanceID>
-                      <CurrentURI>x-rincon-standard:</CurrentURI>
-                      <CurrentURIMetaData></CurrentURIMetaData>
-                    </u:SetAVTransportURI>
-                  </s:Body>
-                </s:Envelope>";
-
-            try
-            {
-                var client = CreateClient();
-                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-                using var content = new StringContent(soapRequest, Encoding.UTF8, "text/xml");
-                content.Headers.Add("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI\"");
-
-                var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine($"Speaker {ip} ungrouped.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: Speaker {ip} could not be ungrouped: {ex.Message}");
-            }
+            await SetTransportUriAsync(ip, "x-rincon-standard:", string.Empty, cancellationToken);
+            _logger.LogDebug("Speaker {SpeakerIp} ungrouped.", ip);
         }
 
         public async Task<IEnumerable<string>> GetAllSpeakersInGroup(string ip, CancellationToken cancellationToken = default)
@@ -1560,6 +871,8 @@ namespace SonosControl.DAL.Repos
                                     var uuid = await GetSpeakerUUID(s.IpAddress, cancellationToken);
                                     return (Speaker: s, Uuid: uuid);
                                 }
+                                catch (OperationCanceledException) { throw; }
+                                catch (HttpRequestException) { throw; }
                                 catch
                                 {
                                     return (Speaker: s, Uuid: (string?)null);
@@ -1580,7 +893,7 @@ namespace SonosControl.DAL.Repos
 
                             if (anyUpdated)
                             {
-                                await _settingsRepo.WriteSettings(settings);
+                                await _settingsRepo.SaveChangesAsync(settings);
                             }
                         }
 
@@ -1598,45 +911,20 @@ namespace SonosControl.DAL.Repos
                     groupedSpeakerIps.Add(ip);
                 }
             }
+            catch (OperationCanceledException) { throw; }
+            catch (HttpRequestException) { throw; }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting speakers in group for {ip}: {ex.Message}");
+                _logger.LogDebug(ex, "Could not read the speaker group from {SpeakerIp}.", ip);
             }
             return groupedSpeakerIps;
         }
 
-        private async Task SendAvTransportCommand(string ip, string action, CancellationToken cancellationToken)
-        {
-            var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
+        private Task<string> SetTransportUriAsync(string ip, string uri, string metadata, CancellationToken cancellationToken)
+            => _transport.SendAsync(CreateClient(), ip, "SetAVTransportURI", $"<CurrentURI>{SecurityElement.Escape(uri)}</CurrentURI><CurrentURIMetaData>{SecurityElement.Escape(metadata)}</CurrentURIMetaData>", cancellationToken);
 
-            var soapEnvelope = $@"
-                <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
-                            s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                    <s:Body>
-                        <u:{action} xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                            <InstanceID>0</InstanceID>
-                        </u:{action}>
-                    </s:Body>
-                </s:Envelope>";
-
-            using var content = new StringContent(soapEnvelope);
-            content.Headers.Clear();
-            content.Headers.Add("SOAPACTION", $"\"urn:schemas-upnp-org:service:AVTransport:1#{action}\"");
-            content.Headers.ContentType = new MediaTypeHeaderValue("text/xml");
-
-            try
-            {
-                var client = CreateClient();
-                var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
-                Console.WriteLine($"{action} command sent successfully.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending {action} command: {ex.Message}");
-            }
-        }
-
+        private Task<string> SendAvTransportCommand(string ip, string action, CancellationToken cancellationToken)
+            => _transport.SendAsync(CreateClient(), ip, action, string.Empty, cancellationToken);
 
         private async Task<string> SendSoapRequest(string url, string soapRequest, string soapAction, CancellationToken cancellationToken = default)
         {
@@ -1645,16 +933,8 @@ namespace SonosControl.DAL.Repos
             content.Headers.Add("SOAPACTION", $"\"{soapAction}\"");
 
             var client = CreateClient();
-            var response = await client.PostAsync(url, content, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadAsStringAsync(cancellationToken);
-            }
-            else
-            {
-                Console.WriteLine($"Error: {response.ReasonPhrase}");
-                return $"Error: {response.ReasonPhrase}";
-            }
+            using var response = await _transport.PostAsync(client, url, content, cancellationToken);
+            return await response.Content.ReadAsStringAsync(cancellationToken);
         }
     }
 }

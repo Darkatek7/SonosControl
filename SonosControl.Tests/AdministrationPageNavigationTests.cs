@@ -16,6 +16,7 @@ public class AdministrationPageNavigationTests
     public void AdministrationPage_UpdatesContentImmediately_WhenTabRouteChanges()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureServices(ctx);
 
         var navigation = ctx.Services.GetRequiredService<NavigationManager>();
@@ -43,6 +44,7 @@ public class AdministrationPageNavigationTests
     public void AdministrationPage_FollowsExternalLocationChanges()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
         ConfigureServices(ctx);
 
         var navigation = ctx.Services.GetRequiredService<NavigationManager>();
@@ -65,7 +67,7 @@ public class AdministrationPageNavigationTests
 
     private static void ConfigureServices(BunitContext ctx)
     {
-        ctx.Services.AddSingleton(Mock.Of<IUnitOfWork>());
+        RepositoryTestServices.Register(ctx.Services);
         ctx.Services.AddSingleton(new AutomationRuntimeStatus());
         ctx.ComponentFactories.AddStub<DevicesPage>();
         ctx.ComponentFactories.AddStub<ConfigPage>();

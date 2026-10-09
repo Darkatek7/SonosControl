@@ -71,12 +71,13 @@ namespace SonosControl.Web.Services
             var sessionWrites = 0;
 
             using var scope = _scopeFactory.CreateScope();
-            var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var settingsRepo = scope.ServiceProvider.GetRequiredService<ISettingsRepo>();
+            var sonosConnectorRepo = scope.ServiceProvider.GetRequiredService<ISonosConnectorRepo>();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             try
             {
-                var settings = await uow.ISettingsRepo.GetSettings();
+                var settings = await settingsRepo.GetSettings();
                 var speakers = (settings?.Speakers ?? new List<SonosSpeaker>())
                     .Where(speaker => !string.IsNullOrWhiteSpace(speaker.IpAddress))
                     .DistinctBy(speaker => speaker.IpAddress.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -95,7 +96,7 @@ namespace SonosControl.Web.Services
                 {
                     token.ThrowIfCancellationRequested();
                     var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
-                    sessionWrites += await ProcessSpeaker(speaker, uow, db, knownStations, nowUtc, token);
+                    sessionWrites += await ProcessSpeaker(speaker, sonosConnectorRepo, db, knownStations, nowUtc, token);
                     speakersProcessed++;
                 }
 
@@ -119,7 +120,7 @@ namespace SonosControl.Web.Services
 
         private async Task<int> ProcessSpeaker(
             SonosSpeaker speaker,
-            IUnitOfWork uow,
+            ISonosConnectorRepo sonosConnectorRepo,
             ApplicationDbContext db,
             IReadOnlyDictionary<string, string> knownStations,
             DateTime nowUtc,
@@ -132,7 +133,7 @@ namespace SonosControl.Web.Services
                 // A laptop sleep, outage, or stalled poll must not become listening time.
                 gapWrites = await CloseSessionIfExists(ip, db, lastObserved, token);
             }
-            var isPlaying = await uow.ISonosConnectorRepo.IsPlaying(ip);
+            var isPlaying = await sonosConnectorRepo.IsPlaying(ip);
 
             if (!isPlaying)
             {
@@ -140,8 +141,8 @@ namespace SonosControl.Web.Services
             }
 
             // Fetch info
-            var trackInfoTask = uow.ISonosConnectorRepo.GetTrackInfoAsync(ip, token);
-            var stationUrlTask = uow.ISonosConnectorRepo.GetCurrentStationAsync(ip, token);
+            var trackInfoTask = sonosConnectorRepo.GetTrackInfoAsync(ip, token);
+            var stationUrlTask = sonosConnectorRepo.GetCurrentStationAsync(ip, token);
 
             await Task.WhenAll(trackInfoTask, stationUrlTask);
 

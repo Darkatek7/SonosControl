@@ -29,7 +29,7 @@ public class SettingsBackupServiceTests
 
         Assert.Equal(StatusCodes.Status413PayloadTooLarge, exception.StatusCode);
         fixture.SettingsRepo.Verify(
-            repository => repository.WriteSettings(It.IsAny<SonosSettings?>()),
+            repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -45,7 +45,7 @@ public class SettingsBackupServiceTests
         Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
         Assert.Contains("valid Sonos settings JSON", exception.Message);
         fixture.SettingsRepo.Verify(
-            repository => repository.WriteSettings(It.IsAny<SonosSettings?>()),
+            repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -84,20 +84,25 @@ public class SettingsBackupServiceTests
 
         Assert.Equal("import.json", result.FileName);
         Assert.Equal("config-pre-import.json", result.SafetyBackup);
-        fixture.SettingsRepo.Verify(
-            repository => repository.CreateVersionedBackupAsync(
-                "pre-import",
-                It.IsAny<CancellationToken>()),
-            Times.Once);
-        fixture.SettingsRepo.Verify(
-            repository => repository.WriteSettings(
-                It.Is<SonosSettings>(settings =>
-                    settings.MaxVolume == 64 &&
-                    settings.Speakers.Count == 1)),
-            Times.Once);
-        fixture.MigrationService.Verify(
-            service => service.MigrateIfRequiredAsync(It.IsAny<CancellationToken>()),
-            Times.Once);
+        fixture.SettingsRepo.Verify(repository => repository.ReplaceSettingsAsync(
+            It.Is<SonosSettings>(settings => settings.MaxVolume == 64 && settings.Speakers.Count == 1),
+            "pre-import", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task InvalidMigratedCandidateOrFailedReplacement_NeverUsesAStaleRollback()
+    {
+        using var fixture = new BackupFixture();
+        var candidate = new SonosSettings { ScheduleWindows = [new ScheduleWindow { IsEnabled = false, Priority = 1001 }] };
+        await using var invalid = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(candidate)));
+        await Assert.ThrowsAsync<SettingsBackupException>(() => fixture.Service.ImportAsync("import.json", invalid, invalid.Length));
+        fixture.SettingsRepo.Verify(repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        fixture.SettingsRepo.Setup(repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("Staging failed"));
+        await using var valid = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new SonosSettings())));
+        await Assert.ThrowsAsync<SettingsBackupException>(() => fixture.Service.ImportAsync("import.json", valid, valid.Length));
+        fixture.SettingsRepo.Verify(repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        fixture.SettingsRepo.Verify(repository => repository.SaveChangesAsync(It.IsAny<SonosSettings>()), Times.Never);
     }
 
     private sealed class BackupFixture : IDisposable
@@ -120,16 +125,8 @@ public class SettingsBackupServiceTests
                     It.IsAny<string>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync((string label, CancellationToken _) => $"config-{label}.json");
-            SettingsRepo.Setup(repository => repository.WriteSettings(It.IsAny<SonosSettings?>()))
-                .Returns(Task.CompletedTask);
-
-            MigrationService = new Mock<ISettingsSchemaMigrationService>();
-            MigrationService.Setup(service => service.MigrateIfRequiredAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new SettingsMigrationResult(
-                    true,
-                    false,
-                    SonosSettings.CurrentSettingsSchemaVersion,
-                    []));
+            SettingsRepo.Setup(repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((SonosSettings _, string label, CancellationToken token) => $"config-{label}.json");
 
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase($"backup-tests-{Guid.NewGuid():N}")
@@ -148,7 +145,6 @@ public class SettingsBackupServiceTests
 
             Service = new SettingsBackupService(
                 SettingsRepo.Object,
-                MigrationService.Object,
                 actionLogger,
                 NullLogger<SettingsBackupService>.Instance,
                 environment.Object,
@@ -156,7 +152,6 @@ public class SettingsBackupServiceTests
         }
 
         public Mock<ISettingsRepo> SettingsRepo { get; }
-        public Mock<ISettingsSchemaMigrationService> MigrationService { get; }
         public SettingsBackupService Service { get; }
 
         public void Dispose()

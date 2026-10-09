@@ -24,6 +24,7 @@ public class IndexPageAccessibilityTests
     public void GlobalPlayer_UsesDecorativeAlbumArtWithAdjacentTrackText()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         // Setup Mocks
         var auth = ctx.AddAuthorization();
@@ -44,7 +45,9 @@ public class IndexPageAccessibilityTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
@@ -62,12 +65,7 @@ public class IndexPageAccessibilityTests
             .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
         connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
@@ -97,6 +95,7 @@ public class IndexPageAccessibilityTests
     public void GlobalPlayer_FallbackArt_IsHiddenFromScreenReaders()
     {
         using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
 
         // Setup Mocks (No album art)
         var auth = ctx.AddAuthorization();
@@ -117,7 +116,9 @@ public class IndexPageAccessibilityTests
 
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(r => r.GetSettings()).ReturnsAsync(settings);
-        settingsRepo.Setup(r => r.WriteSettings(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
+        settingsRepo.Setup(r => r.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
+        settingsRepo.Setup(r => r.SaveChangesAsync(It.IsAny<SonosSettings?>())).Returns(Task.CompletedTask);
 
         var connectorRepo = new Mock<ISonosConnectorRepo>();
         connectorRepo.Setup(r => r.GetVolume(It.IsAny<string>())).ReturnsAsync(20);
@@ -135,12 +136,7 @@ public class IndexPageAccessibilityTests
             .ReturnsAsync((TimeSpan.Zero, TimeSpan.Zero));
         connectorRepo.Setup(r => r.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
 
-        var unitOfWork = new Mock<IUnitOfWork>();
-        unitOfWork.SetupGet(u => u.ISettingsRepo).Returns(settingsRepo.Object);
-        unitOfWork.SetupGet(u => u.ISonosConnectorRepo).Returns(connectorRepo.Object);
-        unitOfWork.SetupGet(u => u.IHolidayRepo).Returns(Mock.Of<IHolidayRepo>());
-
-        ctx.Services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
+        RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());
         ctx.Services.AddSingleton<IMetricsCollector>(new MetricsCollector());
         ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());

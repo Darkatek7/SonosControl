@@ -1,11 +1,10 @@
+@inject ISettingsRepo _settingsRepo
 @page "/register"
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using SonosControl.Web.Models
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Navigation
-@inject IUnitOfWork _uow
-
 <PageTitle>Register - Sonos Control</PageTitle>
 
 <div class="auth-page-shell">
@@ -95,14 +94,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var settings = await _uow.ISettingsRepo.GetSettings();
+        var settings = await _settingsRepo.GetSettings();
         allowRegistration = settings?.AllowUserRegistration ?? true;
     }
 
     private async Task HandleRegister()
     {
         registerModel.statusMessage = "";
-        allowRegistration = (await _uow.ISettingsRepo.GetSettings())?.AllowUserRegistration ?? true;
+        allowRegistration = (await _settingsRepo.GetSettings())?.AllowUserRegistration ?? true;
         if (!allowRegistration)
         {
             registerModel.statusMessage = "Registration is disabled.";
