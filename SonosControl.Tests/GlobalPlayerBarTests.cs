@@ -174,7 +174,7 @@ public class GlobalPlayerBarTests
             connectorRepo.Verify(
                 repo => repo.SetTuneInStationAsync("10.0.0.2", "http://stream.example/live", It.IsAny<CancellationToken>()),
                 Times.Once);
-            connectorRepo.Verify(repo => repo.StartPlaying("10.0.0.2"), Times.Once);
+            connectorRepo.Verify(repo => repo.StartPlaying("10.0.0.2", It.IsAny<CancellationToken>()), Times.Once);
         });
     }
 
@@ -261,7 +261,7 @@ public class GlobalPlayerBarTests
         var wasPlaying = command != "play";
         connectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(wasPlaying);
         if (command == "play")
-            connectorRepo.SetupSequence(repo => repo.StartPlaying("10.0.0.1"))
+            connectorRepo.SetupSequence(repo => repo.StartPlaying("10.0.0.1", It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("Internal device details"))
                 .Returns(Task.CompletedTask);
         else if (command == "pause")
@@ -290,13 +290,13 @@ public class GlobalPlayerBarTests
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-qa='playback-command-error']")));
         if (command == "play")
         {
-            connectorRepo.Verify(repo => repo.StartPlaying("10.0.0.1"), Times.Exactly(2));
+            connectorRepo.Verify(repo => repo.StartPlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Exactly(2));
             connectorRepo.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
         }
         else if (command == "pause")
         {
             connectorRepo.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Exactly(2));
-            connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>()), Times.Never);
+            connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         }
         else
         {
@@ -334,7 +334,7 @@ public class GlobalPlayerBarTests
         var cut = ctx.Render<GlobalPlayerBar>();
 
         Assert.Empty(cut.FindAll("[data-qa='global-player-bar'], .player-sheet, button, select, input"));
-        connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>()), Times.Never);
+        connectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         connectorRepo.Verify(repo => repo.GetVolume(It.IsAny<string>()), Times.Never);
     }
 
@@ -404,7 +404,7 @@ public class GlobalPlayerBarTests
             .ReturnsAsync((string ip, CancellationToken _) => $"uuid:{ip}");
         connectorRepo.Setup(repo => repo.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-        connectorRepo.Setup(repo => repo.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.NextTrack(It.IsAny<string>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))

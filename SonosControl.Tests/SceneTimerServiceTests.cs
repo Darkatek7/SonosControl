@@ -113,7 +113,7 @@ public class SceneTimerServiceTests
         var connector = new Mock<ISonosConnectorRepo>();
         connector.Setup(c => c.UngroupSpeaker(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connector.Setup(c => c.SetSpeakerVolume(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        connector.Setup(c => c.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
+        connector.Setup(c => c.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         return connector;
     }
 

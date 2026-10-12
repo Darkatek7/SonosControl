@@ -38,6 +38,16 @@ console errors, horizontal overflow, or content hidden behind the player.
 The floating player must stay at its configured bottom inset, and mobile
 content clearance includes both the dock height and the inset.
 
+The owned configured fixture additionally creates a scene, a schedule, and a
+saved source. It checks editor field labels, real save-button clicks and hit
+tests, nested dialog focus, Escape, focus restoration, keep/discard decisions,
+internal navigation and browser back. Mobile editors are checked at 320 pixels,
+with short viewports and 200% text; switching between desktop and mobile must
+preserve the draft. These writing scenarios never run against a caller-supplied
+app. The compact Home player must remain at most 400 pixels tall with the smoke
+fixture, with the room heading above the dock. Screenshots include the saved
+mobile schedule editor.
+
 When targeting an already running app, the runner checks its current
 configuration without changing settings. Use an unused app port with
 auto-start enabled to exercise both isolated configurations.

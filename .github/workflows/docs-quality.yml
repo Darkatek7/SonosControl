@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      # Includes the isolated empty/configured UI-smoke verification guide.
+      # Includes isolated setup/configured smoke checks and fixture-only editor workflows.
       - name: Markdown lint
         run: npx --yes markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 

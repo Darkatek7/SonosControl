@@ -50,7 +50,7 @@ public class AutomationSchedulerServiceTests
     }
 
     [Fact]
-    public async Task EvaluateNowAsync_RetriesFailedSceneOnNextEvaluation()
+    public async Task EvaluateNowAsync_RetriesFailedSceneAtReportedRetryTime()
     {
         var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
         var settings = Settings(Window("window-a", "scene-a", new TimeOnly(9, 0), new TimeOnly(11, 0), priority: 10));
@@ -68,6 +68,10 @@ public class AutomationSchedulerServiceTests
         Assert.Contains("Speaker unavailable", fixture.Status.Snapshot.SchedulerError);
         Assert.Null(fixture.Status.Snapshot.ActiveScheduleName);
 
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.NotNull(fixture.Status.Snapshot.NextRetryUtc);
+        time.SetUtcNow(fixture.Status.Snapshot.NextRetryUtc!.Value);
         await fixture.Service.EvaluateNowAsync();
         Assert.Null(fixture.Status.Snapshot.SchedulerError);
         Assert.Equal("window-a", fixture.Status.Snapshot.ActiveScheduleName);

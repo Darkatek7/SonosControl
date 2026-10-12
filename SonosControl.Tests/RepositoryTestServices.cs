@@ -24,6 +24,7 @@ internal static class RepositoryTestServices
         services.TryAddSingleton<SceneTimerService>(provider => new SceneTimerService(provider.GetRequiredService<IServiceScopeFactory>(),
             provider.GetRequiredService<TimeProvider>(), NullLogger<SceneTimerService>.Instance));
         services.TryAddScoped<SettingsEditingService>();
+        services.TryAddScoped<EditorNavigationRequests>();
     }
 
     public static SceneTimerService CreateTimers() => new(Mock.Of<IServiceScopeFactory>(), TimeProvider.System, NullLogger<SceneTimerService>.Instance);

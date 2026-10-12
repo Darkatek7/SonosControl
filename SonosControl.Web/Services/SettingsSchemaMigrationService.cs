@@ -19,7 +19,8 @@ public sealed record AutomationRuntimeSnapshot(
     IReadOnlyList<string> Warnings,
     string? ActiveScheduleName,
     DateTimeOffset? LastEvaluationUtc,
-    string? SchedulerError)
+    string? SchedulerError,
+    DateTimeOffset? NextRetryUtc = null)
 {
     public string? FailureMessage => Phase == AutomationRuntimePhase.Failed ? Error : SchedulerError;
     public bool HasError => Phase == AutomationRuntimePhase.Failed || !string.IsNullOrWhiteSpace(SchedulerError);
@@ -41,6 +42,7 @@ public sealed class AutomationRuntimeStatus
     private string? _activeScheduleName;
     private DateTimeOffset? _lastEvaluationUtc;
     private string? _schedulerError;
+    private DateTimeOffset? _nextRetryUtc;
 
     public event Action? Changed;
 
@@ -57,7 +59,8 @@ public sealed class AutomationRuntimeStatus
                     _warnings.ToArray(),
                     _activeScheduleName,
                     _lastEvaluationUtc,
-                    _schedulerError);
+                    _schedulerError,
+                    _nextRetryUtc);
             }
         }
     }
@@ -84,18 +87,20 @@ public sealed class AutomationRuntimeStatus
             _error = error;
             _warnings = warnings?.ToArray() ?? Array.Empty<string>();
             _activeScheduleName = null;
+            _nextRetryUtc = null;
         }
 
         Changed?.Invoke();
     }
 
-    public void RecordEvaluation(string? activeScheduleName, DateTimeOffset evaluatedUtc, string? error = null)
+    public void RecordEvaluation(string? activeScheduleName, DateTimeOffset evaluatedUtc, string? error = null, DateTimeOffset? nextRetryUtc = null)
     {
         lock (_sync)
         {
             _activeScheduleName = activeScheduleName;
             _lastEvaluationUtc = evaluatedUtc;
             _schedulerError = error;
+            _nextRetryUtc = nextRetryUtc;
         }
 
         Changed?.Invoke();
@@ -140,7 +145,8 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             var warnings = new List<string>();
             var persisted = await _settingsRepo.UpdateSettingsAsync(settings =>
             {
-                migrated = settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion;
+                migrated = settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion
+                    || settings.ScheduleWindows.Any(window => window.Priority is < 0 or > ScheduleWindowOrdering.MaximumPriority);
                 warnings = PrepareForPersistence(settings);
             }, cancellationToken);
             _runtimeStatus.SetReady(persisted.SettingsSchemaVersion, warnings);
@@ -160,7 +166,17 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
     public static List<string> PrepareForPersistence(SonosSettings settings)
     {
         if (settings.SettingsSchemaVersion >= SonosSettings.CurrentSettingsSchemaVersion)
-            return ValidateCanonicalSettings(settings, disableInvalidWindows: false);
+        {
+            settings.ScheduleWindows ??= new();
+            var repairs = new List<string>();
+            if (settings.ScheduleWindows.Any(window => window.Priority is < 0 or > ScheduleWindowOrdering.MaximumPriority))
+            {
+                ScheduleWindowOrdering.AssignPriorities(ScheduleWindowOrdering.Order(settings.ScheduleWindows).ToList());
+                repairs.Add("Schedule priorities were repaired to the range 0–1000, preserving their run order.");
+            }
+            repairs.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: false));
+            return repairs;
+        }
         var warnings = MigrateToVersion2(settings);
         warnings.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: true));
         settings.SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion;
@@ -176,11 +192,7 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
         settings.ActiveDays ??= new();
 
         var warnings = new List<string>();
-        var existingWindows = settings.ScheduleWindows
-            .OrderBy(window => window.Priority)
-            .ThenByDescending(window => window.LastModifiedUtc)
-            .ThenBy(window => window.Id, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var existingWindows = ScheduleWindowOrdering.Order(settings.ScheduleWindows).ToList();
 
         foreach (var scene in settings.Scenes)
         {
@@ -200,7 +212,6 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             .ToList();
 
         var migratedBaselineWindows = new List<ScheduleWindow>();
-        var baselineIndex = 0;
         foreach (var group in groupedProfiles)
         {
             var days = group.Select(item => item.Day).OrderBy(ToMondayFirstIndex).ToList();
@@ -219,7 +230,6 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
                 Id = StableId("legacy-window", signature),
                 Name = $"{FormatDays(days)} schedule",
                 IsEnabled = true,
-                Priority = 1000 + baselineIndex++,
                 StartTime = profile.StartTime,
                 StopTime = profile.StopTime,
                 RecurrenceType = ScheduleRecurrenceType.CustomDays,
@@ -233,7 +243,6 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
         }
 
         var migratedHolidayWindows = new List<ScheduleWindow>();
-        var holidayIndex = 0;
         foreach (var holiday in settings.HolidaySchedules.OrderBy(item => item.Date))
         {
             foreach (var baseline in migratedBaselineWindows.Where(window => window.DaysOfWeek.Contains(holiday.Date.DayOfWeek)))
@@ -263,7 +272,6 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
                 Id = StableId("legacy-holiday-window", signature),
                 Name = string.IsNullOrWhiteSpace(holiday.Name) ? $"{holiday.Date:dd/MM/yyyy} override" : holiday.Name.Trim(),
                 IsEnabled = true,
-                Priority = holidayIndex++,
                 StartTime = holiday.StartTime,
                 StopTime = holiday.StopTime,
                 RecurrenceType = ScheduleRecurrenceType.Daily,
@@ -284,7 +292,6 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             window.DaysOfWeek ??= new();
             window.ExcludedDates ??= new();
             window.AnnualExcludedDates ??= new();
-            window.Priority = 2000 + index;
 
             if (window.IsEnabled && (string.IsNullOrWhiteSpace(window.SceneId) || !validSceneIds.Contains(window.SceneId)))
             {
@@ -297,6 +304,7 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
             .Concat(migratedBaselineWindows)
             .Concat(existingWindows)
             .ToList();
+        ScheduleWindowOrdering.AssignPriorities(settings.ScheduleWindows);
 
         return warnings;
     }

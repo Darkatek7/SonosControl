@@ -93,7 +93,7 @@ public class SettingsBackupServiceTests
     public async Task InvalidMigratedCandidateOrFailedReplacement_NeverUsesAStaleRollback()
     {
         using var fixture = new BackupFixture();
-        var candidate = new SonosSettings { ScheduleWindows = [new ScheduleWindow { IsEnabled = false, Priority = 1001 }] };
+        var candidate = new SonosSettings { SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion, ScheduleWindows = [new ScheduleWindow { IsEnabled = false, FadeInSeconds = -1 }] };
         await using var invalid = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(candidate)));
         await Assert.ThrowsAsync<SettingsBackupException>(() => fixture.Service.ImportAsync("import.json", invalid, invalid.Length));
         fixture.SettingsRepo.Verify(repository => repository.ReplaceSettingsAsync(It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);

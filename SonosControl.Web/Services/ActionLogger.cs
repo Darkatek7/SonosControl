@@ -14,14 +14,14 @@ public class ActionLogger
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task LogAsync(string action, string? details = null)
+    public async Task LogAsync(string action, string? details = null, string? performedBy = null)
     {
         var user = _httpContextAccessor.HttpContext?.User?.Identity?.Name;
 
         var log = new LogEntry
         {
             Action = action,
-            PerformedBy = user ?? "Unknown",
+            PerformedBy = performedBy ?? user ?? "system",
             Details = details
         };
 

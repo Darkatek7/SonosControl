@@ -3,17 +3,18 @@
 
 @if (Visible)
 {
-    <div class="app-dialog-backdrop @BackdropClass"
+    <div class="app-dialog-backdrop @(InlineOnDesktop ? "responsive-editor-backdrop" : null) @BackdropClass"
          role="presentation"
          @onclick="HandleBackdropAsync">
-        <section class="app-dialog @SizeClass"
-                 role="@Role"
-                 aria-modal="true"
+        <section class="app-dialog @(InlineOnDesktop ? "responsive-editor-dialog" : null) @SizeClass"
+                 role="@(IsModal ? Role : null)"
+                 aria-modal="@(IsModal ? "true" : null)"
                  aria-labelledby="@_titleId"
                  aria-describedby="@DescriptionId"
                  tabindex="-1"
                  @ref="_dialogRef"
                  @onkeydown="HandleKeyDownAsync"
+                 @onkeydown:stopPropagation="true"
                  @onclick:stopPropagation="true">
             <div class="app-dialog__header">
                 <div>
@@ -49,8 +50,12 @@
     private ElementReference _dialogRef;
     private ElementReference _closeRef;
     private bool _focusTrapActive;
+    private bool _isMobile;
+    private DotNetObjectReference<AccessibleDialog>? _viewportReference;
+    private bool IsModal => !InlineOnDesktop || _isMobile;
 
     [Parameter] public bool Visible { get; set; }
+    [Parameter] public bool InlineOnDesktop { get; set; }
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
     [Parameter] public string? Eyebrow { get; set; }
     [Parameter] public string Role { get; set; } = "dialog";
@@ -66,7 +71,13 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Visible && !_focusTrapActive)
+        if (Visible && InlineOnDesktop && _viewportReference is null)
+        {
+            _viewportReference = DotNetObjectReference.Create(this);
+            _isMobile = await JSRuntime.InvokeAsync<bool>("window.sonosUi.observeEditorViewport", _dialogRef, _viewportReference);
+            StateHasChanged();
+        }
+        if (Visible && IsModal && !_focusTrapActive)
         {
             await JSRuntime.InvokeVoidAsync("window.sonosUi.activateFocusTrap", _dialogRef, _closeRef);
             _focusTrapActive = true;
@@ -84,13 +95,24 @@
     private Task HandleBackdropAsync()
         => CloseOnBackdrop ? CloseAsync() : Task.CompletedTask;
 
-    private Task HandleKeyDownAsync(KeyboardEventArgs args)
-        => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+    private async Task HandleKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape" && IsModal
+            && await JSRuntime.InvokeAsync<bool>("window.sonosUi.isTopFocusTrap", _dialogRef))
+            await CloseAsync();
+    }
 
     private async Task CloseAsync()
     {
-        await ReleaseFocusTrapAsync();
         await OnClose.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public async Task EditorViewportChanged(bool isMobile)
+    {
+        _isMobile = isMobile;
+        if (!IsModal) await ReleaseFocusTrapAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task ReleaseFocusTrapAsync()
@@ -111,5 +133,14 @@
         _focusTrapActive = false;
     }
 
-    public async ValueTask DisposeAsync() => await ReleaseFocusTrapAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await ReleaseFocusTrapAsync();
+        if (_viewportReference is not null)
+        {
+            try { await JSRuntime.InvokeVoidAsync("window.sonosUi.stopObservingEditorViewport", _dialogRef); }
+            catch (JSDisconnectedException) { }
+            _viewportReference.Dispose();
+        }
+    }
 }

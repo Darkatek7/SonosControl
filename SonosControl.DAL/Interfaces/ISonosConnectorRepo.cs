@@ -10,7 +10,7 @@ namespace SonosControl.DAL.Interfaces
         Task<bool> IsPlaying(string ip);
         Task PausePlaying(string ip);
         Task SetVolume(string ip, int volume);
-        Task StartPlaying(string ip);
+        Task StartPlaying(string ip, CancellationToken cancellationToken = default);
         Task PlayAudioFileAsync(string ip, string audioUrl, string title, CancellationToken cancellationToken = default);
         Task StopPlaying(string ip);
         Task<string> GetCurrentTrackAsync(string ip, CancellationToken cancellationToken = default);

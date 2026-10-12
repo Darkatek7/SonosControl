@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.error import URLError, HTTPError
 from urllib.request import urlopen
 
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright, expect, Error
 
 
 BASE_URL = os.getenv("MOBILE_SMOKE_BASE_URL", "http://localhost:5107")
@@ -33,7 +33,7 @@ VIEWPORTS = [
 THEMES = ["light", "dark"]
 
 ROUTES = [
-    ("/", "home", "Favourites"),
+    ("/", "home", "Quick access"),
     ("/library", "library", "Library"),
     ("/automation", "automation", "Automation"),
     ("/insights", "insights", "Insights"),
@@ -255,7 +255,7 @@ def apply_theme(page, theme):
 
 def assert_home_dashboard_layout(page):
     expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
-    expect(page.get_by_role("heading", name="Favourites")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="Quick access")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Active Automation")).to_be_visible(timeout=10000)
     expect(page.get_by_role("heading", name="Device warnings")).to_be_visible(timeout=10000)
     expect(page.locator(".spotify-library")).to_have_count(0)
@@ -390,6 +390,169 @@ def try_login(page, username, password):
     return False, page.url, error_text
 
 
+def assert_control_is_clickable(control):
+    expect(control).to_be_visible()
+    control.scroll_into_view_if_needed()
+    unobscured = control.evaluate("""element => {
+        const rect = element.getBoundingClientRect();
+        const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2;
+        return y >= 0 && y < innerHeight && x >= 0 && x < innerWidth
+            && element.contains(document.elementFromPoint(x, y));
+    }""")
+    assert unobscured, f"Control is covered or outside the viewport: {control.inner_text()}"
+
+
+def assert_editor_labels(dialog):
+    missing = dialog.locator("input, select").evaluate_all("""elements => elements
+        .filter(element => element.getBoundingClientRect().height > 0)
+        .filter(element => !element.getAttribute('aria-label') && !element.getAttribute('aria-labelledby')
+            && (!element.labels || element.labels.length === 0))
+        .map(element => element.outerHTML)""")
+    assert not missing, f"Unlabelled editor fields: {missing}"
+
+
+def assert_focus_in_dialog(page, dialog):
+    assert dialog.evaluate("element => element.contains(document.activeElement)"), "Focus escaped the active dialog."
+
+
+def verify_editor_sizes(page, editor, save_name):
+    for width, height, text_scale in [(390, 844, 100), (320, 640, 100), (390, 640, 200)]:
+        page.set_viewport_size({"width": width, "height": height})
+        page.evaluate("scale => document.documentElement.style.fontSize = scale + '%'", text_scale)
+        for theme in THEMES:
+            apply_theme(page, theme)
+            body = editor.locator(".app-dialog__body")
+            body.evaluate("element => element.scrollTop = element.scrollHeight")
+            assert body.evaluate("element => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 1"), "Editor form did not scroll to its end."
+            assert_control_is_clickable(editor.get_by_role("button", name=save_name, exact=True))
+            assert_no_horizontal_overflow(page)
+    page.evaluate("document.documentElement.style.fontSize = ''")
+    page.set_viewport_size({"width": 390, "height": 844})
+
+
+def verify_editor_workflows(page, output_dir):
+    # This function writes only to the runner's disposable, configured fixture.
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
+    expect(page.get_by_role("button", name="New schedule", exact=True)).to_have_count(0)
+    page.get_by_role("button", name="Create scene", exact=True).click()
+    scene = page.get_by_role("dialog", name="Scene editor", exact=True)
+    expect(scene).to_be_visible()
+    assert_editor_labels(scene)
+    page.wait_for_function("document.querySelector('.responsive-editor-dialog').contains(document.activeElement)")
+    scene.get_by_role("button", name="Close scene editor").press("Shift+Tab")
+    assert_focus_in_dialog(page, scene)
+    page.keyboard.press("Tab")
+    assert_focus_in_dialog(page, scene)
+    expect(scene.get_by_role("button", name="Close scene editor")).to_be_focused()
+    scene.get_by_label("Name", exact=True).fill("Browser smoke scene")
+    verify_editor_sizes(page, scene, "Save Scene")
+    save = scene.get_by_role("button", name="Save Scene", exact=True)
+    assert_control_is_clickable(save)
+    save.click()
+    expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    scene.get_by_label("Name", exact=True).fill("Unsaved scene")
+    scene.get_by_role("button", name="Close scene editor").click()
+    confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
+    expect(confirmation).to_be_visible()
+    page.wait_for_function("document.querySelector('[role=alertdialog]').contains(document.activeElement)")
+    confirmation.get_by_role("button", name="Close dialog").press("Shift+Tab")
+    assert_focus_in_dialog(page, confirmation)
+    confirmation.get_by_role("button", name="Keep editing").click()
+    expect(confirmation).to_have_count(0)
+    page.wait_for_function("document.querySelector('.responsive-editor-dialog').contains(document.activeElement)")
+    expect(scene.get_by_label("Name", exact=True)).to_have_value("Unsaved scene")
+    scene.get_by_label("Name", exact=True).fill("Browser smoke scene")
+    scene.get_by_role("button", name="Close scene editor").press("Escape")
+    expect(scene).to_have_count(0)
+    expect(confirmation).to_have_count(0)
+
+    page.get_by_role("tab", name="Schedules", exact=True).click()
+    page.get_by_role("button", name="New schedule", exact=True).click()
+    schedule = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    expect(schedule).to_be_visible()
+    assert_editor_labels(schedule)
+    schedule.get_by_label("Name", exact=True).fill("Browser smoke schedule")
+    schedule.get_by_label("Scene", exact=True).select_option(label="Browser smoke scene")
+    verify_editor_sizes(page, schedule, "Save schedule")
+    schedule.get_by_role("button", name="Save schedule", exact=True).click()
+    expect(schedule.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    page.screenshot(path=str(output_dir / "schedule_mobile_editor_saved.png"))
+    schedule.get_by_label("Name", exact=True).fill("Kept across resize")
+    page.set_viewport_size({"width": 1280, "height": 900})
+    expect(schedule).to_have_count(0)
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Kept across resize")
+    page.get_by_role("tab", name="Scenes", exact=True).click()
+    expect(confirmation).to_be_visible()
+    confirmation.get_by_role("button", name="Keep editing").click()
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Kept across resize")
+    page.get_by_role("tab", name="Scenes", exact=True).click()
+    expect(confirmation).to_be_visible()
+    confirmation.get_by_role("button", name="Discard changes").click()
+    expect(page.get_by_role("tab", name="Scenes", exact=True)).to_have_attribute("aria-selected", "true")
+    page.go_back(wait_until="domcontentloaded")
+    expect(page.get_by_role("tab", name="Schedules", exact=True)).to_have_attribute("aria-selected", "true")
+    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
+    page.get_by_label("Name", exact=True).fill("Back navigation draft")
+    page.go_back(wait_until="domcontentloaded")
+    expect(confirmation).to_be_visible()
+    confirmation.get_by_role("button", name="Keep editing").click()
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
+    leave_dialogs = []
+    def cancel_reload(dialog):
+        leave_dialogs.append(dialog.type)
+        dialog.dismiss()
+    page.on("dialog", cancel_reload)
+    try:
+        page.reload(wait_until="domcontentloaded", timeout=5000)
+    except Error:
+        pass  # A dismissed beforeunload dialog cancels the reload.
+    finally:
+        page.remove_listener("dialog", cancel_reload)
+    assert leave_dialogs == ["beforeunload"], "Dirty draft did not protect reload."
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
+    page.get_by_role("button", name="Close schedule editor").click()
+    confirmation.get_by_role("button", name="Discard changes").click()
+
+    page.goto(f"{BASE_URL}/library", wait_until="networkidle")
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.get_by_role("button", name="Add source", exact=True).click()
+    source = page.get_by_role("dialog", name="Add source", exact=True)
+    source.get_by_role("button", name="Save source", exact=True).click()
+    expect(source.locator("#source-name")).to_have_attribute("aria-invalid", "true")
+    page.wait_for_function("document.activeElement.id === 'source-name'")
+    source.get_by_label("Name", exact=True).fill("Browser smoke source")
+    source.get_by_label("Source type", exact=True).select_option("Spotify")
+    source.get_by_label("URL or service link", exact=True).fill("https://example.invalid/not-spotify")
+    source.get_by_role("button", name="Save source", exact=True).click()
+    expect(source.locator("#source-url-error")).to_be_visible()
+    page.wait_for_function("document.activeElement.id === 'source-url'")
+    source.get_by_label("URL or service link", exact=True).fill("spotify:playlist:abc123")
+    source.get_by_role("button", name="Save source", exact=True).click()
+    expect(source).to_have_count(0)
+    expect(page.get_by_role("heading", name="Browser smoke source", exact=True)).to_be_visible()
+
+    page.goto(f"{BASE_URL}/administration/devices", wait_until="networkidle")
+    card = page.locator(".device-card").first
+    player_top = page.locator(".global-player-bar").evaluate("element => element.getBoundingClientRect().top")
+    assert card.evaluate("element => element.getBoundingClientRect().top") < player_top
+    remove = page.get_by_role("button", name="Remove Test room", exact=True)
+    remove.click()
+    device = page.get_by_role("alertdialog", name="Remove speaker?")
+    expect(device).to_be_visible()
+    page.wait_for_function("document.querySelector('[role=alertdialog]').contains(document.activeElement)")
+    device.get_by_role("button", name="Close dialog").press("Shift+Tab")
+    assert_focus_in_dialog(page, device)
+    device.get_by_role("button", name="Cancel", exact=True).press("Escape")
+    expect(device).to_have_count(0)
+    page.wait_for_function("document.activeElement.getAttribute('aria-label') === 'Remove Test room'")
+    page.goto(f"{BASE_URL}/", wait_until="networkidle")
+    hero = page.locator("[data-qa='now-playing-hero']")
+    assert hero.evaluate("element => element.getBoundingClientRect().height") <= 400
+    assert page.locator("#home-rooms-heading").evaluate("element => element.getBoundingClientRect().bottom") < page.locator(".global-player-bar").evaluate("element => element.getBoundingClientRect().top")
+    print("Editor workflows passed: real saves, labels, focus, draft protection, browser back, resizing, 200% text and compact Home.")
+
+
 def verify_application(playwright, output_dir, expected_speaker_state=None):
     browser = launch_chromium(playwright)
     context = browser.new_context(viewport={"width": 390, "height": 844})
@@ -429,8 +592,14 @@ def verify_application(playwright, output_dir, expected_speaker_state=None):
                     assert_no_horizontal_overflow(page)
                     if route == "/library":
                         assert_library_cards_are_uniform(page)
+                    if route == "/automation":
+                        assert page.locator(".scenes-editor-panel").evaluate(
+                            "element => parseFloat(getComputedStyle(element).borderTopWidth) > 0"
+                        ), "Reusable editor lost its panel styling."
                     suffix = "" if with_speaker else "_setup"
                     page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}_{theme}{suffix}.png"), full_page=True)
+        if expected_speaker_state is True:
+            verify_editor_workflows(page, output_dir)
         assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
         print(f"UI smoke passed: {len(VIEWPORTS)} viewports × {len(THEMES)} themes × {len(ROUTES)} routes; configured speaker={with_speaker}.")
     finally:

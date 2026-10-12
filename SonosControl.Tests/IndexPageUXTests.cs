@@ -1,3 +1,4 @@
+using SonosControl.Web.Shared;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -625,7 +626,7 @@ public class IndexPageUXTests
             Assert.Contains("Morning Radio", cut.Markup);
             Assert.Contains("Scene: Morning Radio", cut.Markup);
             Assert.Contains("Speakers", cut.Markup);
-            Assert.Contains("Favourites", cut.Markup);
+            Assert.Contains("Quick access", cut.Markup);
             Assert.Contains("View library", cut.Markup);
             Assert.Contains("Online", cut.Markup);
             Assert.Contains("Offline", cut.Markup);
@@ -718,7 +719,7 @@ public class IndexPageUXTests
             It.IsAny<YouTubePlaybackMode?>(),
             It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5"), Times.Once);
+        resources.ConnectorRepo.Verify(repo => repo.StartPlaying("1.2.3.5", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -776,6 +777,52 @@ public class IndexPageUXTests
             It.IsAny<YouTubePlaybackMode?>(),
             It.IsAny<int?>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void LibraryEditor_ValidatesFieldsAndDuplicatesBeforePersisting()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var stations = new List<TuneInStation> { new() { Name = "Existing", Url = "https://radio.example/live" } };
+        using var resources = ConfigureServices(ctx, stations, [], []);
+        var cut = ctx.Render<LibraryPage>();
+        cut.Find(".workspace-primary-action").Click();
+        cut.Find(".app-dialog__actions .btn-primary").Click();
+        Assert.Equal("true", cut.Find("#source-name").GetAttribute("aria-invalid"));
+        Assert.Equal("true", cut.Find("#source-url").GetAttribute("aria-invalid"));
+        Assert.Contains(ctx.JSInterop.Invocations, call => call.Identifier == "window.sonosUi.focusById" && Equals(call.Arguments[0], "source-name"));
+        cut.Find("#source-name").Input("Duplicate");
+        cut.Find("#source-url").Input(" https://radio.example/live ");
+        cut.Find(".app-dialog__actions .btn-primary").Click();
+        Assert.Contains("already saved", cut.Find("#source-url-error").TextContent);
+        Assert.Single(stations);
+        cut.Find("#source-type").Change("YouTube");
+        cut.Find("#source-url").Input("https://www.youtube.com/watch?v=abc123");
+        cut.Find("#source-queue-length").Change("101");
+        cut.Find(".app-dialog__actions .btn-primary").Click();
+        Assert.Contains("between 1 and 100", cut.Find("#source-queue-length-error").TextContent);
+        resources.ConnectorRepo.Verify(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void LibraryEditor_FailedPersistenceKeepsDraftAndOriginalSource()
+    {
+        using var ctx = new BunitContext();
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        var stations = new List<TuneInStation> { new() { Name = "Existing", Url = "https://radio.example/live" } };
+        using var resources = ConfigureServices(ctx, stations, [], []);
+        var repository = Mock.Get(ctx.Services.GetRequiredService<ISettingsRepo>());
+        repository.Setup(repo => repo.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("Test save failure"));
+        var cut = ctx.Render<LibraryPage>();
+        cut.Find("button[aria-label='Edit Existing']").Click();
+        cut.Find("#source-name").Input("Changed");
+        cut.Find(".app-dialog__actions .btn-primary").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Test save failure", cut.Markup));
+        Assert.Equal("Existing", Assert.Single(stations).Name);
+        Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
+        Assert.Equal("Changed", cut.Find("#source-name").GetAttribute("value"));
     }
 
     private sealed class TestResources : IDisposable
@@ -854,7 +901,7 @@ public class IndexPageUXTests
         connectorRepo.Setup(r => r.PlaySpotifyTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(r => r.PlayYouTubeAudioAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<YouTubePlaybackMode?>(), It.IsAny<int?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(r => r.PlayYouTubeMusicTrackAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        connectorRepo.Setup(r => r.StartPlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(r => r.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());
         ctx.Services.AddSingleton<INotificationService>(Mock.Of<INotificationService>());

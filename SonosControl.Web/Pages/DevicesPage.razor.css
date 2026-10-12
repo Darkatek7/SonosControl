@@ -329,10 +329,27 @@
         font-size: 2.25rem;
     }
 
-    .devices-hero__actions,
-    .devices-health-strip {
+    .devices-hero__actions {
         grid-template-columns: 1fr 1fr;
     }
+
+    .devices-health-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0.65rem;
+    }
+
+    .devices-health-tile {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.5rem;
+        border-radius: 999px;
+    }
+
+    .devices-health-tile span { font-size: 0.8rem; }
+    .devices-health-tile strong { font-size: 0.9rem; }
 
     .devices-hero__actions .btn {
         min-height: 2.75rem;

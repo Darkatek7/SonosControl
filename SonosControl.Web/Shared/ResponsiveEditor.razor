@@ -1,0 +1,31 @@
+@if (IsOpen)
+{
+    <AccessibleDialog Visible="true" InlineOnDesktop="true"
+                      Title="@Title" Eyebrow="@Eyebrow" CloseLabel="@CloseLabel"
+                      SizeClass="@PanelClass" BodyClass="@BodyClass" OnClose="OnClose">
+        <ChildContent>@ChildContent</ChildContent>
+        <FooterContent>@Actions</FooterContent>
+    </AccessibleDialog>
+}
+else
+{
+    <section class="@PanelClass" aria-label="@Title">
+        <div class="app-dialog__header">
+            <div><span class="workspace-eyebrow">@Eyebrow</span><h2>@Title</h2></div>
+        </div>
+        @EmptyContent
+    </section>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Eyebrow { get; set; } = "Editor";
+    [Parameter] public string CloseLabel { get; set; } = "Close editor";
+    [Parameter] public string PanelClass { get; set; } = string.Empty;
+    [Parameter] public string BodyClass { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? EmptyContent { get; set; }
+}
