@@ -35,7 +35,7 @@ public class SettingsSchemaMigrationServiceTests
         Assert.Equal(new TimeOnly(6, 15), window.StartTime);
         Assert.Equal(new TimeOnly(9, 45), window.StopTime);
         Assert.Equal(5, window.DaysOfWeek.Count);
-        Assert.Equal(1000, window.Priority);
+        Assert.Equal(0, window.Priority);
 
         var scene = Assert.Single(repository.Current.Scenes);
         Assert.Equal(SceneSourceSelectionMode.Specific, scene.SourceSelectionMode);
@@ -125,7 +125,7 @@ public class SettingsSchemaMigrationServiceTests
         Assert.Equal(SceneSourceSelectionMode.Specific, holidayScene.SourceSelectionMode);
         Assert.Equal(SceneSourceType.Spotify, holidayScene.SourceType);
 
-        var baseline = windows.Single(window => window.Priority == 1000);
+        var baseline = windows.Single(window => window.Id.StartsWith("legacy-window-", StringComparison.Ordinal));
         Assert.Contains(new DateOnly(2026, 7, 20), baseline.ExcludedDates);
         Assert.DoesNotContain(new DateOnly(2026, 7, 27), baseline.ExcludedDates);
         Assert.Contains(new DateOnly(2026, 7, 27), repository.Current.AutomationExcludedDates);
@@ -133,7 +133,8 @@ public class SettingsSchemaMigrationServiceTests
 
         var migratedExisting = windows.Where(window => window.Id is "earlier" or "later").OrderBy(window => window.Priority).ToList();
         Assert.Equal(["earlier", "later"], migratedExisting.Select(window => window.Id).ToArray());
-        Assert.Equal([2000, 2001], migratedExisting.Select(window => window.Priority).ToArray());
+        Assert.Equal([666, 1000], migratedExisting.Select(window => window.Priority).ToArray());
+        Assert.All(windows, window => Assert.InRange(window.Priority, 0, 1000));
         Assert.All(migratedExisting, window => Assert.Empty(window.ExcludedDates));
     }
 

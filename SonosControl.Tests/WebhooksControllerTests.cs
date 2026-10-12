@@ -21,7 +21,7 @@ public class WebhooksControllerTests
         using var fixture = new WebhookFixture();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         fixture.ConnectorRepo
-            .Setup(repository => repository.StartPlaying("192.0.2.20"))
+            .Setup(repository => repository.StartPlaying("192.0.2.20", It.IsAny<CancellationToken>()))
             .Returns(gate.Task);
         var key = $"parallel-{Guid.NewGuid():N}";
 
@@ -61,7 +61,7 @@ public class WebhooksControllerTests
 
         Assert.IsType<OkObjectResult>(duplicateResult);
         fixture.ConnectorRepo.Verify(
-            repository => repository.StartPlaying("192.0.2.20"),
+            repository => repository.StartPlaying("192.0.2.20", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -70,7 +70,7 @@ public class WebhooksControllerTests
     {
         using var fixture = new WebhookFixture();
         fixture.ConnectorRepo
-            .Setup(repository => repository.StartPlaying("192.0.2.21"))
+            .Setup(repository => repository.StartPlaying("192.0.2.21", It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("speaker unavailable"));
         var key = $"retry-{Guid.NewGuid():N}";
         var request = new WebhooksController.WebhookActionRequest
@@ -86,7 +86,7 @@ public class WebhooksControllerTests
         Assert.Equal(StatusCodes.Status502BadGateway, failure.StatusCode);
 
         fixture.ConnectorRepo
-            .Setup(repository => repository.StartPlaying("192.0.2.21"))
+            .Setup(repository => repository.StartPlaying("192.0.2.21", It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         var retryResult = await fixture.CreateController(key)
@@ -94,7 +94,7 @@ public class WebhooksControllerTests
 
         Assert.IsType<OkObjectResult>(retryResult);
         fixture.ConnectorRepo.Verify(
-            repository => repository.StartPlaying("192.0.2.21"),
+            repository => repository.StartPlaying("192.0.2.21", It.IsAny<CancellationToken>()),
             Times.Exactly(2));
     }
 
@@ -112,7 +112,7 @@ public class WebhooksControllerTests
 
         Assert.IsType<UnauthorizedResult>(result);
         fixture.ConnectorRepo.Verify(
-            repository => repository.StartPlaying(It.IsAny<string>()),
+            repository => repository.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

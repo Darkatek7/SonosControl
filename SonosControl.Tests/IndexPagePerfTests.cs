@@ -103,7 +103,7 @@ namespace SonosControl.Tests
             _mockSonosRepo.Setup(s => s.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(async () => await Task.Delay(delayTime));
 
-            _mockSonosRepo.Setup(s => s.StartPlaying(It.IsAny<string>()))
+            _mockSonosRepo.Setup(s => s.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(async () => await Task.Delay(delayTime));
 
             var cut = Render<GlobalPlayerBar>();
@@ -127,7 +127,7 @@ namespace SonosControl.Tests
             // Assert
             // With 3 speakers total and 1 master (S1), we expect calls for S2 and S3.
             _mockSonosRepo.Verify(s => s.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
-            _mockSonosRepo.Verify(s => s.StartPlaying(It.IsAny<string>()), Times.AtLeast(2));
+            _mockSonosRepo.Verify(s => s.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.AtLeast(2));
         }
     }
 }

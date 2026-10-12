@@ -5,6 +5,7 @@
 @using SonosControl.Web.Services
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISceneOrchestrationService SceneOrchestrationService
+@inject EditorNavigationRequests EditorRequests
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Scenes - Sonos Control</PageTitle>
@@ -81,52 +82,42 @@
                 }
             </aside>
 
-            <main class="scenes-panel scenes-editor-panel" aria-label="Scene editor">
-                <div class="scenes-panel__header">
-                    <div>
-                        <span class="spotify-eyebrow">Builder</span>
-                        <h2><Icon Name="settings" Size="18" /> Scene command center</h2>
-                    </div>
-                    @if (_editingScene is not null)
-                    {
-                        <div class="scenes-editor-header-actions">
-                            <span class="scenes-editor-state">@(_editingScene.Enabled ? "Enabled" : "Disabled")</span>
-                            <button type="button" class="btn mobile-editor-close" @onclick="CloseEditor" aria-label="Close scene editor">
-                                <Icon Name="x" Size="18" />
-                            </button>
-                        </div>
-                    }
-                </div>
-
-                @if (_editingScene is null)
-                {
+            <ResponsiveEditor IsOpen="@(_editingScene is not null)" Title="Scene editor"
+                              Eyebrow="Builder" CloseLabel="Close scene editor"
+                              PanelClass="scenes-panel scenes-editor-panel" OnClose="CloseEditor">
+                <EmptyContent>
                     <div class="scenes-empty-state scene-muted-alert">
                         <Icon Name="edit" Size="24" />
                         <strong>Select a scene or create a new one.</strong>
                         <span>Use the library on the left to edit, apply, or delete a preset.</span>
                     </div>
-                }
-                else
-                {
-                    <div class="scenes-editor-grid">
+                </EmptyContent>
+                <ChildContent>
+                    @if (_editingScene is not null)
+                    {
+                        @if (!string.IsNullOrWhiteSpace(_statusMessage))
+                        {
+                            <div id="scenes-editor-status" class="alert @(_statusIsError ? "alert-danger" : "alert-success")" role="status" aria-live="polite">@_statusMessage</div>
+                        }
+                        <div class="scenes-editor-grid" role="group" aria-label="Scene settings" aria-describedby="@(_statusIsError && !string.IsNullOrWhiteSpace(_statusMessage) ? "scenes-editor-status" : null)">
                         <section class="scenes-editor-card scenes-editor-card--identity">
                             <div class="scenes-editor-card__header">
                                 <h3><Icon Name="edit" Size="16" /> Identity</h3>
                             </div>
                             <div class="scenes-form-grid">
                                 <div class="scenes-field scenes-field--wide">
-                                    <label class="form-label">Name</label>
-                                    <input class="form-control" @bind="_editingScene.Name" disabled="@(!_canManage)" />
+                                    <label for="scene-name" class="form-label">Name</label>
+                                    <input id="scene-name" class="form-control" @bind="_editingScene.Name" @bind:event="oninput" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="scenes-field">
-                                    <label class="form-label">Enabled</label>
+                                    <label for="scene-enabled" class="form-label">Enabled</label>
                                     <div class="form-check form-switch scenes-switch">
-                                        <input class="form-check-input" type="checkbox" @bind="_editingScene.Enabled" disabled="@(!_canManage)" />
+                                        <input id="scene-enabled" class="form-check-input" type="checkbox" @bind="_editingScene.Enabled" disabled="@(!_canManage)" />
                                     </div>
                                 </div>
                                 <div class="scenes-field scenes-field--full">
-                                    <label class="form-label">Description</label>
-                                    <input class="form-control" @bind="_editingScene.Description" disabled="@(!_canManage)" />
+                                    <label for="scene-description" class="form-label">Description</label>
+                                    <input id="scene-description" class="form-control" @bind="_editingScene.Description" @bind:event="oninput" disabled="@(!_canManage)" />
                                 </div>
                             </div>
                         </section>
@@ -167,7 +158,7 @@
                                 <div class="scenes-field scenes-field--full">
                                     <label class="form-label" for="scene-source-url">Source URL</label>
                                     <input id="scene-source-url" class="form-control"
-                                           @bind="_editingScene.SourceUrl"
+                                           @bind="_editingScene.SourceUrl" @bind:event="oninput"
                                            @bind:after="HandleSourceUrlChanged"
                                            disabled="@(!_canManage || _editingScene.SourceSelectionMode != SceneSourceSelectionMode.Specific || _editingScene.SourceType == SceneSourceType.None)" />
                                 </div>
@@ -180,18 +171,18 @@
                             </div>
                             <div class="scenes-form-grid">
                                 <div class="scenes-field">
-                                    <label class="form-label">Timer (minutes)</label>
-                                    <input class="form-control" type="number" min="0" @bind="TimerMinutesValue" disabled="@(!_canManage)" />
+                                    <label for="scene-timer" class="form-label">Timer (minutes)</label>
+                                    <input id="scene-timer" class="form-control" type="number" min="0" @bind="TimerMinutesValue" disabled="@(!_canManage)" />
                                 </div>
                                 <div class="scenes-field">
-                                    <label class="form-label">Synced playback</label>
+                                    <label for="scene-synced" class="form-label">Synced playback</label>
                                     <div class="form-check form-switch scenes-switch">
-                                        <input class="form-check-input" type="checkbox" @bind="_editingScene.IsSyncedPlayback" disabled="@(!_canManage)" />
+                                        <input id="scene-synced" class="form-check-input" type="checkbox" @bind="_editingScene.IsSyncedPlayback" disabled="@(!_canManage)" />
                                     </div>
                                 </div>
                                 <div class="scenes-field scenes-field--full">
-                                    <label class="form-label">Master Speaker</label>
-                                    <select class="form-select" @bind="_editingScene.MasterSpeakerIp" disabled="@(!_canManage || !_editingScene.IsSyncedPlayback)">
+                                    <label for="scene-master" class="form-label">Master Speaker</label>
+                                    <select id="scene-master" class="form-select" @bind="_editingScene.MasterSpeakerIp" disabled="@(!_canManage || !_editingScene.IsSyncedPlayback)">
                                         <option value="">Auto</option>
                                         @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
                                         {
@@ -207,14 +198,16 @@
                                 <h3><Icon Name="speaker" Size="16" /> Speaker mixer</h3>
                                 <span>@GetSpeakerTargetSummary()</span>
                             </div>
-                            <div class="scenes-speaker-list">
+                            <div class="scenes-speaker-list" role="group" aria-label="Speaker playback settings">
                                 @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
                                 {
                                     var action = GetOrCreateAction(speaker.IpAddress);
+                                    var speakerId = $"scene-speaker-{speaker.IpAddress.Replace(".", "-")}";
                                     <article class="scenes-speaker-row">
                                         <div class="scenes-speaker-row__use">
                                             <input class="form-check-input"
                                                    type="checkbox"
+                                                   id="@($"{speakerId}-include")" aria-label="@($"Include {speaker.Name} in playback")"
                                                    checked="@action.IncludeInPlayback"
                                                    @onchange="e => SetSpeakerIncluded(speaker.IpAddress, e.Value)"
                                                    disabled="@(!_canManage)" />
@@ -229,6 +222,7 @@
                                                    type="number"
                                                    min="0"
                                                    max="100"
+                                                   id="@($"{speakerId}-volume")" aria-label="@($"Volume for {speaker.Name}")"
                                                    value="@FormatVolume(action.Volume)"
                                                    @onchange="e => SetSpeakerVolume(speaker.IpAddress, e.Value)"
                                                    disabled="@(!_canManage || !action.IncludeInPlayback)" />
@@ -237,6 +231,7 @@
                                             <input class="form-check-input"
                                                    type="radio"
                                                    name="sceneMasterSpeaker"
+                                                   id="@($"{speakerId}-master")" aria-label="@($"Use {speaker.Name} as master speaker")"
                                                    checked="@IsMasterSpeaker(speaker.IpAddress)"
                                                    @onchange="@(() => SetMasterSpeaker(speaker.IpAddress))"
                                                    disabled="@(!_canManage || !_editingScene.IsSyncedPlayback || !action.IncludeInPlayback)" />
@@ -247,7 +242,10 @@
                             </div>
                         </section>
 
-                        <div class="scenes-editor-actions">
+                        </div>
+                    }
+                </ChildContent>
+                <Actions>
                             @if (_canManage)
                             {
                                 <button type="button" class="btn btn-primary" @onclick="SaveScene" disabled="@_isSaving">
@@ -262,7 +260,7 @@
                                     Save Scene
                                 </button>
                             }
-                            <button type="button" class="btn btn-outline-success" @onclick="() => ApplyScene(_editingScene)" disabled="@_isApplying">
+                            <button type="button" class="btn btn-outline-success" @onclick="() => ApplyScene(_editingScene!)" disabled="@_isApplying">
                                 @if (_isApplying)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -273,10 +271,8 @@
                                 }
                                 Apply Now
                             </button>
-                        </div>
-                    </div>
-                }
-            </main>
+                </Actions>
+            </ResponsiveEditor>
         </section>
     }
 </div>
@@ -289,7 +285,11 @@
                OnConfirm="ConfirmDeleteSceneAsync"
                OnCancel="CancelDeleteScene" />
 
+<UnsavedChangesGuard @ref="_draftGuard" HasChanges="@(_editingScene is not null && _draftTracker.HasChanges(DraftTracker.Values(_editingScene)))" OnDiscard="DiscardEditor" />
+
 @code {
+    private UnsavedChangesGuard? _draftGuard;
+    private readonly DraftTracker _draftTracker = new();
     private SonosSettings? _settings;
     private Scene? _editingScene;
     private Scene? _scenePendingDelete;
@@ -307,6 +307,7 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _canManage = authState.User.IsInRole("admin") || authState.User.IsInRole("operator") || authState.User.IsInRole("superadmin");
         await LoadSettingsAsync();
+        if (EditorRequests.TakeNewSceneRequest()) CreateNewSceneCore();
     }
 
     private async Task LoadSettingsAsync()
@@ -360,7 +361,13 @@
             : string.Empty;
     }
 
-    private void CreateNewScene()
+    private async Task CreateNewScene()
+    {
+        if (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync()) return;
+        CreateNewSceneCore();
+    }
+
+    private void CreateNewSceneCore()
     {
         if (_settings is null)
         {
@@ -388,15 +395,18 @@
         _selectedSceneId = null;
         _selectedSourceItemValue = CustomSourceItemValue;
         EnsureMasterSpeaker();
+        _draftTracker.Accept(DraftTracker.Values(_editingScene));
     }
 
-    private void EditScene(Scene scene)
+    private async Task EditScene(Scene scene)
     {
+        if (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync()) return;
         _editingScene = CloneScene(scene);
         _selectedSceneId = scene.Id;
         EnsureActionCoverage();
         EnsureMasterSpeaker();
         SyncSourceSelectionWithScene();
+        _draftTracker.Accept(DraftTracker.Values(_editingScene));
     }
 
     private async Task SaveScene()
@@ -444,6 +454,7 @@
                 {
                     _editingScene = CloneScene(refreshed);
                     SyncSourceSelectionWithScene();
+                    _draftTracker.Accept(DraftTracker.Values(_editingScene));
                 }
             }
         }
@@ -467,10 +478,17 @@
 
     private void CancelDeleteScene() => _scenePendingDelete = null;
 
-    private void CloseEditor()
+    private async Task CloseEditor()
+    {
+        if (_isSaving || (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync())) return;
+        DiscardEditor();
+    }
+
+    private void DiscardEditor()
     {
         _editingScene = null;
         _selectedSceneId = null;
+        _draftTracker.Accept(null);
     }
 
     private async Task ConfirmDeleteSceneAsync()
@@ -497,9 +515,13 @@
         _isApplying = true;
         try
         {
-            var result = await SceneOrchestrationService.ApplySceneByIdAsync(scene.Id, await GetUserNameOrUnknownAsync());
+            var performedBy = await GetUserNameOrUnknownAsync();
+            var result = ReferenceEquals(scene, _editingScene)
+                ? await SceneOrchestrationService.ApplySceneAsync(CloneScene(scene), performedBy)
+                : await SceneOrchestrationService.ApplySceneByIdAsync(scene.Id, performedBy);
             ShowStatus(result.Success ? result.Message : $"Scene apply failed: {result.Message}", !result.Success);
         }
+        catch (Exception ex) { ShowStatus($"Scene apply failed: {ex.Message}", true); }
         finally
         {
             _isApplying = false;

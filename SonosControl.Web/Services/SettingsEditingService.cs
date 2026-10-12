@@ -54,6 +54,23 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
     public Task<SonosSettings> DeleteWindowAsync(string id) => repository.UpdateSettingsAsync(settings =>
         Check(settings.ScheduleWindows.RemoveAll(w => Equal(w.Id, id)) > 0, "Schedule not found.", 404));
 
+    public Task<SonosSettings> MoveWindowAsync(string id, int direction) => repository.UpdateSettingsAsync(settings =>
+    {
+        Check(direction is -1 or 1, "Move direction must be -1 or 1.");
+        var ordered = ScheduleWindowOrdering.Order(settings.ScheduleWindows).ToList();
+        var index = ordered.FindIndex(window => Equal(window.Id, id));
+        Check(index >= 0, "Schedule was removed. Reload before moving it.", 404);
+        var target = index + direction;
+        if (target < 0 || target >= ordered.Count) return;
+        (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
+        ScheduleWindowOrdering.AssignPriorities(ordered);
+        foreach (var window in ordered)
+        {
+            ValidateWindow(window, settings);
+            window.LastModifiedUtc = DateTime.UtcNow;
+        }
+    });
+
     public static void ValidateScene(Scene scene, SonosSettings settings)
     {
         Check(!string.IsNullOrWhiteSpace(scene.Name), "Scene name is required.");

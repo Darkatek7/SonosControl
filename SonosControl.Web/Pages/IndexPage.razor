@@ -171,11 +171,11 @@
                     }
                 </section>
 
-                <section class="library home-quick-library home-panel" aria-labelledby="home-favourites-heading">
+                <section class="library home-quick-library home-panel" aria-labelledby="home-quick-access-heading">
                     <header class="library__head">
                         <div>
-                            <span class="home-eyebrow">Quick access</span>
-                            <h2 id="home-favourites-heading">Favourites</h2>
+                            <span class="home-eyebrow">Your sources</span>
+                            <h2 id="home-quick-access-heading">Quick access</h2>
                         </div>
                         <a class="btn btn-sm btn-outline-secondary" href="/library">
                             <span>View library</span>
@@ -193,7 +193,7 @@
                                         <strong title="@item.Name">@item.Name</strong>
                                         @if (item.IsFavourite)
                                         {
-                                            <span>@FormatMediaTypeLabel(item.MediaType)</span>
+                                            <span class="home-source-favourite"><Icon Name="heart" Size="12" /> Favourite · @FormatMediaTypeLabel(item.MediaType)</span>
                                         }
                                         else
                                         {

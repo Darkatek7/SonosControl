@@ -1,0 +1,54 @@
+@implements IDisposable
+
+<NavigationLock ConfirmExternalNavigation="@HasChanges" OnBeforeInternalNavigation="BeforeNavigationAsync" />
+<ConfirmDialog Visible="@(_decision is not null)"
+               Title="Unsaved changes"
+               Message="Your changes have not been saved. Discard them and continue?"
+               ConfirmLabel="Discard changes"
+               CancelLabel="Keep editing"
+               Dangerous="true"
+               OnConfirm="DiscardAsync"
+               OnCancel="KeepEditing" />
+
+@code {
+    private TaskCompletionSource<bool>? _decision;
+
+    [Parameter] public bool HasChanges { get; set; }
+    [Parameter] public EventCallback OnDiscard { get; set; }
+
+    public Task<bool> ConfirmDiscardAsync(CancellationToken cancellationToken = default)
+    {
+        if (!HasChanges) return Task.FromResult(true);
+        _decision ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+        StateHasChanged();
+        return _decision.Task.WaitAsync(cancellationToken);
+    }
+
+    private async Task BeforeNavigationAsync(LocationChangingContext context)
+    {
+        try
+        {
+            if (!await ConfirmDiscardAsync(context.CancellationToken)) context.PreventNavigation();
+        }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task DiscardAsync()
+    {
+        var decision = _decision;
+        _decision = null;
+        await OnDiscard.InvokeAsync();
+        decision?.TrySetResult(true);
+    }
+
+    private void KeepEditing()
+    {
+        var decision = _decision;
+        _decision = null;
+        decision?.TrySetResult(false);
+    }
+
+    public void Dispose() => KeepEditing();
+}

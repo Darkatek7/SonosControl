@@ -60,6 +60,7 @@ public class AccessibilityPrimitivesTests
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         RepositoryTestServices.Register(ctx.Services);
         var closed = false;
+        ctx.JSInterop.Setup<bool>("window.sonosUi.isTopFocusTrap", _ => true).SetResult(true);
 
         var cut = ctx.Render<AccessibleDialog>(parameters => parameters
             .Add(component => component.Visible, true)
@@ -83,6 +84,9 @@ public class AccessibilityPrimitivesTests
         dialog.KeyDown(new KeyboardEventArgs { Key = "Escape" });
 
         Assert.True(closed);
+        Assert.DoesNotContain(ctx.JSInterop.Invocations,
+            invocation => invocation.Identifier == "window.sonosUi.releaseFocusTrap");
+        cut.Render(parameters => parameters.Add(component => component.Visible, false));
         Assert.Contains(
             ctx.JSInterop.Invocations,
             invocation => invocation.Identifier == "window.sonosUi.releaseFocusTrap");

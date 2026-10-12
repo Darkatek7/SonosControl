@@ -4,6 +4,8 @@
 @page "/lookup"
 @page "/recommendations"
 @using SonosControl.DAL.Models
+@using SonosControl.DAL.Repos
+@inject IJSRuntime JSRuntime
 @using SonosControl.Web.Services
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject NavigationManager Navigation
@@ -158,7 +160,7 @@
             <div class="form-grid-simple">
                 <div>
                     <label for="source-type" class="form-label">Source type</label>
-                    <select id="source-type" class="form-select" @bind="_draft.Type">
+                    <select id="source-type" class="form-select" @bind="_draft.Type" @bind:after="ValidateIfSubmitted">
                         @foreach (var type in Enum.GetValues<LibrarySourceType>())
                         {
                             <option value="@type">@TypeLabel(type)</option>
@@ -167,17 +169,26 @@
                 </div>
                 <div>
                     <label for="source-name" class="form-label">Name</label>
-                    <input id="source-name" class="form-control" @bind="_draft.Name" autocomplete="off" />
+                    <input id="source-name" class="@FieldClass("source-name")" aria-invalid="@(_fieldErrors.ContainsKey("source-name") ? "true" : "false")" aria-describedby="@FieldDescription("source-name")" @bind="_draft.Name" @bind:event="oninput" @bind:after="ValidateIfSubmitted" autocomplete="off" />
+                    @if (_fieldErrors.TryGetValue("source-name", out var sourcenameError))
+                    {
+                        <span id="source-name-error" class="field-error" role="alert">@sourcenameError</span>
+                    }
                 </div>
                 <div>
                     <label for="source-url" class="form-label">URL or service link</label>
-                    <input id="source-url" class="form-control" @bind="_draft.Url" autocomplete="off" />
+                    <input id="source-url" class="@FieldClass("source-url")" aria-invalid="@(_fieldErrors.ContainsKey("source-url") ? "true" : "false")" aria-describedby="@FieldDescription("source-url")" @bind="_draft.Url" @bind:event="oninput" @bind:after="ValidateIfSubmitted" autocomplete="off" inputmode="url" placeholder="@SourceExample" />
+                    @if (_fieldErrors.TryGetValue("source-url", out var sourceurlError))
+                    {
+                        <span id="source-url-error" class="field-error" role="alert">@sourceurlError</span>
+                    }
+                    <p id="source-url-help" class="form-text">@SourceHelp Example: @SourceExample</p>
                 </div>
                 @if (_draft.Type == LibrarySourceType.YouTube)
                 {
                     <div>
                         <label for="source-playback-mode" class="form-label">Playback mode</label>
-                        <select id="source-playback-mode" class="form-select" @bind="_draft.PlaybackMode">
+                        <select id="source-playback-mode" class="form-select" @bind="_draft.PlaybackMode" @bind:after="ValidateIfSubmitted">
                             @foreach (var mode in Enum.GetValues<YouTubePlaybackMode>())
                             {
                                 <option value="@mode">@FormatPlaybackMode(mode)</option>
@@ -186,7 +197,11 @@
                     </div>
                     <div>
                         <label for="source-queue-length" class="form-label">Related queue length</label>
-                        <input id="source-queue-length" class="form-control" type="number" min="1" max="100" @bind="_draft.PreferredQueueLength" />
+                        <input id="source-queue-length" class="@FieldClass("source-queue-length")" aria-invalid="@(_fieldErrors.ContainsKey("source-queue-length") ? "true" : "false")" aria-describedby="@FieldDescription("source-queue-length")" type="number" min="1" max="100" @bind="_draft.PreferredQueueLength" @bind:after="ValidateIfSubmitted" />
+                    @if (_fieldErrors.TryGetValue("source-queue-length", out var sourcequeuelengthError))
+                    {
+                        <span id="source-queue-length-error" class="field-error" role="alert">@sourcequeuelengthError</span>
+                    }
                     </div>
                 }
                 @if (!string.IsNullOrWhiteSpace(_dialogError))
@@ -213,10 +228,16 @@
                    OnCancel="CancelDelete" />
 }
 
+<UnsavedChangesGuard @ref="_draftGuard" HasChanges="@(_showEditor && _draftTracker.HasChanges(DraftValues))" OnDiscard="DiscardEditor" />
+
 @code {
     [SupplyParameterFromQuery(Name = "tab")]
     public string? RequestedTab { get; set; }
 
+    private UnsavedChangesGuard? _draftGuard;
+    private readonly DraftTracker _draftTracker = new();
+    private readonly Dictionary<string, string> _fieldErrors = new();
+    private bool _validationRequested;
     private SonosSettings? _settings;
     private string _activeTab = "saved";
     private string _search = string.Empty;
@@ -352,16 +373,21 @@
             preferredQueueLength);
     }
 
-    private void OpenCreateDialog()
+    private async Task OpenCreateDialog()
     {
+        if (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync()) return;
         _editingKey = null;
         _draft = new SourceDraft();
         _dialogError = null;
+        _fieldErrors.Clear();
+        _validationRequested = false;
         _showEditor = true;
+        _draftTracker.Accept(DraftValues);
     }
 
-    private void OpenEditDialog(LibrarySource source)
+    private async Task OpenEditDialog(LibrarySource source)
     {
+        if (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync()) return;
         _editingKey = source.Key;
         _draft = new SourceDraft
         {
@@ -372,12 +398,20 @@
             PreferredQueueLength = source.PreferredQueueLength ?? YouTubePlaybackModeResolver.DefaultRelatedQueueLength
         };
         _dialogError = null;
+        _fieldErrors.Clear();
+        _validationRequested = false;
         _showEditor = true;
+        _draftTracker.Accept(DraftValues);
     }
 
-    private void CloseEditor()
+    private async Task CloseEditor()
     {
-        if (_isSaving) return;
+        if (_isSaving || (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync())) return;
+        DiscardEditor();
+    }
+
+    private void DiscardEditor()
+    {
         _showEditor = false;
         _dialogError = null;
     }
@@ -385,16 +419,11 @@
     private async Task SaveSourceAsync()
     {
         if (_settings is null || _isSaving) return;
-        if (string.IsNullOrWhiteSpace(_draft.Name) || string.IsNullOrWhiteSpace(_draft.Url))
+        _validationRequested = true;
+        ValidateDraft();
+        if (_fieldErrors.Count > 0)
         {
-            _dialogError = "Name and URL are required.";
-            return;
-        }
-
-        var duplicate = AllSources.Any(source => source.Key != _editingKey && source.Type == _draft.Type && string.Equals(source.Url, _draft.Url.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (duplicate)
-        {
-            _dialogError = "That source is already saved.";
+            await JSRuntime.InvokeVoidAsync("window.sonosUi.focusById", _fieldErrors.Keys.First());
             return;
         }
 
@@ -404,9 +433,11 @@
             var originalSource = _editingKey is null
                 ? null
                 : AllSources.FirstOrDefault(source => source.Key == _editingKey);
-            if (_editingKey is not null) RemoveByKey(_editingKey);
-            AddDraft(_draft);
-            await _settingsRepo.SaveChangesAsync(_settings);
+            _settings = await _settingsRepo.UpdateSettingsAsync(settings =>
+            {
+                if (_editingKey is not null) RemoveByKey(_editingKey, settings);
+                AddDraft(_draft, settings);
+            });
             string? favouriteWarning = null;
             if (originalSource is not null)
             {
@@ -424,6 +455,7 @@
                 }
             }
             await LoadSettingsAsync();
+            _draftTracker.Accept(DraftValues);
             _showEditor = false;
             ShowStatus(
                 favouriteWarning ?? (_editingKey is null ? "Source added." : "Source updated."),
@@ -439,16 +471,63 @@
         }
     }
 
-    private void AddDraft(SourceDraft draft)
+    private void ValidateIfSubmitted()
+    {
+        if (_validationRequested) ValidateDraft();
+    }
+
+    private void ValidateDraft()
+    {
+        _fieldErrors.Clear();
+        if (string.IsNullOrWhiteSpace(_draft.Name)) _fieldErrors["source-name"] = "Enter a name for this source.";
+        var urlError = SonosSourceValidator.Validate(TypeKey(_draft.Type), _draft.Url);
+        if (urlError is not null) _fieldErrors["source-url"] = urlError;
+        else if (AllSources.Any(source => source.Key != _editingKey && source.Type == _draft.Type && SameUrl(source.Url, _draft.Url.Trim())))
+            _fieldErrors["source-url"] = "That source is already saved.";
+        if (_draft.Type == LibrarySourceType.YouTube && _draft.PreferredQueueLength is < 1 or > 100)
+            _fieldErrors["source-queue-length"] = "Enter a queue length between 1 and 100.";
+    }
+
+    private string FieldClass(string id) => _fieldErrors.ContainsKey(id) ? "form-control is-invalid" : "form-control";
+    private string? FieldDescription(string id)
+    {
+        var error = _fieldErrors.ContainsKey(id) ? $"{id}-error" : null;
+        return id == "source-url" ? $"source-url-help {error}".Trim() : error;
+    }
+
+    private object DraftValues => new
+    {
+        _draft.Type, _draft.Name, _draft.Url,
+        PlaybackMode = _draft.Type == LibrarySourceType.YouTube ? (YouTubePlaybackMode?)_draft.PlaybackMode : null,
+        QueueLength = _draft.Type == LibrarySourceType.YouTube ? (int?)_draft.PreferredQueueLength : null
+    };
+
+    private string SourceExample => _draft.Type switch
+    {
+        LibrarySourceType.Radio => "https://radio.example.com/live.mp3",
+        LibrarySourceType.Spotify => "spotify:playlist:37i9dQZEVXbMDoHDwVN2tF",
+        LibrarySourceType.YouTube => "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        _ => "https://music.youtube.com/playlist?list=LM"
+    };
+
+    private string SourceHelp => _draft.Type switch
+    {
+        LibrarySourceType.Radio => "Use a stream URL, hostname/path, or an existing Sonos radio URI.",
+        LibrarySourceType.Spotify => "Use an open.spotify.com track, album or playlist link, or a spotify: URI.",
+        LibrarySourceType.YouTube => "Use a YouTube video, short link or playlist URL. Audio is prepared when you play it.",
+        _ => "Use a YouTube Music track or playlist link, or a ytm:track: or ytm:playlist: URI."
+    };
+
+    private static void AddDraft(SourceDraft draft, SonosSettings settings)
     {
         var name = draft.Name.Trim();
         var url = draft.Url.Trim();
         switch (draft.Type)
         {
-            case LibrarySourceType.Radio: _settings!.Stations.Add(new TuneInStation { Name = name, Url = url }); break;
-            case LibrarySourceType.Spotify: _settings!.SpotifyTracks.Add(new SpotifyObject { Name = name, Url = url }); break;
+            case LibrarySourceType.Radio: settings.Stations.Add(new TuneInStation { Name = name, Url = url }); break;
+            case LibrarySourceType.Spotify: settings.SpotifyTracks.Add(new SpotifyObject { Name = name, Url = url }); break;
             case LibrarySourceType.YouTube:
-                _settings!.YouTubeCollections.Add(new YouTubeObject
+                settings.YouTubeCollections.Add(new YouTubeObject
                 {
                     Name = name,
                     Url = url,
@@ -456,7 +535,7 @@
                     PreferredQueueLength = Math.Clamp(draft.PreferredQueueLength, 1, 100)
                 });
                 break;
-            case LibrarySourceType.YouTubeMusic: _settings!.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = name, Url = url }); break;
+            case LibrarySourceType.YouTubeMusic: settings.YouTubeMusicCollections.Add(new YouTubeMusicObject { Name = name, Url = url }); break;
         }
     }
 
@@ -484,17 +563,18 @@
         ShowStatus(favouriteWarning ?? $"{name} was deleted.", favouriteWarning is not null);
     }
 
-    private void RemoveByKey(string key)
+    private void RemoveByKey(string key, SonosSettings? settings = null)
     {
-        if (_settings is null) return;
+        settings ??= _settings;
+        if (settings is null) return;
         var separator = key.IndexOf('|');
         if (separator < 0) return;
         var type = key[..separator];
         var url = key[(separator + 1)..];
-        if (type == TypeKey(LibrarySourceType.Radio)) _settings.Stations.RemoveAll(item => SameUrl(item.Url, url));
-        else if (type == TypeKey(LibrarySourceType.Spotify)) _settings.SpotifyTracks.RemoveAll(item => SameUrl(item.Url, url));
-        else if (type == TypeKey(LibrarySourceType.YouTube)) _settings.YouTubeCollections.RemoveAll(item => SameUrl(item.Url, url));
-        else if (type == TypeKey(LibrarySourceType.YouTubeMusic)) _settings.YouTubeMusicCollections.RemoveAll(item => SameUrl(item.Url, url));
+        if (type == TypeKey(LibrarySourceType.Radio)) settings.Stations.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.Spotify)) settings.SpotifyTracks.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.YouTube)) settings.YouTubeCollections.RemoveAll(item => SameUrl(item.Url, url));
+        else if (type == TypeKey(LibrarySourceType.YouTubeMusic)) settings.YouTubeMusicCollections.RemoveAll(item => SameUrl(item.Url, url));
     }
 
     private async Task PlaySourceAsync(LibrarySource source)

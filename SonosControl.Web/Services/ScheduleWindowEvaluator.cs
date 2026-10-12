@@ -11,12 +11,9 @@ public static class ScheduleWindowEvaluator
             return null;
         }
 
-        return windows
+        return ScheduleWindowOrdering.Order(windows
             .Where(window => window.IsEnabled)
-            .Where(window => IsWindowActive(window, nowLocal, settings))
-            .OrderBy(window => window.Priority)
-            .ThenByDescending(window => window.LastModifiedUtc)
-            .ThenBy(window => window.Id, StringComparer.OrdinalIgnoreCase)
+            .Where(window => IsWindowActive(window, nowLocal, settings)))
             .FirstOrDefault();
     }
 

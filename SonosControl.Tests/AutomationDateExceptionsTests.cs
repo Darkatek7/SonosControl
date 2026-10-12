@@ -117,8 +117,11 @@ public class AutomationDateExceptionsTests
         var repo = ConfigureServices(ctx, settings);
         var cut = ctx.Render<ScheduleWindowsPage>();
 
+        ctx.JSInterop.Setup<bool>("window.sonosUi.observeEditorViewport", _ => true).SetResult(false);
+        ctx.JSInterop.SetupVoid("window.sonosUi.stopObservingEditorViewport", _ => true);
+
         cut.FindAll(".schedule-window-card__main").Single(button => button.TextContent.Contains("Tuesday schedule")).Click();
-        cut.Find(".schedule-editor-actions button").Click();
+        cut.Find(".responsive-editor-dialog .app-dialog__actions button").Click();
 
         cut.WaitForAssertion(() =>
         {

@@ -11,7 +11,7 @@
             <p id="@_messageId" class="app-dialog__message">@Message</p>
         </ChildContent>
         <FooterContent>
-            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync">Cancel</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CancelAsync">@CancelLabel</button>
             <button type="button"
                     class="btn @(Dangerous ? "btn-danger" : "btn-primary")"
                     @onclick="ConfirmAsync">
@@ -28,6 +28,7 @@
     [Parameter] public string Title { get; set; } = "Confirm action";
     [Parameter] public string Message { get; set; } = string.Empty;
     [Parameter] public string ConfirmLabel { get; set; } = "Confirm";
+    [Parameter] public string CancelLabel { get; set; } = "Cancel";
     [Parameter] public bool Dangerous { get; set; }
     [Parameter] public EventCallback OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }

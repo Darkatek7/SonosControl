@@ -130,7 +130,7 @@ public class NowPlayingHeroTests
                 AlbumArtUri = albumArtUrl
             });
         connectorRepo.Setup(repo => repo.NextTrack("10.0.0.1")).Returns(Task.CompletedTask);
-        connectorRepo.Setup(repo => repo.StartPlaying("10.0.0.1")).Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.StartPlaying("10.0.0.1", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.PausePlaying("10.0.0.1")).Returns(Task.CompletedTask);
 
         RepositoryTestServices.Register(ctx.Services, settingsRepo.Object, connectorRepo.Object, Mock.Of<IHolidayRepo>());

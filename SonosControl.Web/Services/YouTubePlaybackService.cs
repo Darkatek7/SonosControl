@@ -1,3 +1,4 @@
+using SonosControl.DAL.Repos;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -436,45 +437,7 @@ public sealed class YouTubeToolRunner : IYouTubeToolRunner
     }
 
     private static string NormalizeYouTubeUrl(string sourceUrl)
-    {
-        if (string.IsNullOrWhiteSpace(sourceUrl))
-        {
-            throw new InvalidOperationException("A YouTube URL is required.");
-        }
-
-        var trimmed = sourceUrl.Trim();
-        if (trimmed.StartsWith("https://youtu.be/", StringComparison.OrdinalIgnoreCase))
-        {
-            var uri = new Uri(trimmed);
-            var id = uri.AbsolutePath.Trim('/').Split('/')[0];
-            var query = ParseQueryParameters(uri.Query);
-            query["v"] = id;
-            return BuildWatchUrl(query);
-        }
-
-        if (trimmed.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) || trimmed.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
-        {
-            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
-            {
-                var query = ParseQueryParameters(uri.Query);
-                if (query.TryGetValue("v", out var videoId) && !string.IsNullOrWhiteSpace(videoId))
-                {
-                    query["v"] = videoId.Trim();
-                    return BuildWatchUrl(query);
-                }
-
-                if (uri.AbsolutePath.Contains("/playlist", StringComparison.OrdinalIgnoreCase) && query.Count > 0)
-                {
-                    var queryString = string.Join("&", query.Select(pair => $"{pair.Key}={Uri.EscapeDataString(pair.Value)}"));
-                    return $"https://www.youtube.com/playlist?{queryString}";
-                }
-            }
-
-            return trimmed;
-        }
-
-        throw new InvalidOperationException("Only YouTube video and playlist URLs are supported.");
-    }
+        => YouTubeSourceUrl.Normalize(sourceUrl);
 
     private static Dictionary<string, string> ParseQueryParameters(string query)
     {

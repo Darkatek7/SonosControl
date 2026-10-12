@@ -10,6 +10,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject AutomationRuntimeStatus RuntimeStatus
 @inject ConfiguredTimeZoneService AppTimeZone
+@inject EditorNavigationRequests EditorRequests
 
 <PageTitle>Automation - SonosControl</PageTitle>
 
@@ -30,6 +31,10 @@
     {
         <div class="alert alert-danger" role="alert">
             <strong>@Snapshot.StatusLabel.</strong> @Snapshot.FailureMessage
+            @if (Snapshot.NextRetryUtc is DateTimeOffset retry)
+            {
+                <span> Next attempt: @AppTimeZone.Format(TimeZoneInfo.ConvertTime(retry, AppTimeZone.TimeZone), "HH:mm:ss").</span>
+            }
         </div>
     }
     else if (Snapshot.Warnings.Count > 0)
@@ -58,7 +63,7 @@
              class="workspace-tab-panel">
     @if (_activeTab == "schedules")
     {
-        <ScheduleWindowsPage />
+        <ScheduleWindowsPage OnCreateSceneRequested="StartNewScene" />
     }
     else if (_activeTab == "exceptions")
     {
@@ -233,7 +238,16 @@
         _activeTab = route == "schedule-windows" ? "schedules" : "scenes";
     }
 
-    private void SelectTab(string tab) => Navigation.NavigateTo($"/automation?tab={tab}");
+    private void SelectTab(string tab)
+    {
+        Navigation.NavigateTo($"/automation?tab={tab}");
+    }
+
+    private void StartNewScene()
+    {
+        EditorRequests.RequestNewScene();
+        Navigation.NavigateTo("/automation?tab=scenes");
+    }
     private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
     private string FormatEvaluationTime() => Snapshot.LastEvaluationUtc is { } value ? AppTimeZone.Format(value, "HH:mm:ss") : "Not yet";

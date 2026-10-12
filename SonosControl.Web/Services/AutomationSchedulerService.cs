@@ -23,7 +23,13 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private readonly SemaphoreSlim _evaluationLock = new(1, 1);
 
     private string? _activeWindowId;
-    private DateTime _activeWindowAppliedUtc;
+    private AttemptKey? _appliedAttempt;
+    private AttemptKey? _failedAttempt;
+    private int _failureCount;
+    private string? _failureMessage;
+    private DateTimeOffset? _nextRetryUtc;
+    private static readonly int[] RetrySeconds = [30, 60, 120, 300];
+    private sealed record AttemptKey(string WindowId, DateTime WindowRevision, string SceneId, DateTime SceneRevision, DateOnly StartDate);
 
     public AutomationSchedulerService(
         IServiceScopeFactory scopeFactory,
@@ -81,7 +87,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             if (!migration.Success)
             {
                 _activeWindowId = null;
-                _activeWindowAppliedUtc = default;
+                _appliedAttempt = null;
+                ResetFailure();
                 return;
             }
 
@@ -123,55 +130,67 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                     await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
                         skipFadeOut: settings.ExcludesAutomationDate(DateOnly.FromDateTime(localNow.DateTime)));
                     _activeWindowId = null;
-                    _activeWindowAppliedUtc = default;
+                    _appliedAttempt = null;
+                    ResetFailure();
                 }
 
+                ResetFailure();
                 _runtimeStatus.RecordEvaluation(null, utcNow);
                 return;
             }
 
-            var shouldApply = !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase)
-                              || activeWindow.LastModifiedUtc > _activeWindowAppliedUtc;
-            if (!shouldApply)
+            var scene = settings.Scenes.Single(item => string.Equals(item.Id, activeWindow.SceneId, StringComparison.OrdinalIgnoreCase));
+            var startDate = DateOnly.FromDateTime(localNow.DateTime);
+            if (activeWindow.StopTime <= activeWindow.StartTime && TimeOnly.FromDateTime(localNow.DateTime) < activeWindow.StopTime)
+                startDate = startDate.AddDays(-1);
+            var attempt = new AttemptKey(activeWindow.Id, activeWindow.LastModifiedUtc, scene.Id, scene.LastModifiedUtc, startDate);
+            if (_failedAttempt != attempt) ResetFailure();
+            if (_nextRetryUtc.HasValue && utcNow < _nextRetryUtc.Value)
+            {
+                _runtimeStatus.RecordEvaluation(null, utcNow, _failureMessage, _nextRetryUtc);
+                return;
+            }
+            if (_appliedAttempt == attempt)
             {
                 _runtimeStatus.RecordEvaluation(activeWindow.Name, utcNow);
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(_activeWindowId)
-                && !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
-                    string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                var newTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
-                await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken, newTargets);
+                if (!string.IsNullOrWhiteSpace(_activeWindowId)
+                    && !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
+                        string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
+                    var newTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
+                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken, newTargets);
+                }
+                // Retain attempted targets so a partially applied scene is stopped at the window boundary.
+                _activeWindowId = activeWindow.Id;
+                var result = await sceneOrchestration.ApplySceneByIdAsync(
+                    activeWindow.SceneId!, performedBy: "automation-scheduler", cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!result.Success)
+                {
+                    await RecordFailureAsync(attempt, activeWindow.Name, result.Message, actionLogger);
+                    return;
+                }
+                if (activeWindow.FadeInSeconds > 0 && result.TargetSpeakers.Count > 0)
+                    await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, sonosConnectorRepo, cancellationToken);
+
+                if (_failureCount > 0)
+                    await actionLogger.LogAsync("ScheduleRecovered", $"Schedule '{activeWindow.Name}' recovered after {_failureCount} failed start(s).", "automation-scheduler");
+                await actionLogger.LogAsync("ScheduleTriggered", $"Schedule '{activeWindow.Name}' triggered scene '{activeWindow.SceneId}'.", "automation-scheduler");
+                _appliedAttempt = attempt;
+                ResetFailure();
+                _runtimeStatus.RecordEvaluation(activeWindow.Name, _timeProvider.GetUtcNow());
             }
-
-            var result = await sceneOrchestration.ApplySceneByIdAsync(
-                activeWindow.SceneId!,
-                performedBy: "automation-scheduler",
-                cancellationToken);
-
-            if (!result.Success)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                var message = $"Schedule '{activeWindow.Name}' could not apply scene: {result.Message}";
-                await actionLogger.LogAsync("ScheduleTriggerFailed", message);
-                _runtimeStatus.RecordEvaluation(null, utcNow, message);
-                return;
+                await RecordFailureAsync(attempt, activeWindow.Name, ex.Message, actionLogger);
+                _logger.LogWarning(ex, "Schedule {WindowId} start failed.", activeWindow.Id);
             }
-
-            if (activeWindow.FadeInSeconds > 0 && result.TargetSpeakers.Count > 0)
-            {
-                await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, sonosConnectorRepo, cancellationToken);
-            }
-
-            await actionLogger.LogAsync(
-                "ScheduleTriggered",
-                $"Schedule '{activeWindow.Name}' triggered scene '{activeWindow.SceneId}'.");
-
-            _activeWindowId = activeWindow.Id;
-            _activeWindowAppliedUtc = utcNow.UtcDateTime;
-            _runtimeStatus.RecordEvaluation(activeWindow.Name, utcNow);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -182,6 +201,27 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             _evaluationLock.Release();
         }
+    }
+
+    private async Task RecordFailureAsync(AttemptKey attempt, string windowName, string error, ActionLogger actionLogger)
+    {
+        var message = $"Schedule '{windowName}' could not apply scene: {error}";
+        if (_failureMessage != message)
+            await actionLogger.LogAsync("ScheduleTriggerFailed", message, "automation-scheduler");
+        _failedAttempt = attempt;
+        _failureCount++;
+        _failureMessage = message;
+        var now = _timeProvider.GetUtcNow();
+        _nextRetryUtc = now.AddSeconds(RetrySeconds[Math.Min(_failureCount - 1, RetrySeconds.Length - 1)]);
+        _runtimeStatus.RecordEvaluation(null, now, message, _nextRetryUtc);
+    }
+
+    private void ResetFailure()
+    {
+        _failedAttempt = null;
+        _failureCount = 0;
+        _failureMessage = null;
+        _nextRetryUtc = null;
     }
 
     private static TimeZoneInfo ResolveTimeZone(string? configuredId)
@@ -231,7 +271,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         await Task.WhenAll(targetSpeakers.Select(ip => sonosConnectorRepo.PausePlaying(ip)));
         await actionLogger.LogAsync(
             "ScheduleStopped",
-            window is null ? "Scheduled playback stopped." : $"Schedule '{window.Name}' stopped.");
+            window is null ? "Scheduled playback stopped." : $"Schedule '{window.Name}' stopped.", "automation-scheduler");
     }
 
     private static IReadOnlyCollection<string> ResolveWindowTargetSpeakers(ScheduleWindow? window, SonosSettings settings)

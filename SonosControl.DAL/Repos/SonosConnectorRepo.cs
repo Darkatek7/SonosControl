@@ -79,8 +79,8 @@ namespace SonosControl.DAL.Repos
         public async Task StopPlaying(string ip)
             => await _transport.SendAsync(CreateClient(), ip, "Stop", string.Empty, CancellationToken.None);
 
-        public virtual async Task StartPlaying(string ip)
-            => await _transport.SendAsync(CreateClient(), ip, "Play", "<Speed>1</Speed>", CancellationToken.None);
+        public virtual async Task StartPlaying(string ip, CancellationToken cancellationToken = default)
+            => await _transport.SendAsync(CreateClient(), ip, "Play", "<Speed>1</Speed>", cancellationToken);
 
         public async Task<bool> IsPlaying(string ip)
         {
@@ -110,7 +110,7 @@ namespace SonosControl.DAL.Repos
                 throw new ArgumentException("An HTTP or HTTPS audio URL is required.", nameof(audioUrl));
             await SetTransportUriAsync(ip, audioUrl, YouTubeQueueMetadataBuilder.Build(title, audioUrl), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await StartPlaying(ip);
+            await StartPlaying(ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -120,7 +120,7 @@ namespace SonosControl.DAL.Repos
             await ClearQueue(ip, cancellationToken);
             await SetTransportUriAsync(ip, currentUri, string.Empty, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await StartPlaying(ip);
+            await StartPlaying(ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -521,7 +521,7 @@ namespace SonosControl.DAL.Repos
             var (uri, metadata) = SonosMediaSourceBuilder.Spotify(spotifyUrl, rinconId);
             await SetTransportUriAsync(ip, uri, metadata, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await StartPlaying(ip);
+            await StartPlaying(ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -536,7 +536,7 @@ namespace SonosControl.DAL.Repos
             var (uri, metadata) = SonosMediaSourceBuilder.YouTubeMusic(youtubeMusicUrl, rinconId);
             await SetTransportUriAsync(ip, uri, metadata, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await StartPlaying(ip);
+            await StartPlaying(ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -565,7 +565,7 @@ namespace SonosControl.DAL.Repos
             await SeekToTrackAsync(ip, 1, cancellationToken);
             await _youTubePlaybackService.ActivateSessionAsync(session.SessionId, ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            await StartPlaying(ip);
+            await StartPlaying(ip, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -810,14 +810,11 @@ namespace SonosControl.DAL.Repos
         {
             var masterRinconHex = await GetRinconIdAsync(masterIp, cancellationToken)
                 ?? throw new InvalidOperationException($"Could not retrieve the RINCON ID for {masterIp}.");
-            var groupUri = $"x-rincon-group:uuid:RINCON_{masterRinconHex}";
-            var groupMetadata = $"<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"0\" parentID=\"-1\" restricted=\"true\"><dc:title>Master Speaker</dc:title><upnp:class>object.item.audioItem.audioBroadcast</upnp:class><desc id=\"cdudn\" nameSpace=\"urn:schemas-rinconnetworks-com:metadata-1-0/\">RINCON_{masterRinconHex}</desc></item></DIDL-Lite>";
+            var groupUri = $"x-rincon:RINCON_{masterRinconHex}";
             foreach (var slaveIp in slaveIps.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 if (string.Equals(slaveIp, masterIp, StringComparison.OrdinalIgnoreCase)) continue;
-                await SetTransportUriAsync(slaveIp, groupUri, groupMetadata, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                await StartPlaying(slaveIp);
+                await SetTransportUriAsync(slaveIp, groupUri, string.Empty, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 _logger.LogDebug("Speaker {SpeakerIp} joined master {MasterIp}.", slaveIp, masterIp);
             }
@@ -826,98 +823,39 @@ namespace SonosControl.DAL.Repos
 
         public async Task UngroupSpeaker(string ip, CancellationToken cancellationToken = default)
         {
-            await SetTransportUriAsync(ip, "x-rincon-standard:", string.Empty, cancellationToken);
+            await _transport.SendAsync(CreateClient(), ip, "BecomeCoordinatorOfStandaloneGroup", string.Empty, cancellationToken);
             _logger.LogDebug("Speaker {SpeakerIp} ungrouped.", ip);
         }
 
         public async Task<IEnumerable<string>> GetAllSpeakersInGroup(string ip, CancellationToken cancellationToken = default)
         {
-            var groupedSpeakerIps = new List<string>();
-            try
+            var response = await _transport.SendAsync(CreateClient(), ip, "GetZoneGroupState", string.Empty, cancellationToken, "ZoneGroupTopology");
+            var settings = await _settingsRepo.GetSettings() ?? throw new InvalidOperationException("Settings could not be loaded.");
+            var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var discovered = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var speaker in settings.Speakers)
             {
-                var url = $"http://{ip}:1400/MediaRenderer/AVTransport/Control";
-                string soapRequest = @"
-                    <s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'
-                                s:encodingStyle='http://schemas.xmlsoap.org/soap/encoding/'>
-                      <s:Body>
-                        <u:GetTransportInfo xmlns:u='urn:schemas-upnp-org:service:AVTransport:1'>
-                          <InstanceID>0</InstanceID>
-                        </u:GetTransportInfo>
-                      </s:Body>
-                    </s:Envelope>";
-
-                var responseXml = await SendSoapRequest(url, soapRequest, "urn:schemas-upnp-org:service:AVTransport:1#GetTransportInfo", cancellationToken);
-
-                var doc = XDocument.Parse(responseXml);
-                var currentUriElement = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "CurrentURI");
-
-                if (currentUriElement != null && currentUriElement.Value.StartsWith("x-rincon-group:"))
+                var uuid = speaker.Uuid;
+                if (string.IsNullOrWhiteSpace(uuid))
                 {
-                    var groupUris = currentUriElement.Value.Substring("x-rincon-group:".Length);
-                    var speakerUuidsInGroup = groupUris.Split('+').ToList();
-
-                    var settings = await _settingsRepo.GetSettings();
-                    if (settings?.Speakers != null)
-                    {
-                        // Identify speakers needing UUID update
-                        var speakersToUpdate = settings.Speakers.Where(s => string.IsNullOrEmpty(s.Uuid)).ToList();
-
-                        if (speakersToUpdate.Any())
-                        {
-                            var updateTasks = speakersToUpdate.Select(async s =>
-                            {
-                                try
-                                {
-                                    var uuid = await GetSpeakerUUID(s.IpAddress, cancellationToken);
-                                    return (Speaker: s, Uuid: uuid);
-                                }
-                                catch (OperationCanceledException) { throw; }
-                                catch (HttpRequestException) { throw; }
-                                catch
-                                {
-                                    return (Speaker: s, Uuid: (string?)null);
-                                }
-                            });
-
-                            var results = await Task.WhenAll(updateTasks);
-                            bool anyUpdated = false;
-
-                            foreach (var res in results)
-                            {
-                                if (!string.IsNullOrEmpty(res.Uuid))
-                                {
-                                    res.Speaker.Uuid = res.Uuid;
-                                    anyUpdated = true;
-                                }
-                            }
-
-                            if (anyUpdated)
-                            {
-                                await _settingsRepo.SaveChangesAsync(settings);
-                            }
-                        }
-
-                        // Filter speakers using cached UUIDs
-                        var matchingSpeakers = settings.Speakers
-                            .Where(s => !string.IsNullOrEmpty(s.Uuid) && speakerUuidsInGroup.Contains(s.Uuid))
-                            .Select(s => s.IpAddress);
-
-                        groupedSpeakerIps.AddRange(matchingSpeakers);
-                    }
+                    uuid = await GetSpeakerUUID(speaker.IpAddress, cancellationToken);
+                    if (!string.IsNullOrWhiteSpace(uuid)) discovered[speaker.IpAddress] = uuid;
                 }
-                else
+                if (!string.IsNullOrWhiteSpace(uuid)) identities[speaker.IpAddress] = NormalizeUuid(uuid);
+            }
+            if (discovered.Count > 0)
+                await _settingsRepo.UpdateSettingsAsync(current =>
                 {
-                    // If the speaker is not grouped, it's a group of one (itself)
-                    groupedSpeakerIps.Add(ip);
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (HttpRequestException) { throw; }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Could not read the speaker group from {SpeakerIp}.", ip);
-            }
-            return groupedSpeakerIps;
+                    foreach (var speaker in current.Speakers)
+                        if (string.IsNullOrWhiteSpace(speaker.Uuid) && discovered.TryGetValue(speaker.IpAddress, out var uuid)) speaker.Uuid = uuid;
+                }, cancellationToken);
+
+            if (!identities.TryGetValue(ip, out var requestedId))
+                requestedId = NormalizeUuid(await GetSpeakerUUID(ip, cancellationToken)
+                    ?? throw new InvalidOperationException($"Could not retrieve the RINCON ID for {ip}."));
+            var members = ParseGroupMembers(response, requestedId);
+            return identities.Where(pair => members.Contains(pair.Value)).Select(pair => pair.Key)
+                .Append(ip).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         private Task<string> SetTransportUriAsync(string ip, string uri, string metadata, CancellationToken cancellationToken)

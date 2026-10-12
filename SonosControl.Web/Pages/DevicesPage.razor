@@ -218,19 +218,9 @@
     }
 </div>
 
-@if (_pendingRemoval is not null)
-{
-    <div class="app-dialog-backdrop" @onclick="CancelRemoveSpeaker">
-        <section class="app-dialog app-dialog--confirm" role="alertdialog" aria-modal="true" aria-labelledby="remove-device-title" aria-describedby="remove-device-copy" @onclick:stopPropagation="true">
-            <header class="app-dialog__header"><h2 id="remove-device-title">Remove speaker?</h2></header>
-            <div class="app-dialog__body"><p id="remove-device-copy">“@_pendingRemoval.Name” (@_pendingRemoval.IpAddress) will be removed from SonosControl.</p></div>
-            <footer class="app-dialog__actions">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CancelRemoveSpeaker">Cancel</button>
-                <button type="button" class="btn btn-danger" @onclick="RemoveSpeakerAsync">Remove</button>
-            </footer>
-        </section>
-    </div>
-}
+<ConfirmDialog Visible="@(_pendingRemoval is not null)" Title="Remove speaker?"
+               Message="@($"“{_pendingRemoval?.Name}” ({_pendingRemoval?.IpAddress}) will be removed from SonosControl.")"
+               ConfirmLabel="Remove" Dangerous="true" OnConfirm="RemoveSpeakerAsync" OnCancel="CancelRemoveSpeaker" />
 
 @code {
     private SonosSettings? _settings;

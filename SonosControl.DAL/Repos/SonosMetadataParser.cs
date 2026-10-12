@@ -8,6 +8,20 @@ namespace SonosControl.DAL.Repos;
 
 internal static class SonosMetadataParser
 {
+    internal static string NormalizeUuid(string value) => value.StartsWith("uuid:", StringComparison.OrdinalIgnoreCase) ? value[5..] : value;
+
+    internal static HashSet<string> ParseGroupMembers(string response, string requestedId)
+    {
+        var topology = XDocument.Parse(RequiredValue(response, "ZoneGroupState"));
+        var group = topology.Descendants().FirstOrDefault(element => element.Name.LocalName == "ZoneGroup"
+            && element.Descendants().Any(member => member.Name.LocalName == "ZoneGroupMember"
+                && string.Equals(NormalizeUuid(member.Attribute("UUID")?.Value ?? ""), requestedId, StringComparison.OrdinalIgnoreCase)));
+        if (group is null) throw new InvalidDataException($"The speaker topology does not contain {requestedId}.");
+        return group.Descendants().Where(member => member.Name.LocalName == "ZoneGroupMember")
+            .Select(member => NormalizeUuid(member.Attribute("UUID")?.Value ?? ""))
+            .Where(value => !string.IsNullOrWhiteSpace(value)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     internal static string RequiredValue(string response, string elementName)
         => XDocument.Parse(response).Descendants().FirstOrDefault(element => element.Name.LocalName == elementName)?.Value
             ?? throw new InvalidDataException($"The speaker response is missing {elementName}.");

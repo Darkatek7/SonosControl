@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using SonosControl.DAL.Repos;
 
 namespace SonosControl.Web.Services;
 
@@ -15,7 +16,10 @@ public sealed record SceneApplyResult(
     string Message,
     string? SceneId,
     IReadOnlyList<string> TargetSpeakers,
-    bool RecoveryActivated = false);
+    bool RecoveryActivated = false,
+    SceneCommandFailure? CommandFailure = null);
+
+public sealed record SceneCommandFailure(string SpeakerIp, string Service, string Action, int? HttpStatus, int? UpnpErrorCode, string Description);
 
 public sealed class SceneOrchestrationService : ISceneOrchestrationService
 {
@@ -51,7 +55,11 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
     public async Task<SceneApplyResult> ApplySceneAsync(Scene scene, string? performedBy = null, CancellationToken cancellationToken = default)
     {
-        return await ApplySceneInternalAsync(scene, performedBy, allowRecovery: true, cancellationToken);
+        var draft = SettingsChanges.MergeEntity(scene, scene, scene);
+        var settings = await _settingsRepo.GetSettings() ?? throw new InvalidOperationException("Settings could not be loaded.");
+        SettingsEditingService.ValidateScene(draft, settings);
+        if (!draft.Enabled) return new SceneApplyResult(false, $"Scene '{draft.Name}' is disabled.", draft.Id, Array.Empty<string>());
+        return await ApplySceneInternalAsync(draft, performedBy, allowRecovery: true, cancellationToken);
     }
 
     private async Task<SceneApplyResult> ApplySceneByIdInternalAsync(
@@ -183,7 +191,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 await _actionLogger.LogAsync("SceneRetrySucceeded", $"Scene {scene.Id} succeeded after {playbackResult.AttemptCount} attempts.");
             }
 
-            await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", targetSpeakers)}");
+            await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", targetSpeakers)}", performedBy);
             await _notificationService.SendNotificationAsync(
                 $"Scene '{scene.Name}' applied on {targetSpeakers.Count} speaker(s).",
                 performedBy);
@@ -193,13 +201,17 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
         catch (OperationCanceledException)
         {
-            return new SceneApplyResult(false, "Scene application was cancelled.", scene.Id, targetSpeakers, recoveryActivated);
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to apply scene {SceneId}.", scene.Id);
-            await _actionLogger.LogAsync("SceneApplyFailed", $"{scene.Name} ({scene.Id}): {ex.Message}");
-            return new SceneApplyResult(false, $"Failed to apply scene: {ex.Message}", scene.Id, targetSpeakers, recoveryActivated);
+            if (performedBy != "automation-scheduler")
+                await _actionLogger.LogAsync("SceneApplyFailed", $"{scene.Name} ({scene.Id}): {ex.Message}", performedBy);
+            var failure = ex is SonosCommandException command
+                ? new SceneCommandFailure(command.SpeakerIp, command.Service, command.Action, command.StatusCode.HasValue ? (int)command.StatusCode.Value : null, command.UpnpErrorCode, command.ErrorDescription)
+                : null;
+            return new SceneApplyResult(false, $"Failed to apply scene: {ex.Message}", scene.Id, targetSpeakers, recoveryActivated, failure);
         }
     }
 
@@ -336,7 +348,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
         if (selectionMode == SceneSourceSelectionMode.Resume)
         {
-            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
+            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip, cancellationToken)));
             return;
         }
 
@@ -346,14 +358,14 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
         if (selectionMode == SceneSourceSelectionMode.Random && string.IsNullOrWhiteSpace(sourceUrl))
         {
-            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
+            await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip, cancellationToken)));
             return;
         }
 
         switch (scene.SourceType)
         {
             case SceneSourceType.None:
-                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip)));
+                await Task.WhenAll(playbackTargets.Select(ip => _sonosConnectorRepo.StartPlaying(ip, cancellationToken)));
                 return;
             case SceneSourceType.Station:
                 EnsureSourceUrl(scene, sourceUrl);

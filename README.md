@@ -3,7 +3,7 @@
 
 SonosControl is a deployer-friendly Blazor control centre organised around everyday playback, a unified source library, scene-based automation, listening insights, and role-aware administration.
 
-![SonosControl first-speaker onboarding in dark theme](docs/assets/readme/images/desktop-dark-home.png)
+![SonosControl playback dashboard in dark theme](docs/assets/readme/images/desktop-dark-home.png)
 
 ## Quick Start
 
@@ -87,10 +87,12 @@ Then open `http://localhost:5107`.
 ## Feature Highlights
 
 - Focused first-speaker onboarding, with the playback dock appearing after a room is configured.
-- Expanded Home player plus a compact sticky mini-player with queue, room, group, sync, timer, and coalesced volume controls.
-- One Library for saved TuneIn, Spotify, YouTube, and YouTube Music sources, Radio Browser discovery, and recommendations.
+- Responsive Home player plus a compact sticky mini-player with queue, room, group, sync, timer, and coalesced volume controls.
+- One Library for saved TuneIn, Spotify, YouTube, and YouTube Music sources, with link examples, field validation, Radio Browser discovery, and recommendations.
+- Home Quick access lists favourites first and labels suggested sources.
 - Temporary MP3 uploads in Library with immediate speaker playback and configurable automatic deletion.
 - Reusable scenes, ordered recurring schedules, date exceptions, fades, and migration from legacy day-based automation.
+- Mobile fullscreen editors keep save actions visible and protect unsaved drafts when closing or navigating.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
 - Responsive listening statistics and a searchable read-only activity trail.
 - Separate administration areas for devices, system settings, users, and recoverable configuration backups.
