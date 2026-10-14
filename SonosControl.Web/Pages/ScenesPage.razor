@@ -6,6 +6,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISceneOrchestrationService SceneOrchestrationService
 @inject EditorNavigationRequests EditorRequests
+@inject PlaybackSnapshotStore PlaybackSnapshots
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 
 <PageTitle>Scenes - Sonos Control</PageTitle>
@@ -285,6 +286,7 @@
 
 <UnsavedChangesGuard @ref="_draftGuard" HasChanges="@(_editingScene is not null && _draftTracker.HasChanges(DraftTracker.Values(_editingScene)))" OnDiscard="DiscardEditor" />
 
+@implements IDisposable
 @code {
     private UnsavedChangesGuard? _draftGuard;
     private readonly DraftTracker _draftTracker = new();
@@ -305,7 +307,26 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _canManage = authState.User.IsInRole("admin") || authState.User.IsInRole("operator") || authState.User.IsInRole("superadmin");
         await LoadSettingsAsync();
+        PlaybackSnapshots.SettingsChanged += HandleSettingsChanged;
         if (EditorRequests.TakeNewSceneRequest()) CreateNewSceneCore();
+    }
+
+    public void Dispose() => PlaybackSnapshots.SettingsChanged -= HandleSettingsChanged;
+
+    private void HandleSettingsChanged() => _ = InvokeAsync(RefreshVolumeLimitAsync);
+
+    private async Task RefreshVolumeLimitAsync()
+    {
+        var latest = await _settingsRepo.GetSettings();
+        if (latest is null || _settings is null) return;
+        var oldMaximum = _settings.MaxVolume;
+        _settings.MaxVolume = Math.Clamp(latest.MaxVolume, 0, 100);
+        if (_editingScene is not null && _settings.MaxVolume < oldMaximum)
+        {
+            ClampEditingSceneVolumes();
+            ShowStatus($"Maximum volume changed to {_settings.MaxVolume}. Scene volume values were adjusted; review and save.");
+        }
+        StateHasChanged();
     }
 
     private async Task LoadSettingsAsync()
@@ -390,6 +411,8 @@
                 .ToList()
         };
 
+        ClampEditingSceneVolumes();
+
         _selectedSceneId = null;
         _selectedSourceItemValue = CustomSourceItemValue;
         EnsureMasterSpeaker();
@@ -401,7 +424,9 @@
         if (_draftGuard is not null && !await _draftGuard.ConfirmDiscardAsync()) return;
         _editingScene = CloneScene(scene);
         _selectedSceneId = scene.Id;
+        SeedLegacyActions();
         EnsureActionCoverage();
+        ClampEditingSceneVolumes();
         EnsureMasterSpeaker();
         SyncSourceSelectionWithScene();
         _draftTracker.Accept(DraftTracker.Values(_editingScene));
@@ -411,6 +436,12 @@
     {
         if (!_canManage || _settings is null || _editingScene is null)
         {
+            return;
+        }
+
+        if (SceneTargetResolver.Resolve(_editingScene, _settings).Count == 0)
+        {
+            ShowStatus("Select at least one speaker.", true);
             return;
         }
 
@@ -458,7 +489,8 @@
         }
         catch (Exception ex)
         {
-            ShowStatus($"Failed to save scene: {ex.Message}", true);
+            var adjustedForLimit = await RefreshVolumeLimitAfterSaveFailureAsync();
+            ShowStatus($"Failed to save scene: {ex.Message}{(adjustedForLimit ? " The latest maximum volume was applied to this draft; review and save again." : string.Empty)}", true);
         }
         finally
         {
@@ -510,6 +542,12 @@
 
     private async Task ApplyScene(Scene scene)
     {
+        if (_settings is not null && SceneTargetResolver.Resolve(scene, _settings).Count == 0)
+        {
+            ShowStatus("Select at least one speaker.", true);
+            return;
+        }
+
         _isApplying = true;
         try
         {
@@ -758,6 +796,37 @@
         {
             GetOrCreateAction(speaker.IpAddress);
         }
+    }
+
+    private void SeedLegacyActions()
+    {
+        if (_editingScene is null || _settings is null || _editingScene.Actions.Count > 0) return;
+        var selected = SceneTargetResolver.Resolve(_editingScene, _settings);
+        _editingScene.Actions = selected.Select(ip => new SceneAction { SpeakerIp = ip, IncludeInPlayback = true }).ToList();
+    }
+
+    private void ClampEditingSceneVolumes()
+    {
+        if (_editingScene is null || _settings is null) return;
+        var maximum = Math.Clamp(_settings.MaxVolume, 0, 100);
+        foreach (var action in _editingScene.Actions)
+            if (action.Volume.HasValue) action.Volume = Math.Clamp(action.Volume.Value, 0, maximum);
+    }
+
+    private async Task<bool> RefreshVolumeLimitAfterSaveFailureAsync()
+    {
+        if (_editingScene is null || _settings is null) return false;
+        var latest = await _settingsRepo.GetSettings();
+        if (latest is null) return false;
+        var previousMaximum = _settings.MaxVolume;
+        _settings.MaxVolume = Math.Clamp(latest.MaxVolume, 0, 100);
+        if (_settings.MaxVolume < previousMaximum)
+        {
+            ClampEditingSceneVolumes();
+            StateHasChanged();
+            return true;
+        }
+        return false;
     }
 
     private void EnsureMasterSpeaker()

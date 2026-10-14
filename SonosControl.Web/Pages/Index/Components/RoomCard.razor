@@ -1,5 +1,6 @@
 @using SonosControl.DAL.Models
 @using SonosControl.Web.Shared
+@using SonosControl.Web.Services
 
 <article class="room-card @StatusClass @(IsActive ? "room-card--active" : "")"
          data-qa="room-card"
@@ -30,11 +31,11 @@
                            Label="@($"Volume for {Speaker.Name}")" />
         </div>
     }
-    else if (Health?.CurrentVolume is int v)
+    else if (Playback?.Volume.HasValue == true || Health?.CurrentVolume.HasValue == true)
     {
         <div class="room-card__volume room-card__volume--readonly">
             <Icon Name="volume" Size="14" />
-            <span>@v% volume</span>
+            <span>@(Playback?.Volume ?? Health?.CurrentVolume)% volume</span>
         </div>
     }
 
@@ -70,6 +71,7 @@
 @code {
     [Parameter, EditorRequired] public SonosSpeaker Speaker { get; set; } = default!;
     [Parameter] public DeviceHealthStatus? Health { get; set; }
+    [Parameter] public PlaybackSnapshot? Playback { get; set; }
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public int ActiveVolume { get; set; }
     [Parameter] public int MaxVolume { get; set; } = 100;
@@ -78,24 +80,17 @@
     [Parameter] public EventCallback<int> OnVolumeChanged { get; set; }
     [Parameter] public EventCallback OnTogglePlayback { get; set; }
 
-    private bool IsOnline => Health?.IsOnline == true;
-    private bool IsPlaying => Health?.IsPlaying == true;
+    private bool IsOnline => Playback is null ? Health?.IsOnline == true : !Playback.IsStale;
+    private bool IsPlaying => Playback?.IsPlaying == true;
     private string VolumeIdPrefix => $"room-{SanitizeId(Speaker.IpAddress)}-volume";
 
-    private string StatusClass => Health switch
-    {
-        null => "is-unknown",
-        _ when Health.IsOnline => "is-online",
-        _ => "is-offline"
-    };
+    private string StatusClass => Playback is not null
+        ? Playback.IsStale ? "is-unknown" : "is-online"
+        : Health switch { null => "is-unknown", _ when Health.IsOnline => "is-online", _ => "is-offline" };
 
-    private string StatusLabel => Health switch
-    {
-        null => "No snapshot",
-        _ when !Health.IsOnline => Health.LastError ?? "Offline",
-        _ when Health.IsPlaying => "Playing",
-        _ => "Online"
-    };
+    private string StatusLabel => Playback is not null
+        ? Playback.IsStale ? Playback.Error ?? "Playback status stale" : IsPlaying ? "Playing" : "Online"
+        : Health switch { null => "No snapshot", _ when !Health.IsOnline => Health.LastError ?? "Offline", _ => "Online" };
 
     private Task Activate() => OnSetActive.InvokeAsync();
     private Task TogglePlayback() => OnTogglePlayback.InvokeAsync();

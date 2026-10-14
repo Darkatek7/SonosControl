@@ -44,6 +44,7 @@ public class SettingsEditingServiceTests
     [InlineData("source")]
     [InlineData("timer")]
     [InlineData("volume")]
+    [InlineData("selection")]
     public async Task SceneUiServiceAndApiUseTheCurrentValidationRules(string invalidField)
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -61,6 +62,7 @@ public class SettingsEditingServiceTests
                 case "source": draft.SourceUrl = null; break;
                 case "timer": draft.TimerMinutes = -1; break;
                 case "volume": draft.Actions.Add(new SceneAction { SpeakerIp = "A", Volume = 41 }); break;
+                case "selection": draft.Actions.Add(new SceneAction { SpeakerIp = "A", IncludeInPlayback = false }); break;
             }
             var error = await Assert.ThrowsAsync<SettingsEditException>(() => editor.SaveSceneAsync(draft, true));
             using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -92,6 +94,35 @@ public class SettingsEditingServiceTests
             await editor.DeleteSceneAsync("scene");
             await Assert.ThrowsAsync<SettingsEditException>(() => editor.SaveSceneAsync(draft, false, original));
             Assert.Empty((await repository.GetSettings())!.Scenes);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public async Task SceneVolumeIsValidatedAgainstTheLatestConcurrentMaximum()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var repository = new SettingsRepo(directory);
+            var editor = new SettingsEditingService(repository);
+            var initial = await editor.SaveSceneAsync(new Scene
+            {
+                Id = "scene",
+                Name = "Scene",
+                Actions = [new() { SpeakerIp = "A", IncludeInPlayback = true, Volume = 80 }]
+            }, true);
+            var original = initial.Scenes[0];
+            var draft = SettingsChanges.MergeEntity(original, original, original);
+            draft.Description = "Preserve this edit";
+            await repository.UpdateSettingsAsync(settings => settings.MaxVolume = 40);
+
+            var error = await Assert.ThrowsAsync<SettingsEditException>(() => editor.SaveSceneAsync(draft, false, original));
+
+            Assert.Contains("between 0 and 40", error.Message);
+            var latest = await repository.GetSettings();
+            Assert.Equal(80, latest!.Scenes[0].Actions[0].Volume);
+            Assert.Null(latest.Scenes[0].Description);
         }
         finally { Directory.Delete(directory, true); }
     }

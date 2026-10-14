@@ -9,6 +9,8 @@ public interface ISceneOrchestrationService
 {
     Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy = null, CancellationToken cancellationToken = default);
     Task<SceneApplyResult> ApplySceneAsync(Scene scene, string? performedBy = null, CancellationToken cancellationToken = default);
+    Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy, PlaybackCommandOrigin origin, Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true);
+    Task<SceneApplyResult> ApplySceneByIdWithContextAsync(string sceneId, string? performedBy, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true);
 }
 
 public sealed record SceneApplyResult(
@@ -32,13 +34,17 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
     private readonly ActionLogger _actionLogger;
     private readonly ILogger<SceneOrchestrationService> _logger;
     private readonly SceneTimerService _sceneTimers;
+    private readonly PlaybackCommandCoordinator? _commands;
+    private readonly PlaybackSnapshotMonitorService? _playbackSnapshots;
 
     public SceneOrchestrationService(
         ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
         SceneTimerService sceneTimers,
         INotificationService notificationService,
         ActionLogger actionLogger,
-        ILogger<SceneOrchestrationService> logger)
+        ILogger<SceneOrchestrationService> logger,
+        PlaybackCommandCoordinator? commands = null,
+        PlaybackSnapshotMonitorService? playbackSnapshots = null)
     {
         _settingsRepo = settingsRepo;
         _sonosConnectorRepo = sonosConnectorRepo;
@@ -46,27 +52,126 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         _notificationService = notificationService;
         _actionLogger = actionLogger;
         _logger = logger;
+        _commands = commands;
+        _playbackSnapshots = playbackSnapshots;
     }
 
     public async Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy = null, CancellationToken cancellationToken = default)
     {
-        return await ApplySceneByIdInternalAsync(sceneId, performedBy, allowRecovery: true, cancellationToken);
+        return await ApplySceneByIdAsync(sceneId, performedBy, PlaybackCommandOrigin.Manual, null, cancellationToken);
+    }
+
+    public async Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy, PlaybackCommandOrigin origin,
+        Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true)
+    {
+        for (var planAttempt = 0; planAttempt < 2; planAttempt++)
+        {
+            var loaded = await _settingsRepo.GetSettings();
+            var scene = loaded?.Scenes?.FirstOrDefault(item => string.Equals(item.Id, sceneId, StringComparison.OrdinalIgnoreCase));
+            if (loaded is null) return new SceneApplyResult(false, "Settings could not be loaded.", sceneId, Array.Empty<string>());
+            if (scene is null) return new SceneApplyResult(false, $"Scene '{sceneId}' not found.", sceneId, Array.Empty<string>());
+            // Freeze both the scene and its companion settings before waiting for ownership.
+            var settings = SettingsChanges.MergeEntity(loaded, loaded, loaded);
+            var preparedScene = SettingsChanges.MergeEntity(scene, scene, scene);
+            var targets = await ResolveExecutionTargetsAsync(preparedScene, settings, targetOverride, allowRecovery: false, cancellationToken);
+            await using var commandLease = origin == PlaybackCommandOrigin.Automation || _commands is null || targets.Count == 0
+                ? null
+                : await _commands.EnterManualAsync(targets, origin, cancellationToken);
+            var changedWhileWaiting = false;
+            if (origin != PlaybackCommandOrigin.Automation && _commands is not null && targets.Count > 0)
+            {
+                var current = await _settingsRepo.GetSettings();
+                var currentScene = current?.Scenes?.FirstOrDefault(item => string.Equals(item.Id, sceneId, StringComparison.OrdinalIgnoreCase));
+                changedWhileWaiting = current is null || currentScene is null || currentScene.LastModifiedUtc != preparedScene.LastModifiedUtc;
+                if (!changedWhileWaiting)
+                {
+                    var currentTargets = await ResolveExecutionTargetsAsync(currentScene!, current!, targetOverride, allowRecovery: false, cancellationToken);
+                    changedWhileWaiting = !targets.Order(StringComparer.OrdinalIgnoreCase)
+                        .SequenceEqual(currentTargets.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+                }
+            }
+            if (changedWhileWaiting)
+            {
+                if (planAttempt == 0) continue;
+                return new SceneApplyResult(false, "Scene or speaker group kept changing while waiting for playback ownership. Apply it again.", sceneId, Array.Empty<string>());
+            }
+            if (!preparedScene.Enabled) return new SceneApplyResult(false, $"Scene '{preparedScene.Name}' is disabled.", sceneId, Array.Empty<string>());
+            await using var context = _commands is null || commandLease is null
+                ? null
+                : new SceneExecutionContext(_commands, origin, DateTimeOffset.MinValue, cancellationToken, commandLease);
+            return await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
+        }
+        throw new InvalidOperationException("Unable to prepare scene playback.");
+    }
+
+    public async Task<SceneApplyResult> ApplySceneByIdWithContextAsync(string sceneId, string? performedBy, SceneExecutionContext context,
+        Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true)
+    {
+        var loaded = await _settingsRepo.GetSettings();
+        var scene = loaded?.Scenes?.FirstOrDefault(item => string.Equals(item.Id, sceneId, StringComparison.OrdinalIgnoreCase));
+        if (loaded is null) return new SceneApplyResult(false, "Settings could not be loaded.", sceneId, Array.Empty<string>());
+        if (scene is null) return new SceneApplyResult(false, $"Scene '{sceneId}' not found.", sceneId, Array.Empty<string>());
+        if (!scene.Enabled) return new SceneApplyResult(false, $"Scene '{scene.Name}' is disabled.", sceneId, Array.Empty<string>());
+        var settings = SettingsChanges.MergeEntity(loaded, loaded, loaded);
+        var preparedScene = SettingsChanges.MergeEntity(scene, scene, scene);
+        if (context.CurrentLease is null)
+            return new SceneApplyResult(false, "Playback ownership is no longer available.", sceneId, Array.Empty<string>());
+        var resolvedTargets = await ResolveExecutionTargetsAsync(preparedScene, settings, targetOverride, allowRecovery: false, cancellationToken);
+        if (!context.CurrentLease.Speakers.Order(StringComparer.OrdinalIgnoreCase)
+                .SequenceEqual(resolvedTargets.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+        {
+            await context.ReplaceTargetsAsync(resolvedTargets, cancellationToken);
+            var revalidated = await ResolveExecutionTargetsAsync(preparedScene, settings, targetOverride, allowRecovery: false, cancellationToken);
+            if (context.CurrentLease is null || !context.CurrentLease.Speakers.Order(StringComparer.OrdinalIgnoreCase)
+                    .SequenceEqual(revalidated.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+                return new SceneApplyResult(false, "Speaker group kept changing while waiting for playback ownership. Apply it again.", sceneId, Array.Empty<string>());
+        }
+        return await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
     }
 
     public async Task<SceneApplyResult> ApplySceneAsync(Scene scene, string? performedBy = null, CancellationToken cancellationToken = default)
     {
         var draft = SettingsChanges.MergeEntity(scene, scene, scene);
-        var settings = await _settingsRepo.GetSettings() ?? throw new InvalidOperationException("Settings could not be loaded.");
-        SettingsEditingService.ValidateScene(draft, settings);
-        if (!draft.Enabled) return new SceneApplyResult(false, $"Scene '{draft.Name}' is disabled.", draft.Id, Array.Empty<string>());
-        return await ApplySceneInternalAsync(draft, performedBy, allowRecovery: true, cancellationToken);
+        for (var planAttempt = 0; planAttempt < 2; planAttempt++)
+        {
+            var loaded = await _settingsRepo.GetSettings() ?? throw new InvalidOperationException("Settings could not be loaded.");
+            var settings = SettingsChanges.MergeEntity(loaded, loaded, loaded);
+            SettingsEditingService.ValidateScene(draft, settings);
+            if (!draft.Enabled) return new SceneApplyResult(false, $"Scene '{draft.Name}' is disabled.", draft.Id, Array.Empty<string>());
+            var targets = await ResolveExecutionTargetsAsync(draft, settings, null, allowRecovery: false, cancellationToken);
+            await using var commandLease = _commands is null || targets.Count == 0
+                ? null
+                : await _commands.EnterManualAsync(targets, PlaybackCommandOrigin.Manual, cancellationToken);
+            var changedWhileWaiting = false;
+            if (_commands is not null && targets.Count > 0)
+            {
+                var current = await _settingsRepo.GetSettings();
+                if (current is null) return new SceneApplyResult(false, "Settings could not be loaded.", draft.Id, Array.Empty<string>());
+                var currentTargets = await ResolveExecutionTargetsAsync(draft, current, null, allowRecovery: false, cancellationToken);
+                changedWhileWaiting = !targets.Order(StringComparer.OrdinalIgnoreCase)
+                    .SequenceEqual(currentTargets.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            }
+            if (changedWhileWaiting)
+            {
+                if (planAttempt == 0) continue;
+                return new SceneApplyResult(false, "Speaker group kept changing while waiting for playback ownership. Apply it again.", draft.Id, Array.Empty<string>());
+            }
+            await using var context = _commands is null || commandLease is null
+                ? null
+                : new SceneExecutionContext(_commands, PlaybackCommandOrigin.Manual, DateTimeOffset.MinValue, cancellationToken, commandLease);
+            return await ApplySceneInternalAsync(draft, settings, performedBy, allowRecovery: true, cancellationToken, null, null, context);
+        }
+        throw new InvalidOperationException("Unable to prepare scene playback.");
     }
 
     private async Task<SceneApplyResult> ApplySceneByIdInternalAsync(
         string sceneId,
         string? performedBy,
         bool allowRecovery,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<IReadOnlyCollection<string>>? recordTargets = null,
+        IReadOnlyCollection<string>? targetOverride = null)
     {
         if (string.IsNullOrWhiteSpace(sceneId))
         {
@@ -91,44 +196,48 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             return new SceneApplyResult(false, $"Scene '{scene.Name}' is disabled.", sceneId, Array.Empty<string>());
         }
 
-        return await ApplySceneInternalAsync(scene, performedBy, allowRecovery, cancellationToken);
+        return await ApplySceneInternalAsync(scene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, null);
     }
 
     private async Task<SceneApplyResult> ApplySceneInternalAsync(
         Scene scene,
+        SonosSettings settings,
         string? performedBy,
         bool allowRecovery,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<IReadOnlyCollection<string>>? recordTargets,
+        IReadOnlyCollection<string>? targetOverride,
+        SceneExecutionContext? executionContext)
     {
-        var settings = await _settingsRepo.GetSettings();
-        if (settings is null)
-        {
-            return new SceneApplyResult(false, "Settings could not be loaded.", scene.Id, Array.Empty<string>());
-        }
-
         settings.Speakers ??= new();
-        var targetSpeakers = ResolveTargetSpeakers(scene, settings).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var targetSpeakers = SceneTargetResolver.Resolve(scene, settings).ToList();
+        if (targetOverride is not null)
+            targetSpeakers = targetSpeakers.Intersect(targetOverride, StringComparer.OrdinalIgnoreCase).ToList();
         if (!targetSpeakers.Any())
         {
-            return new SceneApplyResult(false, "No target speakers available for scene.", scene.Id, Array.Empty<string>());
+            return new SceneApplyResult(false, "Select at least one speaker.", scene.Id, Array.Empty<string>());
         }
 
         bool recoveryActivated = false;
         string? groupingWarning = null;
+        IReadOnlyList<string> appliedTargets = targetSpeakers;
 
         try
         {
             await using var lease = await _sceneTimers.BeginSceneAsync(targetSpeakers, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
+            var commandToken = executionContext?.CancellationToken ?? cancellationToken;
+            commandToken.ThrowIfCancellationRequested();
 
-            await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, cancellationToken)));
+            // Ownership starts with the first side effect, not merely target validation.
+            recordTargets?.Invoke(targetSpeakers);
+            await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, commandToken)));
 
             foreach (var ip in targetSpeakers)
             {
                 var volume = ResolveVolume(scene, settings, ip);
                 if (volume.HasValue)
                 {
-                    await _sonosConnectorRepo.SetSpeakerVolume(ip, Math.Clamp(volume.Value, 0, settings.MaxVolume), cancellationToken);
+                    await _sonosConnectorRepo.SetSpeakerVolume(ip, Math.Clamp(volume.Value, 0, settings.MaxVolume), commandToken);
                 }
             }
 
@@ -141,7 +250,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 var grouped = false;
                 try
                 {
-                    grouped = await _sonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                    grouped = await _sonosConnectorRepo.CreateGroup(masterIp, slaveIps, commandToken);
                 }
                 catch (SonosCommandException ex) when (ex.Action == "SetAVTransportURI" && ex.UpnpErrorCode == 501)
                 {
@@ -150,7 +259,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 if (!grouped)
                 {
                     // Clear any members joined before the failure, then play each target directly.
-                    await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, cancellationToken)));
+                    await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, commandToken)));
                     groupingWarning = "Synchronized grouping is unavailable; speakers are playing independently. Check that they belong to the same Sonos system.";
                     await _actionLogger.LogAsync("SceneGroupingUnavailable", $"{scene.Name} ({scene.Id}): {groupingWarning}", performedBy);
                 }
@@ -175,7 +284,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 settings,
                 retryCount,
                 retryDelay,
-                cancellationToken);
+                commandToken);
 
             if (!playbackResult.Success)
             {
@@ -187,33 +296,45 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 // A fallback source uses the current group under the same leases.
                 // A recovery scene acquires its own (possibly different) target speakers.
                 if (sourceFailureRule?.ActionType == AutomationActionType.ApplyScene) await lease.DisposeAsync();
-                var recovered = await TryRecoverPlaybackAsync(
+                var recoveryTouchedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                void RecordRecoveryTargets(IReadOnlyCollection<string> targets)
+                {
+                    recoveryTouchedTargets.UnionWith(targets);
+                    recordTargets?.Invoke(targets);
+                }
+                var recoveredTargets = await TryRecoverPlaybackAsync(
                     scene,
                     settings,
                     playbackTargets,
                     playbackResult.LastError,
                     sourceFailureRule,
-                    cancellationToken);
+                    commandToken,
+                    RecordRecoveryTargets,
+                    null,
+                    executionContext);
 
-                if (!recovered)
+                if (recoveredTargets is null)
                 {
                     throw playbackResult.LastError;
                 }
 
                 recoveryActivated = true;
+                appliedTargets = recoveredTargets;
             }
             else if (playbackResult.AttemptCount > 1)
             {
                 await _actionLogger.LogAsync("SceneRetrySucceeded", $"Scene {scene.Id} succeeded after {playbackResult.AttemptCount} attempts.");
             }
 
-            await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", targetSpeakers)}", performedBy);
+            await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", appliedTargets)}", performedBy);
             await _notificationService.SendNotificationAsync(
-                $"Scene '{scene.Name}' applied on {targetSpeakers.Count} speaker(s). {groupingWarning}".TrimEnd(),
+                $"Scene '{scene.Name}' applied on {appliedTargets.Count} speaker(s). {groupingWarning}".TrimEnd(),
                 performedBy);
+            if (_playbackSnapshots is not null)
+                await _playbackSnapshots.RefreshNowAsync(commandToken);
 
             if (!recoveryActivated || sourceFailureRule?.ActionType == AutomationActionType.PlayFallbackSource) _sceneTimers.Schedule(scene.Id, scene.Name, targetSpeakers, scene.TimerMinutes);
-            return new SceneApplyResult(true, groupingWarning is null ? "Scene applied." : $"Scene applied. {groupingWarning}", scene.Id, targetSpeakers, recoveryActivated);
+            return new SceneApplyResult(true, groupingWarning is null ? "Scene applied." : $"Scene applied. {groupingWarning}", scene.Id, appliedTargets, recoveryActivated);
         }
         catch (OperationCanceledException)
         {
@@ -232,6 +353,40 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
     }
 
     private sealed record PlaybackExecutionResult(bool Success, Exception? LastError, int AttemptCount);
+
+    private async Task<IReadOnlyCollection<string>> ResolveExecutionTargetsAsync(
+        Scene scene, SonosSettings settings, IReadOnlyCollection<string>? targetOverride, bool allowRecovery, CancellationToken cancellationToken)
+    {
+        var targets = SceneTargetResolver.Resolve(scene, settings).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (targetOverride is not null) targets.IntersectWith(targetOverride);
+
+        if (allowRecovery)
+        {
+            var recovery = settings.AutomationRules?
+                .Where(rule => rule.Enabled && rule.TriggerType == AutomationTriggerType.SourceFailure && rule.ActionType == AutomationActionType.ApplyScene)
+                .OrderBy(rule => rule.LastModifiedUtc)
+                .FirstOrDefault();
+            var recoveryScene = recovery is null ? null : settings.Scenes?.FirstOrDefault(item =>
+                string.Equals(item.Id, recovery.SceneId, StringComparison.OrdinalIgnoreCase));
+            if (recoveryScene is not null)
+                targets.UnionWith(SceneTargetResolver.Resolve(recoveryScene, settings));
+        }
+
+        foreach (var ip in targets.ToArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                foreach (var member in await _sonosConnectorRepo.GetAllSpeakersInGroup(ip, cancellationToken) ?? [])
+                    if (!string.IsNullOrWhiteSpace(member)) targets.Add(member.Trim());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Could not resolve speaker group for playback target {SpeakerIp}.", ip);
+            }
+        }
+        return targets.Order(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
 
     private async Task<PlaybackExecutionResult> ExecutePlaybackWithRetriesAsync(
         Scene scene,
@@ -281,31 +436,6 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
 
         return new PlaybackExecutionResult(false, lastError, retryCount + 1);
-    }
-
-    private static IReadOnlyList<string> ResolveTargetSpeakers(Scene scene, SonosSettings settings)
-    {
-        if (scene.Actions?.Any(a => !string.IsNullOrWhiteSpace(a.SpeakerIp) && a.IncludeInPlayback) == true)
-        {
-            return scene.Actions
-                .Where(a => a.IncludeInPlayback)
-                .Select(a => a.SpeakerIp.Trim())
-                .Where(ip => !string.IsNullOrWhiteSpace(ip))
-                .ToList();
-        }
-
-        if (scene.SpeakerIps?.Any(ip => !string.IsNullOrWhiteSpace(ip)) == true)
-        {
-            return scene.SpeakerIps
-                .Select(ip => ip.Trim())
-                .Where(ip => !string.IsNullOrWhiteSpace(ip))
-                .ToList();
-        }
-
-        return settings.Speakers
-            .Select(s => s.IpAddress)
-            .Where(ip => !string.IsNullOrWhiteSpace(ip))
-            .ToList();
     }
 
     private static string ResolveMasterSpeaker(Scene scene, IReadOnlyList<string> targetSpeakers)
@@ -408,17 +538,20 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
     }
 
-    private async Task<bool> TryRecoverPlaybackAsync(
+    private async Task<IReadOnlyList<string>?> TryRecoverPlaybackAsync(
         Scene scene,
         SonosSettings settings,
         IReadOnlyList<string> playbackTargets,
         Exception originalError,
         AutomationRule? recoveryRule,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<IReadOnlyCollection<string>>? recordTargets,
+        IReadOnlyCollection<string>? targetOverride,
+        SceneExecutionContext? executionContext)
     {
         if (recoveryRule is null || recoveryRule.ActionType == AutomationActionType.None)
         {
-            return false;
+            return null;
         }
 
         _logger.LogWarning(
@@ -432,32 +565,43 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             case AutomationActionType.ApplyScene:
                 if (string.IsNullOrWhiteSpace(recoveryRule.SceneId))
                 {
-                    return false;
+                    return null;
                 }
 
                 if (string.Equals(recoveryRule.SceneId, scene.Id, StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Recovery rule {RuleId} points to the same scene {SceneId}; skipping to avoid recursion.", recoveryRule.Id, scene.Id);
-                    return false;
+                    return null;
                 }
 
-                var applyResult = await ApplySceneByIdInternalAsync(
-                    recoveryRule.SceneId,
-                    performedBy: "automation-recovery",
-                    allowRecovery: false,
-                    cancellationToken);
-
-                if (!applyResult.Success)
+                SceneApplyResult applyResult;
+                if (executionContext is not null)
                 {
-                    return false;
+                    var recoveryScene = settings.Scenes?.FirstOrDefault(item =>
+                        string.Equals(item.Id, recoveryRule.SceneId, StringComparison.OrdinalIgnoreCase));
+                    if (recoveryScene is null) return null;
+                    var recoveryTargets = await ResolveExecutionTargetsAsync(recoveryScene, settings, null, allowRecovery: false, cancellationToken);
+                    if (!await executionContext.ReplaceTargetsAsync(recoveryTargets, cancellationToken)) return null;
+                    applyResult = await ApplySceneInternalAsync(
+                        SettingsChanges.MergeEntity(recoveryScene, recoveryScene, recoveryScene), settings,
+                        performedBy: "automation-recovery", allowRecovery: false,
+                        executionContext.CancellationToken, recordTargets, null, executionContext);
                 }
+                else
+                {
+                    applyResult = await ApplySceneByIdInternalAsync(
+                        recoveryRule.SceneId, performedBy: "automation-recovery", allowRecovery: false,
+                        cancellationToken, recordTargets, null);
+                }
+
+                if (!applyResult.Success) return null;
 
                 await _actionLogger.LogAsync("RecoveryActivated", $"Scene {scene.Id} failed, recovered via scene {recoveryRule.SceneId}.");
-                return true;
+                return applyResult.TargetSpeakers;
             case AutomationActionType.PlayFallbackSource:
                 if (string.IsNullOrWhiteSpace(recoveryRule.FallbackUrl) || recoveryRule.FallbackSourceType == SceneSourceType.None)
                 {
-                    return false;
+                    return null;
                 }
 
                 var fallbackScene = new Scene
@@ -470,11 +614,12 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                     IsSyncedPlayback = scene.IsSyncedPlayback
                 };
 
+                recordTargets?.Invoke(playbackTargets);
                 await ExecutePlaybackAsync(fallbackScene, playbackTargets, settings, cancellationToken);
                 await _actionLogger.LogAsync("RecoveryActivated", $"Scene {scene.Id} failed, fallback source started.");
-                return true;
+                return playbackTargets;
             default:
-                return false;
+                return null;
         }
     }
 

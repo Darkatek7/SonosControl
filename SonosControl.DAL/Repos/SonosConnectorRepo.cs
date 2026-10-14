@@ -73,8 +73,10 @@ namespace SonosControl.DAL.Repos
             public Task CleanupExpiredSessionsAsync(CancellationToken cancellationToken = default)
                 => Task.CompletedTask;
         }
-        public async Task PausePlaying(string ip)
-            => await _transport.SendAsync(CreateClient(), ip, "Pause", string.Empty, CancellationToken.None);
+        public Task PausePlaying(string ip) => PausePlaying(ip, CancellationToken.None);
+
+        public async Task PausePlaying(string ip, CancellationToken cancellationToken)
+            => await _transport.SendAsync(CreateClient(), ip, "Pause", string.Empty, cancellationToken);
 
         public async Task StopPlaying(string ip)
             => await _transport.SendAsync(CreateClient(), ip, "Stop", string.Empty, CancellationToken.None);
@@ -82,15 +84,19 @@ namespace SonosControl.DAL.Repos
         public virtual async Task StartPlaying(string ip, CancellationToken cancellationToken = default)
             => await _transport.SendAsync(CreateClient(), ip, "Play", "<Speed>1</Speed>", cancellationToken);
 
-        public async Task<bool> IsPlaying(string ip)
+        public Task<bool> IsPlaying(string ip) => IsPlaying(ip, CancellationToken.None);
+
+        public async Task<bool> IsPlaying(string ip, CancellationToken cancellationToken)
         {
-            var response = await _transport.SendAsync(CreateClient(), ip, "GetTransportInfo", string.Empty, CancellationToken.None);
+            var response = await _transport.SendAsync(CreateClient(), ip, "GetTransportInfo", string.Empty, cancellationToken);
             return string.Equals(RequiredValue(response, "CurrentTransportState"), "PLAYING", StringComparison.OrdinalIgnoreCase);
         }
 
-        public async Task<int> GetVolume(string ip)
+        public Task<int> GetVolume(string ip) => GetVolume(ip, CancellationToken.None);
+
+        public async Task<int> GetVolume(string ip, CancellationToken cancellationToken)
         {
-            var response = await _transport.SendAsync(CreateClient(), ip, "GetVolume", "<Channel>Master</Channel>", CancellationToken.None, "RenderingControl");
+            var response = await _transport.SendAsync(CreateClient(), ip, "GetVolume", "<Channel>Master</Channel>", cancellationToken, "RenderingControl");
             if (!int.TryParse(RequiredValue(response, "CurrentVolume"), out var volume) || volume is < 0 or > 100)
                 throw new InvalidDataException("The speaker returned an invalid volume.");
             return volume;

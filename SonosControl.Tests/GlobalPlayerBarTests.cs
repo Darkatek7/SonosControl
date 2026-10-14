@@ -19,7 +19,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task SleepTimer_PausesOriginalRoomAfterRoomSelectionChanges()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
@@ -43,7 +43,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task SleepTimer_RestartKeepsNewRoomAndIgnoresOldTimer()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
@@ -65,12 +65,31 @@ public class GlobalPlayerBarTests
         });
     }
 
+    [Fact]
+    public async Task SleepTimer_IsSharedAcrossPlayerComponentsAndCanBeCancelledFromEither()
+    {
+        await using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ConfigureServices(ctx);
+        ConfigureTimerClock(ctx);
+        var first = ctx.Render<GlobalPlayerBar>();
+        var second = ctx.Render<GlobalPlayerBar>();
+        first.Find(".player-surface__open").Click();
+        first.Find(".player-sheet__timer .input-group button").Click();
+        second.Find(".player-surface__open").Click();
+
+        Assert.Contains("Office pauses at", second.Find(".player-sheet__timer").TextContent);
+        second.Find(".player-sheet__timer .btn-outline-danger").Click();
+        Assert.Contains("Not running", first.Find(".player-sheet__timer").TextContent);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SleepTimer_CancelOrDisposePreventsPlaybackCommand(bool dispose)
+    public async Task SleepTimer_CancelStopsTimerButComponentDisposalDoesNot(bool dispose)
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
@@ -78,18 +97,31 @@ public class GlobalPlayerBarTests
         var cut = ctx.Render<GlobalPlayerBar>();
         cut.Find(".player-surface__open").Click();
         cut.Find(".player-sheet__timer .input-group button").Click();
-        if (dispose) await ctx.DisposeAsync();
-        else cut.Find(".player-sheet__timer .btn-outline-danger").Click();
-
-        callbacks[0]();
-        await Task.Yield();
-        connector.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+        if (dispose)
+        {
+            var timer = ctx.Services.GetRequiredService<SleepTimerService>();
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            timer.Changed += () => { if (timer.GetSnapshot()?.IsRunning == false) completed.TrySetResult(); };
+            cut.Dispose();
+            Assert.True(timer.GetSnapshot()?.IsRunning);
+            callbacks[0]();
+            await completed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            connector.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Once);
+            Assert.False(timer.GetSnapshot()?.IsRunning);
+        }
+        else
+        {
+            cut.Find(".player-sheet__timer .btn-outline-danger").Click();
+            callbacks[0]();
+            await Task.Yield();
+            connector.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+        }
     }
 
     [Fact]
     public async Task SleepTimer_FailureShowsActionableFeedback()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
@@ -104,9 +136,9 @@ public class GlobalPlayerBarTests
     }
 
     [Fact]
-    public void GroupFailureKeepsPlayerAvailableAndShowsFeedback()
+    public async Task GroupFailureKeepsPlayerAvailableAndShowsFeedback()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connector = ConfigureServices(ctx);
@@ -125,16 +157,19 @@ public class GlobalPlayerBarTests
         var clock = new Mock<TimeProvider>();
         clock.Setup(provider => provider.GetUtcNow()).Returns(new DateTimeOffset(2026, 9, 30, 20, 0, 0, TimeSpan.Zero));
         clock.Setup(provider => provider.CreateTimer(It.IsAny<TimerCallback>(), It.IsAny<object?>(), It.IsAny<TimeSpan>(), It.IsAny<TimeSpan>()))
-            .Callback<TimerCallback, object?, TimeSpan, TimeSpan>((callback, state, _, _) => callbacks.Add(() => callback(state)))
+        .Callback<TimerCallback, object?, TimeSpan, TimeSpan>((callback, state, due, _) =>
+        {
+            if (due > TimeSpan.FromSeconds(10)) callbacks.Add(() => callback(state));
+        })
             .Returns(() => Mock.Of<ITimer>());
         ctx.Services.AddSingleton(clock.Object);
         return callbacks;
     }
 
     [Fact]
-    public void GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
+    public async Task GlobalPlayerBar_NextButton_UsesCentralPlaybackState()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
 
@@ -153,9 +188,9 @@ public class GlobalPlayerBarTests
     }
 
     [Fact]
-    public void GlobalPlayerBar_SyncButton_IsEnabledAfterInitialRefresh()
+    public async Task GlobalPlayerBar_SyncButton_IsEnabledAfterInitialRefresh()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
 
@@ -234,7 +269,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task PlaybackState_CoalescesRapidVolumeUpdatesAndPersistsFinalValue()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         var playbackState = ctx.Services.GetRequiredService<PlaybackUiStateService>();
@@ -247,6 +282,49 @@ public class GlobalPlayerBarTests
         connectorRepo.Verify(repo => repo.SetVolume("10.0.0.1", 44), Times.Once);
         connectorRepo.Verify(repo => repo.SetVolume(It.IsAny<string>(), It.IsAny<int>()), Times.Once);
         Assert.Equal(44, playbackState.Volume);
+    }
+
+    [Fact]
+    public async Task VolumeCommandPreemptsAnActiveAutomationLease()
+    {
+        await using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        var connector = ConfigureServices(ctx);
+        var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await state.InitializeAsync();
+        var coordinator = ctx.Services.GetRequiredService<PlaybackCommandCoordinator>();
+        var automation = await coordinator.EnterAutomationAsync(["10.0.0.1"], DateTimeOffset.UtcNow.AddSeconds(-1));
+        Assert.NotNull(automation);
+        var automationFinished = Task.Run(async () =>
+        {
+            try { await Task.Delay(Timeout.Infinite, automation!.CancellationToken); }
+            catch (OperationCanceledException) { }
+            finally { await automation!.DisposeAsync(); }
+        });
+        var claimedSince = DateTimeOffset.UtcNow.AddSeconds(-1);
+
+        await state.SetVolumeAsync(46);
+        await automationFinished;
+
+        Assert.Contains("10.0.0.1", coordinator.ManualSpeakersSince(claimedSince));
+        connector.Verify(repo => repo.SetVolume("10.0.0.1", 46), Times.Once);
+    }
+
+    [Fact]
+    public async Task SyncPlayClaimsAllAffectedRoomsTogether()
+    {
+        await using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureServices(ctx);
+        var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await state.InitializeAsync();
+        var coordinator = ctx.Services.GetRequiredService<PlaybackCommandCoordinator>();
+        var since = DateTimeOffset.UtcNow.AddSeconds(-1);
+
+        var result = await state.SyncPlayAsync();
+
+        Assert.True(result.Success);
+        Assert.Equal(new[] { "10.0.0.1", "10.0.0.2" }, coordinator.ManualSpeakersSince(since).Order(StringComparer.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -307,7 +385,7 @@ public class GlobalPlayerBarTests
     [Fact]
     public async Task PlaybackState_ChangingRoom_DiscardsFailedCommand()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         connectorRepo.Setup(repo => repo.NextTrack("10.0.0.1")).ThrowsAsync(new InvalidOperationException("Offline"));
@@ -339,9 +417,9 @@ public class GlobalPlayerBarTests
     }
 
     [Fact]
-    public void GlobalPlayerBar_FailedCommand_CanBeRetriedInsideExpandedPlayer()
+    public async Task GlobalPlayerBar_FailedCommand_CanBeRetriedInsideExpandedPlayer()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         var connectorRepo = ConfigureServices(ctx);
@@ -405,6 +483,7 @@ public class GlobalPlayerBarTests
         connectorRepo.Setup(repo => repo.SetTuneInStationAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connectorRepo.Setup(repo => repo.PausePlaying(It.IsAny<string>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.NextTrack(It.IsAny<string>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.SetVolume(It.IsAny<string>(), It.IsAny<int>())).Returns(Task.CompletedTask);
         connectorRepo.Setup(repo => repo.GetQueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))

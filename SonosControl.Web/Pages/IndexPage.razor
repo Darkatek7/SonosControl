@@ -21,6 +21,7 @@
 @inject PlaybackUiStateService PlaybackState
 @inject ManualPlaybackService ManualPlayback
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
+@inject PlaybackSnapshotStore PlaybackSnapshotStore
 @inject ConfiguredTimeZoneService AppTimeZone
 @inject HomeLibraryService HomeLibrary
 @inject AutomationRuntimeStatus RuntimeStatus
@@ -140,9 +141,11 @@
                             @foreach (var speaker in _settings.Speakers.OrderBy(s => s.Name))
                             {
                                 var status = healthSummary.ByIp.TryGetValue(speaker.IpAddress, out var value) ? value : null;
+                                var playback = PlaybackSnapshotStore.Get(speaker.IpAddress);
                                 var isActive = string.Equals(speaker.IpAddress, PlaybackState.ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
                                 <RoomCard Speaker="speaker"
                                           Health="status"
+                                          Playback="playback"
                                           IsActive="isActive"
                                           ActiveVolume="@PlaybackState.Volume"
                                           MaxVolume="@PlaybackState.MaxVolume"
