@@ -93,6 +93,70 @@ public class SceneOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task AutomationRecoveryDoesNotResolveOrClaimDisabledRecoverySceneTargets()
+    {
+        var now = TimeProvider.System.GetUtcNow();
+        var commands = new PlaybackCommandCoordinator(TimeProvider.System);
+        var primaryLease = await commands.EnterAutomationAsync(["A"], now.AddMinutes(-1));
+        Assert.NotNull(primaryLease);
+        var primary = new Scene
+        {
+            Id = "primary",
+            Name = "Primary",
+            SourceType = SceneSourceType.Station,
+            SourceUrl = "bad://station",
+            Actions = [new() { SpeakerIp = "A" }]
+        };
+        var disabledRecovery = new Scene
+        {
+            Id = "disabled-recovery",
+            Name = "Disabled recovery",
+            Enabled = false,
+            Actions = [new() { SpeakerIp = "B" }]
+        };
+        var settings = new SonosSettings
+        {
+            Scenes = [primary, disabledRecovery],
+            Speakers = [new() { IpAddress = "A" }, new() { IpAddress = "B" }],
+            AutomationRules = [new()
+            {
+                Id = "source-failure",
+                Enabled = true,
+                TriggerType = AutomationTriggerType.SourceFailure,
+                ActionType = AutomationActionType.ApplyScene,
+                SceneId = disabledRecovery.Id,
+                RetryCount = 0
+            }]
+        };
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
+        var connector = new Mock<ISonosConnectorRepo>(MockBehavior.Strict);
+        connector.Setup(repo => repo.GetAllSpeakersInGroup("A", It.IsAny<CancellationToken>())).ReturnsAsync(["A"]);
+        connector.Setup(repo => repo.UngroupSpeaker("A", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        connector.Setup(repo => repo.SetTuneInStationAsync("A", "bad://station", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("primary source failed"));
+        var (logger, _) = CreateActionLogger();
+        await using var timers = RepositoryTestServices.CreateTimers();
+        var service = new SceneOrchestrationService(settingsRepo.Object, connector.Object, timers,
+            Mock.Of<INotificationService>(), logger, NullLogger<SceneOrchestrationService>.Instance, commands);
+        await using var context = new SceneExecutionContext(commands, PlaybackCommandOrigin.Automation,
+            now.AddMinutes(-1), CancellationToken.None, primaryLease);
+        var observedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var result = await service.ApplySceneByIdWithContextAsync("primary", "automation-scheduler", context,
+            targets => observedTargets.UnionWith(targets), context.CancellationToken, ["A"]);
+
+        Assert.False(result.Success);
+        Assert.Equal(new[] { "A" }, result.TargetSpeakers);
+        Assert.Equal(new[] { "A" }, observedTargets.Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(new[] { "A" }, context.CurrentLease!.Speakers);
+        Assert.Empty(commands.ManualSpeakersSince(now.AddMinutes(-1)));
+        connector.Verify(repo => repo.GetAllSpeakersInGroup("B", It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(repo => repo.UngroupSpeaker("B", It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(repo => repo.SetTuneInStationAsync("B", It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task SchedulerCancellationDuringRecoveryRemainsLinkedAfterOwnershipTransfer()
     {
         using var lifetime = new CancellationTokenSource();

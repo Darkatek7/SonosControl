@@ -579,7 +579,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
                 {
                     var recoveryScene = settings.Scenes?.FirstOrDefault(item =>
                         string.Equals(item.Id, recoveryRule.SceneId, StringComparison.OrdinalIgnoreCase));
-                    if (recoveryScene is null) return null;
+                    if (recoveryScene is null || !recoveryScene.Enabled) return null;
                     var recoveryTargets = await ResolveExecutionTargetsAsync(recoveryScene, settings, null, allowRecovery: false, cancellationToken);
                     if (!await executionContext.ReplaceTargetsAsync(recoveryTargets, cancellationToken)) return null;
                     applyResult = await ApplySceneInternalAsync(
