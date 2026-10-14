@@ -255,7 +255,7 @@ public class GlobalPlayerBarTests
     [InlineData("skip")]
     public async Task GlobalPlayerBar_FailedCommand_ShowsErrorAndRetriesOriginalAction(string command)
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var connectorRepo = ConfigureServices(ctx);
         var wasPlaying = command != "play";

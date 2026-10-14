@@ -26,6 +26,24 @@ namespace SonosControl.Tests;
 public class IndexPageUXTests
 {
     [Fact]
+    public async Task HomeQuickAccessRefreshesTheHeroAfterManualPlayback()
+    {
+        await using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        using var resources = ConfigureServices(ctx,
+            [new TuneInStation { Name = "Radio", Url = "http://radio.example/stream" }], [], []);
+        var playing = false;
+        resources.ConnectorRepo.Setup(repo => repo.IsPlaying(It.IsAny<string>())).ReturnsAsync(() => playing);
+        resources.ConnectorRepo.Setup(repo => repo.StartPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => playing = true).Returns(Task.CompletedTask);
+        var home = ctx.Render<IndexPage>();
+        Assert.Empty(home.FindAll(".np-hero__record.is-spinning"));
+        await home.Find("button[aria-label='Play Radio']").ClickAsync(new MouseEventArgs());
+        home.WaitForAssertion(() => Assert.Single(home.FindAll(".np-hero__record.is-spinning")));
+    }
+
+    [Fact]
     public async Task HomeAndAutomation_FollowRuntimeStatusInsteadOfMatchingSchedule()
     {
         using var ctx = new BunitContext();
@@ -677,7 +695,7 @@ public class IndexPageUXTests
     [Fact]
     public async Task LibraryPage_PlaySource_UsesPlaybackStateSpeakerEvenWhenPersistedSpeakerDiffers()
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
 
         var settings = new SonosSettings

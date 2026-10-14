@@ -2,6 +2,15 @@
     "use strict";
 
     const ui = window.sonosUi = window.sonosUi || {};
+    // Normalize before Blazor reads the event, including while a server round trip is pending.
+    document.addEventListener("input", function (event) {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || !input.hasAttribute("data-volume-input") || input.value === "") return;
+        const maximum = Math.min(100, Math.max(0, Number(input.max)));
+        const value = input.valueAsNumber;
+        input.value = Number.isNaN(value) ? (input.getAttribute("value") || "")
+            : String(Math.trunc(Math.min(maximum, Math.max(0, value))));
+    }, true);
     ui._scrollLockCount = ui._scrollLockCount || 0;
     ui.setBodyScrollLock = function (locked) {
         ui._scrollLockCount = Math.max(0, ui._scrollLockCount + (locked ? 1 : -1));

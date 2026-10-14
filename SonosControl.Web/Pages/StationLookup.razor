@@ -3,6 +3,7 @@
 @inject ILogger<StationLookup> Logger
 @* Routed through LibraryPage. *@
 @using System.Net.Http.Json
+@using SonosControl.Web.Services
 @using System.Linq
 @using System.Text
 @using SonosControl.DAL.Interfaces
@@ -368,6 +369,8 @@
         return cleanUrl;
     }
 
+    [Inject] private ManualPlaybackService ManualPlayback { get; set; } = default!;
+
     private async Task PlayStation(string url)
     {
         if (_settings is not null && _settings.Speakers.Any())
@@ -378,6 +381,7 @@
 
             try
             {
+                await using var manualLease = await ManualPlayback.BeginAsync(_settings.IP_Adress);
                 await _sonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
                 Logger.LogDebug("Station {StationUrl} played on {SpeakerIp}.", url, _settings.IP_Adress);
                 await AddLog("Playing Station", $"station: {url}");

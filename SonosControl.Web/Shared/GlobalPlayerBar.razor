@@ -20,7 +20,8 @@
             <span class="global-player-bar__art" aria-hidden="true">
                 @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
                 {
-                    <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
+                    var artworkUrl = PlaybackState.CurrentTrackArtUrl;
+                    <img @key="artworkUrl" src="@artworkUrl" alt="" @onerror="() => PlaybackState.ReportArtworkFailure(artworkUrl)" />
                 }
                 else
                 {
@@ -127,7 +128,11 @@
                 }
                 <div class="player-sheet__now">
                     <span class="global-player-bar__art" aria-hidden="true">
-                        @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl)) { <img src="@PlaybackState.CurrentTrackArtUrl" alt="" /> }
+                        @if (!string.IsNullOrWhiteSpace(PlaybackState.CurrentTrackArtUrl))
+                        {
+                            var artworkUrl = PlaybackState.CurrentTrackArtUrl;
+                            <img @key="artworkUrl" src="@artworkUrl" alt="" @onerror="() => PlaybackState.ReportArtworkFailure(artworkUrl)" />
+                        }
                         else { <Icon Name="music" Size="28" /> }
                     </span>
                     <div><strong>@PlayerTitle</strong><span>@PlaybackState.CurrentStationDisplay</span></div>

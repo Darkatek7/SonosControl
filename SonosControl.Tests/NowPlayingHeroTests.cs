@@ -82,6 +82,28 @@ public class NowPlayingHeroTests
         Assert.Equal("Pause playback", cut.Find("[data-qa='home-player-toggle']").GetAttribute("aria-label"));
     }
 
+    [Fact]
+    public async Task BrokenArtworkFallsBackAcrossPlayers_AndDoesNotRetryTheSameUrlOnRefresh()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        var connector = ConfigureServices(ctx, true, "http://speaker/getaa?missing");
+        var state = ctx.Services.GetRequiredService<PlaybackUiStateService>();
+        await state.InitializeAsync();
+        var cut = ctx.Render<NowPlayingHero>();
+        cut.Find(".np-hero img").TriggerEvent("onerror", EventArgs.Empty);
+        cut.WaitForAssertion(() => Assert.Contains("is-spinning", cut.Find(".np-hero__record").ClassList));
+        Assert.Null(state.CurrentTrackArtUrl);
+        await state.RefreshAsync();
+        Assert.Null(state.CurrentTrackArtUrl);
+        connector.Setup(repo => repo.GetTrackInfoAsync("10.0.0.1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosTrackInfo { Title = "New", AlbumArtUri = "http://speaker/new-art" });
+        await state.RefreshAsync();
+        Assert.Equal("http://speaker/new-art", state.CurrentTrackArtUrl);
+        state.ReportArtworkFailure("http://speaker/getaa?missing");
+        Assert.Equal("http://speaker/new-art", state.CurrentTrackArtUrl);
+    }
+
     private static Mock<ISonosConnectorRepo> ConfigureServices(
         BunitContext ctx,
         bool isPlaying,

@@ -671,6 +671,7 @@ public partial class IndexPage : IAsyncDisposable
 
         try
         {
+            await using var manualLease = await ManualPlayback.BeginAsync(targetSpeakerIp);
             switch (mediaType)
             {
                 case "station":
@@ -701,6 +702,7 @@ public partial class IndexPage : IAsyncDisposable
             }
 
             await _sonosConnectorRepo.StartPlaying(targetSpeakerIp);
+            await PlaybackState.RefreshAsync();
             ShowCommandStatus("Playback command sent.");
         }
         catch (Exception ex)

@@ -20,6 +20,9 @@ internal static class RepositoryTestServices
     public static void AddDefaults(IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<PlaybackCommandCoordinator>();
+        services.TryAddSingleton<Microsoft.Extensions.Logging.ILogger<ManualPlaybackService>>(NullLogger<ManualPlaybackService>.Instance);
+        services.TryAddScoped<ManualPlaybackService>();
         services.TryAddSingleton(NullLogger<SceneTimerService>.Instance);
         services.TryAddSingleton<SceneTimerService>(provider => new SceneTimerService(provider.GetRequiredService<IServiceScopeFactory>(),
             provider.GetRequiredService<TimeProvider>(), NullLogger<SceneTimerService>.Instance));

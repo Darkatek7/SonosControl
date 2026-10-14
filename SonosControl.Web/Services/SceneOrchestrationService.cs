@@ -114,6 +114,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         }
 
         bool recoveryActivated = false;
+        string? groupingWarning = null;
 
         try
         {
@@ -137,7 +138,22 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             if (scene.IsSyncedPlayback && targetSpeakers.Count > 1)
             {
                 var slaveIps = targetSpeakers.Where(ip => !string.Equals(ip, masterIp, StringComparison.OrdinalIgnoreCase));
-                var grouped = await _sonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                var grouped = false;
+                try
+                {
+                    grouped = await _sonosConnectorRepo.CreateGroup(masterIp, slaveIps, cancellationToken);
+                }
+                catch (SonosCommandException ex) when (ex.Action == "SetAVTransportURI" && ex.UpnpErrorCode == 501)
+                {
+                    _logger.LogWarning(ex, "Synchronized grouping is unavailable for scene {SceneId}.", scene.Id);
+                }
+                if (!grouped)
+                {
+                    // Clear any members joined before the failure, then play each target directly.
+                    await Task.WhenAll(targetSpeakers.Select(ip => _sonosConnectorRepo.UngroupSpeaker(ip, cancellationToken)));
+                    groupingWarning = "Synchronized grouping is unavailable; speakers are playing independently. Check that they belong to the same Sonos system.";
+                    await _actionLogger.LogAsync("SceneGroupingUnavailable", $"{scene.Name} ({scene.Id}): {groupingWarning}", performedBy);
+                }
                 playbackTargets = grouped ? new List<string> { masterIp } : targetSpeakers;
             }
 
@@ -193,11 +209,11 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
 
             await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", targetSpeakers)}", performedBy);
             await _notificationService.SendNotificationAsync(
-                $"Scene '{scene.Name}' applied on {targetSpeakers.Count} speaker(s).",
+                $"Scene '{scene.Name}' applied on {targetSpeakers.Count} speaker(s). {groupingWarning}".TrimEnd(),
                 performedBy);
 
             if (!recoveryActivated || sourceFailureRule?.ActionType == AutomationActionType.PlayFallbackSource) _sceneTimers.Schedule(scene.Id, scene.Name, targetSpeakers, scene.TimerMinutes);
-            return new SceneApplyResult(true, "Scene applied.", scene.Id, targetSpeakers, recoveryActivated);
+            return new SceneApplyResult(true, groupingWarning is null ? "Scene applied." : $"Scene applied. {groupingWarning}", scene.Id, targetSpeakers, recoveryActivated);
         }
         catch (OperationCanceledException)
         {

@@ -48,6 +48,15 @@ app. The compact Home player must remain at most 400 pixels tall with the smoke
 fixture, with the room heading above the dock. Screenshots include the saved
 mobile schedule editor.
 
+The same disposable fixture verifies 0–100 volume limits while typing, including
+appending digits to 100, negative values, and exponent notation. Startup volume
+and the system maximum must retain their bounded values after reload; optional
+startup and scene volume fields can be cleared. A broken artwork response must
+restore the record, which spins after starting a source manually. Service tests
+cover cancellation of old scene timers, manual playback taking priority over
+the current schedule occurrence, and independent playback when Sonos refuses
+grouping with UPnP error 501. Future schedule occurrences still run normally.
+
 When targeting an already running app, the runner checks its current
 configuration without changing settings. Use an unused app port with
 auto-start enabled to exercise both isolated configurations.
@@ -103,6 +112,7 @@ Optional:
 |---|---|---|
 | Login fails on first run | Missing `ADMIN_*` values | Set all three admin variables and restart the app |
 | App runs but no playback starts | Wrong speaker IP, inactive schedule, or invalid scene | Check Administration > Devices and the scene/schedule status in Automation |
+| A synchronized scene reports grouping unavailable | Speakers cannot join the requested Sonos group, for example because they belong to separate Sonos systems | Playback falls back to independent speakers and logs `SceneGroupingUnavailable`; place speakers in the same Sonos system to synchronize them |
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
 | Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |

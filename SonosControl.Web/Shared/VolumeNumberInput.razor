@@ -1,0 +1,49 @@
+@using System.Globalization
+
+<input @attributes="AdditionalAttributes"
+       data-volume-input="true"
+       type="number" inputmode="numeric" min="0" max="@SafeMaximum" step="1"
+       @bind:get="DisplayValue" @bind:set="HandleInputAsync" @bind:event="oninput"
+       @onchange="CommitAsync" />
+
+@code {
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+    [Parameter] public EventCallback<int?> OnCommit { get; set; }
+    [Parameter] public int MaxVolume { get; set; } = 100;
+    [Parameter] public bool AllowEmpty { get; set; } = true;
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private int SafeMaximum => Math.Clamp(MaxVolume, 0, 100);
+    private bool _emptyDraft;
+    private string DisplayValue => _emptyDraft ? string.Empty : Value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        Value = Value.HasValue ? Math.Clamp(Value.Value, 0, SafeMaximum) : AllowEmpty ? null : 0;
+        _emptyDraft = false;
+    }
+
+    private async Task HandleInputAsync(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            if (!AllowEmpty) { _emptyDraft = true; return; }
+            Value = null;
+        }
+        else if (decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+        {
+            _emptyDraft = false;
+            Value = (int)decimal.Truncate(Math.Clamp(number, 0, SafeMaximum));
+        }
+        else return;
+
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private Task CommitAsync()
+    {
+        _emptyDraft = false;
+        return OnCommit.InvokeAsync(Value);
+    }
+}

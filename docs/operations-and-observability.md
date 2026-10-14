@@ -29,6 +29,15 @@ This guide summarizes runtime checks, telemetry endpoints, and day-2 operational
   fail the command. Scene playback retries and fallback rules handle source
   failures; cancelled requests do not trigger recovery. Transport failures include
   the endpoint in structured application logs.
+- If Sonos rejects group creation with UPnP error 501, the scene clears partial
+  groups and plays on each target independently. `SceneGroupingUnavailable`
+  explains that synchronization requires speakers in the same Sonos system.
+
+Starting or pausing playback manually cancels existing scene timers for the
+speaker's group and takes priority over the current schedule occurrence. The
+scheduler does not retry that occurrence or pause manually controlled speakers
+at its end. Future schedule occurrences run normally. This priority is held in
+memory and resets when the application restarts.
 
 ## Backup and Restore
 Back up these paths together:

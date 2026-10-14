@@ -20,7 +20,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private readonly ILogger<AutomationSchedulerService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly TimeZoneInfo _timeZone;
-    private readonly SemaphoreSlim _evaluationLock = new(1, 1);
+    private readonly PlaybackCommandCoordinator _commands;
+    private DateTimeOffset _ownedOccurrenceStart;
 
     private string? _activeWindowId;
     private AttemptKey? _appliedAttempt;
@@ -38,13 +39,15 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         ILogger<AutomationSchedulerService> logger,
         IConfiguration configuration,
         TimeProvider? timeProvider = null,
-        TimeZoneInfo? timeZone = null)
+        TimeZoneInfo? timeZone = null,
+        PlaybackCommandCoordinator? commands = null)
     {
         _scopeFactory = scopeFactory;
         _migrationService = migrationService;
         _runtimeStatus = runtimeStatus;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _commands = commands ?? new PlaybackCommandCoordinator(_timeProvider);
         _timeZone = timeZone ?? ResolveTimeZone(configuration["Automation:TimeZone"]);
     }
 
@@ -76,7 +79,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
     public async Task EvaluateNowAsync(CancellationToken cancellationToken = default)
     {
-        if (!await _evaluationLock.WaitAsync(0, cancellationToken))
+        await using var commandLease = await _commands.EnterAsync(false, cancellationToken);
+        if (commandLease is null)
         {
             return;
         }
@@ -128,6 +132,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                     var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
                         string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
                     await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
+                        excludeSpeakerIps: _commands.ManualSpeakersSince(_ownedOccurrenceStart),
                         skipFadeOut: settings.ExcludesAutomationDate(DateOnly.FromDateTime(localNow.DateTime)));
                     _activeWindowId = null;
                     _appliedAttempt = null;
@@ -144,6 +149,28 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             if (activeWindow.StopTime <= activeWindow.StartTime && TimeOnly.FromDateTime(localNow.DateTime) < activeWindow.StopTime)
                 startDate = startDate.AddDays(-1);
             var attempt = new AttemptKey(activeWindow.Id, activeWindow.LastModifiedUtc, scene.Id, scene.LastModifiedUtc, startDate);
+            var localStart = startDate.ToDateTime(activeWindow.StartTime);
+            while (_timeZone.IsInvalidTime(localStart)) localStart = localStart.AddMinutes(1);
+            var occurrenceStart = _timeZone.IsAmbiguousTime(localStart)
+                ? new DateTimeOffset(localStart, _timeZone.GetAmbiguousTimeOffsets(localStart).Max()).ToUniversalTime()
+                : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, _timeZone));
+            var manualSpeakers = _commands.ManualSpeakersSince(occurrenceStart);
+            if (ResolveWindowTargetSpeakers(activeWindow, settings).Any(ip => manualSpeakers.Contains(ip, StringComparer.OrdinalIgnoreCase)))
+            {
+                if (!string.IsNullOrWhiteSpace(_activeWindowId)
+                    && !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
+                        string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
+                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
+                        excludeSpeakerIps: _commands.ManualSpeakersSince(_ownedOccurrenceStart));
+                    _activeWindowId = null;
+                    _appliedAttempt = null;
+                }
+                ResetFailure();
+                _runtimeStatus.RecordEvaluation(null, utcNow);
+                return;
+            }
             if (_failedAttempt != attempt) ResetFailure();
             if (_nextRetryUtc.HasValue && utcNow < _nextRetryUtc.Value)
             {
@@ -164,10 +191,12 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                     var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
                         string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
                     var newTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
-                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken, newTargets);
+                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
+                        newTargets.Concat(_commands.ManualSpeakersSince(_ownedOccurrenceStart)).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
                 }
                 // Retain attempted targets so a partially applied scene is stopped at the window boundary.
                 _activeWindowId = activeWindow.Id;
+                _ownedOccurrenceStart = occurrenceStart;
                 var result = await sceneOrchestration.ApplySceneByIdAsync(
                     activeWindow.SceneId!, performedBy: "automation-scheduler", cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -196,10 +225,6 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             _runtimeStatus.RecordEvaluation(null, _timeProvider.GetUtcNow(), ex.Message);
             throw;
-        }
-        finally
-        {
-            _evaluationLock.Release();
         }
     }
 
