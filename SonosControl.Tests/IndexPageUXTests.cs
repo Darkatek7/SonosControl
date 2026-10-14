@@ -269,7 +269,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_RendersGroupedSpeakers_Correctly()
+    public async Task IndexPage_RendersGroupedSpeakers_Correctly()
     {
         using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
@@ -332,6 +332,7 @@ public class IndexPageUXTests
             .Build();
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
+        await ctx.Services.GetRequiredService<PlaybackSnapshotMonitorService>().PollOnceAsync();
         var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>
@@ -346,7 +347,7 @@ public class IndexPageUXTests
     }
 
     [Fact]
-    public void IndexPage_CollapsesGroupedSpeaker_WhenChildReportsPlaying()
+    public async Task IndexPage_CollapsesGroupedSpeaker_WhenChildReportsPlaying()
     {
         using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
@@ -407,6 +408,7 @@ public class IndexPageUXTests
             .Build();
         ctx.Services.AddSingleton<IConfiguration>(configuration);
 
+        await ctx.Services.GetRequiredService<PlaybackSnapshotMonitorService>().PollOnceAsync();
         var cut = ctx.Render<IndexPage>();
 
         cut.WaitForAssertion(() =>

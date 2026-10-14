@@ -38,6 +38,15 @@ console errors, horizontal overflow, or content hidden behind the player.
 The floating player must stay at its configured bottom inset, and mobile
 content clearance includes both the dock height and the inset.
 
+Only the runner-owned configured fixture enables the shared playback snapshot
+monitor. It polls its loopback speaker every five seconds, and a snapshot is
+marked stale after fifteen seconds without a successful refresh. The smoke
+changes the fake speaker's Play/Pause and volume state outside the app, then
+checks that Home, the dock, and the active room card show those changes within
+ten seconds. Empty setup disables the monitor. A caller-supplied running app
+is only inspected; the runner never enables services, changes playback, or
+performs the writing workflows there.
+
 The owned configured fixture additionally creates a scene, a schedule, and a
 saved source. It checks editor field labels, real save-button clicks and hit
 tests, nested dialog focus, Escape, focus restoration, keep/discard decisions,
@@ -56,6 +65,18 @@ restore the record, which spins after starting a source manually. Service tests
 cover cancellation of old scene timers, manual playback taking priority over
 the current schedule occurrence, and independent playback when Sonos refuses
 grouping with UPnP error 501. Future schedule occurrences still run normally.
+
+The configured scene workflow also verifies that an explicit empty speaker
+selection cannot be saved or applied and sends no device commands. It opens and
+saves a legacy `SpeakerIps` scene to check that its original selection is
+preserved, then lowers the configured maximum and saves a scene draft clamped
+to the new limit. A one-minute sleep timer is started before the remaining
+workflows, survives a page reload, and appears in a second browser context.
+That context cancels and replaces the shared timer; the replacement remains
+armed beyond the original one-minute deadline and is then canceled in both
+contexts. After the editor workflows, a fresh one-minute timer remains armed
+through manual Pause/Play and page reload, then expires and pauses the
+simulated room.
 
 When targeting an already running app, the runner checks its current
 configuration without changing settings. Use an unused app port with

@@ -20,6 +20,42 @@ namespace SonosControl.Tests;
 
 public class SonosConnectorRepoTests
 {
+    [Theory]
+    [InlineData("volume")]
+    [InlineData("playing")]
+    [InlineData("pause")]
+    public async Task PlaybackProbeAndPauseCancellationReachTheHttpRequest(string operation)
+    {
+        var handler = new BlockingHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(client), Mock.Of<ISettingsRepo>());
+        using var cancellation = new CancellationTokenSource();
+        Task request = operation switch
+        {
+            "volume" => repo.GetVolume("192.0.2.1", cancellation.Token),
+            "playing" => repo.IsPlaying("192.0.2.1", cancellation.Token),
+            _ => repo.PausePlaying("192.0.2.1", cancellation.Token)
+        };
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.True(handler.RequestToken.IsCancellationRequested);
+    }
+
+    private sealed class BlockingHttpMessageHandler : HttpMessageHandler
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken RequestToken { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestToken = cancellationToken;
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The blocked request should have been cancelled.");
+        }
+    }
+
     private sealed class QueueHttpMessageHandler : HttpMessageHandler
     {
         internal sealed record CapturedRequest(HttpMethod Method, Uri? Uri, string? SoapAction, string? Body);

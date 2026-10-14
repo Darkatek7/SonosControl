@@ -4,7 +4,9 @@
 @using SonosControl.Web.Services
 @inject PlaybackUiStateService PlaybackState
 @inject ConfiguredTimeZoneService AppTimeZone
-@inject TimeProvider TimerClock
+@inject SleepTimerService SleepTimer
+@inject ManualPlaybackService ManualPlayback
+@inject PlaybackSnapshotMonitorService PlaybackMonitor
 
 @if (PlaybackState.Speakers.Count > 0)
 {
@@ -175,15 +177,15 @@
 
                 <section class="player-sheet__timer" aria-labelledby="timer-heading">
                     <div><h3 id="timer-heading">Sleep timer</h3><span role="status">@TimerStatus</span></div>
-                    @if (!string.IsNullOrWhiteSpace(_timerError))
+                    @if (!string.IsNullOrWhiteSpace(TimerSnapshot?.Error))
                     {
-                        <p class="text-danger" role="alert">@_timerError</p>
+                        <p class="text-danger" role="alert">@TimerSnapshot.Error</p>
                     }
                     <div class="input-group">
                         <label class="visually-hidden" for="player-timer-minutes">Timer minutes</label>
                         <input id="player-timer-minutes" class="form-control" type="number" min="1" max="720" @bind="_timerMinutes" />
                         <button type="button" class="btn btn-outline-secondary" @onclick="StartTimer" disabled="@(!PlaybackState.HasActiveSpeaker)">Start</button>
-                        @if (_timerEndsUtc.HasValue) { <button type="button" class="btn btn-outline-danger" @onclick="CancelTimer">Cancel</button> }
+                        @if (TimerSnapshot?.IsRunning == true) { <button type="button" class="btn btn-outline-danger" @onclick="CancelTimer">Cancel</button> }
                     </div>
                 </section>
 
@@ -229,21 +231,20 @@
     private List<SonosQueueItem> _queueItems = new();
     private int _queueTotal;
     private int _timerMinutes = 60;
-    private DateTime? _timerEndsUtc;
-    private CancellationTokenSource? _timerCts;
-    private string? _timerRoomName;
-    private string? _timerError;
     private bool _disposed;
 
     private const string SpeakerSelectId = "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
     private string PlayerTitle => PlaybackState.HasActiveSpeaker ? PlaybackState.CurrentTrack : "Set up a speaker first";
     private string PlayToggleIcon => PlaybackState.IsPlaying ? "pause" : "play";
-    private string TimerStatus => _timerEndsUtc.HasValue ? $"{_timerRoomName} pauses at {AppTimeZone.Format(_timerEndsUtc.Value, "HH:mm")}" : "Not running";
+    private SleepTimerSnapshot? TimerSnapshot => SleepTimer.GetSnapshot();
+    private string TimerStatus => TimerSnapshot is { IsRunning: true } timer
+        ? $"{timer.SpeakerName} pauses at {AppTimeZone.Format(timer.EndsUtc.UtcDateTime, "HH:mm")}" : TimerSnapshot?.Error is not null ? "Timer ended" : "Not running";
 
     protected override async Task OnInitializedAsync()
     {
         PlaybackState.StateChanged += HandlePlaybackStateChanged;
+        SleepTimer.Changed += HandleSleepTimerChanged;
         await PlaybackState.InitializeAsync();
     }
 
@@ -292,35 +293,44 @@
 
     private async Task GroupAllAsync()
     {
-        if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        var masterIp = PlaybackState.ActiveSpeakerIp;
+        if (string.IsNullOrWhiteSpace(masterIp)) return;
         _groupError = null;
         _isCommandBusy = true;
         try
         {
-            var slaves = PlaybackState.Speakers.Where(speaker => speaker.IpAddress != PlaybackState.ActiveSpeakerIp).Select(speaker => speaker.IpAddress);
-            await _sonosConnectorRepo.CreateGroup(PlaybackState.ActiveSpeakerIp, slaves);
-            await PlaybackState.RefreshAsync();
+            var slaves = PlaybackState.Speakers.Where(speaker => !string.Equals(speaker.IpAddress, masterIp, StringComparison.OrdinalIgnoreCase)).Select(speaker => speaker.IpAddress);
+            var targets = new[] { masterIp }.Concat(slaves).ToArray();
+            await using (var lease = await ManualPlayback.BeginTargetsAsync(targets))
+                await _sonosConnectorRepo.CreateGroup(masterIp, targets.Where(ip => !string.Equals(ip, masterIp, StringComparison.OrdinalIgnoreCase)));
+            await PlaybackMonitor.RefreshNowAsync();
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             _groupError = "The speaker group could not be changed. Check the connection and try again.";
-            Logger.LogWarning(ex, "Speaker grouping failed for {SpeakerIp}.", PlaybackState.ActiveSpeakerIp);
+            Logger.LogWarning(ex, "Speaker grouping failed for {SpeakerIp}.", masterIp);
         }
         finally { _isCommandBusy = false; }
     }
 
     private async Task UngroupAsync()
     {
-        if (string.IsNullOrWhiteSpace(PlaybackState.ActiveSpeakerIp)) return;
+        var speakerIp = PlaybackState.ActiveSpeakerIp;
+        if (string.IsNullOrWhiteSpace(speakerIp)) return;
         _groupError = null;
         _isCommandBusy = true;
-        try { await _sonosConnectorRepo.UngroupSpeaker(PlaybackState.ActiveSpeakerIp); await PlaybackState.RefreshAsync(); }
+        try
+        {
+            await using (var lease = await ManualPlayback.BeginAsync(speakerIp))
+                await _sonosConnectorRepo.UngroupSpeaker(speakerIp);
+            await PlaybackMonitor.RefreshNowAsync();
+        }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             _groupError = "The speaker group could not be changed. Check the connection and try again.";
-            Logger.LogWarning(ex, "Speaker grouping failed for {SpeakerIp}.", PlaybackState.ActiveSpeakerIp);
+            Logger.LogWarning(ex, "Speaker ungrouping failed for {SpeakerIp}.", speakerIp);
         }
         finally { _isCommandBusy = false; }
     }
@@ -329,59 +339,15 @@
     {
         var speakerIp = PlaybackState.ActiveSpeakerIp;
         if (string.IsNullOrWhiteSpace(speakerIp)) return;
-        CancelTimer();
         var minutes = Math.Clamp(_timerMinutes, 1, 720);
-        _timerEndsUtc = TimerClock.GetUtcNow().UtcDateTime.AddMinutes(minutes);
-        _timerRoomName = PlaybackState.ActiveSpeakerName;
-        _timerError = null;
-        var timerCts = new CancellationTokenSource();
-        _timerCts = timerCts;
-        _ = RunTimerAsync(speakerIp, minutes, timerCts);
+        SleepTimer.Start(speakerIp, PlaybackState.ActiveSpeakerName, TimeSpan.FromMinutes(minutes));
     }
 
-    private async Task RunTimerAsync(string speakerIp, int minutes, CancellationTokenSource timerCts)
-    {
-        var token = timerCts.Token;
-        string? error = null;
-        try
-        {
-            await Task.Delay(TimeSpan.FromMinutes(minutes), TimerClock, token);
-            token.ThrowIfCancellationRequested();
-            await _sonosConnectorRepo.PausePlaying(speakerIp);
-            if (PlaybackState.ActiveSpeakerIp == speakerIp) await PlaybackState.RefreshAsync();
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-        catch (Exception)
-        {
-            error = "The sleep timer could not pause the room. Check the speaker connection and try again.";
-        }
-        finally
-        {
-            if (!_disposed && ReferenceEquals(_timerCts, timerCts))
-            {
-                await InvokeAsync(() =>
-                {
-                    if (!ReferenceEquals(_timerCts, timerCts)) return;
-                    _timerEndsUtc = null;
-                    _timerRoomName = null;
-                    _timerError = error;
-                    _timerCts = null;
-                    timerCts.Dispose();
-                    StateHasChanged();
-                });
-            }
-        }
-    }
+    private void CancelTimer() => SleepTimer.Cancel();
 
-    private void CancelTimer()
+    private void HandleSleepTimerChanged()
     {
-        var timerCts = _timerCts;
-        _timerCts = null;
-        _timerEndsUtc = null;
-        _timerRoomName = null;
-        _timerError = null;
-        timerCts?.Cancel();
-        timerCts?.Dispose();
+        if (!_disposed) _ = InvokeAsync(StateHasChanged);
     }
 
     private void HandlePlaybackStateChanged() => _ = InvokeAsync(() =>
@@ -389,7 +355,6 @@
         if (PlaybackState.Speakers.Count == 0)
         {
             ClosePanel();
-            CancelTimer();
         }
 
         StateHasChanged();
@@ -399,6 +364,6 @@
     {
         _disposed = true;
         PlaybackState.StateChanged -= HandlePlaybackStateChanged;
-        CancelTimer();
+        SleepTimer.Changed -= HandleSleepTimerChanged;
     }
 }

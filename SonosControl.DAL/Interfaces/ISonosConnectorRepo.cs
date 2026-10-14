@@ -7,8 +7,15 @@ namespace SonosControl.DAL.Interfaces
     public interface ISonosConnectorRepo
     {
         Task<int> GetVolume(string ip);
+        Task<int> GetVolume(string ip, CancellationToken cancellationToken) => GetVolume(ip).WaitAsync(cancellationToken);
         Task<bool> IsPlaying(string ip);
+        Task<bool> IsPlaying(string ip, CancellationToken cancellationToken) => IsPlaying(ip).WaitAsync(cancellationToken);
         Task PausePlaying(string ip);
+        async Task PausePlaying(string ip, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await PausePlaying(ip);
+        }
         Task SetVolume(string ip, int volume);
         Task StartPlaying(string ip, CancellationToken cancellationToken = default);
         Task PlayAudioFileAsync(string ip, string audioUrl, string title, CancellationToken cancellationToken = default);

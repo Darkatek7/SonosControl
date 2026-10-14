@@ -91,6 +91,7 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
             scene.SourceUrl = null;
         scene.SpeakerIps ??= [];
         scene.Actions ??= [];
+        Check(scene.Actions.Count == 0 || SceneTargetResolver.Resolve(scene, settings).Count > 0, "Select at least one speaker.");
         foreach (var action in scene.Actions)
             Check(action.Volume is null || action.Volume >= 0 && action.Volume <= settings.MaxVolume, $"Speaker volume must be between 0 and {settings.MaxVolume}.");
     }

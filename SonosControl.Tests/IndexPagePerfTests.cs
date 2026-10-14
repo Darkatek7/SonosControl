@@ -21,8 +21,12 @@ using SonosControl.Web.Models;
 
 namespace SonosControl.Tests
 {
-    public class IndexPagePerfTests : BunitContext
+    public class IndexPagePerfTests : BunitContext, IAsyncLifetime
     {
+
+        Task IAsyncLifetime.InitializeAsync() => Task.CompletedTask;
+
+        async Task IAsyncLifetime.DisposeAsync() => await DisposeAsync();
 
         private Mock<ISonosConnectorRepo> _mockSonosRepo;
         private Mock<ISettingsRepo> _mockSettingsRepo;

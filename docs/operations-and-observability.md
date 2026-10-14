@@ -39,6 +39,21 @@ scheduler does not retry that occurrence or pause manually controlled speakers
 at its end. Future schedule occurrences run normally. This priority is held in
 memory and resets when the application restarts.
 
+The playback snapshot monitor is the single process-wide owner of room state
+shared by Home, the dock, and connected browser circuits. It polls configured
+rooms every five seconds. A room snapshot becomes stale after fifteen seconds
+without a successful poll; stale snapshots retain their last known room values
+and show that updates are delayed. Room ownership follows the configured
+speaker address, so changing the active room does not move one room's observed
+state to another.
+
+The sleep timer is one shared, process-local timer across all connected
+browsers. Starting a timer replaces the current timer, and any browser can
+cancel it. The timer remains attached to the room selected when it was started,
+even if the active room changes later. Manual Play or Pause leaves the sleep
+timer armed; when its deadline arrives it takes command priority and pauses its
+room. A running timer is not persisted across application restarts.
+
 ## Backup and Restore
 Back up these paths together:
 1. `SonosControl.Web/Data/app.db`

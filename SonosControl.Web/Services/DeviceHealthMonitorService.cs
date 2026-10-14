@@ -59,17 +59,20 @@ public sealed class DeviceHealthMonitorService : BackgroundService
     private readonly IDeviceHealthSnapshotStore _snapshotStore;
     private readonly ILogger<DeviceHealthMonitorService> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly PlaybackSnapshotStore? _playbackSnapshots;
 
     public DeviceHealthMonitorService(
         IServiceScopeFactory scopeFactory,
         IDeviceHealthSnapshotStore snapshotStore,
         ILogger<DeviceHealthMonitorService> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        PlaybackSnapshotStore? playbackSnapshots = null)
     {
         _scopeFactory = scopeFactory;
         _snapshotStore = snapshotStore;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _playbackSnapshots = playbackSnapshots;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -157,6 +160,19 @@ public sealed class DeviceHealthMonitorService : BackgroundService
 
         try
         {
+            if (_playbackSnapshots is not null)
+            {
+                var playback = _playbackSnapshots.Get(speaker.IpAddress);
+                status.IsOnline = playback is { IsStale: false, LastSuccessfulRefreshUtc: not null };
+                status.IsPlaying = status.IsOnline && playback!.IsPlaying;
+                status.CurrentVolume = playback?.Volume;
+                status.LastError = status.IsOnline ? null : playback?.Error ?? "Waiting for playback status";
+                status.ConsecutiveFailures = status.IsOnline ? 0 : status.ConsecutiveFailures + 1;
+                if (playback?.LastSuccessfulRefreshUtc is { } seen) status.LastSeenUtc = seen.UtcDateTime;
+                if (string.IsNullOrWhiteSpace(status.SpeakerUuid) && status.IsOnline)
+                    status.SpeakerUuid = await sonosConnectorRepo.GetSpeakerUUID(speaker.IpAddress, cancellationToken);
+                return status;
+            }
             var playingTask = sonosConnectorRepo.IsPlaying(speaker.IpAddress);
             var volumeTask = sonosConnectorRepo.GetVolume(speaker.IpAddress);
             var uuidTask = string.IsNullOrWhiteSpace(speaker.Uuid)

@@ -37,6 +37,50 @@ public class SceneTimerServiceTests
     }
 
     [Fact]
+    public async Task ManualPlaybackRetriesOnceWhenGroupChangesWhileAcquiringOwnership()
+    {
+        var clock = new ManualClock();
+        var connector = Connector();
+        connector.SetupSequence(repo => repo.GetAllSpeakersInGroup("A", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(["A", "B"])
+            .ReturnsAsync(["A", "C"])
+            .ReturnsAsync(["A", "C"])
+            .ReturnsAsync(["A", "C"]);
+        var services = Services(connector.Object);
+        services.AddSingleton(new PlaybackCommandCoordinator(clock));
+        services.AddSingleton<SceneTimerService>(provider => new(provider.GetRequiredService<IServiceScopeFactory>(), clock, NullLogger<SceneTimerService>.Instance));
+        services.AddSingleton<ILogger<ManualPlaybackService>>(NullLogger<ManualPlaybackService>.Instance);
+        services.AddScoped<ManualPlaybackService>();
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        await using var lease = await scope.ServiceProvider.GetRequiredService<ManualPlaybackService>().BeginAsync("A");
+
+        connector.Verify(repo => repo.GetAllSpeakersInGroup("A", It.IsAny<CancellationToken>()), Times.Exactly(4));
+    }
+
+    [Fact]
+    public async Task CancelledTopologyRevalidationReleasesManualCommandLease()
+    {
+        var clock = new ManualClock();
+        var connector = Connector();
+        connector.SetupSequence(repo => repo.GetAllSpeakersInGroup("A", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(["A"])
+            .ThrowsAsync(new OperationCanceledException());
+        var services = Services(connector.Object);
+        var commands = new PlaybackCommandCoordinator(clock);
+        services.AddSingleton(commands);
+        services.AddSingleton<SceneTimerService>(provider => new(provider.GetRequiredService<IServiceScopeFactory>(), clock, NullLogger<SceneTimerService>.Instance));
+        services.AddSingleton<ILogger<ManualPlaybackService>>(NullLogger<ManualPlaybackService>.Instance);
+        services.AddScoped<ManualPlaybackService>();
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => scope.ServiceProvider.GetRequiredService<ManualPlaybackService>().BeginAsync("A"));
+        await using var subsequent = await commands.EnterManualAsync(["A"]).WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
     public async Task SceneFromAnotherScope_OnlyReplacesOverlappingSpeakerTimers()
     {
         var clock = new ManualClock();

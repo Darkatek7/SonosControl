@@ -21,9 +21,9 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private readonly TimeProvider _timeProvider;
     private readonly TimeZoneInfo _timeZone;
     private readonly PlaybackCommandCoordinator _commands;
-    private DateTimeOffset _ownedOccurrenceStart;
-
-    private string? _activeWindowId;
+    private readonly PlaybackSnapshotMonitorService? _playbackSnapshots;
+    private ActiveOccurrence? _ownedOccurrence;
+    private int _evaluating;
     private AttemptKey? _appliedAttempt;
     private AttemptKey? _failedAttempt;
     private int _failureCount;
@@ -31,6 +31,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     private DateTimeOffset? _nextRetryUtc;
     private static readonly int[] RetrySeconds = [30, 60, 120, 300];
     private sealed record AttemptKey(string WindowId, DateTime WindowRevision, string SceneId, DateTime SceneRevision, DateOnly StartDate);
+    private sealed record ActiveOccurrence(AttemptKey Attempt, DateTimeOffset StartUtc, string Name, int FadeOutSeconds, bool IsSynced, IReadOnlyCollection<string> Targets);
 
     public AutomationSchedulerService(
         IServiceScopeFactory scopeFactory,
@@ -40,7 +41,8 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         IConfiguration configuration,
         TimeProvider? timeProvider = null,
         TimeZoneInfo? timeZone = null,
-        PlaybackCommandCoordinator? commands = null)
+        PlaybackCommandCoordinator? commands = null,
+        PlaybackSnapshotMonitorService? playbackSnapshots = null)
     {
         _scopeFactory = scopeFactory;
         _migrationService = migrationService;
@@ -48,6 +50,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _commands = commands ?? new PlaybackCommandCoordinator(_timeProvider);
+        _playbackSnapshots = playbackSnapshots;
         _timeZone = timeZone ?? ResolveTimeZone(configuration["Automation:TimeZone"]);
     }
 
@@ -79,18 +82,13 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
     public async Task EvaluateNowAsync(CancellationToken cancellationToken = default)
     {
-        await using var commandLease = await _commands.EnterAsync(false, cancellationToken);
-        if (commandLease is null)
-        {
-            return;
-        }
-
+        if (Interlocked.Exchange(ref _evaluating, 1) != 0) return;
         try
         {
             var migration = await _migrationService.MigrateIfRequiredAsync(cancellationToken);
             if (!migration.Success)
             {
-                _activeWindowId = null;
+                _ownedOccurrence = null;
                 _appliedAttempt = null;
                 ResetFailure();
                 return;
@@ -127,14 +125,12 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
             if (activeWindow is null)
             {
-                if (!string.IsNullOrWhiteSpace(_activeWindowId))
+                if (_ownedOccurrence is not null)
                 {
-                    var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
-                        string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
-                        excludeSpeakerIps: _commands.ManualSpeakersSince(_ownedOccurrenceStart),
+                    await StopOwnedPlaybackAsync(_ownedOccurrence, sonosConnectorRepo, actionLogger, cancellationToken,
+                        excludeSpeakerIps: _commands.ManualSpeakersSince(_ownedOccurrence.StartUtc),
                         skipFadeOut: settings.ExcludesAutomationDate(DateOnly.FromDateTime(localNow.DateTime)));
-                    _activeWindowId = null;
+                    _ownedOccurrence = null;
                     _appliedAttempt = null;
                     ResetFailure();
                 }
@@ -155,16 +151,34 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
                 ? new DateTimeOffset(localStart, _timeZone.GetAmbiguousTimeOffsets(localStart).Max()).ToUniversalTime()
                 : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, _timeZone));
             var manualSpeakers = _commands.ManualSpeakersSince(occurrenceStart);
-            if (ResolveWindowTargetSpeakers(activeWindow, settings).Any(ip => manualSpeakers.Contains(ip, StringComparer.OrdinalIgnoreCase)))
+            var configuredTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
+            var targetGroups = await ResolveAffectedGroupsAsync(configuredTargets, sonosConnectorRepo, cancellationToken);
+            var manualAffectedGroups = targetGroups.Values.Where(group => group.Any(ip => manualSpeakers.Contains(ip, StringComparer.OrdinalIgnoreCase)))
+                .SelectMany(group => group).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var activeTargets = configuredTargets.Where(ip => !targetGroups[ip].Any(member => manualSpeakers.Contains(member, StringComparer.OrdinalIgnoreCase))).ToList();
+            var protectedTargets = manualSpeakers.Concat(manualAffectedGroups)
+                .Concat(activeTargets.SelectMany(ip => targetGroups[ip])).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (scene.IsSyncedPlayback && activeTargets.Count != configuredTargets.Count)
             {
-                if (!string.IsNullOrWhiteSpace(_activeWindowId)
-                    && !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
+                if (_ownedOccurrence is not null && _ownedOccurrence.Attempt != attempt)
                 {
-                    var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
-                        string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
-                        excludeSpeakerIps: _commands.ManualSpeakersSince(_ownedOccurrenceStart));
-                    _activeWindowId = null;
+                    await StopOwnedPlaybackAsync(_ownedOccurrence, sonosConnectorRepo, actionLogger, cancellationToken,
+                        excludeSpeakerIps: protectedTargets);
+                    _ownedOccurrence = null;
+                    _appliedAttempt = null;
+                }
+                ResetFailure();
+                _runtimeStatus.RecordEvaluation(null, utcNow);
+                return;
+            }
+            activeTargets = activeTargets.Where(ip => !manualSpeakers.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (activeTargets.Count == 0)
+            {
+                if (_ownedOccurrence is not null && _ownedOccurrence.Attempt != attempt)
+                {
+                    await StopOwnedPlaybackAsync(_ownedOccurrence, sonosConnectorRepo, actionLogger, cancellationToken,
+                        excludeSpeakerIps: protectedTargets);
+                    _ownedOccurrence = null;
                     _appliedAttempt = null;
                 }
                 ResetFailure();
@@ -185,28 +199,78 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
 
             try
             {
-                if (!string.IsNullOrWhiteSpace(_activeWindowId)
-                    && !string.Equals(_activeWindowId, activeWindow.Id, StringComparison.OrdinalIgnoreCase))
+                if (_ownedOccurrence is not null && _ownedOccurrence.Attempt != attempt)
                 {
-                    var oldWindow = settings.ScheduleWindows.FirstOrDefault(window =>
-                        string.Equals(window.Id, _activeWindowId, StringComparison.OrdinalIgnoreCase));
-                    var newTargets = ResolveWindowTargetSpeakers(activeWindow, settings);
-                    await StopWindowPlaybackAsync(oldWindow, settings, sonosConnectorRepo, actionLogger, cancellationToken,
-                        newTargets.Concat(_commands.ManualSpeakersSince(_ownedOccurrenceStart)).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+                    await StopOwnedPlaybackAsync(_ownedOccurrence, sonosConnectorRepo, actionLogger, cancellationToken,
+                        activeTargets.SelectMany(ip => targetGroups[ip]).Concat(protectedTargets).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
                 }
-                // Retain attempted targets so a partially applied scene is stopped at the window boundary.
-                _activeWindowId = activeWindow.Id;
-                _ownedOccurrenceStart = occurrenceStart;
-                var result = await sceneOrchestration.ApplySceneByIdAsync(
-                    activeWindow.SceneId!, performedBy: "automation-scheduler", cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!result.Success)
+                // Capture targets and fade policy before execution so failure, edits, and deletion cannot erase ownership.
+                var inheritedTargets = _ownedOccurrence?.Attempt == attempt
+                    ? _ownedOccurrence.Targets
+                    : Array.Empty<string>();
+                _ownedOccurrence = new ActiveOccurrence(attempt, occurrenceStart, activeWindow.Name, activeWindow.FadeOutSeconds, scene.IsSyncedPlayback, inheritedTargets.ToArray());
+                var touchedTargets = inheritedTargets.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var touchedSync = new object();
+                void RecordTargets(IReadOnlyCollection<string> targets)
                 {
-                    await RecordFailureAsync(attempt, activeWindow.Name, result.Message, actionLogger);
+                    lock (touchedSync)
+                    {
+                        touchedTargets.UnionWith(targets);
+                        _ownedOccurrence = _ownedOccurrence! with { Targets = touchedTargets.ToList() };
+                    }
+                }
+                var failedResults = new List<SceneApplyResult>();
+                var completedAny = 0;
+                var allowRecovery = true;
+                List<IReadOnlyCollection<string>> partitions = scene.IsSyncedPlayback
+                    ? [activeTargets]
+                    : activeTargets.Select(ip => (IReadOnlyCollection<string>)[ip]).ToList();
+                async Task ApplyPartitionAsync(IReadOnlyCollection<string> partition)
+                {
+                    var partitionLeaseTargets = partition.SelectMany(ip => targetGroups[ip]).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    var commandLease = await _commands.EnterAutomationAsync(partitionLeaseTargets, occurrenceStart, cancellationToken);
+                    if (commandLease is null) return;
+                    await using var commandOwnership = new SceneExecutionContext(_commands, PlaybackCommandOrigin.Automation,
+                        occurrenceStart, cancellationToken, commandLease);
+                    try
+                    {
+                        // Each independent room uses its own scoped orchestration/logger/DbContext.
+                        using var partitionScope = _scopeFactory.CreateScope();
+                        var partitionOrchestration = partitionScope.ServiceProvider.GetRequiredService<ISceneOrchestrationService>();
+                        var result = await partitionOrchestration.ApplySceneByIdWithContextAsync(activeWindow.SceneId!, "automation-scheduler", commandOwnership,
+                            RecordTargets, commandLease.CancellationToken, partition, allowRecovery);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        commandOwnership.CancellationToken.ThrowIfCancellationRequested();
+                        RecordTargets(result.TargetSpeakers);
+                        if (!result.Success) lock (failedResults) failedResults.Add(result);
+                        else
+                        {
+                            Interlocked.Exchange(ref completedAny, 1);
+                            if (activeWindow.FadeInSeconds > 0 && result.TargetSpeakers.Count > 0 && commandOwnership.CurrentLease is not null)
+                            {
+                                await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, sonosConnectorRepo, commandOwnership.CancellationToken);
+                                if (_playbackSnapshots is not null)
+                                    await _playbackSnapshots.RefreshNowAsync(commandOwnership.CancellationToken);
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) when (commandOwnership.WasPreempted && !scene.IsSyncedPlayback)
+                    {
+                        return;
+                    }
+                }
+                await Task.WhenAll(partitions.Select(ApplyPartitionAsync));
+                if (failedResults.Count > 0)
+                {
+                    await RecordFailureAsync(attempt, activeWindow.Name, string.Join("; ", failedResults.Select(result => result.Message)), actionLogger);
                     return;
                 }
-                if (activeWindow.FadeInSeconds > 0 && result.TargetSpeakers.Count > 0)
-                    await ApplyFadeInAsync(result.TargetSpeakers, activeWindow.FadeInSeconds, sonosConnectorRepo, cancellationToken);
+                if (completedAny == 0)
+                {
+                    ResetFailure();
+                    _runtimeStatus.RecordEvaluation(null, _timeProvider.GetUtcNow());
+                    return;
+                }
 
                 if (_failureCount > 0)
                     await actionLogger.LogAsync("ScheduleRecovered", $"Schedule '{activeWindow.Name}' recovered after {_failureCount} failed start(s).", "automation-scheduler");
@@ -226,6 +290,12 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             _runtimeStatus.RecordEvaluation(null, _timeProvider.GetUtcNow(), ex.Message);
             throw;
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Overlapping manual playback preempted this occurrence. It is not a scheduler failure.
+            _runtimeStatus.RecordEvaluation(null, _timeProvider.GetUtcNow());
+        }
+        finally { Volatile.Write(ref _evaluating, 0); }
     }
 
     private async Task RecordFailureAsync(AttemptKey attempt, string windowName, string error, ActionLogger actionLogger)
@@ -266,16 +336,15 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         }
     }
 
-    private static async Task StopWindowPlaybackAsync(
-        ScheduleWindow? window,
-        SonosSettings settings,
+    private async Task StopOwnedPlaybackAsync(
+        ActiveOccurrence occurrence,
         ISonosConnectorRepo sonosConnectorRepo,
         ActionLogger actionLogger,
         CancellationToken cancellationToken,
         IReadOnlyCollection<string>? excludeSpeakerIps = null,
         bool skipFadeOut = false)
     {
-        var targetSpeakers = ResolveWindowTargetSpeakers(window, settings).ToList();
+        var targetSpeakers = occurrence.Targets.ToList();
         if (excludeSpeakerIps?.Count > 0)
         {
             targetSpeakers = targetSpeakers
@@ -288,15 +357,28 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             return;
         }
 
-        if (!skipFadeOut && (window?.FadeOutSeconds ?? 0) > 0)
+        List<IReadOnlyCollection<string>> partitions = occurrence.IsSynced
+            ? [targetSpeakers]
+            : targetSpeakers.Select(ip => (IReadOnlyCollection<string>)[ip]).ToList();
+        foreach (var partition in partitions)
         {
-            await ApplyFadeOutAsync(targetSpeakers, window!.FadeOutSeconds, sonosConnectorRepo, cancellationToken);
+            var ownership = await _commands.EnterAutomationAsync(partition, occurrence.StartUtc, cancellationToken);
+            if (ownership is null) continue;
+            await using var lease = ownership;
+            try
+            {
+                if (!skipFadeOut && occurrence.FadeOutSeconds > 0)
+                    await ApplyFadeOutAsync(partition, occurrence.FadeOutSeconds, sonosConnectorRepo, lease.CancellationToken);
+                lease.CancellationToken.ThrowIfCancellationRequested();
+                await Task.WhenAll(partition.Select(ip => sonosConnectorRepo.PausePlaying(ip, lease.CancellationToken)));
+            }
+            catch (OperationCanceledException) when (lease.WasPreempted) { continue; }
         }
-
-        await Task.WhenAll(targetSpeakers.Select(ip => sonosConnectorRepo.PausePlaying(ip)));
         await actionLogger.LogAsync(
             "ScheduleStopped",
-            window is null ? "Scheduled playback stopped." : $"Schedule '{window.Name}' stopped.", "automation-scheduler");
+            $"Schedule '{occurrence.Name}' stopped.", "automation-scheduler");
+        if (_playbackSnapshots is not null)
+            await _playbackSnapshots.RefreshNowAsync(cancellationToken);
     }
 
     private static IReadOnlyCollection<string> ResolveWindowTargetSpeakers(ScheduleWindow? window, SonosSettings settings)
@@ -308,23 +390,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             var scene = settings.Scenes.FirstOrDefault(item =>
                 string.Equals(item.Id, window.SceneId, StringComparison.OrdinalIgnoreCase));
-            if (scene?.Actions?.Any(action => action.IncludeInPlayback && !string.IsNullOrWhiteSpace(action.SpeakerIp)) == true)
-            {
-                return scene.Actions
-                    .Where(action => action.IncludeInPlayback && !string.IsNullOrWhiteSpace(action.SpeakerIp))
-                    .Select(action => action.SpeakerIp.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
-
-            if (scene?.SpeakerIps?.Any(ip => !string.IsNullOrWhiteSpace(ip)) == true)
-            {
-                return scene.SpeakerIps
-                    .Where(ip => !string.IsNullOrWhiteSpace(ip))
-                    .Select(ip => ip.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            }
+            if (scene is not null) return SceneTargetResolver.Resolve(scene, settings);
         }
 
         return settings.Speakers
@@ -332,6 +398,27 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             .Where(ip => !string.IsNullOrWhiteSpace(ip))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task<Dictionary<string, IReadOnlyCollection<string>>> ResolveAffectedGroupsAsync(
+        IReadOnlyCollection<string> selectedTargets, ISonosConnectorRepo connector, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ip in selectedTargets)
+        {
+            var group = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ip };
+            try
+            {
+                foreach (var member in await connector.GetAllSpeakersInGroup(ip, cancellationToken) ?? [])
+                    if (!string.IsNullOrWhiteSpace(member)) group.Add(member.Trim());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Could not resolve current group for scheduled target {SpeakerIp}; playback will revalidate it before writes.", ip);
+            }
+            result[ip] = group.ToArray();
+        }
+        return result;
     }
 
     private static async Task ApplyFadeOutAsync(
@@ -348,7 +435,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             try
             {
-                startingVolumes[ip] = await sonosConnectorRepo.GetVolume(ip);
+                startingVolumes[ip] = await sonosConnectorRepo.GetVolume(ip, cancellationToken);
             }
             catch
             {
@@ -386,7 +473,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         {
             try
             {
-                targetVolumes[ip] = await sonosConnectorRepo.GetVolume(ip);
+                targetVolumes[ip] = await sonosConnectorRepo.GetVolume(ip, cancellationToken);
             }
             catch
             {

@@ -47,6 +47,29 @@ ROUTES = [
 class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
     transport_state = "PAUSED_PLAYBACK"
     volume = 34
+    device_command_count = 0
+    state_lock = threading.Lock()
+
+    @classmethod
+    def reset(cls):
+        with cls.state_lock:
+            cls.transport_state = "PAUSED_PLAYBACK"
+            cls.volume = 34
+            cls.device_command_count = 0
+
+    @classmethod
+    def set_external_state(cls, *, playing=None, volume=None):
+        """Change the simulated room without sending a command from the app."""
+        with cls.state_lock:
+            if playing is not None:
+                cls.transport_state = "PLAYING" if playing else "PAUSED_PLAYBACK"
+            if volume is not None:
+                cls.volume = max(0, min(100, int(volume)))
+
+    @classmethod
+    def command_count(cls):
+        with cls.state_lock:
+            return cls.device_command_count
 
     def log_message(self, *args):
         pass
@@ -65,20 +88,27 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         action = self.headers.get("SOAPACTION", "").strip('"').split("#")[-1]
-        if action == "Play":
-            type(self).transport_state = "PLAYING"
-        elif action in ("Pause", "Stop"):
-            type(self).transport_state = "PAUSED_PLAYBACK" if action == "Pause" else "STOPPED"
-        elif action == "SetVolume":
-            match = re.search(r"<DesiredVolume>(\d+)</DesiredVolume>", body)
-            if match:
-                type(self).volume = int(match.group(1))
+        cls = type(self)
+        if action not in {"GetVolume", "GetTransportInfo", "GetPositionInfo", "GetMediaInfo", "Browse", "GetZoneGroupState"}:
+            with cls.state_lock:
+                cls.device_command_count += 1
+                if action == "Play":
+                    cls.transport_state = "PLAYING"
+                elif action in ("Pause", "Stop"):
+                    cls.transport_state = "PAUSED_PLAYBACK" if action == "Pause" else "STOPPED"
+                elif action == "SetVolume":
+                    match = re.search(r"<DesiredVolume>(\d+)</DesiredVolume>", body)
+                    if match:
+                        cls.volume = int(match.group(1))
+        with cls.state_lock:
+            volume = cls.volume
+            transport_state = cls.transport_state
         # A successful HTTP response with non-image content reproduces a broken Sonos cover.
         metadata = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist><upnp:albumArtURI>http://127.0.0.1:1400/missing-art</upnp:albumArtURI></item></DIDL-Lite>'
         topology = '<ZoneGroups><ZoneGroup Coordinator="RINCON_00000000000101400"><ZoneGroupMember UUID="RINCON_00000000000101400" Location="http://127.0.0.1:1400/xml/device_description.xml" /></ZoneGroup></ZoneGroups>'
         fields = {
-            "GetVolume": f"<CurrentVolume>{type(self).volume}</CurrentVolume>",
-            "GetTransportInfo": f"<CurrentTransportState>{type(self).transport_state}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
+            "GetVolume": f"<CurrentVolume>{volume}</CurrentVolume>",
+            "GetTransportInfo": f"<CurrentTransportState>{transport_state}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
             "GetPositionInfo": f"<Track>1</Track><TrackDuration>00:04:00</TrackDuration><TrackMetaData>{html.escape(metadata)}</TrackMetaData><TrackURI>http://127.0.0.1:1400/stream</TrackURI><RelTime>00:01:00</RelTime>",
             "GetMediaInfo": "<CurrentURI>http://127.0.0.1:1400/stream</CurrentURI>",
             "Browse": "<Result></Result><NumberReturned>0</NumberReturned><TotalMatches>0</TotalMatches><UpdateID>1</UpdateID>",
@@ -119,6 +149,11 @@ def start_local_server(with_speaker=False):
         "SettingsSchemaVersion": 2,
         "IP_Adress": "127.0.0.1" if with_speaker else "",
         "Speakers": [{"Name": "Test room", "IpAddress": "127.0.0.1", "Uuid": "RINCON_00000000000101400"}] if with_speaker else [],
+        "Scenes": ([{
+            "Id": "legacy-smoke-scene", "Name": "Legacy smoke scene", "Enabled": False,
+            "SourceSelectionMode": 1, "SourceType": 0, "IsSyncedPlayback": False,
+            "SpeakerIps": ["127.0.0.1"], "Actions": [],
+        }] if with_speaker else []),
         "Volume": 34,
         "Stations": [{"Name": "Test radio", "Url": "http://127.0.0.1:1400/stream"}],
         "SpotifyTracks": [], "YouTubeCollections": [], "YouTubeMusicCollections": [],
@@ -134,6 +169,7 @@ def start_local_server(with_speaker=False):
         env={
             **os.environ,
             "BackgroundServices__Enabled": "false",
+            "PlaybackSnapshots__Enabled": "true" if with_speaker else "false",
             "Settings__DataDirectory": str(settings_dir),
             "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
             "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
@@ -444,7 +480,7 @@ def verify_editor_sizes(page, editor, save_name):
     page.set_viewport_size({"width": 390, "height": 844})
 
 
-def verify_editor_workflows(page, output_dir):
+def verify_editor_workflows(page, output_dir, browser):
     # This function writes only to the runner's disposable, configured fixture.
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
@@ -470,6 +506,17 @@ def verify_editor_workflows(page, output_dir):
     save.click()
     expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
     expect(mixer_volume).to_have_value("")
+
+    scene.get_by_role("checkbox", name="Include Test room in playback", exact=True).uncheck()
+    command_count = SimulatedSpeakerHandler.command_count()
+    save.click()
+    expect(scene.get_by_text("Select at least one speaker.", exact=True)).to_be_visible()
+    scene.get_by_role("button", name="Apply Now", exact=True).click()
+    expect(scene.get_by_text("Select at least one speaker.", exact=True)).to_be_visible()
+    assert SimulatedSpeakerHandler.command_count() == command_count, "An empty scene selection sent a Sonos command."
+    scene.get_by_role("checkbox", name="Include Test room in playback", exact=True).check()
+    save.click()
+    expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
     scene.get_by_label("Name", exact=True).fill("Unsaved scene")
     scene.get_by_role("button", name="Close scene editor").click()
     confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
@@ -509,6 +556,22 @@ def verify_editor_workflows(page, output_dir):
     expect(confirmation).to_be_visible()
     confirmation.get_by_role("button", name="Discard changes").click()
     expect(page.get_by_role("tab", name="Scenes", exact=True)).to_have_attribute("aria-selected", "true")
+    page.set_viewport_size({"width": 390, "height": 844})
+    legacy_card = page.locator(".scene-card__main").filter(has_text="Legacy smoke scene")
+    legacy_card.click()
+    legacy_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
+    legacy_toggle = legacy_scene.get_by_role("checkbox", name="Include Test room in playback", exact=True)
+    expect(legacy_toggle).to_be_checked()
+    legacy_scene.get_by_role("button", name="Save Scene", exact=True).click()
+    expect(legacy_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    expect(legacy_toggle).to_be_checked()
+    legacy_scene.get_by_role("button", name="Close scene editor").click()
+    page.locator(".scene-card__main").filter(has_text="Browser smoke scene").click()
+    cap_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
+    cap_scene.get_by_label("Volume for Test room", exact=True).fill("80")
+    cap_scene.get_by_role("button", name="Save Scene", exact=True).click()
+    expect(cap_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    cap_scene.get_by_role("button", name="Close scene editor").click()
     page.go_back(wait_until="domcontentloaded")
     expect(page.get_by_role("tab", name="Schedules", exact=True)).to_have_attribute("aria-selected", "true")
     page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
@@ -578,6 +641,29 @@ def verify_editor_workflows(page, output_dir):
     page.locator("#maxVolume").press("Tab")
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("100")
+    save_status = page.get_by_role("status", name="Configuration save status")
+    page.locator("#maxVolume").fill("40")
+    expect(page.locator("#maxVolume")).to_have_value("40")
+    expect(save_status).to_have_text("Saving…")
+    expect(save_status).to_have_text("Saved")
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#maxVolume")).to_have_value("40")
+    page.goto(f"{BASE_URL}/automation?tab=scenes", wait_until="networkidle")
+    page.locator(".scene-card__main").filter(has_text="Browser smoke scene").click()
+    cap_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
+    capped_volume = cap_scene.get_by_label("Volume for Test room", exact=True)
+    expect(capped_volume).to_have_value("40")
+    expect(cap_scene.get_by_role("button", name="Save Scene", exact=True)).to_be_enabled()
+    cap_scene.get_by_role("button", name="Save Scene", exact=True).click()
+    expect(cap_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    page.goto(f"{BASE_URL}/administration/settings", wait_until="networkidle")
+    page.locator("#maxVolume").fill("100")
+    expect(page.locator("#maxVolume")).to_have_value("100")
+    save_status = page.get_by_role("status", name="Configuration save status")
+    expect(save_status).to_have_text("Saving…")
+    expect(save_status).to_have_text("Saved")
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#maxVolume")).to_have_value("100")
     page.goto(f"{BASE_URL}/", wait_until="networkidle")
     hero = page.locator("[data-qa='now-playing-hero']")
     assert hero.evaluate("element => element.getBoundingClientRect().height") <= 400
@@ -585,12 +671,11 @@ def verify_editor_workflows(page, output_dir):
     verify_volume_input(page.locator("#mobile-player-volume-number"))
     page.locator("#mobile-player-volume-number").fill("34")
     expect(hero.locator(".np-hero__record")).to_be_visible()
-    page.get_by_role("button", name="Play Test radio", exact=True).click()
     expect(hero.locator(".np-hero__record.is-spinning")).to_be_visible()
     expect(hero.locator("img")).to_have_count(0)
     page.screenshot(path=str(output_dir / "playback_broken_cover_fallback.png"))
     print("Editor workflows passed: real saves, labels, focus, draft protection, browser back, resizing, 200% text and compact Home.")
-    print("Playback regressions passed: bounded volume while typing and after reload, optional volume clearing, broken-cover fallback and spinning record after manual Play.")
+    print("Editor and playback checks passed: empty and legacy scene targets, lower volume caps, bounded typing, nullable volumes, and broken-cover fallback.")
 
 
 def verify_volume_input(field):
@@ -601,6 +686,89 @@ def verify_volume_input(field):
     field.press("End")
     field.press("8")
     expect(field).to_have_value("100")
+
+
+def verify_external_snapshot_updates(page):
+    page.goto(f"{BASE_URL}/", wait_until="networkidle")
+    SimulatedSpeakerHandler.set_external_state(playing=True, volume=63)
+    hero_state = page.locator(".np-hero__playback-state")
+    expect(hero_state).to_have_text("Playing", timeout=10000)
+    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Pause playback", timeout=10000)
+    expect(page.locator("#home-now-playing-volume-number")).to_have_value("63", timeout=10000)
+    expect(page.locator("#global-player-volume-number")).to_have_value("63", timeout=10000)
+    expect(page.locator(".room-card--active input[type='number']")).to_have_value("63", timeout=10000)
+
+    SimulatedSpeakerHandler.set_external_state(playing=False, volume=22)
+    expect(hero_state).to_have_text("Paused", timeout=10000)
+    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Start playback", timeout=10000)
+    expect(page.locator("#home-now-playing-volume-number")).to_have_value("22", timeout=10000)
+    expect(page.locator("#global-player-volume-number")).to_have_value("22", timeout=10000)
+    expect(page.locator(".room-card--active input[type='number']")).to_have_value("22", timeout=10000)
+    SimulatedSpeakerHandler.set_external_state(playing=False, volume=34)
+
+
+def verify_sleep_timer_workflow(page, browser, output_dir):
+    page.get_by_role("button", name="Open expanded player").click()
+    sheet = page.get_by_role("dialog", name="Now playing")
+    timer_status = sheet.locator(".player-sheet__timer [role='status']")
+    sheet.locator("#player-timer-minutes").fill("1")
+    sheet.get_by_role("button", name="Start", exact=True).click()
+    expect(timer_status).to_contain_text("pauses at")
+    page.reload(wait_until="networkidle")
+    page.get_by_role("button", name="Open expanded player").click()
+    sheet = page.get_by_role("dialog", name="Now playing")
+    expect(sheet.locator(".player-sheet__timer [role='status']")).to_contain_text("pauses at")
+
+    secondary_context = browser.new_context(viewport={"width": 390, "height": 844})
+    try:
+        secondary = secondary_context.new_page()
+        succeeded = False
+        login_errors = []
+        for username, password in get_login_attempts():
+            succeeded, current_url, error_text = try_login(secondary, username, password)
+            if succeeded:
+                break
+            login_errors.append(f"{username}@{current_url} ({error_text or 'no error message'})")
+        assert succeeded, "Second browser could not log in: " + "; ".join(login_errors)
+        secondary.get_by_role("button", name="Open expanded player").click()
+        secondary_sheet = secondary.get_by_role("dialog", name="Now playing")
+        secondary_timer = secondary_sheet.locator(".player-sheet__timer [role='status']")
+        expect(secondary_timer).to_contain_text("pauses at")
+        secondary_timer_parent = secondary.locator(".player-sheet__timer")
+        secondary_timer_parent.get_by_role("button", name="Cancel", exact=True).click()
+        expect(secondary_timer).to_have_text("Not running")
+        expect(sheet.locator(".player-sheet__timer [role='status']")).to_have_text("Not running")
+
+        sheet.locator("#player-timer-minutes").fill("1")
+        sheet.get_by_role("button", name="Start", exact=True).click()
+        expect(timer_status).to_contain_text("pauses at")
+        secondary_timer_parent.locator("#player-timer-minutes").fill("3")
+        secondary_timer_parent.get_by_role("button", name="Start", exact=True).click()
+        expect(timer_status).to_contain_text("pauses at")
+        replacement_started = time.monotonic()
+
+        page.goto(f"{BASE_URL}/")
+        page.locator("[data-qa='home-player-toggle']").click()
+        expect(page.locator(".np-hero__playback-state")).to_have_text("Playing", timeout=10000)
+        hero = page.locator("[data-qa='now-playing-hero']")
+        expect(hero.locator(".np-hero__record.is-spinning")).to_be_visible(timeout=10000)
+        expect(hero.locator("img")).to_have_count(0, timeout=10000)
+        page.screenshot(path=str(output_dir / "playback_broken_cover_fallback.png"))
+        page.get_by_role("button", name="Open expanded player").click()
+        expect(page.locator(".player-sheet__timer [role='status']")).to_contain_text("pauses at")
+        print("Waiting past the original one-minute deadline to verify its replacement remains armed.")
+        while time.monotonic() - replacement_started < 65:
+            page.wait_for_timeout(1000)
+        expect(page.locator(".np-hero__playback-state")).to_have_text("Playing", timeout=10000)
+        expect(page.locator(".player-sheet__timer [role='status']")).to_contain_text("pauses at")
+        print("Replacement sleep timer remained armed beyond the original one-minute deadline.")
+        secondary_timer_parent.get_by_role("button", name="Cancel", exact=True).click()
+        expect(secondary_timer).to_have_text("Not running")
+        expect(page.locator(".player-sheet__timer [role='status']")).to_have_text("Not running")
+        return secondary_context
+    except Exception:
+        secondary_context.close()
+        raise
 
 
 def verify_application(playwright, output_dir, expected_speaker_state=None):
@@ -625,6 +793,11 @@ def verify_application(playwright, output_dir, expected_speaker_state=None):
         with_speaker = page.locator("[data-qa='home-setup']").count() == 0
         if expected_speaker_state is not None:
             assert with_speaker == expected_speaker_state, "Isolated speaker fixture did not match the expected configuration."
+        secondary_context = None
+        if expected_speaker_state is True:
+            SimulatedSpeakerHandler.reset()
+            verify_external_snapshot_updates(page)
+            secondary_context = verify_sleep_timer_workflow(page, browser, output_dir)
         verify_responsive_home(page, output_dir, with_speaker)
         for viewport_slug, width, height in VIEWPORTS:
             page.set_viewport_size({"width": width, "height": height})
@@ -649,10 +822,43 @@ def verify_application(playwright, output_dir, expected_speaker_state=None):
                     suffix = "" if with_speaker else "_setup"
                     page.screenshot(path=str(output_dir / f"{slug}_{viewport_slug}_{theme}{suffix}.png"), full_page=True)
         if expected_speaker_state is True:
-            verify_editor_workflows(page, output_dir)
+            verify_editor_workflows(page, output_dir, browser)
+            expect(page.locator(".np-hero__playback-state")).to_have_text("Playing", timeout=10000)
+            page.get_by_role("button", name="Open expanded player").click()
+            timer_panel = page.locator(".player-sheet__timer")
+            timer_panel.locator("#player-timer-minutes").fill("1")
+            timer_panel.get_by_role("button", name="Start", exact=True).click()
+            timer_status = timer_panel.locator("[role='status']")
+            expect(timer_status).to_contain_text("pauses at")
+            player_toggle = page.locator(".player-sheet__play")
+            player_toggle.click()
+            expect(page.locator(".np-hero__playback-state")).to_have_text("Paused", timeout=10000)
+            player_toggle.click()
+            expect(page.locator(".np-hero__playback-state")).to_have_text("Playing", timeout=10000)
+            expect(timer_status).to_contain_text("pauses at")
+            secondary_timer_status = None
+            if secondary_context is not None:
+                secondary_timer_status = secondary_context.pages[0].locator(".player-sheet__timer [role='status']")
+                expect(secondary_timer_status).to_contain_text("pauses at")
+            print("Fresh one-minute sleep timer survived manual playback; waiting for its deadline.")
+            page.reload(wait_until="networkidle")
+            page.get_by_role("button", name="Open expanded player").click()
+            timer_status = page.locator(".player-sheet__timer [role='status']")
+            expect(timer_status).to_contain_text("pauses at")
+            if secondary_timer_status is not None:
+                expect(secondary_timer_status).to_contain_text("pauses at")
+            expect(page.locator(".np-hero__playback-state")).to_have_text("Paused", timeout=75000)
+            expect(page.locator(".player-sheet__timer [role='status']")).to_have_text("Not running", timeout=10000)
+            if secondary_timer_status is not None:
+                expect(secondary_timer_status).to_have_text("Not running", timeout=10000)
+            print("Shared snapshot checks passed across Home, dock and room cards; shared sleep timer survived reload, cross-browser cancellation/replacement, manual playback, and expiry.")
+        if secondary_context is not None:
+            secondary_context.close()
         assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
         print(f"UI smoke passed: {len(VIEWPORTS)} viewports × {len(THEMES)} themes × {len(ROUTES)} routes; configured speaker={with_speaker}.")
     finally:
+        if 'secondary_context' in locals() and secondary_context is not None:
+            secondary_context.close()
         context.close()
         browser.close()
 
@@ -671,6 +877,7 @@ def run():
             process = log_stream = runtime_dir = None
             try:
                 if with_speaker:
+                    SimulatedSpeakerHandler.reset()
                     speaker = ThreadingHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
                     threading.Thread(target=speaker.serve_forever, daemon=True).start()
                 process, log_stream, log_path, runtime_dir = start_local_server(with_speaker)

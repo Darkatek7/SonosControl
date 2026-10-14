@@ -466,14 +466,33 @@ public partial class IndexPage : IAsyncDisposable
 
     private async Task UpdateSpeakerStatuses(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_settings?.Speakers == null)
         {
             _speakerStatuses = new();
             return;
         }
 
-        var tasks = _settings.Speakers.Select(speaker => BuildSpeakerStatusAsync(speaker, cancellationToken)).ToList();
-        _speakerStatuses = CollapseGroupedSpeakerStatuses((await Task.WhenAll(tasks)).ToList());
+        var snapshots = PlaybackSnapshotStore.GetAll().ToDictionary(snapshot => snapshot.SpeakerIp, StringComparer.OrdinalIgnoreCase);
+        _speakerStatuses = CollapseGroupedSpeakerStatuses(_settings.Speakers.Select(speaker =>
+        {
+            snapshots.TryGetValue(speaker.IpAddress, out var snapshot);
+            var rawStationUrl = snapshot?.CurrentStationUrl;
+            var isPlaying = snapshot?.IsPlaying == true;
+            if (string.Equals(speaker.IpAddress, SelectedSpeakerIp, StringComparison.OrdinalIgnoreCase)) _isPlaying = isPlaying;
+            return new SpeakerStatusViewModel
+            {
+                Name = speaker.Name,
+                IpAddress = speaker.IpAddress,
+                Uuid = speaker.Uuid,
+                IsPlaying = isPlaying,
+                Media = string.Equals(speaker.IpAddress, SelectedSpeakerIp, StringComparison.OrdinalIgnoreCase)
+                    ? null
+                    : ResolveSpeakerMedia(isPlaying, NormalizeStationUrl(rawStationUrl), TryExtractMasterUuid(rawStationUrl)),
+                MasterUuid = TryExtractMasterUuid(rawStationUrl),
+                RawStationUrl = rawStationUrl
+            };
+        }).ToList());
     }
 
     private static List<SpeakerStatusViewModel> CollapseGroupedSpeakerStatuses(List<SpeakerStatusViewModel> statuses)
@@ -491,56 +510,6 @@ public partial class IndexPage : IAsyncDisposable
             .Where(status => string.IsNullOrWhiteSpace(status.MasterUuid)
                 || !statuses.Any(root => string.Equals(root.Uuid, status.MasterUuid, StringComparison.OrdinalIgnoreCase)))
             .ToList();
-    }
-
-    private async Task<SpeakerStatusViewModel> BuildSpeakerStatusAsync(SonosSpeaker speaker, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var isPlayingTask = _sonosConnectorRepo.IsPlaying(speaker.IpAddress);
-            var rawStationUrlTask = _sonosConnectorRepo.GetCurrentStationAsync(speaker.IpAddress, cancellationToken);
-            await Task.WhenAll(isPlayingTask, rawStationUrlTask);
-
-            var isPlaying = await isPlayingTask;
-            var rawStationUrl = await rawStationUrlTask;
-            var normalizedStationUrl = NormalizeStationUrl(rawStationUrl);
-            var masterUuid = TryExtractMasterUuid(rawStationUrl);
-
-            if (speaker.IpAddress == SelectedSpeakerIp)
-            {
-                _isPlaying = isPlaying;
-            }
-
-            return new SpeakerStatusViewModel
-            {
-                Name = speaker.Name,
-                IpAddress = speaker.IpAddress,
-                Uuid = speaker.Uuid,
-                IsPlaying = isPlaying,
-                Media = speaker.IpAddress == SelectedSpeakerIp
-                    ? null
-                    : ResolveSpeakerMedia(isPlaying, normalizedStationUrl, masterUuid),
-                MasterUuid = masterUuid,
-                RawStationUrl = rawStationUrl
-            };
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            return new SpeakerStatusViewModel
-            {
-                Name = speaker.Name,
-                IpAddress = speaker.IpAddress,
-                Uuid = speaker.Uuid,
-                IsPlaying = false,
-                Media = "Offline",
-                MasterUuid = null,
-                RawStationUrl = null
-            };
-        }
     }
 
     private string ResolveSpeakerMedia(bool isPlaying, string normalizedStationUrl, string? masterUuid)
