@@ -14,6 +14,7 @@ public sealed class PlaybackUiStateService
     private readonly ApplicationDbContext _db;
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly INotificationService _notificationService;
+    private readonly ManualPlaybackService? _manualPlayback;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly SemaphoreSlim _volumeUpdateLock = new(1, 1);
     private readonly object _volumeSync = new();
@@ -29,7 +30,8 @@ public sealed class PlaybackUiStateService
         ILogger<PlaybackUiStateService> logger,
         ApplicationDbContext db,
         AuthenticationStateProvider authenticationStateProvider,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ManualPlaybackService? manualPlayback = null)
     {
         _settingsRepo = settingsRepo;
         _sonosConnectorRepo = sonosConnectorRepo;
@@ -37,6 +39,7 @@ public sealed class PlaybackUiStateService
         _db = db;
         _authenticationStateProvider = authenticationStateProvider;
         _notificationService = notificationService;
+        _manualPlayback = manualPlayback;
     }
 
     public event Action? StateChanged;
@@ -46,7 +49,16 @@ public sealed class PlaybackUiStateService
     public string ActiveSpeakerName { get; private set; } = "No speaker";
     public string CurrentStationDisplay { get; private set; } = "No source";
     public string CurrentTrack { get; private set; } = "No metadata available";
-    public string? CurrentTrackArtUrl { get; private set; }
+    private string? _trackArtUrl;
+    private string? _failedArtUrl;
+    public string? CurrentTrackArtUrl => _trackArtUrl == _failedArtUrl ? null : _trackArtUrl;
+
+    public void ReportArtworkFailure(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url != _trackArtUrl) return;
+        _failedArtUrl = url;
+        NotifyStateChanged();
+    }
     public bool IsPlaying { get; private set; }
     public bool IsLoading { get; private set; }
     public bool IsSkipping { get; private set; }
@@ -124,6 +136,7 @@ public sealed class PlaybackUiStateService
 
         try
         {
+            await using var manualLease = _manualPlayback is null ? null : await _manualPlayback.BeginAsync(speakerIp);
             if (!shouldPlay)
             {
                 await _sonosConnectorRepo.PausePlaying(speakerIp);
@@ -443,16 +456,17 @@ public sealed class PlaybackUiStateService
 
     private void ApplyTrackInfo(SonosTrackInfo? trackInfo)
     {
-        CurrentTrackArtUrl = null;
-
         if (trackInfo is null || !trackInfo.IsValidMetadata())
         {
             CurrentTrack = "No metadata available";
+            _trackArtUrl = null;
             return;
         }
 
         CurrentTrack = trackInfo.GetDisplayString();
-        CurrentTrackArtUrl = string.IsNullOrWhiteSpace(trackInfo.AlbumArtUri) ? null : trackInfo.AlbumArtUri;
+        var artUrl = string.IsNullOrWhiteSpace(trackInfo.AlbumArtUri) ? null : trackInfo.AlbumArtUri;
+        if (artUrl != _trackArtUrl && artUrl is not null) _failedArtUrl = null;
+        _trackArtUrl = artUrl;
     }
 
     private async Task<bool> IsSpeakerReachableAsync(string ip)

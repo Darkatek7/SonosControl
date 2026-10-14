@@ -11,6 +11,47 @@ namespace SonosControl.Tests;
 
 public class VolumeControlTests
 {
+    [Theory]
+    [InlineData("1008", 100)]
+    [InlineData("456051", 100)]
+    [InlineData("-12", 0)]
+    [InlineData("1e4", 100)]
+    [InlineData("999999999999999999999999999999999999", 100)]
+    public void NumberInputCorrectsItsDisplayedValue_EvenWhenTheClampedValueIsUnchanged(string raw, int expected)
+    {
+        using var ctx = new BunitContext();
+        var submitted = -1;
+        var committed = -1;
+        var cut = ctx.Render<VolumeNumberInput>(parameters => parameters
+            .Add(input => input.Value, 100)
+            .Add(input => input.MaxVolume, 1000)
+            .Add(input => input.ValueChanged, value => submitted = value ?? -1)
+            .Add(input => input.OnCommit, value => committed = value ?? -1));
+        cut.Find("input").Input(raw);
+        Assert.Equal(expected.ToString(), cut.Find("input").GetAttribute("value"));
+        Assert.Equal("100", cut.Find("input").GetAttribute("max"));
+        Assert.Equal(-1, committed);
+        cut.Find("input").Change(raw);
+        Assert.Equal(expected, committed);
+        Assert.True(submitted <= 100);
+    }
+
+    [Fact]
+    public void OptionalStartupVolumeCanBeCleared_AndLowerConfiguredLimitsRemainEffective()
+    {
+        using var ctx = new BunitContext();
+        int? changed = 12;
+        var cut = ctx.Render<VolumeNumberInput>(parameters => parameters
+            .Add(input => input.Value, 12)
+            .Add(input => input.MaxVolume, 70)
+            .Add(input => input.ValueChanged, value => changed = value));
+        cut.Find("input").Input("900");
+        Assert.Equal(70, changed);
+        cut.Find("input").Input("");
+        Assert.Null(changed);
+        Assert.Equal("", cut.Find("input").GetAttribute("value"));
+    }
+
     [Fact]
     public void VolumeControl_SynchronizesInputsAndClampsTypedValues()
     {

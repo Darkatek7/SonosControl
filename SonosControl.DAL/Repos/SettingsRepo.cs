@@ -124,6 +124,9 @@ public class SettingsRepo : ISettingsRepo, IDisposable
     {
         settings.MaxVolume = Math.Clamp(settings.MaxVolume, 0, 100);
         settings.Volume = Math.Clamp(settings.Volume, 0, settings.MaxVolume);
+        settings.Speakers ??= new();
+        foreach (var speaker in settings.Speakers)
+            if (speaker.StartupVolume.HasValue) speaker.StartupVolume = Math.Clamp(speaker.StartupVolume.Value, 0, 100);
         settings.Stations ??= new();
         settings.SpotifyTracks ??= new();
         settings.YouTubeCollections ??= new();

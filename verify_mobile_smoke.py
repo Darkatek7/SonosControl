@@ -45,6 +45,9 @@ ROUTES = [
 
 
 class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
+    transport_state = "PAUSED_PLAYBACK"
+    volume = 34
+
     def log_message(self, *args):
         pass
 
@@ -57,18 +60,29 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):
-        self.respond('<root><device><friendlyName>Test room</friendlyName><UDN>uuid:RINCON_SMOKE</UDN><serviceList/></device></root>')
+        self.respond('<root><device><friendlyName>Test room</friendlyName><UDN>uuid:RINCON_00000000000101400</UDN><serviceList/></device></root>')
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         action = self.headers.get("SOAPACTION", "").strip('"').split("#")[-1]
-        metadata = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist></item></DIDL-Lite>'
+        if action == "Play":
+            type(self).transport_state = "PLAYING"
+        elif action in ("Pause", "Stop"):
+            type(self).transport_state = "PAUSED_PLAYBACK" if action == "Pause" else "STOPPED"
+        elif action == "SetVolume":
+            match = re.search(r"<DesiredVolume>(\d+)</DesiredVolume>", body)
+            if match:
+                type(self).volume = int(match.group(1))
+        # A successful HTTP response with non-image content reproduces a broken Sonos cover.
+        metadata = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist><upnp:albumArtURI>http://127.0.0.1:1400/missing-art</upnp:albumArtURI></item></DIDL-Lite>'
+        topology = '<ZoneGroups><ZoneGroup Coordinator="RINCON_00000000000101400"><ZoneGroupMember UUID="RINCON_00000000000101400" Location="http://127.0.0.1:1400/xml/device_description.xml" /></ZoneGroup></ZoneGroups>'
         fields = {
-            "GetVolume": "<CurrentVolume>34</CurrentVolume>",
-            "GetTransportInfo": "<CurrentTransportState>PAUSED_PLAYBACK</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
+            "GetVolume": f"<CurrentVolume>{type(self).volume}</CurrentVolume>",
+            "GetTransportInfo": f"<CurrentTransportState>{type(self).transport_state}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
             "GetPositionInfo": f"<Track>1</Track><TrackDuration>00:04:00</TrackDuration><TrackMetaData>{html.escape(metadata)}</TrackMetaData><TrackURI>http://127.0.0.1:1400/stream</TrackURI><RelTime>00:01:00</RelTime>",
             "GetMediaInfo": "<CurrentURI>http://127.0.0.1:1400/stream</CurrentURI>",
             "Browse": "<Result></Result><NumberReturned>0</NumberReturned><TotalMatches>0</TotalMatches><UpdateID>1</UpdateID>",
+            "GetZoneGroupState": f"<ZoneGroupState>{html.escape(topology)}</ZoneGroupState>",
         }.get(action, "")
         service = "RenderingControl" if "Volume" in action else "AVTransport"
         self.respond(f'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:{action}Response xmlns:u="urn:schemas-upnp-org:service:{service}:1">{fields}</u:{action}Response></s:Body></s:Envelope>')
@@ -104,7 +118,7 @@ def start_local_server(with_speaker=False):
     settings = {
         "SettingsSchemaVersion": 2,
         "IP_Adress": "127.0.0.1" if with_speaker else "",
-        "Speakers": [{"Name": "Test room", "IpAddress": "127.0.0.1", "Uuid": "RINCON_SMOKE"}] if with_speaker else [],
+        "Speakers": [{"Name": "Test room", "IpAddress": "127.0.0.1", "Uuid": "RINCON_00000000000101400"}] if with_speaker else [],
         "Volume": 34,
         "Stations": [{"Name": "Test radio", "Url": "http://127.0.0.1:1400/stream"}],
         "SpotifyTracks": [], "YouTubeCollections": [], "YouTubeMusicCollections": [],
@@ -446,11 +460,16 @@ def verify_editor_workflows(page, output_dir):
     assert_focus_in_dialog(page, scene)
     expect(scene.get_by_role("button", name="Close scene editor")).to_be_focused()
     scene.get_by_label("Name", exact=True).fill("Browser smoke scene")
+    mixer_volume = scene.get_by_label("Volume for Test room", exact=True)
+    verify_volume_input(mixer_volume)
+    mixer_volume.fill("")
+    expect(mixer_volume).to_have_value("")
     verify_editor_sizes(page, scene, "Save Scene")
     save = scene.get_by_role("button", name="Save Scene", exact=True)
     assert_control_is_clickable(save)
     save.click()
     expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    expect(mixer_volume).to_have_value("")
     scene.get_by_label("Name", exact=True).fill("Unsaved scene")
     scene.get_by_role("button", name="Close scene editor").click()
     confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
@@ -534,6 +553,14 @@ def verify_editor_workflows(page, output_dir):
 
     page.goto(f"{BASE_URL}/administration/devices", wait_until="networkidle")
     card = page.locator(".device-card").first
+    startup = page.get_by_label("Startup volume for Test room", exact=True)
+    verify_volume_input(startup)
+    startup.press("Tab")
+    page.reload(wait_until="networkidle")
+    expect(startup).to_have_value("100")
+    manual_volume = page.locator("#manual-speaker-volume")
+    verify_volume_input(manual_volume)
+    manual_volume.fill("")
     player_top = page.locator(".global-player-bar").evaluate("element => element.getBoundingClientRect().top")
     assert card.evaluate("element => element.getBoundingClientRect().top") < player_top
     remove = page.get_by_role("button", name="Remove Test room", exact=True)
@@ -546,11 +573,34 @@ def verify_editor_workflows(page, output_dir):
     device.get_by_role("button", name="Cancel", exact=True).press("Escape")
     expect(device).to_have_count(0)
     page.wait_for_function("document.activeElement.getAttribute('aria-label') === 'Remove Test room'")
+    page.goto(f"{BASE_URL}/administration/settings", wait_until="networkidle")
+    verify_volume_input(page.locator("#maxVolume"))
+    page.locator("#maxVolume").press("Tab")
+    page.reload(wait_until="networkidle")
+    expect(page.locator("#maxVolume")).to_have_value("100")
     page.goto(f"{BASE_URL}/", wait_until="networkidle")
     hero = page.locator("[data-qa='now-playing-hero']")
     assert hero.evaluate("element => element.getBoundingClientRect().height") <= 400
     assert page.locator("#home-rooms-heading").evaluate("element => element.getBoundingClientRect().bottom") < page.locator(".global-player-bar").evaluate("element => element.getBoundingClientRect().top")
+    verify_volume_input(page.locator("#mobile-player-volume-number"))
+    page.locator("#mobile-player-volume-number").fill("34")
+    expect(hero.locator(".np-hero__record")).to_be_visible()
+    page.get_by_role("button", name="Play Test radio", exact=True).click()
+    expect(hero.locator(".np-hero__record.is-spinning")).to_be_visible()
+    expect(hero.locator("img")).to_have_count(0)
+    page.screenshot(path=str(output_dir / "playback_broken_cover_fallback.png"))
     print("Editor workflows passed: real saves, labels, focus, draft protection, browser back, resizing, 200% text and compact Home.")
+    print("Playback regressions passed: bounded volume while typing and after reload, optional volume clearing, broken-cover fallback and spinning record after manual Play.")
+
+
+def verify_volume_input(field):
+    for raw, expected in [("1008", "100"), ("456051", "100"), ("-12", "0"), ("1e4", "100")]:
+        field.fill(raw)
+        expect(field).to_have_value(expected)
+    # Appending to an already clamped value previously left the raw DOM value behind.
+    field.press("End")
+    field.press("8")
+    expect(field).to_have_value("100")
 
 
 def verify_application(playwright, output_dir, expected_speaker_state=None):

@@ -15,6 +15,28 @@ namespace SonosControl.Tests;
 public class SceneTimerServiceTests
 {
     [Fact]
+    public async Task ManualPlaybackCancelsSceneTimersForTheWholeCurrentGroup()
+    {
+        var clock = new ManualClock();
+        var connector = Connector();
+        connector.Setup(repo => repo.GetAllSpeakersInGroup("A", It.IsAny<CancellationToken>())).ReturnsAsync(["A", "B"]);
+        var services = Services(connector.Object);
+        services.AddSingleton(new PlaybackCommandCoordinator(clock));
+        services.AddSingleton<SceneTimerService>(provider => new(provider.GetRequiredService<IServiceScopeFactory>(), clock, NullLogger<SceneTimerService>.Instance));
+        services.AddSingleton<ILogger<ManualPlaybackService>>(NullLogger<ManualPlaybackService>.Instance);
+        services.AddScoped<ManualPlaybackService>();
+        await using var provider = services.BuildServiceProvider();
+        var timers = provider.GetRequiredService<SceneTimerService>();
+        await using (await timers.BeginSceneAsync(["A", "B"], CancellationToken.None)) timers.Schedule("old", "Old", ["A", "B"], 1);
+        using var scope = provider.CreateScope();
+        await using (await scope.ServiceProvider.GetRequiredService<ManualPlaybackService>().BeginAsync("A"))
+            await connector.Object.StartPlaying("A");
+        clock.Advance(TimeSpan.FromMinutes(2));
+        await timers.StopAsync(CancellationToken.None);
+        connector.Verify(repo => repo.PausePlaying(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task SceneFromAnotherScope_OnlyReplacesOverlappingSpeakerTimers()
     {
         var clock = new ManualClock();

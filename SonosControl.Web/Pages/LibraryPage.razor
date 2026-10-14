@@ -10,6 +10,7 @@
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
 @inject NavigationManager Navigation
 @inject PlaybackUiStateService PlaybackState
+@inject ManualPlaybackService ManualPlayback
 @inject UserFavouriteSourceService FavouriteSources
 
 <PageTitle>Library - SonosControl</PageTitle>
@@ -594,6 +595,7 @@
         _busyKey = source.Key;
         try
         {
+            await using var manualLease = await ManualPlayback.BeginAsync(speakerIp);
             switch (source.Type)
             {
                 case LibrarySourceType.Radio: await _sonosConnectorRepo.SetTuneInStationAsync(speakerIp, source.Url); break;
@@ -608,6 +610,7 @@
                 case LibrarySourceType.YouTubeMusic: await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(speakerIp, source.Url, _settings.AutoPlayStationUrl); break;
             }
             await _sonosConnectorRepo.StartPlaying(speakerIp);
+            await PlaybackState.RefreshAsync();
             ShowStatus($"Playing {source.Name}.");
         }
         catch (Exception ex)

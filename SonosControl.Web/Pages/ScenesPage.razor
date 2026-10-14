@@ -218,13 +218,11 @@
                                         </div>
                                         <label class="scenes-speaker-row__volume">
                                             <span>Volume</span>
-                                            <input class="form-control form-control-sm"
-                                                   type="number"
-                                                   min="0"
-                                                   max="100"
+                                            <VolumeNumberInput class="form-control form-control-sm"
+                                                   MaxVolume="@_settings.MaxVolume"
                                                    id="@($"{speakerId}-volume")" aria-label="@($"Volume for {speaker.Name}")"
-                                                   value="@FormatVolume(action.Volume)"
-                                                   @onchange="e => SetSpeakerVolume(speaker.IpAddress, e.Value)"
+                                                   Value="@action.Volume"
+                                                   ValueChanged="value => SetSpeakerVolume(speaker.IpAddress, value)"
                                                    disabled="@(!_canManage || !action.IncludeInPlayback)" />
                                         </label>
                                         <label class="scenes-speaker-row__master">

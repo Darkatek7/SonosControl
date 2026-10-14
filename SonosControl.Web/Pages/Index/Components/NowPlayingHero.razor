@@ -8,7 +8,8 @@
     <div class="np-hero__art" aria-hidden="true">
         @if (HasArt)
         {
-            <img src="@PlaybackState.CurrentTrackArtUrl" alt="" />
+            var artworkUrl = PlaybackState.CurrentTrackArtUrl;
+            <img @key="artworkUrl" src="@artworkUrl" alt="" @onerror="() => PlaybackState.ReportArtworkFailure(artworkUrl)" />
         }
         else
         {

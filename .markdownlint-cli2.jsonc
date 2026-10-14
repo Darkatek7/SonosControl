@@ -1,6 +1,6 @@
 {
   // Keep document globs aligned with .github/workflows/docs-quality.yml and AGENTS.md.
-  // The testing guide covers setup/configured UI smoke and fixture-only editor writes.
+  // The testing guide covers isolated UI smoke, editor writes, volume limits and artwork fallback.
   "config": {
     "default": true,
     "MD013": false,

@@ -5,6 +5,7 @@
 @using SonosControl.Web.Data
 @using SonosControl.Web.Models
 @using SonosControl.Web.Services
+@inject ManualPlaybackService ManualPlayback
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @attribute [Authorize(Roles = "admin,operator,superadmin")]
@@ -433,6 +434,7 @@
         _isPlayingFromRecommendation = true;
         try
         {
+            await using var manualLease = await ManualPlayback.BeginAsync(_selectedSpeakerIp);
             switch (item.MediaType.ToLowerInvariant())
             {
                 case "station":

@@ -15,6 +15,82 @@ namespace SonosControl.Tests;
 public class AutomationSchedulerServiceTests
 {
     [Fact]
+    public async Task AManuallyControlledNewWindowStillStopsUnclaimedTargetsFromTheOldWindow()
+    {
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
+        var commands = new PlaybackCommandCoordinator(time);
+        var repository = new Mock<ISettingsRepo>();
+        repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(
+            Window("current", "scene-a", new(9, 0), new(11, 0), 10),
+            Window("next", "scene-b", new(11, 0), new(13, 0), 20)));
+        var scenes = new Mock<ISceneOrchestrationService>();
+        scenes.Setup(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
+        var connector = new Mock<ISonosConnectorRepo>();
+        using var fixture = CreateScheduler(repository.Object, connector.Object, scenes.Object, time, commands: commands);
+        await fixture.Service.EvaluateNowAsync();
+        time.SetUtcNow(new DateTimeOffset(2026, 7, 20, 11, 1, 0, TimeSpan.Zero));
+        await using (await commands.EnterAsync(true)) commands.TakeManualControl(["10.0.0.2"]);
+        await fixture.Service.EvaluateNowAsync();
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-b", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Once);
+        connector.Verify(repo => repo.PausePlaying("10.0.0.2"), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ManualPlaybackPreventsRetriesAndBoundaryPauses_ButTheNextWindowStillRuns(bool firstAttemptFails)
+    {
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
+        var commands = new PlaybackCommandCoordinator(time);
+        var settings = Settings(
+            Window("current", "scene-a", new(9, 0), new(11, 0), 10),
+            Window("next", "scene-b", new(11, 0), new(13, 0), 20));
+        var repository = new Mock<ISettingsRepo>();
+        repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
+        var scenes = new Mock<ISceneOrchestrationService>();
+        scenes.Setup(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SceneApplyResult(!firstAttemptFails, "Attempt", "scene-a", ["10.0.0.1"]));
+        scenes.Setup(service => service.ApplySceneByIdAsync("scene-b", "automation-scheduler", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SceneApplyResult(true, "Next", "scene-b", ["10.0.0.2"]));
+        var connector = new Mock<ISonosConnectorRepo>();
+        using var fixture = CreateScheduler(repository.Object, connector.Object, scenes.Object, time, commands: commands);
+        await fixture.Service.EvaluateNowAsync();
+        await using (await commands.EnterAsync(true)) commands.TakeManualControl(["10.0.0.1"]);
+        time.SetUtcNow(time.GetUtcNow().AddMinutes(2));
+        await fixture.Service.EvaluateNowAsync();
+        Assert.Null(fixture.Status.Snapshot.NextRetryUtc);
+        Assert.Null(fixture.Status.Snapshot.SchedulerError);
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Once);
+        time.SetUtcNow(new DateTimeOffset(2026, 7, 20, 11, 1, 0, TimeSpan.Zero));
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-b", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Once);
+        connector.Verify(repo => repo.PausePlaying("10.0.0.1"), Times.Never);
+    }
+
+    [Fact]
+    public async Task ManualPlaybackBeforeTheFirstPollSuppressesOnlyTheCurrentOvernightOccurrence()
+    {
+        var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 23, 0, 0, TimeSpan.Zero));
+        var commands = new PlaybackCommandCoordinator(time);
+        var repository = new Mock<ISettingsRepo>();
+        repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(Window("night", "scene-a", new(22, 0), new(2, 0), 10)));
+        var scenes = new Mock<ISceneOrchestrationService>();
+        scenes.Setup(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SceneApplyResult(true, "Next day", "scene-a", ["10.0.0.1"]));
+        using var fixture = CreateScheduler(repository.Object, Mock.Of<ISonosConnectorRepo>(), scenes.Object, time, commands: commands);
+        await using (await commands.EnterAsync(true)) commands.TakeManualControl(["10.0.0.1"]);
+        time.SetUtcNow(new DateTimeOffset(2026, 7, 21, 1, 0, 0, TimeSpan.Zero));
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        time.SetUtcNow(new DateTimeOffset(2026, 7, 21, 23, 0, 0, TimeSpan.Zero));
+        await fixture.Service.EvaluateNowAsync();
+        scenes.Verify(service => service.ApplySceneByIdAsync("scene-a", "automation-scheduler", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task EvaluateNowAsync_TransitionsBetweenWindows_StopsOldTargetsAndAppliesNewScene()
     {
         var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
@@ -245,7 +321,8 @@ public class AutomationSchedulerServiceTests
         ISceneOrchestrationService scenes,
         TimeProvider timeProvider,
         ISettingsSchemaMigrationService? migration = null,
-        TimeZoneInfo? timeZone = null)
+        TimeZoneInfo? timeZone = null,
+        PlaybackCommandCoordinator? commands = null)
     {
         var databaseOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"canonical-scheduler-{Guid.NewGuid():N}")
@@ -277,7 +354,8 @@ public class AutomationSchedulerServiceTests
             NullLogger<AutomationSchedulerService>.Instance,
             configuration,
             timeProvider,
-            timeZone ?? TimeZoneInfo.Utc);
+            timeZone ?? TimeZoneInfo.Utc,
+            commands);
 
         return new SchedulerFixture(scheduler, status, db, provider);
     }

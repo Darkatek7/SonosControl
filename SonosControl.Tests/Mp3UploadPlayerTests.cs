@@ -16,9 +16,9 @@ public sealed class Mp3UploadPlayerTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void UploadAndPlay_UsesSelectedSpeaker_AndDeletesUploadWhenPlaybackFails(bool failPlayback)
+    public async Task UploadAndPlay_UsesSelectedSpeaker_AndDeletesUploadWhenPlaybackFails(bool failPlayback)
     {
-        using var ctx = new BunitContext();
+        await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
         var uploads = Mp3UploadServiceTests.CreateService(_root);
         ctx.Services.AddSingleton(uploads);

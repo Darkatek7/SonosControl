@@ -10,6 +10,21 @@ public sealed class ReliableSettingsTests : IDisposable
 {
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"settings-regression-{Guid.NewGuid():N}");
     private SettingsRepo Open() => new(_directory);
+    [Fact]
+    public async Task StartupVolumesAreNormalizedBeforePersistence()
+    {
+        using var repository = Open();
+        await repository.UpdateSettingsAsync(settings => settings.Speakers =
+        [
+            new() { IpAddress = "A", StartupVolume = 456051 },
+            new() { IpAddress = "B", StartupVolume = -12 },
+            new() { IpAddress = "C", StartupVolume = null }
+        ]);
+        var settings = (await repository.GetSettings())!;
+        Assert.Equal(100, settings.Speakers[0].StartupVolume);
+        Assert.Equal(0, settings.Speakers[1].StartupVolume);
+        Assert.Null(settings.Speakers[2].StartupVolume);
+    }
     public void Dispose() { if (Directory.Exists(_directory)) Directory.Delete(_directory, true); }
 
     [Fact]

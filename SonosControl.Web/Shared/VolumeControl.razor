@@ -14,17 +14,12 @@
 
     <span class="volume-control__number-wrap">
         <label class="visually-hidden" for="@NumberId">@Label percentage</label>
-        <input id="@NumberId"
+        <VolumeNumberInput id="@NumberId"
                class="form-control form-control-sm volume-control__number"
                data-qa="volume-number-input"
-               type="number"
-               inputmode="numeric"
-               min="0"
-               max="@SafeMaxVolume"
-               step="1"
-               value="@ClampedValue"
+               Value="@ClampedValue" MaxVolume="@SafeMaxVolume" AllowEmpty="false"
                disabled="@Disabled"
-               @oninput="HandleInput" />
+               ValueChanged="HandleNumberInput" />
         <span class="volume-control__unit" aria-hidden="true">%</span>
     </span>
 </div>
@@ -37,10 +32,12 @@
     [Parameter, EditorRequired] public string Label { get; set; } = "Volume";
     [Parameter] public bool Disabled { get; set; }
 
-    private int SafeMaxVolume => Math.Max(0, MaxVolume);
+    private int SafeMaxVolume => Math.Clamp(MaxVolume, 0, 100);
     private int ClampedValue => Math.Clamp(Value, 0, SafeMaxVolume);
     private string SliderId => $"{IdPrefix}-slider";
     private string NumberId => $"{IdPrefix}-number";
+
+    private Task HandleNumberInput(int? value) => ValueChanged.InvokeAsync(value ?? ClampedValue);
 
     private Task HandleInput(ChangeEventArgs args)
     {

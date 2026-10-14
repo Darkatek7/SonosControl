@@ -188,14 +188,10 @@ else
                         <label class="form-label config-label" for="maxVolume">
                             <Icon Name="volume" Size="16" /> Maximum volume
                         </label>
-                        <input id="maxVolume"
-                               type="number"
+                        <VolumeNumberInput id="maxVolume"
                                class="form-control"
-                               min="0"
-                               max="100"
-                               @bind-value="MaxVolume"
-                               @bind-value:event="oninput"
-                               @bind-value:after="SaveSettings" />
+                               Value="@MaxVolume" AllowEmpty="false"
+                               ValueChanged="SetMaximumVolumeAsync" />
                         <div class="form-text">Limits volume changes throughout the application.</div>
                     </div>
 
@@ -309,6 +305,12 @@ else
             _settings.AutoPlayYouTubeUrl = ReadSelection(value, "youtubevideo");
             _settings.AutoPlayYouTubeMusicUrl = ReadSelection(value, "youtubemusic");
         }
+    }
+
+    private async Task SetMaximumVolumeAsync(int? value)
+    {
+        MaxVolume = value ?? MaxVolume;
+        await SaveSettings();
     }
 
     private int MaxVolume

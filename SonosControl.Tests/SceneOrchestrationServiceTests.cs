@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using SonosControl.DAL.Repos;
 using SonosControl.Web.Data;
 using SonosControl.Web.Services;
 using Xunit;
@@ -13,6 +14,45 @@ namespace SonosControl.Tests;
 
 public class SceneOrchestrationServiceTests
 {
+    [Theory]
+    [InlineData(501, true)]
+    [InlineData(714, false)]
+    public async Task UnsupportedGroupingFallsBackToIndependentPlayback_ButOtherCommandErrorsRemainFailures(int upnpCode, bool succeeds)
+    {
+        var scene = new Scene
+        {
+            Id = "group",
+            Name = "Grouped radio",
+            IsSyncedPlayback = true,
+            SourceType = SceneSourceType.Station,
+            SourceUrl = "https://radio.example/stream",
+            Actions = [new() { SpeakerIp = "A", IncludeInPlayback = true }, new() { SpeakerIp = "B", IncludeInPlayback = true }]
+        };
+        var settings = new Mock<ISettingsRepo>();
+        settings.Setup(repo => repo.GetSettings()).ReturnsAsync(new SonosSettings
+        {
+            Scenes = [scene],
+            Speakers = [new() { IpAddress = "A" }, new() { IpAddress = "B" }]
+        });
+        var connector = new Mock<ISonosConnectorRepo>();
+        connector.Setup(repo => repo.CreateGroup("A", It.IsAny<IEnumerable<string>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new SonosCommandException("B", "AVTransport", "SetAVTransportURI", System.Net.HttpStatusCode.InternalServerError, upnpCode, "UPnPError"));
+        var (logger, db) = CreateActionLogger();
+        await using var timers = RepositoryTestServices.CreateTimers();
+        var service = new SceneOrchestrationService(settings.Object, connector.Object, timers, Mock.Of<INotificationService>(), logger, NullLogger<SceneOrchestrationService>.Instance);
+        var result = await service.ApplySceneByIdAsync("group", "automation-scheduler");
+        Assert.Equal(succeeds, result.Success);
+        foreach (var ip in new[] { "A", "B" })
+            connector.Verify(repo => repo.SetTuneInStationAsync(ip, scene.SourceUrl, It.IsAny<CancellationToken>()), succeeds ? Times.Once() : Times.Never());
+        if (succeeds)
+        {
+            Assert.Contains("independently", result.Message);
+            Assert.Contains(db.Logs, log => log.Action == "SceneGroupingUnavailable");
+            connector.Verify(repo => repo.UngroupSpeaker(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(4));
+        }
+        else Assert.Equal(upnpCode, result.CommandFailure!.UpnpErrorCode);
+    }
+
     [Fact]
     public async Task ApplySceneByIdAsync_WhenSourceFails_RetriesThenUsesFallbackRecovery()
     {

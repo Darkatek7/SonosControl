@@ -48,6 +48,8 @@ builder.Services.AddScoped<ISonosConnectorRepo, SonosConnectorRepo>();
 builder.Services.AddScoped<IHolidayRepo, HolidayRepo>();
 builder.Services.AddScoped<SettingsEditingService>();
 builder.Services.AddScoped<EditorNavigationRequests>();
+builder.Services.AddSingleton<PlaybackCommandCoordinator>();
+builder.Services.AddScoped<ManualPlaybackService>();
 builder.Services.AddSingleton<SceneTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SceneTimerService>());
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
