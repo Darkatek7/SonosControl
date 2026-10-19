@@ -31,9 +31,9 @@ public class AuthorizationPolicyTests
         yield return [typeof(SchedulesController), nameof(SchedulesController.Create), AdminSuperadmin];
         yield return [typeof(SchedulesController), nameof(SchedulesController.Update), AdminSuperadmin];
         yield return [typeof(SchedulesController), nameof(SchedulesController.Delete), AdminSuperadmin];
-        yield return [typeof(ScenesController), nameof(ScenesController.Create), OperatorAdminSuperadmin];
-        yield return [typeof(ScenesController), nameof(ScenesController.Update), OperatorAdminSuperadmin];
-        yield return [typeof(ScenesController), nameof(ScenesController.Delete), OperatorAdminSuperadmin];
+        yield return [typeof(ScenesController), nameof(ScenesController.Create), AdminSuperadmin];
+        yield return [typeof(ScenesController), nameof(ScenesController.Update), AdminSuperadmin];
+        yield return [typeof(ScenesController), nameof(ScenesController.Delete), AdminSuperadmin];
         yield return [typeof(ScenesController), nameof(ScenesController.Apply), OperatorAdminSuperadmin];
         yield return [typeof(QueueController), nameof(QueueController.RemoveQueueItem), OperatorAdminSuperadmin];
         yield return [typeof(DevicesController), nameof(DevicesController.Health), AdminSuperadmin];

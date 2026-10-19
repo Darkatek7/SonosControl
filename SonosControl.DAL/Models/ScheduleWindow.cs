@@ -13,6 +13,7 @@ public class ScheduleWindow
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "New Window";
     public bool IsEnabled { get; set; } = true;
+    public bool HasTimeSchedule { get; set; } = true;
     public int Priority { get; set; } = 100;
     public TimeOnly StartTime { get; set; } = new(6, 0);
     public TimeOnly StopTime { get; set; } = new(18, 0);
@@ -23,6 +24,7 @@ public class ScheduleWindow
     public List<DateOnly> ExcludedDates { get; set; } = new();
     public List<DateOnly> AnnualExcludedDates { get; set; } = new();
     public string? SceneId { get; set; }
+    public Scene? Playback { get; set; }
     public int FadeInSeconds { get; set; }
     public int FadeOutSeconds { get; set; }
     public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;

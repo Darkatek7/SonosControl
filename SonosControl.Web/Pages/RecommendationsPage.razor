@@ -460,6 +460,7 @@
                     return;
             }
 
+            await ManualPlayback.PlaybackSucceededAsync([_selectedSpeakerIp]);
             ShowStatus("Recommendation started.");
         }
         catch (Exception ex)

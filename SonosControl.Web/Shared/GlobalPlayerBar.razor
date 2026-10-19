@@ -7,6 +7,7 @@
 @inject SleepTimerService SleepTimer
 @inject ManualPlaybackService ManualPlayback
 @inject PlaybackSnapshotMonitorService PlaybackMonitor
+@inject IManualAutoStopStatusProvider ManualStops
 
 @if (PlaybackState.Speakers.Count > 0)
 {
@@ -37,6 +38,10 @@
                 @if (PlaybackState.HasActiveSpeaker)
                 {
                     <span id="global-player-active-room" class="global-player-bar__active-room" title="@PlaybackState.ActiveSpeakerName">Room: @PlaybackState.ActiveSpeakerName</span>
+                    @if (_nextStop is { } nextStop)
+                    {
+                        <span class="global-player-bar__stop-reason">Stops at @AppTimeZone.Format(nextStop.StopAtUtc, "HH:mm") · @nextStop.Reason</span>
+                    }
                 }
             </span>
             <span class="player-surface__expand" aria-hidden="true"><Icon Name="chevron-up" Size="18" /></span>
@@ -232,6 +237,8 @@
     private int _queueTotal;
     private int _timerMinutes = 60;
     private bool _disposed;
+    private ManualAutoStopStatus? _nextStop;
+    private string? _stopLookupIp;
 
     private const string SpeakerSelectId = "global-player-speaker";
     private string PlayToggleLabel => PlaybackState.IsPlaying ? "Pause playback" : "Start playback";
@@ -246,6 +253,7 @@
         PlaybackState.StateChanged += HandlePlaybackStateChanged;
         SleepTimer.Changed += HandleSleepTimerChanged;
         await PlaybackState.InitializeAsync();
+        await RefreshNextStopAsync(force: true);
     }
 
     private Task TogglePlaybackAsync() => PlaybackState.TogglePlaybackAsync();
@@ -350,15 +358,24 @@
         if (!_disposed) _ = InvokeAsync(StateHasChanged);
     }
 
-    private void HandlePlaybackStateChanged() => _ = InvokeAsync(() =>
+    private void HandlePlaybackStateChanged() => _ = InvokeAsync(async () =>
     {
         if (PlaybackState.Speakers.Count == 0)
         {
             ClosePanel();
         }
 
+        await RefreshNextStopAsync(force: true);
         StateHasChanged();
     });
+
+    private async Task RefreshNextStopAsync(bool force = false)
+    {
+        var ip = PlaybackState.ActiveSpeakerIp;
+        if (!force && string.Equals(_stopLookupIp, ip, StringComparison.OrdinalIgnoreCase)) return;
+        _stopLookupIp = ip;
+        _nextStop = string.IsNullOrWhiteSpace(ip) ? null : await ManualStops.GetNextStopAsync(ip);
+    }
 
     public void Dispose()
     {

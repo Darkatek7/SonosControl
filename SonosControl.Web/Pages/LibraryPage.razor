@@ -610,6 +610,7 @@
                 case LibrarySourceType.YouTubeMusic: await _sonosConnectorRepo.PlayYouTubeMusicTrackAsync(speakerIp, source.Url, _settings.AutoPlayStationUrl); break;
             }
             await _sonosConnectorRepo.StartPlaying(speakerIp);
+            await ManualPlayback.PlaybackSucceededAsync([speakerIp]);
             await PlaybackState.RefreshAsync();
             ShowStatus($"Playing {source.Name}.");
         }

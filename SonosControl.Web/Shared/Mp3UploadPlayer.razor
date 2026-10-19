@@ -100,6 +100,7 @@
             upload = await Uploads.SaveAsync(stream, _file.Name, _retentionMinutes, _lifetime.Token);
             await using var manualLease = await ManualPlayback.BeginAsync(_speakerIp, _lifetime.Token);
             await _sonosConnectorRepo.PlayAudioFileAsync(_speakerIp, upload.StreamUrl, upload.Title, _lifetime.Token);
+            await ManualPlayback.PlaybackSucceededAsync([_speakerIp], _lifetime.Token);
             _error = false;
             _message = $"Playing {upload.Title}. Automatically deleted after {_retentionMinutes} minutes (cleanup runs every {Uploads.CleanupInterval.TotalMinutes:0} minute(s)).";
         }

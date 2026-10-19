@@ -13,13 +13,14 @@ public static class ScheduleWindowEvaluator
 
         return ScheduleWindowOrdering.Order(windows
             .Where(window => window.IsEnabled)
+            .Where(window => window.HasTimeSchedule)
             .Where(window => IsWindowActive(window, nowLocal, settings)))
             .FirstOrDefault();
     }
 
     public static bool IsWindowActive(ScheduleWindow window, DateTimeOffset nowLocal, SonosSettings? settings = null)
     {
-        if (!window.IsEnabled)
+        if (!window.IsEnabled || !window.HasTimeSchedule)
         {
             return false;
         }

@@ -67,16 +67,17 @@ public class SettingsSchemaMigrationServiceTests
         var result = await service.MigrateIfRequiredAsync();
 
         Assert.True(result.Success);
-        Assert.Equal(2, repository.Current!.ScheduleWindows.Count);
+        Assert.Equal(2, repository.Current!.ScheduleWindows.Count(window => window.HasTimeSchedule));
         var overnightWindow = repository.Current.ScheduleWindows.Single(window => window.StartTime == new TimeOnly(22, 0));
-        var randomScene = repository.Current.Scenes.Single(scene => scene.Id == overnightWindow.SceneId);
+        var randomScene = Assert.IsType<Scene>(overnightWindow.Playback);
+        Assert.Null(overnightWindow.SceneId);
         Assert.Equal(new TimeOnly(2, 0), overnightWindow.StopTime);
         Assert.Equal(SceneSourceSelectionMode.Random, randomScene.SourceSelectionMode);
         Assert.Equal(SceneSourceType.YouTubeMusic, randomScene.SourceType);
         Assert.False(randomScene.IsSyncedPlayback);
 
         var resumeWindow = repository.Current.ScheduleWindows.Single(window => window.StartTime == new TimeOnly(7, 0));
-        var resumeScene = repository.Current.Scenes.Single(scene => scene.Id == resumeWindow.SceneId);
+        var resumeScene = Assert.IsType<Scene>(resumeWindow.Playback);
         Assert.Equal(SceneSourceSelectionMode.Resume, resumeScene.SourceSelectionMode);
         Assert.Equal(SceneSourceType.None, resumeScene.SourceType);
         Assert.Null(resumeScene.SourceUrl);
@@ -121,7 +122,7 @@ public class SettingsSchemaMigrationServiceTests
         var holiday = windows.Single(window => window.StartDate == new DateOnly(2026, 7, 20));
         Assert.Equal(holiday.StartDate, holiday.EndDate);
         Assert.Equal(0, holiday.Priority);
-        var holidayScene = repository.Current.Scenes.Single(scene => scene.Id == holiday.SceneId);
+        var holidayScene = Assert.IsType<Scene>(holiday.Playback);
         Assert.Equal(SceneSourceSelectionMode.Specific, holidayScene.SourceSelectionMode);
         Assert.Equal(SceneSourceType.Spotify, holidayScene.SourceType);
 
@@ -160,7 +161,7 @@ public class SettingsSchemaMigrationServiceTests
 
         Assert.True(result.Success);
         var holiday = repository.Current!.ScheduleWindows.Single(window => window.StartDate == new DateOnly(2026, 7, 21));
-        var scene = repository.Current.Scenes.Single(item => item.Id == holiday.SceneId);
+        var scene = Assert.IsType<Scene>(holiday.Playback);
         Assert.Equal(SceneSourceSelectionMode.Specific, scene.SourceSelectionMode);
         Assert.Equal(SceneSourceType.YouTube, scene.SourceType);
     }
@@ -171,7 +172,7 @@ public class SettingsSchemaMigrationServiceTests
         var settings = LegacySettings();
         settings.Scenes =
         [
-            new Scene { Id = "disabled-scene", Name = "Disabled", Enabled = false }
+            new Scene { Id = "disabled-scene", Name = "Disabled", Enabled = false, SpeakerIps = ["192.0.2.4"] }
         ];
         settings.ScheduleWindows =
         [
@@ -184,9 +185,48 @@ public class SettingsSchemaMigrationServiceTests
 
         Assert.True(result.Success);
         Assert.All(repository.Current!.ScheduleWindows, window => Assert.False(window.IsEnabled));
+        Assert.Null(repository.Current.ScheduleWindows.Single(window => window.Id == "missing").Playback);
+        Assert.Equal("Disabled", repository.Current.ScheduleWindows.Single(window => window.Id == "disabled").Playback!.Name);
         Assert.Contains(result.Warnings, warning => warning.Contains("Missing", StringComparison.Ordinal));
         Assert.Contains(result.Warnings, warning => warning.Contains("Disabled ref", StringComparison.Ordinal));
         Assert.Equal(AutomationRuntimePhase.Ready, status.Snapshot.Phase);
+    }
+
+    [Fact]
+    public async Task Migration_EmbedsIndependentPlaybackAndCreatesManualTemplates()
+    {
+        var settings = LegacySettings();
+        settings.Scenes =
+        [
+            new Scene
+            {
+                Id = "shared", Name = "Shared", SpeakerIps = ["192.0.2.1"],
+                Actions = [new SceneAction { SpeakerIp = "192.0.2.1", IncludeInPlayback = false, IsMaster = true }]
+            },
+            new Scene { Id = "template", Name = "Template", SpeakerIps = ["192.0.2.2"] }
+        ];
+        settings.ScheduleWindows =
+        [
+            new ScheduleWindow { Id = "one", SceneId = "shared" },
+            new ScheduleWindow { Id = "two", SceneId = "shared" }
+        ];
+
+        var (service, repository, _) = CreateService(settings);
+        var result = await service.MigrateIfRequiredAsync();
+
+        Assert.True(result.Success);
+        var one = repository.Current!.ScheduleWindows.Single(window => window.Id == "one");
+        var two = repository.Current.ScheduleWindows.Single(window => window.Id == "two");
+        Assert.NotSame(one.Playback, two.Playback);
+        Assert.NotSame(one.Playback!.SpeakerIps, two.Playback!.SpeakerIps);
+        Assert.False(one.Playback.Actions.Single().IncludeInPlayback);
+        Assert.True(one.Playback.Actions.Single().IsMaster);
+        Assert.NotEqual(one.Playback.Id, two.Playback!.Id);
+        one.Playback.Name = "Edited independently";
+        Assert.Equal("Shared", two.Playback.Name);
+        var template = Assert.Single(repository.Current.ScheduleWindows, window => !window.HasTimeSchedule);
+        Assert.Equal("Template", template.Playback!.Name);
+        Assert.Null(template.SceneId);
     }
 
     [Fact]

@@ -171,6 +171,7 @@ public class AutomationDateExceptionsTests
 
     private static SonosSettings CreateSettings() => new()
     {
+        Speakers = [new() { Name = "Kitchen", IpAddress = "10.0.0.1" }],
         ScheduleWindows =
         [
             new ScheduleWindow { Name = "Tuesday schedule", RecurrenceType = ScheduleRecurrenceType.CustomDays, DaysOfWeek = [DayOfWeek.Tuesday] },

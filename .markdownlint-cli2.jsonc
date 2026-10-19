@@ -1,6 +1,6 @@
 {
   // Keep document globs aligned with .github/workflows/docs-quality.yml and AGENTS.md.
-  // The testing guide covers isolated playback snapshots, scene selection, shared sleep timer, volume limits and artwork fallback.
+  // The testing guide covers unified schedule/template editing, room stop rules, snapshots, volume limits and artwork fallback.
   "config": {
     "default": true,
     "MD013": false,

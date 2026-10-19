@@ -14,6 +14,7 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
     private readonly SemaphoreSlim _legacyGate = new(1, 1);
     private readonly Dictionary<string, SemaphoreSlim> _speakerGates = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Operation> _automations = [];
+    private readonly HashSet<MandatoryStop> _mandatoryStops = [];
     private readonly Dictionary<string, DateTimeOffset> _manualStarts = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _manualSync = new();
 
@@ -59,6 +60,41 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         }
     }
 
+    /// <summary>Acquires room ownership for a mandatory stop, even after a manual override.</summary>
+    public async Task<PlaybackCommandLease> EnterMandatoryStopAsync(
+        IEnumerable<string> targets,
+        CancellationToken cancellationToken = default)
+    {
+        var speakers = Normalize(targets);
+        if (speakers.Length == 0) throw new ArgumentException("At least one speaker target is required.", nameof(targets));
+        var overlapping = new List<Operation>();
+        var stop = new MandatoryStop(speakers);
+        await _sync.WaitAsync(cancellationToken);
+        try
+        {
+            foreach (var operation in _automations.Where(item => item.Targets.Overlaps(speakers)).ToList())
+            {
+                operation.Preempted = true;
+                overlapping.Add(operation);
+            }
+            _mandatoryStops.Add(stop);
+        }
+        finally { _sync.Release(); }
+
+        try
+        {
+            await Task.WhenAll(overlapping.Select(item => item.Cancellation.CancelAsync()));
+            await Task.WhenAll(overlapping.Select(item => item.Finished.Task)).WaitAsync(cancellationToken);
+            var gates = await AcquireGatesAsync(speakers, cancellationToken);
+            return new PlaybackCommandLease(this, null, PlaybackCommandOrigin.SleepTimer, speakers, cancellationToken, gates, stop);
+        }
+        catch
+        {
+            await FinishMandatoryStopAsync(stop);
+            throw;
+        }
+    }
+
     public async Task<PlaybackCommandLease> EnterManualAsync(
         IEnumerable<string> targets,
         PlaybackCommandOrigin origin = PlaybackCommandOrigin.Manual,
@@ -68,6 +104,7 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         var speakers = Normalize(targets);
         if (speakers.Length == 0) throw new ArgumentException("At least one speaker target is required.", nameof(targets));
         var overlapping = new List<Operation>();
+        List<MandatoryStop> yielding;
         var started = time.GetUtcNow();
         await _sync.WaitAsync(cancellationToken);
         try
@@ -79,9 +116,12 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
                 operation.Preempted = true;
                 overlapping.Add(operation);
             }
+            yielding = _mandatoryStops.Where(item => item.Targets.Overlaps(speakers)).ToList();
         }
         finally { _sync.Release(); }
 
+        // A boundary stop keeps its room and still pauses, but its fade-out yields to the queued request.
+        await Task.WhenAll(yielding.Select(item => item.Yield.CancelAsync()));
         // Claims are visible before cancellation, so a concurrent scheduler poll cannot reacquire the room.
         await Task.WhenAll(overlapping.Select(item => item.Cancellation.CancelAsync()));
         await Task.WhenAll(overlapping.Select(item => item.Finished.Task)).WaitAsync(cancellationToken);
@@ -146,6 +186,14 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         finally { _sync.Release(); }
     }
 
+    private async Task FinishMandatoryStopAsync(MandatoryStop stop)
+    {
+        await _sync.WaitAsync();
+        try { _mandatoryStops.Remove(stop); }
+        finally { _sync.Release(); }
+        // Not disposed: a concurrent manual request may still cancel it after reading the set.
+    }
+
     private static string[] Normalize(IEnumerable<string> speakers)
         => speakers.Where(ip => !string.IsNullOrWhiteSpace(ip)).Select(ip => ip.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -160,16 +208,25 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         public bool Preempted { get; set; }
     }
 
+    internal sealed class MandatoryStop(string[] targets)
+    {
+        public HashSet<string> Targets { get; } = targets.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        public CancellationTokenSource Yield { get; } = new();
+    }
+
     public sealed class PlaybackCommandLease : IAsyncDisposable
     {
         private readonly PlaybackCommandCoordinator _owner;
         private readonly Operation? _operation;
+        private readonly MandatoryStop? _stop;
         private SemaphoreSlim[] _manualGates;
         internal PlaybackCommandLease(PlaybackCommandCoordinator owner, Operation? operation,
-            PlaybackCommandOrigin origin, string[] speakers, CancellationToken token, SemaphoreSlim[]? gates = null)
+            PlaybackCommandOrigin origin, string[] speakers, CancellationToken token, SemaphoreSlim[]? gates = null, MandatoryStop? stop = null)
         {
-            _owner = owner; _operation = operation; Origin = origin; Speakers = speakers; CancellationToken = token; _manualGates = gates ?? [];
+            _owner = owner; _operation = operation; Origin = origin; Speakers = speakers; CancellationToken = token; _manualGates = gates ?? []; _stop = stop;
         }
+        /// <summary>Cancelled when a queued manual request asks a mandatory stop to cut its fade short; the stop itself must still run.</summary>
+        public CancellationToken YieldToken => _stop?.Yield.Token ?? CancellationToken.None;
         public PlaybackCommandOrigin Origin { get; }
         public IReadOnlyList<string> Speakers { get; }
         public CancellationToken CancellationToken { get; }
@@ -178,6 +235,7 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         {
             if (_operation is not null) await _owner.FinishAutomationAsync(_operation);
             foreach (var gate in Interlocked.Exchange(ref _manualGates, []).Reverse()) gate.Release();
+            if (_stop is not null) await _owner.FinishMandatoryStopAsync(_stop);
         }
     }
 

@@ -1,0 +1,23 @@
+.manual-stop-settings {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: .55rem;
+    padding: .65rem;
+    border: 1px solid var(--border-strong);
+    border-radius: .65rem;
+    background: var(--surface-2);
+}
+
+.manual-stop-settings > summary { display: flex; justify-content: space-between; gap: .5rem; cursor: pointer; }
+.manual-stop-settings > summary span { color: var(--text-muted); font-size: .8rem; }
+.manual-stop-settings__body { display: grid; gap: .5rem; }
+.manual-stop-settings__body > .form-control { max-width: 12rem; }
+.manual-stop-help { margin: -.3rem 0 .1rem; color: var(--text-muted); font-size: .8rem; }
+.manual-stop-days { display: grid; gap: .45rem; }
+.manual-stop-day { display: grid; grid-template-columns: minmax(5rem, .7fr) minmax(5rem, 1fr) minmax(5rem, 1fr) auto; align-items: center; gap: .4rem; padding: .5rem; border: 1px solid var(--border-strong); border-radius: .55rem; }
+.manual-stop-day label:not(.form-check) { display: grid; gap: .2rem; color: var(--text-muted); font-size: .75rem; }
+
+@media (max-width: 575.98px) {
+    .manual-stop-day { grid-template-columns: minmax(4rem, .7fr) 1fr 1fr; }
+    .manual-stop-day > button { grid-column: 2 / -1; }
+}

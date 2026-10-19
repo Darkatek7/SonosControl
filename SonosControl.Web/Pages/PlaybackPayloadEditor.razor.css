@@ -1,0 +1,64 @@
+.schedule-editor-card {
+    padding: var(--spacing-md);
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--surface-2) 34%, transparent);
+}
+
+.schedule-editor-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.schedule-editor-card__header h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: 0.15rem 0 0;
+    color: var(--text-primary);
+    font-size: 0.98rem;
+}
+
+.schedule-editor-card__header h3 svg { color: var(--brand-primary); }
+.schedule-editor-card__header span { color: var(--text-muted); font-size: var(--font-size-sm); font-weight: 800; }
+
+.schedule-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+}
+
+.schedule-field { display: grid; gap: 0.35rem; min-width: 0; }
+.schedule-field--wide { grid-column: span 2; }
+.schedule-field .form-label { margin: 0; color: color-mix(in srgb, var(--text-secondary) 82%, white 18%); font-weight: 800; }
+
+.schedule-speaker-list { display: grid; gap: .5rem; margin-top: .75rem; }
+
+.schedule-speaker-row {
+    display: grid;
+    grid-template-columns: auto minmax(7rem, 1fr) minmax(5rem, 8rem) auto;
+    gap: .8rem;
+    align-items: center;
+    padding: .65rem;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
+    border-radius: .75rem;
+    background: color-mix(in srgb, var(--surface-2) 42%, transparent);
+}
+
+.schedule-speaker-row > div { display: grid; min-width: 0; gap: .15rem; }
+.schedule-speaker-row small { display: block; overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; }
+.schedule-speaker-row label { display: grid; gap: .2rem; font-size: .75rem; }
+.schedule-speaker-row .schedule-master { display: flex; align-items: center; gap: .5rem; padding-left: .25rem; white-space: nowrap; }
+
+@media (max-width: 767.98px) {
+    .schedule-form-grid { grid-template-columns: 1fr; }
+    .schedule-field--wide { grid-column: auto; }
+}
+
+@media (max-width: 540px) {
+    .schedule-speaker-row { grid-template-columns: auto minmax(0, 1fr) minmax(4.5rem, 6.5rem); }
+    .schedule-speaker-row .schedule-master { grid-column: 2 / -1; }
+}

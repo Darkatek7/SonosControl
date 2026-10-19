@@ -33,15 +33,24 @@ public sealed class ScenesController : ControllerBase
         var settings = await _settingsRepo.GetSettings();
         settings ??= new SonosSettings();
         settings.Scenes ??= new();
-
-        return Ok(settings.Scenes.OrderBy(s => s.Name).ThenBy(s => s.Id).ToList());
+        settings.ScheduleWindows ??= new();
+        var templates = settings.ScheduleWindows.Where(window => !window.HasTimeSchedule && window.Playback is not null)
+            .Select(window => window.Playback!).ToList();
+        var scenes = templates.Concat(settings.Scenes)
+            .GroupBy(scene => scene.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(scene => scene.Name).ThenBy(scene => scene.Id).ToList();
+        return Ok(scenes);
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Scene>> GetById(string id)
     {
         var settings = await _settingsRepo.GetSettings();
-        var scene = settings?.Scenes?.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+        var scene = settings?.ScheduleWindows?.Where(window => !window.HasTimeSchedule)
+            .Select(window => window.Playback)
+            .FirstOrDefault(s => s is not null && string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase))
+            ?? settings?.Scenes?.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
         if (scene is null)
         {
             return NotFound();
@@ -51,10 +60,11 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "admin,operator,superadmin")]
+    [Authorize(Roles = "admin,superadmin")]
     public async Task<ActionResult<Scene>> Create([FromBody] Scene scene)
     {
         if (scene is null) return BadRequest("Scene payload is required.");
+        if (!ApiIdValidator.IsValidOptionalId(scene.Id)) return BadRequest(ApiIdValidator.Message);
         try
         {
             scene.Id = string.IsNullOrWhiteSpace(scene.Id) ? Guid.NewGuid().ToString("N") : scene.Id.Trim();
@@ -67,7 +77,7 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    [Authorize(Roles = "admin,operator,superadmin")]
+    [Authorize(Roles = "admin,superadmin")]
     public async Task<ActionResult<Scene>> Update(string id, [FromBody] Scene scene)
     {
         if (scene is null) return BadRequest("Scene payload is required.");
@@ -83,7 +93,7 @@ public sealed class ScenesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    [Authorize(Roles = "admin,operator,superadmin")]
+    [Authorize(Roles = "admin,superadmin")]
     public async Task<IActionResult> Delete(string id)
     {
         try
@@ -94,11 +104,17 @@ public sealed class ScenesController : ControllerBase
         }
         catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
     }
+
     [HttpPost("{id}/apply")]
     public async Task<ActionResult<SceneApplyResult>> Apply(string id, CancellationToken cancellationToken)
     {
         var user = User.Identity?.Name;
-        var result = await _sceneOrchestrationService.ApplySceneByIdAsync(id, user, cancellationToken);
+        var settings = await _settingsRepo.GetSettings();
+        var template = settings?.ScheduleWindows.FirstOrDefault(window => !window.HasTimeSchedule
+            && string.Equals(window.Playback?.Id, id, StringComparison.OrdinalIgnoreCase));
+        var result = template?.Playback is { } playback
+            ? await _sceneOrchestrationService.ApplySceneAsync(playback, user, cancellationToken)
+            : await _sceneOrchestrationService.ApplySceneByIdAsync(id, user, cancellationToken);
 
         if (!result.Success)
         {

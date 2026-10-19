@@ -15,13 +15,25 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         return await repository.UpdateSettingsAsync(settings =>
         {
             var index = settings.Scenes.FindIndex(s => Equal(s.Id, draft.Id));
-            Check(create ? index < 0 : index >= 0, create ? "Scene already exists." : "Scene was removed. Reload before editing it.", create ? 409 : 404);
-            var candidate = original is not null && index >= 0
-                ? SettingsChanges.MergeEntity(settings.Scenes[index], original, draft)
+            var template = settings.ScheduleWindows.FindIndex(window => !window.HasTimeSchedule
+                && window.Playback is not null && Equal(window.Playback.Id, draft.Id));
+            var exists = index >= 0 || template >= 0;
+            Check(create ? !exists : exists, create ? "Scene already exists." : "Scene was removed. Reload before editing it.", create ? 409 : 404);
+            var current = index >= 0 ? settings.Scenes[index] : template >= 0 ? settings.ScheduleWindows[template].Playback : null;
+            var candidate = original is not null && current is not null
+                ? SettingsChanges.MergeEntity(current, original, draft)
                 : Clone(draft);
             ValidateScene(candidate, settings);
             candidate.LastModifiedUtc = DateTime.UtcNow;
-            if (create) settings.Scenes.Add(candidate); else settings.Scenes[index] = candidate;
+            if (index < 0) settings.Scenes.Add(candidate); else settings.Scenes[index] = candidate;
+            var templateWindow = template >= 0 ? Clone(settings.ScheduleWindows[template])
+                : new ScheduleWindow { Id = $"scene-template-{candidate.Id}", HasTimeSchedule = false };
+            templateWindow.Name = candidate.Name;
+            templateWindow.IsEnabled = candidate.Enabled;
+            templateWindow.Playback = Clone(candidate);
+            templateWindow.LastModifiedUtc = candidate.LastModifiedUtc;
+            if (template >= 0) settings.ScheduleWindows[template] = templateWindow;
+            else settings.ScheduleWindows.Add(templateWindow);
         });
     }
 
@@ -37,12 +49,20 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
             ValidateWindow(candidate, settings);
             candidate.LastModifiedUtc = DateTime.UtcNow;
             if (create) settings.ScheduleWindows.Add(candidate); else settings.ScheduleWindows[index] = candidate;
+            if (!candidate.HasTimeSchedule && candidate.Playback is not null)
+            {
+                var legacyIndex = settings.Scenes.FindIndex(scene => Equal(scene.Id, candidate.Playback.Id));
+                if (legacyIndex >= 0) settings.Scenes[legacyIndex] = Clone(candidate.Playback);
+            }
         });
     }
 
     public Task<SonosSettings> DeleteSceneAsync(string id) => repository.UpdateSettingsAsync(settings =>
     {
-        Check(settings.Scenes.RemoveAll(s => Equal(s.Id, id)) > 0, "Scene not found.", 404);
+        var removedScenes = settings.Scenes.RemoveAll(s => Equal(s.Id, id));
+        var removedTemplates = settings.ScheduleWindows.RemoveAll(window => !window.HasTimeSchedule
+            && window.Playback is not null && Equal(window.Playback.Id, id));
+        Check(removedScenes + removedTemplates > 0, "Scene not found.", 404);
         foreach (var window in settings.ScheduleWindows.Where(w => Equal(w.SceneId, id)))
         {
             window.SceneId = null;
@@ -52,7 +72,13 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
     });
 
     public Task<SonosSettings> DeleteWindowAsync(string id) => repository.UpdateSettingsAsync(settings =>
-        Check(settings.ScheduleWindows.RemoveAll(w => Equal(w.Id, id)) > 0, "Schedule not found.", 404));
+    {
+        var window = settings.ScheduleWindows.FirstOrDefault(w => Equal(w.Id, id));
+        Check(window is not null, "Schedule not found.", 404);
+        settings.ScheduleWindows.Remove(window!);
+        if (window is { HasTimeSchedule: false, Playback: not null })
+            settings.Scenes.RemoveAll(scene => Equal(scene.Id, window.Playback.Id));
+    });
 
     public Task<SonosSettings> MoveWindowAsync(string id, int direction) => repository.UpdateSettingsAsync(settings =>
     {
@@ -71,11 +97,12 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         }
     });
 
-    public static void ValidateScene(Scene scene, SonosSettings settings)
+    public static void ValidateScene(Scene scene, SonosSettings settings, bool checkUniqueName = true)
     {
         Check(!string.IsNullOrWhiteSpace(scene.Name), "Scene name is required.");
         scene.Name = scene.Name.Trim();
-        Check(!settings.Scenes.Any(s => !Equal(s.Id, scene.Id) && Equal(s.Name.Trim(), scene.Name)), $"A scene named '{scene.Name}' already exists.", 409);
+        if (checkUniqueName)
+            Check(!settings.Scenes.Any(s => !Equal(s.Id, scene.Id) && Equal(s.Name.Trim(), scene.Name)), $"A scene named '{scene.Name}' already exists.", 409);
         Check(Enum.IsDefined(scene.SourceType) && Enum.IsDefined(scene.SourceSelectionMode), "Invalid scene source selection.");
         Check(scene.TimerMinutes is null or >= 0, "Timer minutes cannot be negative.");
         if (scene.TimerMinutes == 0) scene.TimerMinutes = null;
@@ -106,8 +133,20 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         Check(window.DaysOfWeek.All(Enum.IsDefined), "Invalid recurrence day.");
         Check(window.RecurrenceType != ScheduleRecurrenceType.CustomDays || window.DaysOfWeek.Count > 0, "Custom day recurrence requires at least one day.");
         Check(!window.StartDate.HasValue || !window.EndDate.HasValue || window.EndDate >= window.StartDate, "EndDate must be on or after StartDate.");
-        Check(string.IsNullOrWhiteSpace(window.SceneId) || settings.Scenes.Any(s => Equal(s.Id, window.SceneId)), "Schedule references a scene that does not exist.");
-        Check(!window.IsEnabled || settings.Scenes.Any(s => s.Enabled && Equal(s.Id, window.SceneId)), "An enabled schedule must reference an existing enabled scene.");
+        if (window.Playback is null && !string.IsNullOrWhiteSpace(window.SceneId))
+        {
+            var scene = settings.Scenes.FirstOrDefault(s => Equal(s.Id, window.SceneId));
+            Check(scene is not null, "Schedule references a scene that does not exist.");
+            window.Playback = Clone(scene!);
+            if (window.HasTimeSchedule) window.Playback.Id = $"{window.Id}-playback";
+        }
+        Check(!window.IsEnabled || window.Playback is { Enabled: true }, "An enabled schedule must include enabled playback.");
+        if (window.Playback is not null)
+        {
+            Check(window.Playback.SpeakerIps?.Count > 0 || window.Playback.Actions?.Any(a => !string.IsNullOrWhiteSpace(a.SpeakerIp)) == true, "Select at least one speaker for schedule playback.");
+            ValidateScene(window.Playback, settings, checkUniqueName: false);
+            window.SceneId = null;
+        }
         window.ExcludedDates ??= [];
         window.AnnualExcludedDates ??= [];
     }
