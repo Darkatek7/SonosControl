@@ -16,6 +16,34 @@ tests/          pytest suite (synthetic data, no network)
 Dockerfile      multi-stage build, bakes the auditory connectome artifact
 ```
 
+## Docker Hub image
+
+The image is `darkatek7/sonoscontrol-flydj:latest`, built for Linux AMD64 and
+ARM64. Both the auditory and full connectomes are included. The server runs
+as UID/GID 10001 and starts with the simulation stopped.
+
+To test the sidecar independently:
+
+```bash
+docker pull darkatek7/sonoscontrol-flydj:latest
+docker run -d --name flydj -p 127.0.0.1:8090:8090 \
+  -e FLYDJ_ENABLED=true darkatek7/sonoscontrol-flydj:latest
+curl --fail http://127.0.0.1:8090/health
+docker logs flydj
+docker stop flydj
+docker rm flydj
+```
+
+Wait for `/health` to report `modelStatus: ready` before using the model.
+Without `FLYDJ_ENABLED=true`, the container exits successfully without starting
+the server. Set `FLYDJ_CONNECTOME_SCOPE=full` to select the whole-brain artifact.
+The image contains `/srv/NOTICE.md` with data and software attribution and
+the existing licence questions; see [NOTICE.md](NOTICE.md).
+
+For use with SonosControl, follow the
+[Docker Hub Compose instructions](../docs/docker-operations.md#use-published-docker-hub-images).
+The sidecar port remains internal to the Compose network in that setup.
+
 ## Run locally
 
 Python 3.13 is what the image uses; 3.12 to 3.14 work (numba and PyAV ship wheels).

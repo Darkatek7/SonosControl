@@ -19,6 +19,24 @@ docker compose up -d --build
 
 ## Routine Commands
 
+### Use published Docker Hub images
+
+From the repository root, after configuring `.env`, run:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.hub.yml pull
+docker compose -f docker-compose.yml -f docker-compose.hub.yml up -d --no-build
+```
+
+Set `FLYDJ_ENABLED=true` in `.env` to enable the sidecar. Repeat both commands
+to update. The override uses `darkatek7/sonoscontrol:latest` and
+`darkatek7/sonoscontrol-flydj:latest`; keep `--no-build` to use those published
+images. FlyDJ supports Linux AMD64 and ARM64; the published web application
+currently supports AMD64 only (ARM64 hosts need AMD64 emulation for it).
+
+If pulling reports `pull access denied`, check that the Docker Hub repository
+is public, or use `docker login` with an account granted access.
+
 ### Check status
 ```bash
 docker compose ps

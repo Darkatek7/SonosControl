@@ -1,0 +1,6 @@
+# Use with docker-compose.yml and --no-build to run published images.
+services:
+  sonos:
+    image: darkatek7/sonoscontrol:latest
+  flydj:
+    image: darkatek7/sonoscontrol-flydj:latest
