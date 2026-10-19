@@ -40,6 +40,16 @@ internal static class RepositoryTestServices
     public static void AddDefaults(IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
+        services.TryAddSingleton<IManualAutoStopStatusProvider, NullManualAutoStopStatusProvider>();
+        services.TryAddSingleton<ISceneOrchestrationService>(_ =>
+        {
+            var orchestration = new Mock<ISceneOrchestrationService>();
+            orchestration.Setup(service => service.ApplySceneAsync(It.IsAny<SonosControl.DAL.Models.Scene>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((SonosControl.DAL.Models.Scene scene, string? _, CancellationToken _) =>
+                    new SceneApplyResult(true, "Playback started.", scene.Id, []));
+            return orchestration.Object;
+        });
         services.TryAddSingleton<PlaybackCommandCoordinator>();
         services.TryAddSingleton<PlaybackSnapshotStore>();
         services.TryAddSingleton<Microsoft.Extensions.Logging.ILogger<PlaybackSnapshotMonitorService>>(NullLogger<PlaybackSnapshotMonitorService>.Instance);
@@ -60,4 +70,10 @@ internal static class RepositoryTestServices
     }
 
     public static SceneTimerService CreateTimers() => new(Mock.Of<IServiceScopeFactory>(), TimeProvider.System, NullLogger<SceneTimerService>.Instance);
+}
+
+internal sealed class NullManualAutoStopStatusProvider : IManualAutoStopStatusProvider
+{
+    public Task<ManualAutoStopStatus?> GetNextStopAsync(string speakerIp, CancellationToken cancellationToken = default)
+        => Task.FromResult<ManualAutoStopStatus?>(null);
 }

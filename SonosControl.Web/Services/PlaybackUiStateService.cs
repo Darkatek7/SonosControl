@@ -189,6 +189,7 @@ public sealed class PlaybackUiStateService : IDisposable
             else
             {
                 await _sonosConnectorRepo.StartPlaying(speakerIp);
+                if (_manualPlayback is not null) await _manualPlayback.PlaybackSucceededAsync([speakerIp]);
             }
 
             var stillActive = string.Equals(speakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
@@ -430,7 +431,13 @@ public sealed class PlaybackUiStateService : IDisposable
             var reachableSlaveIps = await FilterReachableSpeakerIpsAsync(allSlaveIps);
             var targets = new[] { masterIp }.Concat(reachableSlaveIps).ToArray();
             await using (var manualLease = _manualPlayback is null ? null : await _manualPlayback.BeginTargetsAsync(targets))
+            {
                 await ApplyLegacySyncAsync(masterIp, reachableSlaveIps);
+                // The master keeps playing untouched; only the slaves were actually started, so only they
+                // get a new grace period. Re-registering the master would push its stop deadline out.
+                if (_manualPlayback is not null && reachableSlaveIps.Count > 0)
+                    await _manualPlayback.PlaybackSucceededAsync(reachableSlaveIps);
+            }
 
             var skippedCount = allSlaveIps.Count - reachableSlaveIps.Count;
             var details = skippedCount > 0

@@ -15,7 +15,7 @@ namespace SonosControl.Web.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
@@ -252,6 +252,37 @@ namespace SonosControl.Web.Migrations
                     b.HasIndex("PerformedBy", "Timestamp");
 
                     b.ToTable("Logs");
+                });
+
+            modelBuilder.Entity("SonosControl.Web.Models.ManualPlaybackDeadline", b =>
+                {
+                    b.Property<string>("SpeakerIp")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Generation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RuleKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StopAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("SpeakerIp");
+
+                    b.HasIndex("StopAtUtc");
+
+                    b.ToTable("ManualPlaybackDeadlines");
                 });
 
             modelBuilder.Entity("SonosControl.Web.Models.PlaybackHistory", b =>

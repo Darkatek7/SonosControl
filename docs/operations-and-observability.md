@@ -26,18 +26,41 @@ This guide summarizes runtime checks, telemetry endpoints, and day-2 operational
 - Record key admin actions and playback events for auditability.
 - In incident review, correlate logs with `/healthz` and `/metricsz` snapshots.
 - Sonos HTTP errors, SOAP faults, invalid sources, and missing required device IDs
-  fail the command. Scene playback retries and fallback rules handle source
+  fail the command. Schedule playback retries and fallback rules handle source
   failures; cancelled requests do not trigger recovery. Transport failures include
   the endpoint in structured application logs.
-- If Sonos rejects group creation with UPnP error 501, the scene clears partial
+- If Sonos rejects group creation with UPnP error 501, playback clears partial
   groups and plays on each target independently. `SceneGroupingUnavailable`
   explains that synchronization requires speakers in the same Sonos system.
 
-Starting or pausing playback manually cancels existing scene timers for the
-speaker's group and takes priority over the current schedule occurrence. The
-scheduler does not retry that occurrence or pause manually controlled speakers
-at its end. Future schedule occurrences run normally. This priority is held in
-memory and resets when the application restarts.
+Starting or pausing playback manually cancels the current schedule occurrence
+for the affected room and takes priority until that occurrence ends. The
+scheduler does not retry that occurrence or pause manually controlled rooms at
+its end; future occurrences run normally. A scheduled stop remains enforced
+even when a manual command changes playback. This ownership is persisted in
+SQLite so a restart does not lose a pending schedule stop.
+
+Speaker auto-stop rules are configured per speaker and per weekday in Device
+settings: a Stop time, a Release time, and a grace period in minutes (required
+and positive when the rule is enabled; rules are disabled by default). "Copy to
+all days" duplicates one day's values to the rest of the week.
+
+- A schedule's end always stops its speakers, even if music was started manually
+  during the schedule.
+- After the daily Stop time, a manual start from this web app is stopped once the
+  grace period has elapsed (start 22:10 with 30 minutes grace stops at 22:40).
+  Each new successful start gets its own deadline. Volume changes, skips, failed
+  starts, and page reloads do not extend it. Starts made in the Sonos app are not
+  registered.
+- The rule applies until the Release time or the next effective schedule start on
+  that speaker, whichever comes first. A Release time earlier than Stop means the
+  following day.
+- Only the due speaker is ungrouped and stopped. If ungrouping fails, no
+  group-wide pause is sent; the failure is logged and retried.
+- Sleep timers are independent of these deadlines.
+- Deadlines are stored in SQLite and reconciled on restart, so overdue stops run
+  immediately. Evaluation happens within the next scheduler cycle (about 15
+  seconds). Room cards and the player show the next auto-stop and its reason.
 
 The playback snapshot monitor is the single process-wide owner of room state
 shared by Home, the dock, and connected browser circuits. It polls configured
@@ -52,7 +75,9 @@ browsers. Starting a timer replaces the current timer, and any browser can
 cancel it. The timer remains attached to the room selected when it was started,
 even if the active room changes later. Manual Play or Pause leaves the sleep
 timer armed; when its deadline arrives it takes command priority and pauses its
-room. A running timer is not persisted across application restarts.
+room. Sleep timers are independent of the persisted manual and scheduled stop
+deadlines, and a running sleep timer is not persisted across application
+restarts.
 
 ## Backup and Restore
 Back up these paths together:
@@ -76,13 +101,26 @@ write defaults over the failed configuration. A missing file alone uses defaults
 Administrator sign-in remains available for recovery; public registration is
 disabled while the configuration cannot be read.
 
-Scene and schedule editors share API validation. Scene names are required and
-unique, specific sources require a URL, timers cannot be negative, and volumes
-must fit the current maximum. Schedule priorities are 0–1000 and fades are
-0–600 seconds. Custom recurrence requires valid days, end dates cannot precede
-start dates, and schedules must use valid scene references. Enabled schedules
-require an enabled scene. Overnight windows and Resume/Random playback keep
-their existing semantics.
+Scenes and schedules are one Schedules surface (`/automation`; the old `/scenes`
+and `/schedule-windows` routes redirect there). Each entry embeds its playback
+payload: source, selected rooms, and per-room volume. Entries saved without time
+control are manual templates, started with Start now. Date bounds, priority,
+fades, and exclusions sit in a collapsible Advanced section.
+
+Settings schema version 3 migrates on startup, after writing a backup. Scenes
+shared by several schedules are copied per schedule, unreferenced scenes become
+manual templates, and invalid references become disabled entries that can be
+repaired in the editor. Old scene timers become an optional runtime limit.
+Imported backups are validated and migrated before they replace active settings.
+Schedule priorities are 0–1000 and fades are 0–600 seconds. Custom recurrence
+requires valid days, end dates cannot precede start dates, and overnight windows
+and Resume/Random playback keep their existing semantics.
+
+`/api/schedules` returns the full data. Legacy payloads that use `SceneId`, and
+`/api/scenes`, still work through a compatibility adapter; write operations on
+them require admin or superadmin. Custom recurrence requires valid days, end dates cannot precede
+start dates, and overnight windows and Resume/Random playback keep their
+existing semantics.
 
 ## Security and Secrets Hygiene
 1. Keep `config.json` and data protection keys out of source control.

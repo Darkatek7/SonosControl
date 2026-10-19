@@ -15,25 +15,30 @@ namespace SonosControl.Tests;
 
 public class EditorWorkflowTests
 {
+    private const string SaveButton = ".responsive-editor-dialog .app-dialog__actions .btn-primary";
+
+    private static ScheduleWindow TemplateWithScene(Scene scene, bool timed = false) =>
+        new() { Id = "window", Name = "Window", HasTimeSchedule = timed, IsEnabled = timed, Playback = scene };
+
     [Fact]
-    public void SceneEditor_LabelsEveryField_AndOpeningIsClean()
+    public void ScheduleEditor_LabelsEveryField_AndOpeningIsClean()
     {
         using var ctx = CreateContext(new SonosSettings
         {
             Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }]
         });
-        var cut = ctx.Render<ScenesPage>();
-        cut.Find(".scenes-new-button").Click();
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-new-button").Click();
         AssertLabelledFields(cut);
         Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        cut.Find("#scene-name").Input("Changed");
+        cut.Find("#schedule-name").Input("Changed");
         Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        cut.Find("#scene-name").Input("Scene 1");
+        cut.Find("#schedule-name").Input("Schedule 1");
         Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
     }
 
     [Fact]
-    public void SceneEditor_SeedsLegacySpeakerIpsWithoutOpeningDirty()
+    public void ScheduleEditor_SeedsLegacySceneSpeakerIpsWithoutOpeningDirty()
     {
         var legacy = new Scene
         {
@@ -47,162 +52,228 @@ public class EditorWorkflowTests
         {
             MaxVolume = 40,
             Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }, new() { Name = "Office", IpAddress = "1.2.3.5" }],
-            Scenes = [legacy]
+            Scenes = [legacy],
+            ScheduleWindows = [new() { Id = "window", Name = "Legacy template", HasTimeSchedule = false, IsEnabled = false, SceneId = "legacy" }]
         };
         using var ctx = CreateContext(settings);
-        var cut = ctx.Render<ScenesPage>();
+        var cut = ctx.Render<ScheduleWindowsPage>();
 
-        cut.Find(".scene-select-link").Click();
+        cut.Find(".schedule-window-select-link").Click();
 
-        Assert.True(cut.Find("#scene-speaker-1-2-3-4-include").HasAttribute("checked"));
-        Assert.False(cut.Find("#scene-speaker-1-2-3-5-include").HasAttribute("checked"));
+        Assert.True(cut.Find("input[aria-label='Include Kitchen in playback']").HasAttribute("checked"));
+        Assert.False(cut.Find("input[aria-label='Include Office in playback']").HasAttribute("checked"));
         Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
     }
 
     [Fact]
-    public void SceneEditor_ClampsExistingVolumeToCurrentLimitWithoutOpeningDirty()
+    public void ScheduleEditor_ClampsExistingVolumeToCurrentLimitWithoutOpeningDirty()
     {
         var settings = new SonosSettings
         {
             MaxVolume = 40,
             Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }, new() { Name = "Office", IpAddress = "1.2.3.5" }],
-            Scenes = [new()
+            ScheduleWindows = [TemplateWithScene(new()
             {
                 Id = "high-volume", Name = "High volume", IsSyncedPlayback = false,
                 Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true, Volume = 80 }, new() { SpeakerIp = "1.2.3.5", IncludeInPlayback = true, Volume = null }]
-            }]
+            })]
         };
         using var ctx = CreateContext(settings);
-        var cut = ctx.Render<ScenesPage>();
+        var cut = ctx.Render<ScheduleWindowsPage>();
 
-        cut.Find(".scene-select-link").Click();
+        cut.Find(".schedule-window-select-link").Click();
 
-        Assert.Equal("40", cut.Find("#scene-speaker-1-2-3-4-volume").GetAttribute("value"));
-        Assert.Equal("", cut.Find("#scene-speaker-1-2-3-5-volume").GetAttribute("value"));
+        Assert.Equal("40", cut.Find("#payload-speaker-1-2-3-4-volume").GetAttribute("value"));
+        Assert.Equal("", cut.Find("#payload-speaker-1-2-3-5-volume").GetAttribute("value"));
         Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
     }
 
     [Fact]
-    public void SceneEditor_ConcurrentMaximumReductionRefreshesCapAndRetainsDirtyDraft()
-    {
-        var store = new SonosSettings
-        {
-            MaxVolume = 100,
-            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
-            Scenes = [new()
-            {
-                Id = "high-volume", Name = "High volume", IsSyncedPlayback = false,
-                Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true, Volume = 80 }]
-            }]
-        };
-        using var ctx = CreateSnapshotContext(store);
-        var cut = ctx.Render<ScenesPage>();
-        cut.Find(".scene-select-link").Click();
-        store.MaxVolume = 40;
-
-        cut.Find(".responsive-editor-dialog .btn-primary").Click();
-
-        cut.WaitForAssertion(() => Assert.Contains("latest maximum volume was applied", cut.Markup));
-        Assert.Equal("40", cut.Find("#scene-speaker-1-2-3-4-volume").GetAttribute("value"));
-        Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        Assert.Equal(80, store.Scenes[0].Actions[0].Volume);
-    }
-
-    [Fact]
-    public void SceneEditor_SettingsChangeEventClampsDraftAndPreservesDirtyBaseline()
-    {
-        var store = new SonosSettings
-        {
-            MaxVolume = 100,
-            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
-            Scenes = [new()
-            {
-                Id = "high-volume", Name = "High volume", IsSyncedPlayback = false,
-                Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true, Volume = 80 }]
-            }]
-        };
-        using var ctx = CreateSnapshotContext(store);
-        var cut = ctx.Render<ScenesPage>();
-        cut.Find(".scene-select-link").Click();
-        cut.Find("#scene-name").Input("User edit");
-        store.MaxVolume = 40;
-        ctx.Services.GetRequiredService<PlaybackSnapshotStore>().NotifySettingsChanged("reduced-limit");
-
-        cut.WaitForAssertion(() => Assert.Contains("Maximum volume changed to 40", cut.Markup));
-
-        Assert.Equal("40", cut.Find("#scene-speaker-1-2-3-4-volume").GetAttribute("value"));
-        Assert.Equal("User edit", cut.Find("#scene-name").GetAttribute("value"));
-        Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-    }
-
-    [Fact]
-    public void SceneEditor_AllExcludedActionsCannotBeSavedOrApplied()
+    public void ScheduleEditor_AllExcludedSpeakersCannotBeSaved()
     {
         var settings = new SonosSettings
         {
             Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
-            Scenes = [new()
+            ScheduleWindows = [TemplateWithScene(new()
             {
                 Id = "empty-selection", Name = "Empty selection", SpeakerIps = ["1.2.3.4"],
                 Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = false }]
-            }]
+            })]
         };
         using var ctx = CreateContext(settings);
-        var cut = ctx.Render<ScenesPage>();
+        var cut = ctx.Render<ScheduleWindowsPage>();
 
-        cut.Find(".scene-select-link").Click();
-        cut.Find(".responsive-editor-dialog .btn-primary").Click();
+        cut.Find(".schedule-window-select-link").Click();
+        cut.Find(SaveButton).Click();
         cut.WaitForAssertion(() => Assert.Contains("Select at least one speaker", cut.Markup));
-        cut.Find(".responsive-editor-dialog .btn-outline-success").Click();
-        cut.WaitForAssertion(() => Assert.Contains("Select at least one speaker", cut.Markup));
-        Assert.Single(settings.Scenes);
+        Assert.Single(settings.ScheduleWindows);
+        Assert.False(settings.ScheduleWindows[0].Playback!.Actions[0].IncludeInPlayback);
     }
 
     [Fact]
-    public async Task SceneEditor_KeepEditingPreservesDraft_DiscardClosesIt()
+    public async Task ScheduleEditor_KeepEditingPreservesDraft_DiscardClosesIt()
     {
         using var ctx = CreateContext(new SonosSettings());
-        var cut = ctx.Render<ScenesPage>();
-        cut.Find(".scenes-new-button").Click();
-        cut.Find("#scene-name").Input("Unsaved scene");
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-new-button").Click();
+        cut.Find("#schedule-name").Input("Unsaved schedule");
         var closing = cut.Find(".app-dialog__close").ClickAsync(new MouseEventArgs());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[role='alertdialog']")));
         cut.FindAll("button").Single(button => button.TextContent == "Keep editing").Click();
         await closing;
-        Assert.Equal("Unsaved scene", cut.Find("#scene-name").GetAttribute("value"));
+        Assert.Equal("Unsaved schedule", cut.Find("#schedule-name").GetAttribute("value"));
         closing = cut.Find(".app-dialog__close").ClickAsync(new MouseEventArgs());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[role='alertdialog']")));
         cut.FindAll("button").Single(button => button.TextContent == "Discard changes").Click();
         await closing;
-        Assert.Empty(cut.FindAll("#scene-name"));
+        Assert.Empty(cut.FindAll("#schedule-name"));
     }
 
     [Fact]
-    public void SceneEditor_SaveClearsChanges_FailureAndApplyDoNot()
+    public void ScheduleEditor_SaveClearsChanges_FailureDoesNot()
     {
         var settings = new SonosSettings { Speakers = [new() { Name = "Test room", IpAddress = "192.0.2.1" }] };
         using var ctx = CreateContext(settings);
-        var cut = ctx.Render<ScenesPage>();
-        cut.Find(".scenes-new-button").Click();
-        cut.Find("#scene-name").Input("Saved scene");
-        cut.Find(".responsive-editor-dialog .btn-primary").Click();
-        cut.WaitForAssertion(() => Assert.Single(settings.Scenes));
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-new-button").Click();
+        cut.Find("#schedule-name").Input("Saved schedule");
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.Single(settings.ScheduleWindows));
         Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        cut.Find("#scene-name").Input("Changed scene");
-        cut.Find(".responsive-editor-dialog .btn-outline-success").Click();
-        cut.WaitForAssertion(() => Assert.Contains("Applied", cut.Markup));
+        cut.Find("#schedule-name").Input("");
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter a name", cut.Markup));
         Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        cut.Find("#scene-name").Input("");
-        cut.Find(".responsive-editor-dialog .btn-primary").Click();
-        cut.WaitForAssertion(() => Assert.Contains("Failed to save scene", cut.Markup));
+        Assert.Equal("Saved schedule", settings.ScheduleWindows[0].Name);
+    }
+
+    [Fact]
+    public void TimeControl_RoundTripsScheduleToTemplateAndBack_KeepingHiddenData()
+    {
+        var settings = new SonosSettings
+        {
+            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
+            ScheduleWindows = [new()
+            {
+                Id = "window", Name = "Morning", IsEnabled = true, HasTimeSchedule = true,
+                StartTime = new TimeOnly(7, 15), StopTime = new TimeOnly(9, 30), FadeInSeconds = 12,
+                ExcludedDates = [new DateOnly(2026, 12, 25)],
+                Playback = new() { Id = "morning-playback", Name = "Morning", Enabled = true, Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true }] }
+            }]
+        };
+        using var ctx = CreateContext(settings);
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-window-select-link").Click();
+        var guard = cut.FindComponent<UnsavedChangesGuard>();
+        Assert.Equal("07:15", cut.Find("#schedule-start").GetAttribute("value"));
+        Assert.NotEmpty(cut.FindAll("#schedule-fade-in"));
+
+        cut.Find("#schedule-time-control").Change(false);
+
+        Assert.Empty(cut.FindAll("#schedule-start"));
+        Assert.Empty(cut.FindAll("#schedule-recurrence"));
+        Assert.Empty(cut.FindAll("#schedule-fade-in"));
+        Assert.Contains("Save template", cut.Find(SaveButton).TextContent);
+        Assert.True(guard.Instance.HasChanges);
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.False(settings.ScheduleWindows[0].HasTimeSchedule));
+        Assert.Equal(new TimeOnly(7, 15), settings.ScheduleWindows[0].StartTime);
+        Assert.Equal(12, settings.ScheduleWindows[0].FadeInSeconds);
+        Assert.Single(settings.ScheduleWindows[0].ExcludedDates);
+        Assert.Contains("Start now", cut.Markup);
+
+        cut.Find("#schedule-time-control").Change(true);
+
+        Assert.Equal("07:15", cut.Find("#schedule-start").GetAttribute("value"));
+        Assert.Equal("12", cut.Find("#schedule-fade-in").GetAttribute("value"));
+        Assert.Contains("Save schedule", cut.Find(SaveButton).TextContent);
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.True(settings.ScheduleWindows[0].HasTimeSchedule));
+        Assert.Equal(new DateOnly(2026, 12, 25), Assert.Single(settings.ScheduleWindows[0].ExcludedDates));
+    }
+
+    [Fact]
+    public void TimeControl_ValidationAppliesToTimedSchedulesButNotHiddenTemplateTiming()
+    {
+        var settings = new SonosSettings
+        {
+            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
+            ScheduleWindows = [new()
+            {
+                Id = "window", Name = "Custom", IsEnabled = true, HasTimeSchedule = true,
+                RecurrenceType = ScheduleRecurrenceType.CustomDays, DaysOfWeek = [],
+                Playback = new() { Id = "custom-playback", Name = "Custom", Enabled = true, Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true }] }
+            }]
+        };
+        using var ctx = CreateContext(settings);
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-window-select-link").Click();
+
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.Contains("Choose at least one day", cut.Markup));
+        Assert.True(settings.ScheduleWindows[0].HasTimeSchedule);
+
+        cut.Find("#schedule-time-control").Change(false);
+        cut.Find(SaveButton).Click();
+
+        cut.WaitForAssertion(() => Assert.False(settings.ScheduleWindows[0].HasTimeSchedule));
+    }
+
+    [Fact]
+    public void AdvancedSection_GroupsPriorityDatesFadesAndExclusions_AndEditsWindowExclusions()
+    {
+        var settings = new SonosSettings
+        {
+            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
+            ScheduleWindows = [new()
+            {
+                Id = "window", Name = "Morning", IsEnabled = true, HasTimeSchedule = true,
+                Playback = new() { Id = "morning-playback", Name = "Morning", Enabled = true, Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true }] }
+            }]
+        };
+        using var ctx = CreateContext(settings);
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-window-select-link").Click();
+
+        var advanced = cut.Find("[data-qa='schedule-advanced']");
+        foreach (var id in new[] { "schedule-priority", "schedule-start-date", "schedule-end-date", "schedule-fade-in", "schedule-fade-out", "schedule-exclusion-date" })
+            Assert.NotNull(advanced.QuerySelector("#" + id));
+        Assert.Null(cut.Find(".schedule-editor-grid > section").QuerySelector("#schedule-priority"));
+
+        cut.Find("#schedule-exclusion-date").Change("2026-12-25");
+        cut.Find("#schedule-exclusion-repeat").Change("yearly");
+        cut.FindAll("[data-qa='schedule-advanced'] button").Single(button => button.TextContent == "Add exclusion").Click();
+        cut.Find("#schedule-exclusion-repeat").Change("once");
+        cut.Find("#schedule-exclusion-date").Change("2026-12-26");
+        cut.FindAll("[data-qa='schedule-advanced'] button").Single(button => button.TextContent == "Add exclusion").Click();
         Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
-        Assert.Equal("Saved scene", settings.Scenes[0].Name);
+        cut.Find("[aria-label='Remove excluded date 26/12/2026']").Click();
+        cut.Find(SaveButton).Click();
+
+        cut.WaitForAssertion(() => Assert.Single(settings.ScheduleWindows[0].AnnualExcludedDates));
+        Assert.Empty(settings.ScheduleWindows[0].ExcludedDates);
+    }
+
+    [Fact]
+    public void ManualAutoStopSettings_RefreshesCleanDraftButKeepsDirtyDraft()
+    {
+        using var ctx = CreateContext(new SonosSettings());
+        var speaker = new SonosSpeaker { Name = "Kitchen", IpAddress = "1.2.3.4", ManualAutoStopMinutes = 30 };
+        var cut = ctx.Render<ManualAutoStopSettings>(parameters => parameters.Add(p => p.Speaker, speaker));
+        Assert.Equal("30", cut.Find("input[type='number']").GetAttribute("value"));
+
+        cut.Render(parameters => parameters.Add(p => p.Speaker, new SonosSpeaker { Name = "Kitchen", IpAddress = "1.2.3.4", ManualAutoStopMinutes = 45 }));
+        Assert.Equal("45", cut.Find("input[type='number']").GetAttribute("value"));
+
+        cut.Find("input[type='number']").Change("50");
+        cut.Render(parameters => parameters.Add(p => p.Speaker, new SonosSpeaker { Name = "Kitchen", IpAddress = "1.2.3.4", ManualAutoStopMinutes = 60 }));
+        Assert.Equal("50", cut.Find("input[type='number']").GetAttribute("value"));
     }
 
     [Theory]
     [InlineData("admin", true)]
     [InlineData("operator", false)]
-    public void Schedules_ExplainMissingEnabledScene_AndPreserveExistingSchedules(string role, bool canManage)
+    public void Schedules_CanBeCreatedWithoutEnabledScene_AndPreserveExistingSchedules(string role, bool canManage)
     {
         var settings = new SonosSettings
         {
@@ -210,17 +281,18 @@ public class EditorWorkflowTests
             ScheduleWindows = [new() { Name = "Existing", SceneId = "scene", IsEnabled = false }]
         };
         using var ctx = CreateContext(settings, role);
-        var requested = false;
-        var cut = ctx.Render<ScheduleWindowsPage>(parameters => parameters.Add(component => component.OnCreateSceneRequested,
-            EventCallback.Factory.Create(this, () => requested = true)));
-        Assert.Empty(cut.FindAll(".schedule-new-button"));
+        var cut = ctx.Render<ScheduleWindowsPage>();
         if (canManage)
         {
-            Assert.Contains("Create or enable a scene", cut.Markup);
-            cut.Find(".schedule-prerequisite button").Click();
-            Assert.True(requested);
+            Assert.Single(cut.FindAll(".schedule-new-button"));
+            cut.Find(".schedule-new-button").Click();
+            Assert.NotNull(cut.Find("#schedule-name"));
+            Assert.NotNull(cut.Find("#payload-source-mode"));
         }
-        cut.Find(".schedule-window-card__main").Click();
+        else
+        {
+            cut.Find(".schedule-window-card__main").Click();
+        }
         AssertLabelledFields(cut);
         Assert.Equal(!canManage, cut.Find("#schedule-name").HasAttribute("disabled"));
     }
@@ -236,27 +308,6 @@ public class EditorWorkflowTests
         repo.Setup(repository => repository.GetSettings()).ReturnsAsync(settings);
         repo.Setup(repository => repository.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(settings); return settings; });
-        RepositoryTestServices.Register(ctx.Services, repo.Object);
-        ctx.Services.AddSingleton(new PlaybackSnapshotStore());
-        var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneAsync(It.IsAny<Scene>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SceneApplyResult(true, "Applied", null, Array.Empty<string>()));
-        ctx.Services.AddSingleton(scenes.Object);
-        ctx.Services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
-        return ctx;
-    }
-
-    private static BunitContext CreateSnapshotContext(SonosSettings store)
-    {
-        var ctx = new BunitContext();
-        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
-        var auth = ctx.AddAuthorization();
-        auth.SetAuthorized("tester");
-        auth.SetRoles("admin");
-        var repo = new Mock<ISettingsRepo>();
-        repo.Setup(repository => repository.GetSettings()).ReturnsAsync(() => SettingsChanges.MergeEntity(store, store, store));
-        repo.Setup(repository => repository.UpdateSettingsAsync(It.IsAny<Action<SonosSettings>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Action<SonosSettings> update, CancellationToken token) => { update(store); return SettingsChanges.MergeEntity(store, store, store); });
         RepositoryTestServices.Register(ctx.Services, repo.Object);
         ctx.Services.AddSingleton(new PlaybackSnapshotStore());
         var scenes = new Mock<ISceneOrchestrationService>();

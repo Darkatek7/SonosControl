@@ -191,3 +191,11 @@
         transform: none;
     }
 }
+.room-card__auto-stop {
+    display: flex;
+    align-items: flex-start;
+    gap: .35rem;
+    margin: .35rem 0;
+    color: var(--text-muted);
+    font-size: .75rem;
+}

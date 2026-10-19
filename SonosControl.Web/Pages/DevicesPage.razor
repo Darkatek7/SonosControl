@@ -114,6 +114,7 @@
                                         <span>Startup volume</span>
                                         <VolumeNumberInput class="form-control form-control-sm" Value="@speaker.StartupVolume" ValueChanged="value => speaker.StartupVolume = value" OnCommit="value => UpdateStartupVolumeAsync(speaker, value)" placeholder="@_settings.Volume" aria-label="@($"Startup volume for {speaker.Name}")" />
                                     </label>
+                                    <ManualAutoStopSettings Speaker="speaker" />
                                     <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => RequestRemoveSpeaker(speaker)" aria-label="@($"Remove {speaker.Name}")"><Icon Name="trash" Size="15" /> Remove</button>
                                 </div>
                             </article>

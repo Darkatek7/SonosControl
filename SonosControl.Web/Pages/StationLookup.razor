@@ -383,6 +383,7 @@
             {
                 await using var manualLease = await ManualPlayback.BeginAsync(_settings.IP_Adress);
                 await _sonosConnectorRepo.SetTuneInStationAsync(_settings.IP_Adress, url);
+                await ManualPlayback.PlaybackSucceededAsync([_settings.IP_Adress]);
                 Logger.LogDebug("Station {StationUrl} played on {SpeakerIp}.", url, _settings.IP_Adress);
                 await AddLog("Playing Station", $"station: {url}");
             }

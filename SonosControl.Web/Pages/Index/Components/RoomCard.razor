@@ -1,6 +1,8 @@
 @using SonosControl.DAL.Models
 @using SonosControl.Web.Shared
 @using SonosControl.Web.Services
+@inject IManualAutoStopStatusProvider ManualStops
+@inject ConfiguredTimeZoneService AppTimeZone
 
 <article class="room-card @StatusClass @(IsActive ? "room-card--active" : "")"
          data-qa="room-card"
@@ -19,6 +21,11 @@
             <span class="room-card__active-badge" aria-label="Active room">Active</span>
         }
     </header>
+
+    @if (_nextStop is { } nextStop)
+    {
+        <p class="room-card__auto-stop" title="@nextStop.Reason"><Icon Name="clock" Size="13" /> Stops at @AppTimeZone.Format(nextStop.StopAtUtc, "HH:mm") · @nextStop.Reason</p>
+    }
 
     @if (IsActive)
     {
@@ -83,6 +90,9 @@
     private bool IsOnline => Playback is null ? Health?.IsOnline == true : !Playback.IsStale;
     private bool IsPlaying => Playback?.IsPlaying == true;
     private string VolumeIdPrefix => $"room-{SanitizeId(Speaker.IpAddress)}-volume";
+    private ManualAutoStopStatus? _nextStop;
+    private string? _lastStopLookupIp;
+    private DateTimeOffset? _lastStopLookupAt;
 
     private string StatusClass => Playback is not null
         ? Playback.IsStale ? "is-unknown" : "is-online"
@@ -94,6 +104,15 @@
 
     private Task Activate() => OnSetActive.InvokeAsync();
     private Task TogglePlayback() => OnTogglePlayback.InvokeAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.Equals(_lastStopLookupIp, Speaker.IpAddress, StringComparison.OrdinalIgnoreCase)
+            && _lastStopLookupAt == Playback?.LastCheckedUtc) return;
+        _lastStopLookupIp = Speaker.IpAddress;
+        _lastStopLookupAt = Playback?.LastCheckedUtc;
+        _nextStop = await ManualStops.GetNextStopAsync(Speaker.IpAddress);
+    }
 
     private static string SanitizeId(string value)
         => new(value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray());
