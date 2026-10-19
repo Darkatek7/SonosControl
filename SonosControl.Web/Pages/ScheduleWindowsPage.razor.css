@@ -276,44 +276,6 @@ html:not([data-theme='dark']) .schedule-active-strip {
     gap: var(--spacing-md);
 }
 
-.schedule-editor-card {
-    padding: var(--spacing-md);
-    border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent);
-    border-radius: 0.9rem;
-    background: color-mix(in srgb, var(--surface-2) 34%, transparent);
-}
-
-.schedule-editor-card__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-}
-
-.schedule-editor-card__header span {
-    color: var(--text-muted);
-    font-size: var(--font-size-sm);
-    font-weight: 800;
-}
-
-.schedule-form-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-sm);
-}
-
-.schedule-field {
-    display: grid;
-    gap: 0.35rem;
-    min-width: 0;
-}
-
-.schedule-field--wide {
-    grid-column: span 2;
-}
-
-.schedule-field .form-label,
 .schedule-custom-days .form-label {
     margin: 0;
     color: color-mix(in srgb, var(--text-secondary) 82%, white 18%);
@@ -406,8 +368,7 @@ html:not([data-theme='dark']) .schedule-active-strip {
 @media (max-width: 767.98px) {
     .schedule-active-strip,
     .schedule-panel,
-    .schedule-workspace ::deep .schedule-editor-panel,
-    .schedule-editor-card {
+    .schedule-workspace ::deep .schedule-editor-panel {
         padding: var(--spacing-md);
     }
 
@@ -439,14 +400,6 @@ html:not([data-theme='dark']) .schedule-active-strip {
         width: 100%;
     }
 
-    .schedule-form-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .schedule-field--wide {
-        grid-column: auto;
-    }
-
     .schedule-day-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -468,4 +421,49 @@ html:not([data-theme='dark']) .schedule-active-strip {
 
 @media (min-width: 768px) {
     .schedule-workspace ::deep .schedule-editor-panel > .app-dialog__header { padding: 0 0 1rem; }
+}
+
+.schedule-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-sm);
+}
+
+.schedule-field { display: grid; align-content: start; gap: 0.35rem; min-width: 0; }
+.schedule-field--wide { grid-column: span 2; }
+.schedule-field .form-label { margin: 0; color: color-mix(in srgb, var(--text-secondary) 82%, white 18%); font-weight: 800; }
+
+.schedule-window-card__side .btn.schedule-start-now {
+    width: auto;
+    min-width: 2.75rem;
+    padding: 0 0.7rem;
+    white-space: nowrap;
+}
+
+.schedule-advanced > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    min-height: 2.75rem;
+    cursor: pointer;
+}
+
+.schedule-advanced[open] > summary { margin-bottom: var(--spacing-md); }
+.schedule-advanced > summary h3 { display: flex; align-items: center; gap: var(--spacing-xs); margin: 0; font-size: 0.98rem; color: var(--text-primary); }
+.schedule-advanced > summary span { color: var(--text-muted); font-size: var(--font-size-sm); font-weight: 800; }
+
+.schedule-exclusions { display: grid; gap: var(--spacing-xs); margin-top: var(--spacing-md); }
+.schedule-exclusions h4 { margin: 0; font-size: 0.9rem; color: var(--text-primary); }
+.schedule-exclusions .form-text { margin: 0; }
+.schedule-exclusions__add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: end; }
+.schedule-exclusions__add .btn { min-height: 2.75rem; }
+.schedule-exclusions__list { display: grid; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+.schedule-exclusions__list li { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); padding: 0.4rem 0.6rem; border: 1px solid color-mix(in srgb, var(--border-strong) 62%, transparent); border-radius: 0.65rem; }
+.schedule-exclusions__list .btn { min-height: 2.75rem; }
+
+@media (max-width: 767.98px) {
+    .schedule-form-grid { grid-template-columns: 1fr; }
+    .schedule-field--wide { grid-column: auto; }
+    .schedule-exclusions__add { grid-template-columns: 1fr; }
 }

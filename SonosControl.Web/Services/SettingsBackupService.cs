@@ -256,6 +256,12 @@ public sealed class SettingsBackupService : ISettingsBackupService
             throw new SettingsBackupException("Every configured speaker must have a name and IP address.");
         }
 
+        if (settings.Speakers.Any(speaker => speaker.ManualAutoStopDays?.Values.Any(rule => rule.Enabled) == true
+            && speaker.ManualAutoStopMinutes is not > 0))
+        {
+            throw new SettingsBackupException("Manual auto-stop minutes must be positive when a speaker has an enabled rule.");
+        }
+
         var duplicateSpeaker = settings.Speakers
             .GroupBy(speaker => speaker.IpAddress.Trim(), StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(group => group.Count() > 1);

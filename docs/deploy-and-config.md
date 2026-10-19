@@ -131,8 +131,11 @@ At minimum, verify:
 
 For production, back up all three regularly.
 
-Scene timers are held in memory. A new scene cancels earlier timers on its target
-speakers, including when the new scene has no timer. Timers on other speakers
-continue. Scene commands and timer expiry are serialized per speaker across
-service scopes. Shutdown cancels pending timers and awaits running timer commands;
-timers are not restored after an app restart.
+Playback timers from legacy scenes are optional runtime limits held in memory.
+Starting a schedule or template cancels earlier timers on its target speakers,
+including when the new playback has no timer. Timers on other speakers continue.
+Playback commands and timer expiry are serialized per speaker across service
+scopes. Shutdown cancels pending timers and awaits running timer commands;
+timers are not restored after an app restart. Speaker auto-stop deadlines are
+different: they are stored in `Data/app.db` and reconciled on restart (see
+[Operations and Observability](operations-and-observability.md)).

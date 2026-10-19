@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System.Linq.Expressions;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Data;
@@ -24,7 +25,7 @@ public class AutomationSchedulerServiceTests
             Window("current", "scene-a", new(9, 0), new(11, 0), 10),
             Window("next", "scene-b", new(11, 0), new(13, 0), 20)));
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
         var connector = new Mock<ISonosConnectorRepo>();
         using var fixture = CreateScheduler(repository.Object, connector.Object, scenes.Object, time, commands: commands);
@@ -33,7 +34,7 @@ public class AutomationSchedulerServiceTests
         await using (await commands.EnterAsync(true)) commands.TakeManualControl(["10.0.0.2"]);
         await fixture.Service.EvaluateNowAsync();
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-b", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-b"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
         connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Once);
         connector.Verify(repo => repo.PausePlaying("10.0.0.2", It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -46,14 +47,16 @@ public class AutomationSchedulerServiceTests
         var settings = Settings(Window("current", "scene-a", new(9, 0), new(11, 0), 10));
         settings.Scenes[0].IsSyncedPlayback = false;
         settings.Scenes[0].Actions.Add(new SceneAction { SpeakerIp = "10.0.0.2", IncludeInPlayback = true });
+        settings.ScheduleWindows[0].Playback!.IsSyncedPlayback = false;
+        settings.ScheduleWindows[0].Playback!.Actions.Add(new SceneAction { SpeakerIp = "10.0.0.2", IncludeInPlayback = true });
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var aStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var bStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync(
-                "scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
-            .Returns(async (string _, string? _, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? record,
+        scenes.Setup(service => service.ApplySceneWithContextAsync(
+                It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+            .Returns(async (Scene _, string? _, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? record,
                 CancellationToken token, IReadOnlyCollection<string>? targets, bool _) =>
             {
                 record?.Invoke(targets ?? []);
@@ -75,8 +78,8 @@ public class AutomationSchedulerServiceTests
         }
         await evaluation.WaitAsync(TimeSpan.FromSeconds(2));
 
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync(
-            "scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
+        scenes.Verify(service => service.ApplySceneWithContextAsync(
+            It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -90,7 +93,7 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
         using var fixture = CreateScheduler(repository.Object, Mock.Of<ISonosConnectorRepo>(), scenes.Object, time, commands: commands);
@@ -98,7 +101,7 @@ public class AutomationSchedulerServiceTests
 
         await fixture.Service.EvaluateNowAsync();
 
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
             It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
         Assert.Equal("current", fixture.Status.Snapshot.ActiveScheduleName);
     }
@@ -115,9 +118,9 @@ public class AutomationSchedulerServiceTests
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
         var attempt = 0;
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
-            .Returns((string _, string? _, SceneExecutionContext _, Action<IReadOnlyCollection<string>>? record, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
+            .Returns((Scene _, string? _, SceneExecutionContext _, Action<IReadOnlyCollection<string>>? record, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
             {
                 attempt++;
                 record?.Invoke(["10.0.0.1"]);
@@ -152,7 +155,7 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(window));
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
         var fadeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -175,7 +178,7 @@ public class AutomationSchedulerServiceTests
     }
 
     [Fact]
-    public async Task ManualTakeoverDuringFadeOutPreventsScheduledPause()
+    public async Task ManualPlaybackWaitsForScheduledBoundaryStopDuringFadeOut()
     {
         var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
         var commands = new PlaybackCommandCoordinator(time);
@@ -184,7 +187,7 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(window));
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
         var fadeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -200,13 +203,15 @@ public class AutomationSchedulerServiceTests
         using var fixture = CreateScheduler(repository.Object, connector.Object, scenes.Object, time, commands: commands);
 
         await fixture.Service.EvaluateNowAsync();
+        await using (await commands.EnterManualAsync(["10.0.0.1"]).WaitAsync(TimeSpan.FromSeconds(2))) { }
         time.SetUtcNow(new DateTimeOffset(2026, 7, 20, 11, 1, 0, TimeSpan.Zero));
         var evaluation = fixture.Service.EvaluateNowAsync();
-        await fadeStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var fadeOrEvaluation = await Task.WhenAny(fadeStarted.Task, evaluation).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(ReferenceEquals(fadeStarted.Task, fadeOrEvaluation), fixture.Status.Snapshot.SchedulerError);
         await using var manualLease = await commands.EnterManualAsync(["10.0.0.1"]).WaitAsync(TimeSpan.FromSeconds(2));
         await evaluation.WaitAsync(TimeSpan.FromSeconds(2));
 
-        connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Never);
+        connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -219,9 +224,9 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
-            .Returns((string _, string? _, SceneExecutionContext _, Action<IReadOnlyCollection<string>>? record, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
+            .Returns((Scene _, string? _, SceneExecutionContext _, Action<IReadOnlyCollection<string>>? record, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
             {
                 record?.Invoke(["10.0.0.1"]);
                 record?.Invoke(["10.0.0.2"]);
@@ -248,9 +253,9 @@ public class AutomationSchedulerServiceTests
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(Window("current", "scene-a", new(9, 0), new(11, 0), 10)));
         var capturedTargets = new TaskCompletionSource<IReadOnlyList<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(),
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(),
                 It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
-            .Returns((string _, string? _, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? _, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
+            .Returns((Scene _, string? _, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? _, CancellationToken _, IReadOnlyCollection<string>? _, bool _) =>
             {
                 capturedTargets.TrySetResult(context.CurrentLease!.Speakers);
                 return Task.FromResult(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
@@ -267,7 +272,7 @@ public class AutomationSchedulerServiceTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ManualPlaybackPreventsRetriesAndBoundaryPauses_ButTheNextWindowStillRuns(bool firstAttemptFails)
+    public async Task ManualPlaybackPreventsRetriesButScheduledPlaybackStillStopsAtBoundary(bool firstAttemptFails)
     {
         var time = new ManualTimeProvider(new DateTimeOffset(2026, 7, 20, 10, 0, 0, TimeSpan.Zero));
         var commands = new PlaybackCommandCoordinator(time);
@@ -277,9 +282,9 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(!firstAttemptFails, "Attempt", "scene-a", ["10.0.0.1"]));
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-b", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-b"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Next", "scene-b", ["10.0.0.2"]));
         var connector = new Mock<ISonosConnectorRepo>();
         using var fixture = CreateScheduler(repository.Object, connector.Object, scenes.Object, time, commands: commands);
@@ -289,11 +294,11 @@ public class AutomationSchedulerServiceTests
         await fixture.Service.EvaluateNowAsync();
         Assert.Null(fixture.Status.Snapshot.NextRetryUtc);
         Assert.Null(fixture.Status.Snapshot.SchedulerError);
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
         time.SetUtcNow(new DateTimeOffset(2026, 7, 20, 11, 1, 0, TimeSpan.Zero));
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-b", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
-        connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Never);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-b"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -304,16 +309,16 @@ public class AutomationSchedulerServiceTests
         var repository = new Mock<ISettingsRepo>();
         repository.Setup(repo => repo.GetSettings()).ReturnsAsync(Settings(Window("night", "scene-a", new(22, 0), new(2, 0), 10)));
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Next day", "scene-a", ["10.0.0.1"]));
         using var fixture = CreateScheduler(repository.Object, Mock.Of<ISonosConnectorRepo>(), scenes.Object, time, commands: commands);
         await using (await commands.EnterAsync(true)) commands.TakeManualControl(["10.0.0.1"]);
         time.SetUtcNow(new DateTimeOffset(2026, 7, 21, 1, 0, 0, TimeSpan.Zero));
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.IsAny<Scene>(), It.IsAny<string>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
         time.SetUtcNow(new DateTimeOffset(2026, 7, 21, 23, 0, 0, TimeSpan.Zero));
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
@@ -330,9 +335,9 @@ public class AutomationSchedulerServiceTests
         connector.Setup(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied A", "scene-a", ["10.0.0.1"]));
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-b", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-b"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied B", "scene-b", ["10.0.0.2"]));
 
         using var fixture = CreateScheduler(settingsRepo.Object, connector.Object, scenes.Object, time);
@@ -344,8 +349,8 @@ public class AutomationSchedulerServiceTests
         await fixture.Service.EvaluateNowAsync();
 
         connector.Verify(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>()), Times.Once);
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-b", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-b"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
         Assert.Equal("window-b", fixture.Status.Snapshot.ActiveScheduleName);
         Assert.Equal(2, fixture.Db.Logs.Count(log => log.Action == "ScheduleTriggered"));
         Assert.Single(fixture.Db.Logs.Where(log => log.Action == "ScheduleStopped"));
@@ -360,7 +365,7 @@ public class AutomationSchedulerServiceTests
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
 
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.SetupSequence(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.SetupSequence(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(false, "Speaker unavailable", "scene-a", []))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
 
@@ -371,13 +376,13 @@ public class AutomationSchedulerServiceTests
         Assert.Null(fixture.Status.Snapshot.ActiveScheduleName);
 
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
         Assert.NotNull(fixture.Status.Snapshot.NextRetryUtc);
         time.SetUtcNow(fixture.Status.Snapshot.NextRetryUtc!.Value);
         await fixture.Service.EvaluateNowAsync();
         Assert.Null(fixture.Status.Snapshot.SchedulerError);
         Assert.Equal("window-a", fixture.Status.Snapshot.ActiveScheduleName);
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -399,7 +404,7 @@ public class AutomationSchedulerServiceTests
         await fixture.Service.EvaluateNowAsync();
 
         settingsRepo.Verify(repo => repo.GetSettings(), Times.Never);
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.IsAny<Scene>(), It.IsAny<string?>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
@@ -412,14 +417,14 @@ public class AutomationSchedulerServiceTests
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
 
         using var fixture = CreateScheduler(settingsRepo.Object, Mock.Of<ISonosConnectorRepo>(), scenes.Object, time, timeZone: timeZone);
 
         await fixture.Service.EvaluateNowAsync();
 
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Once);
         Assert.Equal("dst-window", fixture.Status.Snapshot.ActiveScheduleName);
     }
 
@@ -440,7 +445,7 @@ public class AutomationSchedulerServiceTests
         connector.Setup(repo => repo.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
 
         using var fixture = CreateScheduler(settingsRepo.Object, connector.Object, scenes.Object, time);
@@ -464,7 +469,7 @@ public class AutomationSchedulerServiceTests
         var settingsRepo = new Mock<ISettingsRepo>();
         settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(settings);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
 
         using (var firstRun = CreateScheduler(settingsRepo.Object, Mock.Of<ISonosConnectorRepo>(), scenes.Object, time))
@@ -478,7 +483,7 @@ public class AutomationSchedulerServiceTests
         }
 
         scenes.Verify(
-            service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()),
+            service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()),
             Times.Exactly(2));
     }
 
@@ -500,7 +505,7 @@ public class AutomationSchedulerServiceTests
 
         await fixture.Service.EvaluateNowAsync();
 
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.IsAny<Scene>(), It.IsAny<string?>(), It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Never);
         connector.Verify(service => service.PausePlaying(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.Null(fixture.Status.Snapshot.ActiveScheduleName);
     }
@@ -520,7 +525,7 @@ public class AutomationSchedulerServiceTests
         var connector = new Mock<ISonosConnectorRepo>();
         connector.Setup(value => value.PausePlaying("10.0.0.1", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         var scenes = new Mock<ISceneOrchestrationService>();
-        scenes.Setup(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
+        scenes.Setup(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()))
             .ReturnsAsync(new SceneApplyResult(true, "Applied", "scene-a", ["10.0.0.1"]));
         using var fixture = CreateScheduler(repo.Object, connector.Object, scenes.Object, time, timeZone: timeZone);
 
@@ -537,7 +542,7 @@ public class AutomationSchedulerServiceTests
 
         time.SetUtcNow(new DateTimeOffset(2027, 12, 26, 22, 0, 0, TimeSpan.Zero));
         await fixture.Service.EvaluateNowAsync();
-        scenes.Verify(service => service.ApplySceneByIdWithContextAsync("scene-a", "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
+        scenes.Verify(service => service.ApplySceneWithContextAsync(It.Is<Scene>(scene => scene.Id == "scene-a"), "automation-scheduler", It.IsAny<SceneExecutionContext>(), It.IsAny<Action<IReadOnlyCollection<string>>>(), It.IsAny<CancellationToken>(), It.IsAny<IReadOnlyCollection<string>?>(), It.IsAny<bool>()), Times.Exactly(2));
         Assert.Equal("overnight", fixture.Status.Snapshot.ActiveScheduleName);
     }
 
@@ -550,6 +555,14 @@ public class AutomationSchedulerServiceTests
         TimeZoneInfo? timeZone = null,
         PlaybackCommandCoordinator? commands = null)
     {
+        var connectorMock = Mock.Get(connector);
+        if (!connectorMock.Setups.Any(setup => setup.Expression.Body is MethodCallExpression call
+                && call.Method.Name == nameof(ISonosConnectorRepo.GetAllSpeakersInGroup)))
+        {
+            connectorMock.Setup(repo => repo.GetAllSpeakersInGroup(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns((string ip, CancellationToken _) => Task.FromResult<IEnumerable<string>>([ip]));
+        }
+
         var databaseOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"canonical-scheduler-{Guid.NewGuid():N}")
             .Options;
@@ -621,6 +634,13 @@ public class AutomationSchedulerServiceTests
             Id = id,
             Name = id,
             SceneId = sceneId,
+            Playback = new Scene
+            {
+                Id = sceneId,
+                Name = sceneId,
+                IsSyncedPlayback = true,
+                Actions = [new SceneAction { SpeakerIp = sceneId == "scene-b" ? "10.0.0.2" : "10.0.0.1", IncludeInPlayback = true }]
+            },
             IsEnabled = true,
             StartTime = start,
             StopTime = stop,

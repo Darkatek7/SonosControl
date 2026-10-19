@@ -671,6 +671,7 @@ public partial class IndexPage : IAsyncDisposable
             }
 
             await _sonosConnectorRepo.StartPlaying(targetSpeakerIp);
+            await ManualPlayback.PlaybackSucceededAsync([targetSpeakerIp]);
             await PlaybackState.RefreshAsync();
             ShowCommandStatus("Playback command sent.");
         }

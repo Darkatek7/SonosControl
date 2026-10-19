@@ -15,6 +15,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<LogEntry> Logs { get; set; }
     public DbSet<PlaybackHistory> PlaybackStats { get; set; }
     public DbSet<UserFavouriteSource> UserFavouriteSources { get; set; }
+    public DbSet<ManualPlaybackDeadline> ManualPlaybackDeadlines { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -59,6 +60,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(favourite => favourite.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ManualPlaybackDeadline>(entity =>
+        {
+            entity.HasKey(item => item.SpeakerIp);
+            entity.Property(item => item.SpeakerIp).HasMaxLength(128);
+            entity.Property(item => item.Reason).HasMaxLength(256).IsRequired();
+            entity.Property(item => item.RuleKey).HasMaxLength(128);
+            entity.HasIndex(item => item.StopAtUtc);
         });
 
         // You may need to adjust other Identity entities similarly if errors come up

@@ -38,6 +38,21 @@ public sealed class PlaybackCommandCoordinatorTests
     }
 
     [Fact]
+    public async Task MandatoryStopCanAcquireAfterManualOverrideWithoutExtendingManualClaim()
+    {
+        var clock = new AdjustableTimeProvider(new DateTimeOffset(2026, 10, 14, 10, 0, 0, TimeSpan.Zero));
+        var coordinator = new PlaybackCommandCoordinator(clock);
+        await using (await coordinator.EnterManualAsync(["room-a"])) { }
+        var claimedAt = Assert.Single(coordinator.ManualSpeakersSince(clock.GetUtcNow().AddSeconds(-1)));
+
+        await using var stop = await coordinator.EnterMandatoryStopAsync(["ROOM-A"]);
+
+        Assert.Equal("room-a", claimedAt);
+        Assert.Equal(PlaybackCommandOrigin.SleepTimer, stop.Origin);
+        Assert.Contains("room-a", coordinator.ManualSpeakersSince(clock.GetUtcNow().AddSeconds(-1)));
+    }
+
+    [Fact]
     public async Task ManualClaimSuppressesOnlyOccurrencesThatAlreadyStarted()
     {
         var coordinator = new PlaybackCommandCoordinator(TimeProvider.System);

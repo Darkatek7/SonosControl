@@ -47,30 +47,38 @@ ten seconds. Empty setup disables the monitor. A caller-supplied running app
 is only inspected; the runner never enables services, changes playback, or
 performs the writing workflows there.
 
-The owned configured fixture additionally creates a scene, a schedule, and a
-saved source. It checks editor field labels, real save-button clicks and hit
-tests, nested dialog focus, Escape, focus restoration, keep/discard decisions,
-internal navigation and browser back. Mobile editors are checked at 320 pixels,
-with short viewports and 200% text; switching between desktop and mobile must
-preserve the draft. These writing scenarios never run against a caller-supplied
-app. The compact Home player must remain at most 400 pixels tall with the smoke
-fixture, with the room heading above the dock. Screenshots include the saved
-mobile schedule editor.
+The owned configured fixture additionally creates a unified schedule with its
+playback source and room mixer, a manual playback template, and a saved source.
+It checks that schedules can be created without a prior scene, empty room
+selection is rejected without a device command, templates can be started now,
+and legacy scenes remain editable as manual templates. Per-room daily stop
+rules validate the required manual limit, copy one day's values to all days,
+and persist across reload. It also checks editor labels, real save-button hit
+tests, nested dialog focus, keep/discard decisions, and draft preservation when
+the editor changes size. Mobile editors are checked at 320 pixels, with short
+viewports and 200% text. The Time control toggle must turn a schedule into a
+manual template and back without losing its timing, and the Advanced section
+(priority, dates, fades, excluded dates) must stay reachable above its save
+action on small screens. After a manual start with a passed daily stop rule, the
+room card and player must show "Stops at" with its reason. These writing scenarios never run against a
+caller-supplied app. The compact Home player must remain at most 400 pixels tall
+with the smoke fixture, with the room heading above the dock. Screenshots
+include the saved mobile schedule editor.
 
 The same disposable fixture verifies 0–100 volume limits while typing, including
 appending digits to 100, negative values, and exponent notation. Startup volume
 and the system maximum must retain their bounded values after reload; optional
-startup and scene volume fields can be cleared. A broken artwork response must
+startup and schedule room volume fields can be cleared. A broken artwork response must
 restore the record, which spins after starting a source manually. Service tests
-cover cancellation of old scene timers, manual playback taking priority over
+cover cancellation of legacy scene timers, manual playback taking priority over
 the current schedule occurrence, and independent playback when Sonos refuses
 grouping with UPnP error 501. Future schedule occurrences still run normally.
 
-The configured scene workflow also verifies that an explicit empty speaker
-selection cannot be saved or applied and sends no device commands. It opens and
-saves a legacy `SpeakerIps` scene to check that its original selection is
-preserved, then lowers the configured maximum and saves a scene draft clamped
-to the new limit. A one-minute sleep timer is started before the remaining
+The configured schedule workflow also verifies that an explicit empty speaker
+selection cannot be saved and sends no device commands. It opens a legacy
+`SpeakerIps` scene migrated as a manual template and checks that its original
+room selection is preserved, then lowers the configured maximum and saves an
+embedded playback draft clamped to the new limit. A one-minute sleep timer is started before the remaining
 workflows, survives a page reload, and appears in a second browser context.
 That context cancels and replaces the shared timer; the replacement remains
 armed beyond the original one-minute deadline and is then canceled in both
@@ -132,8 +140,9 @@ Optional:
 | Symptom | Likely cause | Resolution |
 |---|---|---|
 | Login fails on first run | Missing `ADMIN_*` values | Set all three admin variables and restart the app |
-| App runs but no playback starts | Wrong speaker IP, inactive schedule, or invalid scene | Check Administration > Devices and the scene/schedule status in Automation |
-| A synchronized scene reports grouping unavailable | Speakers cannot join the requested Sonos group, for example because they belong to separate Sonos systems | Playback falls back to independent speakers and logs `SceneGroupingUnavailable`; place speakers in the same Sonos system to synchronize them |
+| App runs but no playback starts | Wrong speaker IP, inactive schedule, disabled entry with an invalid reference, or an auto-stop rule that already ended playback | Check Administration > Devices (speaker IP and auto-stop rules) and the entry status in Automation |
+| Playback stops shortly after a manual start | A daily auto-stop rule's grace period elapsed after its Stop time | Adjust or disable the speaker's rule in Administration > Devices, or start playback after its Release time |
+| A synchronized schedule reports grouping unavailable | Speakers cannot join the requested Sonos group, for example because they belong to separate Sonos systems | Playback falls back to independent speakers and logs `SceneGroupingUnavailable`; place speakers in the same Sonos system to synchronize them |
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
 | Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |

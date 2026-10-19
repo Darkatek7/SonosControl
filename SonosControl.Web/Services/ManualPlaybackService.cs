@@ -3,7 +3,7 @@ using SonosControl.DAL.Interfaces;
 namespace SonosControl.Web.Services;
 
 public sealed class ManualPlaybackService(PlaybackCommandCoordinator commands, IServiceProvider services,
-    ISonosConnectorRepo connector, ILogger<ManualPlaybackService> logger)
+    ISonosConnectorRepo connector, ILogger<ManualPlaybackService> logger, ManualAutoStopService? autoStop = null)
 {
     public async Task<IAsyncDisposable> BeginAsync(string speakerIp, CancellationToken cancellationToken = default,
         PlaybackCommandOrigin origin = PlaybackCommandOrigin.Manual)
@@ -41,6 +41,16 @@ public sealed class ManualPlaybackService(PlaybackCommandCoordinator commands, I
     public Task<IAsyncDisposable> BeginTargetsAsync(IEnumerable<string> speakerIps,
         CancellationToken cancellationToken = default, PlaybackCommandOrigin origin = PlaybackCommandOrigin.Manual)
         => BeginAsync(speakerIps, cancellationToken, origin);
+
+    /// <summary>Call after a manual start command succeeds, while its BeginAsync lease is still held.</summary>
+    public Task PlaybackSucceededAsync(IEnumerable<string> speakerIps, CancellationToken cancellationToken = default)
+        => autoStop is null ? Task.CompletedTask : RegisterSuccessForResolvedTargetsAsync(speakerIps, cancellationToken);
+
+    private async Task RegisterSuccessForResolvedTargetsAsync(IEnumerable<string> speakerIps, CancellationToken cancellationToken)
+    {
+        var targets = await ResolveTargetsAsync(speakerIps, cancellationToken);
+        await autoStop!.RegisterSuccessfulStartAsync(targets, cancellationToken);
+    }
 
     private async Task<HashSet<string>> ResolveTargetsAsync(IEnumerable<string> speakerIps, CancellationToken cancellationToken)
     {

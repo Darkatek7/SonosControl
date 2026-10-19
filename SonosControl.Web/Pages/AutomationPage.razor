@@ -17,9 +17,9 @@
 <div class="workspace-page automation-page" data-qa="automation-page">
     <header class="workspace-header">
         <div>
-            <span class="workspace-eyebrow">Scenes and schedules</span>
-            <h1>Automation</h1>
-            <p>Build reusable room scenes, arrange schedules, and exclude individual dates.</p>
+            <span class="workspace-eyebrow">Playback automation</span>
+            <h1>Schedules</h1>
+            <p>Set when playback runs, which rooms join, and what each room plays.</p>
         </div>
         <div class="automation-health @Snapshot.StatusClass" role="status">
             <span class="automation-health__dot" aria-hidden="true"></span>
@@ -63,7 +63,7 @@
              class="workspace-tab-panel">
     @if (_activeTab == "schedules")
     {
-        <ScheduleWindowsPage OnCreateSceneRequested="StartNewScene" />
+        <ScheduleWindowsPage />
     }
     else if (_activeTab == "exceptions")
     {
@@ -137,10 +137,6 @@
             }
         </section>
     }
-    else
-    {
-        <ScenesPage />
-    }
     </section>
 </div>
 
@@ -148,7 +144,7 @@
     [SupplyParameterFromQuery(Name = "tab")]
     public string? RequestedTab { get; set; }
 
-    private string _activeTab = "scenes";
+    private string _activeTab = "schedules";
     private SonosSettings? _settings;
     private DateTime? _newExceptionDate;
     private enum ExceptionRecurrence { Once, Yearly }
@@ -163,7 +159,6 @@
         && _settings?.ExcludesAutomationDate(DateOnly.FromDateTime(AppTimeZone.Now.DateTime)) == true;
     private static readonly IReadOnlyList<WorkspaceTabItem> AutomationTabs =
     [
-        new("scenes", "Scenes"),
         new("schedules", "Schedules"),
         new("exceptions", "Date exceptions")
     ];
@@ -186,8 +181,7 @@
         if (route is "scenes" or "schedule-windows")
         {
             _redirectedAlias = true;
-            var tab = route == "scenes" ? "scenes" : "schedules";
-            Navigation.NavigateTo($"/automation?tab={tab}", replace: true);
+            Navigation.NavigateTo("/automation?tab=schedules", replace: true);
         }
     }
 
@@ -228,14 +222,13 @@
             : $"The one-time exception for {FormatExceptionDate(date, false)} was removed.");
     }
 
+
     private static string FormatExceptionDate(DateOnly date, bool isAnnual) =>
         date.ToString(isAnnual ? "dd/MM" : "dd/MM/yyyy", CultureInfo.GetCultureInfo("en-GB"));
 
     private void ApplyRequestedTab()
     {
-        if (RequestedTab is "scenes" or "schedules" or "exceptions") { _activeTab = RequestedTab; return; }
-        var route = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
-        _activeTab = route == "schedule-windows" ? "schedules" : "scenes";
+        _activeTab = RequestedTab == "exceptions" ? "exceptions" : "schedules";
     }
 
     private void SelectTab(string tab)
@@ -243,11 +236,6 @@
         Navigation.NavigateTo($"/automation?tab={tab}");
     }
 
-    private void StartNewScene()
-    {
-        EditorRequests.RequestNewScene();
-        Navigation.NavigateTo("/automation?tab=scenes");
-    }
     private string GetTabClass(string tab) => _activeTab == tab ? "workspace-tab is-active" : "workspace-tab";
     private string? GetAriaCurrent(string tab) => _activeTab == tab ? "page" : null;
     private string FormatEvaluationTime() => Snapshot.LastEvaluationUtc is { } value ? AppTimeZone.Format(value, "HH:mm:ss") : "Not yet";
