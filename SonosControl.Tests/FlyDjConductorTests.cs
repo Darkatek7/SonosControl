@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -35,6 +36,9 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
     public Mock<IFlyDjClient> Client { get; } = new();
     public Mock<IScheduleRoomOwnership> Schedules { get; } = new();
     public Mock<ISceneOrchestrationService> Scenes { get; } = new();
+    public Mock<ISonosConnectorRepo> Connector { get; } = new();
+    public AutomationSchedulerService Scheduler { get; private set; } = null!;
+    public ManualAutoStopService AutoStop { get; private set; } = null!;
     public PlaybackCommandCoordinator Commands { get; }
     public PlaybackSnapshotStore Snapshots { get; } = new();
     public FlyDjStateStore Store { get; }
@@ -49,7 +53,7 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
     public Func<Exception?> StartFailure { get; set; } = () => null;
     public double Engagement { get; set; } = 0.5;
 
-    private FlyDjConductorFixture()
+    private FlyDjConductorFixture(bool withScheduler)
     {
         Commands = new PlaybackCommandCoordinator(Time);
         Repo = new SettingsRepo(_directory);
@@ -86,17 +90,36 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         services.AddSingleton<TimeProvider>(Time);
         services.AddSingleton<ISettingsRepo>(Repo);
         services.AddSingleton(Scenes.Object);
+        services.AddSingleton(Connector.Object);
+        if (withScheduler) services.AddSingleton<IFlyDjScheduleConductor>(_ => Conductor);
         services.AddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         services.AddSingleton<IHttpContextAccessor>(new HttpContextAccessor());
         services.AddDbContext<ApplicationDbContext>(options => options.UseInMemoryDatabase(_databaseName));
         services.AddScoped<ActionLogger>();
         services.AddScoped<FlyDjCandidateProvider>();
         Provider = services.BuildServiceProvider();
+        if (withScheduler)
+        {
+            Connector.Setup(connector => connector.GetAllSpeakersInGroup(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns((string ip, CancellationToken _) => Task.FromResult<IEnumerable<string>>([ip]));
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Automation:TimeZone"] = "UTC" }).Build();
+            var scopes = Provider.GetRequiredService<IServiceScopeFactory>();
+            AutoStop = new ManualAutoStopService(scopes, Commands, Time, configuration, NullLogger<ManualAutoStopService>.Instance);
+            var migration = new Mock<ISettingsSchemaMigrationService>();
+            migration.Setup(service => service.MigrateIfRequiredAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SettingsMigrationResult(true, false, SonosSettings.CurrentSettingsSchemaVersion, []));
+            Scheduler = new AutomationSchedulerService(scopes, migration.Object, new AutomationRuntimeStatus(),
+                NullLogger<AutomationSchedulerService>.Instance, configuration, Time, TimeZoneInfo.Utc, Commands, autoStop: AutoStop);
+            Schedules.Setup(owner => owner.GetScheduleOwnedSpeakers(It.IsAny<SonosSettings>(), It.IsAny<DateTimeOffset>()))
+                .Returns((SonosSettings settings, DateTimeOffset now) => Scheduler.GetScheduleOwnedSpeakers(settings, now));
+            Schedules.Setup(owner => owner.GetFlyDjSchedules(It.IsAny<SonosSettings>(), It.IsAny<DateTimeOffset>()))
+                .Returns((SonosSettings settings, DateTimeOffset now) => Scheduler.GetFlyDjSchedules(settings, now));
+        }
     }
 
-    public static async Task<FlyDjConductorFixture> CreateAsync(Action<SonosSettings>? configure = null, bool startHost = true)
+    public static async Task<FlyDjConductorFixture> CreateAsync(Action<SonosSettings>? configure = null, bool startHost = true, bool withScheduler = false)
     {
-        var fixture = new FlyDjConductorFixture();
+        var fixture = new FlyDjConductorFixture(withScheduler);
         await fixture.Repo.UpdateSettingsAsync(settings =>
         {
             settings.MaxVolume = 30;
@@ -113,7 +136,7 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         });
         fixture.Conductor = new FlyDjConductorService(
             fixture.Time, fixture.Provider.GetRequiredService<IServiceScopeFactory>(), fixture.Commands, fixture.Snapshots,
-            fixture.Store, fixture.Client.Object, NullLogger<FlyDjConductorService>.Instance, fixture.Schedules.Object);
+            fixture.Store, fixture.Client.Object, NullLogger<FlyDjConductorService>.Instance, fixture.Schedules.Object, withScheduler ? fixture.AutoStop : null);
         if (startHost) await ((IHostedService)fixture.Conductor).StartAsync(CancellationToken.None);
         return fixture;
     }

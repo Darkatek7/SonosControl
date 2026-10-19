@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using SonosControl.Web.Services.FlyDj;
 
 namespace SonosControl.Web.Services;
 
@@ -14,6 +15,7 @@ public interface IAutomationScheduler
 public interface IScheduleRoomOwnership
 {
     IReadOnlyCollection<string> GetScheduleOwnedSpeakers(SonosSettings settings, DateTimeOffset utcNow);
+    IReadOnlyList<FlyDjSchedulePlayback> GetFlyDjSchedules(SonosSettings settings, DateTimeOffset utcNow) => [];
 }
 
 public sealed class AutomationSchedulerService : BackgroundService, IAutomationScheduler, IScheduleRoomOwnership
@@ -116,9 +118,12 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             var utcNow = _timeProvider.GetUtcNow();
             var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
             var winningWindows = SelectWinningWindows(eligibleWindows, localNow, settings);
+            var flyDj = scope.ServiceProvider.GetService<IFlyDjScheduleConductor>();
+            if (flyDj is not null)
+                await flyDj.UpdateSchedulesAsync(GetFlyDjSchedules(settings, utcNow), cancellationToken);
             if (winningWindows.Count > 0 || _ownedWindowOccurrences.Count > 0)
             {
-                await EvaluateWinningWindowsAsync(winningWindows, settings, localNow, utcNow, sonosConnectorRepo, sceneOrchestration, actionLogger, cancellationToken);
+                await EvaluateWinningWindowsAsync(winningWindows, settings, localNow, utcNow, sonosConnectorRepo, sceneOrchestration, actionLogger, cancellationToken, flyDj is not null);
                 return;
             }
             _runtimeStatus.RecordEvaluation(null, utcNow);
@@ -162,6 +167,17 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             .ToArray();
     }
 
+    public IReadOnlyList<FlyDjSchedulePlayback> GetFlyDjSchedules(SonosSettings settings, DateTimeOffset utcNow)
+    {
+        if (settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion) return [];
+        var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
+        return SelectWinningWindows(GetEligibleWindows(settings), localNow, settings)
+            .Where(item => item.Window.Playback?.SourceType == SceneSourceType.FlyDj)
+            .Select(item => new FlyDjSchedulePlayback(item.Window, item.Targets.ToArray(),
+                ResolveWindowStartUtc(item.Window, localNow), ResolveWindowEndUtc(item.Window, localNow)))
+            .ToArray();
+    }
+
     private static List<(ScheduleWindow Window, List<string> Targets)> SelectWinningWindows(
         IEnumerable<ScheduleWindow> windows, DateTimeOffset localNow, SonosSettings settings)
     {
@@ -188,7 +204,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         ISonosConnectorRepo connector,
         ISceneOrchestrationService orchestration,
         ActionLogger actionLogger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool flyDjEnabled)
     {
         var date = DateOnly.FromDateTime(localNow.DateTime);
         var active = new Dictionary<string, (ScheduleWindow Window, List<string> Targets)>(StringComparer.OrdinalIgnoreCase);
@@ -225,6 +241,23 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             var window = item.Window;
             var scene = window.Playback;
             if (scene is null || item.Targets.Count == 0) continue;
+            if (scene.SourceType == SceneSourceType.FlyDj)
+            {
+                // FlyDJ owns station selection and registers accepted writes with the stop
+                // worker. The scheduler retains cleanup ownership and the usual priority rules.
+                if (!flyDjEnabled)
+                {
+                    pendingFailure ??= $"Schedule '{window.Name}' requires FlyDJ to be enabled on this server.";
+                    continue;
+                }
+                var start = ResolveWindowStartUtc(window, localNow);
+                _ownedWindowOccurrences[window.Id] = new ActiveOccurrence(
+                    new AttemptKey(window.Id, window.LastModifiedUtc, scene.Id, scene.LastModifiedUtc, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(start, _timeZone).DateTime)),
+                    start, window.Name, window.FadeOutSeconds, scene.IsSyncedPlayback,
+                    item.Targets.ToArray(), item.Targets.ToArray(), ResolveWindowEndUtc(window, localNow));
+                statusNames.Add(window.Name);
+                continue;
+            }
             var startDate = date;
             if (window.StopTime <= window.StartTime && TimeOnly.FromDateTime(localNow.DateTime) < window.StopTime)
                 startDate = startDate.AddDays(-1);
@@ -382,6 +415,18 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         return _timeZone.IsAmbiguousTime(localEnd)
             ? new DateTimeOffset(localEnd, _timeZone.GetAmbiguousTimeOffsets(localEnd).Max()).ToUniversalTime()
             : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localEnd, _timeZone));
+    }
+
+    private DateTimeOffset ResolveWindowStartUtc(ScheduleWindow window, DateTimeOffset localNow)
+    {
+        var date = DateOnly.FromDateTime(localNow.DateTime);
+        if (window.StopTime <= window.StartTime && TimeOnly.FromDateTime(localNow.DateTime) < window.StopTime)
+            date = date.AddDays(-1);
+        var localStart = date.ToDateTime(window.StartTime);
+        while (_timeZone.IsInvalidTime(localStart)) localStart = localStart.AddMinutes(1);
+        return _timeZone.IsAmbiguousTime(localStart)
+            ? new DateTimeOffset(localStart, _timeZone.GetAmbiguousTimeOffsets(localStart).Max()).ToUniversalTime()
+            : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, _timeZone));
     }
 
     private async Task StopOwnedPlaybackAsync(
@@ -594,7 +639,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
         }
     }
 
-    private static async Task ApplyFadeInAsync(
+    internal static async Task ApplyFadeInAsync(
         IReadOnlyCollection<string> targetSpeakers,
         int fadeInSeconds,
         ISonosConnectorRepo sonosConnectorRepo,

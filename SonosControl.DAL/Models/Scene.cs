@@ -6,7 +6,8 @@ public enum SceneSourceType
     Station = 1,
     Spotify = 2,
     YouTubeMusic = 3,
-    YouTube = 4
+    YouTube = 4,
+    FlyDj = 5
 }
 
 public enum SceneSourceSelectionMode

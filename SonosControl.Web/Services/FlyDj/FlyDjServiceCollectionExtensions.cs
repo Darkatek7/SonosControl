@@ -37,6 +37,7 @@ public static class FlyDjServiceCollectionExtensions
         services.TryAddSingleton<IScheduleRoomOwnership>(provider => provider.GetRequiredService<AutomationSchedulerService>());
         services.TryAddSingleton<FlyDjConductorService>();
         services.TryAddSingleton<IFlyDjConductor>(provider => provider.GetRequiredService<FlyDjConductorService>());
+        services.TryAddSingleton<IFlyDjScheduleConductor>(provider => provider.GetRequiredService<FlyDjConductorService>());
         // Background services off (for example in UI smoke runs): the page still works, it just stays stopped.
         if (configuration.GetValue("BackgroundServices:Enabled", true))
             services.AddHostedService(provider => provider.GetRequiredService<FlyDjConductorService>());

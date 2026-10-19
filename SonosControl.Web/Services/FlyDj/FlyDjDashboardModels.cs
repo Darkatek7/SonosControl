@@ -55,6 +55,8 @@ public sealed record FlyDjDashboardState(
     DateTimeOffset? NextDecisionAtUtc,
     DateTimeOffset UpdatedUtc)
 {
+    public bool IsScheduled { get; init; }
+
     public static FlyDjDashboardState Initial(DateTimeOffset now) => new(
         FlyDjConductorStatus.Stopped, null, false, null, null, null, null,
         Array.Empty<string>(), Array.Empty<FlyDjYieldedSpeaker>(), null, Array.Empty<FlyDjDecisionView>(), null, now);
