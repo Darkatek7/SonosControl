@@ -1,0 +1,4 @@
+three.js r170 (npm three@0.170.0, MIT)
+build/three.module.min.js: unmodified.
+OrbitControls.js: examples/jsm/controls/OrbitControls.js with the bare "three" import rewritten to ./three.module.min.js.
+Tarball sha512 verified against registry metadata: sha512-FQK+LEpYc0fBD+J8g6oSEyyNzjp+Q7Ks1C568WWaoMRLW+TkNNWmenWeGgJjV105Gd+p/2ql1ZcjYvNiPZBhuQ==

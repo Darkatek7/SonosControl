@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# locally built connectome artifact (baked into the image by the Dockerfile)
+model/
+*.npz

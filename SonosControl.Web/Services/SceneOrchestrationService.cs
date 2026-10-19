@@ -360,9 +360,11 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             }
 
             await _actionLogger.LogAsync("SceneApplied", $"{scene.Name} ({scene.Id}) on {string.Join(", ", appliedTargets)}", performedBy);
-            await _notificationService.SendNotificationAsync(
-                $"Scene '{scene.Name}' applied on {appliedTargets.Count} speaker(s). {groupingWarning}".TrimEnd(),
-                performedBy);
+            // FlyDJ switches stations every few minutes; its own log and page already report each pick.
+            if (!string.Equals(performedBy, FlyDj.FlyDjConductorService.DefaultActor, StringComparison.Ordinal))
+                await _notificationService.SendNotificationAsync(
+                    $"Scene '{scene.Name}' applied on {appliedTargets.Count} speaker(s). {groupingWarning}".TrimEnd(),
+                    performedBy);
             if (_playbackSnapshots is not null)
                 await _playbackSnapshots.RefreshNowAsync(commandToken);
 

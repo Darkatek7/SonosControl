@@ -1,0 +1,14 @@
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+tests/
+model/
+*.npz
+README.md
+API.md
+Dockerfile
+.dockerignore
+.gitignore
+pytest.ini
+requirements-dev.txt

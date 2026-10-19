@@ -226,6 +226,60 @@ namespace SonosControl.Web.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("SonosControl.Web.Models.FlyDjDecision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("BrainWeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("CandidatesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DecidedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("DwellSeconds")
+                        .HasColumnType("REAL");
+
+                    b.Property<DateTime?>("EndedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("OverriddenByUser")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("PriorWeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SpeakerIpsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StationName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StationUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedAtUtc");
+
+                    b.ToTable("FlyDjDecisions");
+                });
+
             modelBuilder.Entity("SonosControl.Web.Models.LogEntry", b =>
                 {
                     b.Property<int>("Id")

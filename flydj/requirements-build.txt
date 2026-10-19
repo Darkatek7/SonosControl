@@ -1,0 +1,6 @@
+# Needed by tools/build_connectome.py only (builder stage of the Dockerfile and
+# local rebuilds). pandas is not required: the edge list is read with pyarrow
+# and everything else with numpy and the csv module.
+numpy==2.5.4
+pyarrow==26.0.0
+PyYAML==6.0.3

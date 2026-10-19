@@ -41,6 +41,40 @@ docker compose restart
 docker compose down
 ```
 
+## FlyDJ (optional, experimental)
+The FlyDJ sidecar (`sonoscontrol-flydj`) is off by default. Its details and
+settings are in [Deploy and Config Guide](deploy-and-config.md#flydj-optional-experimental).
+
+### Enable
+Set `FLYDJ_ENABLED=true` in `.env`, then build and start the stack:
+
+```bash
+docker compose up -d --build
+```
+
+### Check
+```bash
+docker compose ps
+docker compose logs flydj
+```
+
+With `FLYDJ_ENABLED=false`, `docker compose ps` shows `sonoscontrol-flydj` as
+`Exited (0)`. This is expected: the container stays stopped and uses no CPU or
+RAM. With FlyDJ enabled, it shows `Up` and reports `healthy` after its start
+period. Both connectome artifacts are baked into the image, so the sidecar
+needs no internet access at runtime.
+
+The sidecar listens on port 8090 only inside the Compose network. It is not
+published to the host.
+
+### Resources
+```bash
+docker stats --no-stream sonoscontrol-flydj
+```
+
+Compare the reported CPU and memory with the `FLYDJ_CPUS` and `FLYDJ_MEM_LIMIT`
+values. Use `FLYDJ_CPUS=2.0` and `FLYDJ_MEM_LIMIT=1g` for the `full` scope.
+
 ## Backup
 Back up all persisted runtime state:
 - `Data/`

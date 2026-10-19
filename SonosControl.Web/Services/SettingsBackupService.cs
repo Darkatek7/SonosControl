@@ -246,6 +246,8 @@ public sealed class SettingsBackupService : ISettingsBackupService
         settings.QueueSnapshots ??= new();
         settings.DeviceHealthStatuses ??= new();
         settings.Jukebox ??= new JukeboxSettings();
+        settings.FlyDj ??= new FlyDjSettings();
+        settings.FlyDj.Normalize();
         settings.JukeboxSuggestions ??= new();
         settings.ActiveDays ??= new();
         settings.MaxVolume = Math.Clamp(settings.MaxVolume, 0, 100);

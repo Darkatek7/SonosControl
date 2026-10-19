@@ -5,6 +5,7 @@
 @using SonosControl.Web.Models
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject SonosControl.Web.Services.ThemeService ThemeService
+@inject IServiceProvider Services
 @inject IJSRuntime JSRuntime
 
 <div class="nav-shell">
@@ -28,6 +29,12 @@
                     <div class="nav-item"><NavLink class="nav-link" href="library" @onclick="HandleNavigate"><Icon Name="music" Size="18" Class="nav-icon" /><span>Library</span></NavLink></div>
                     <div class="nav-item"><NavLink class="nav-link" href="automation" @onclick="HandleNavigate"><Icon Name="schedule" Size="18" Class="nav-icon" /><span>Automation</span></NavLink></div>
                     <div class="nav-item"><NavLink class="nav-link" href="insights" @onclick="HandleNavigate"><Icon Name="graph" Size="18" Class="nav-icon" /><span>Insights</span></NavLink></div>
+                    @if (_flyDjEnabled)
+                    {
+                        <AuthorizeView Roles="@SonosControl.Web.Services.FlyDj.FlyDjServiceCollectionExtensions.AllowedRoles">
+                            <div class="nav-item"><NavLink class="nav-link" href="flydj" @onclick="HandleNavigate"><Icon Name="brain" Size="18" Class="nav-icon" /><span>FlyDJ</span></NavLink></div>
+                        </AuthorizeView>
+                    }
                 </div>
             </section>
 
@@ -83,6 +90,7 @@
     [Parameter] public EventCallback OnNavigate { get; set; }
 
     private bool _isAuthenticated;
+    private bool _flyDjEnabled;
     private bool _allowRegistration = true;
     private ThemePreferenceMode _userThemePreference = ThemePreferenceMode.System;
     private static readonly ThemePreferenceMode[] ThemeOptions = [ThemePreferenceMode.System, ThemePreferenceMode.Light, ThemePreferenceMode.Dark];
@@ -90,6 +98,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Optional feature flag; tolerate hosts that never registered the options.
+        _flyDjEnabled = Services.GetService(typeof(Microsoft.Extensions.Options.IOptions<SonosControl.Web.Services.FlyDj.FlyDjOptions>))
+            is Microsoft.Extensions.Options.IOptions<SonosControl.Web.Services.FlyDj.FlyDjOptions> { Value.Enabled: true };
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
         _userThemePreference = ThemeService.CurrentPreference;

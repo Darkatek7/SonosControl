@@ -30,10 +30,32 @@ services:
       ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: ChangeMe123!
       PLAYBACK_PUBLIC_BASE_URL: http://192.168.1.50:8080
+      FlyDj__Enabled: ${FLYDJ_ENABLED:-false}
+      FlyDj__ServiceUrl: http://flydj:8090
+      FlyDj__SharedSecret: ${FLYDJ_SHARED_SECRET:-}
     volumes:
       - ./Data:/app/Data
       - ./DataProtectionKeys:/app/DataProtectionKeys
       - ./artifacts:/app/artifacts
+
+  # Optional experimental FlyDJ sidecar. Stays stopped (exit 0) unless FLYDJ_ENABLED=true.
+  flydj:
+    build:
+      context: ./flydj
+      dockerfile: Dockerfile
+    image: sonoscontrol-flydj:local
+    container_name: sonoscontrol-flydj
+    restart: on-failure
+    expose:
+      - "8090"
+    environment:
+      TZ: ${TZ:-Europe/Vienna}
+      FLYDJ_ENABLED: ${FLYDJ_ENABLED:-false}
+      FLYDJ_CONNECTOME_SCOPE: ${FLYDJ_CONNECTOME_SCOPE:-auditory}
+      FLYDJ_SIM_SPEED: ${FLYDJ_SIM_SPEED:-1.0}
+      FLYDJ_SHARED_SECRET: ${FLYDJ_SHARED_SECRET:-}
+    cpus: ${FLYDJ_CPUS:-1.0}
+    mem_limit: ${FLYDJ_MEM_LIMIT:-512m}
 ```
 
 ```bash
@@ -89,6 +111,40 @@ Configure these values in `appsettings.json` or with environment variables:
 | `Mp3Upload__ArtifactDirectory` | `artifacts/mp3-uploads` under the app directory | Temporary upload storage, outside `wwwroot` |
 
 `Playback__PublicBaseUrl` must point to the app's LAN address and include any reverse proxy path prefix. Sonos fetches audio without a login using an unguessable temporary URL; byte-range requests are supported. Cleanup requires `BackgroundServices__Enabled=true` (the default). Retention is fixed per file at upload time; changing defaults affects future uploads.
+
+## FlyDJ (optional, experimental)
+
+FlyDJ is an optional, experimental radio DJ. It runs as a separate `flydj` Python container that is off by default and never published to the host: the web app reaches it at `http://flydj:8090` on the Compose network. The DJ chooses only between radio stations from your library and plays them on configured rooms. Its choices come from a simulation of the fruit-fly auditory connectome, which scores each candidate station by how the simulated brain responds to it. Manual control always wins; see [Operations and Observability](operations-and-observability.md#flydj-optional-experimental) for the playback ownership rules.
+
+### Enable
+
+1. Set `FLYDJ_ENABLED=true` in `.env`.
+2. Build and start the stack: `docker compose up -d --build`.
+
+While `FLYDJ_ENABLED` is `false`, the sidecar container exits immediately with code 0. With `restart: on-failure` it stays stopped and uses no CPU or RAM. Its image is still built or pulled. To turn FlyDJ off again, set the value back to `false` and run `docker compose up -d`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FLYDJ_ENABLED` | `false` | Single on/off switch. Passed to the web app as `FlyDj__Enabled` and to the sidecar. |
+| `FLYDJ_CONNECTOME_SCOPE` | `auditory` | `auditory` uses a baked subgraph of about 8k neurons seeded at Johnston's organ. `full` uses the whole brain (about 139k neurons, 15M connections). Both artifacts are built into the image from pinned, checksum-verified FlyWire data, so no download happens at runtime. |
+| `FLYDJ_SIM_SPEED` | `1.0` | Target simulation speed relative to real time in the live view. |
+| `FLYDJ_SHARED_SECRET` | empty | Optional token shared by the web app (`FlyDj__SharedSecret`) and the sidecar. When set, every sidecar request must send it. |
+| `FLYDJ_CPUS` | `1.0` | CPU limit for the sidecar container. |
+| `FLYDJ_MEM_LIMIT` | `512m` | Memory limit for the sidecar container. |
+| `FlyDj__ServiceUrl` | `http://flydj:8090` | Internal sidecar address, set in `docker-compose.yml`. |
+
+### Resource notes
+
+- The default `auditory` scope is small and suits modest hardware with the default 1 CPU and 512 MB limits.
+- The `full` scope uses about 300–500 MB of RAM and runs at roughly 0.6x real time on one fast core. Set `FLYDJ_CPUS=2.0` and `FLYDJ_MEM_LIMIT=1g` for it.
+- When stopped, the simulation does no work. When running with no FlyDJ page open, it only simulates short bursts. With the page open, it simulates continuously for the live 3D view.
+- The sidecar keeps no persistent data; FlyDJ settings and decision history live in the web app's `config.json` and database.
+
+### Data and attribution
+
+- Connectome data: FlyWire release 783, licensed under CC BY 4.0 (Dorkenwald et al. 2024, *Nature*).
+- Leaky integrate-and-fire model: Shiu et al. 2024, licensed under MIT.
+- Full attribution and license notices are in [`flydj/NOTICE.md`](../flydj/NOTICE.md). The sidecar API contract is in [`flydj/API.md`](../flydj/API.md).
 
 ## Config File Contract
 - Runtime config file: `SonosControl.Web/Data/config.json` (not tracked)

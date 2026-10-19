@@ -29,8 +29,12 @@ artifacts/ui-smoke-venv/bin/python verify_mobile_smoke.py
 The auto-start path creates disposable settings and SQLite directories under
 `artifacts`, disables background services, and checks all primary pages in
 light and dark themes at 390, 768, and 1280 pixels in two configurations:
-empty setup and a configured simulated speaker. The simulation uses only
-loopback port 1400; keep that port free for the auto-start check. Empty setup
+empty setup and a configured simulated speaker, both with FlyDJ disabled. A
+third FlyDJ configuration starts the app with `FlyDj__Enabled=true` against a
+stub sidecar the runner serves on a free loopback port, then checks the
+`FlyDJ` nav link, the `/flydj` page (3D view or 2D fallback, statistics,
+activity, switch, settings), and a clean browser console. The simulation uses
+only loopback port 1400; keep that port free for the auto-start check. Empty setup
 must show the large Home onboarding, no playback dock on any route, and no
 reserved dock clearance. The configured fixture must retain the dashboard,
 dock, volume controls, and expanded player. Checks also fail on browser
@@ -88,7 +92,7 @@ simulated room.
 
 When targeting an already running app, the runner checks its current
 configuration without changing settings. Use an unused app port with
-auto-start enabled to exercise both isolated configurations.
+auto-start enabled to exercise all isolated configurations.
 
 Optional:
 ```bash

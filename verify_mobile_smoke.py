@@ -1,6 +1,13 @@
 import os
+import base64
+import hashlib
 import html
 import json
+import math
+import random
+import select
+import socket
+import struct
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -119,6 +126,230 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         self.respond(f'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:{action}Response xmlns:u="urn:schemas-upnp-org:service:{service}:1">{fields}</u:{action}Response></s:Body></s:Envelope>')
 
 
+FLYDJ_POPULATIONS = [
+    (1, "jo_a", "JO-A (high-frequency sound)", "input"),
+    (2, "jo_b", "JO-B (low-frequency sound)", "input"),
+    (3, "jo_ce", "JO-C/E (vibration)", "input"),
+    (4, "approach", "Approach / courtship song", "output"),
+    (5, "startle", "Startle / escape", "output"),
+    (6, "arousal", "Arousal", "output"),
+]
+FLYDJ_CELL_TYPES = ["JO-A", "JO-B", "JO-CE", "DNp01", "DNp02", "DNp03", "Kenyon cell"]
+FLYDJ_NEURONS_PER_POPULATION = 15
+FLYDJ_NEURON_COUNT = 200
+FLYDJ_SILHOUETTE_COUNT = 600
+WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+def build_flydj_geometry():
+    """A tiny but valid geometry document (flydj/API.md, GET /v1/model/geometry)."""
+    rng = random.Random(7)
+
+    def point(scale):
+        while True:
+            x, y, z = (rng.uniform(-1, 1) for _ in range(3))
+            if x * x + y * y + z * z <= 1:
+                return x * 180 * scale, y * 140 * scale, z * 120 * scale
+
+    def shell_point():
+        theta, phi = rng.uniform(0, 2 * math.pi), math.acos(rng.uniform(-1, 1))
+        return 190 * math.sin(phi) * math.cos(theta), 150 * math.cos(phi), 130 * math.sin(phi) * math.sin(theta)
+
+    header = json.dumps({
+        "version": 1,
+        "neuronCount": FLYDJ_NEURON_COUNT,
+        "silhouetteCount": FLYDJ_SILHOUETTE_COUNT,
+        "populations": [{"id": i, "key": key, "label": label, "role": role} for i, key, label, role in FLYDJ_POPULATIONS],
+        "cellTypes": FLYDJ_CELL_TYPES,
+    }, separators=(",", ":")).encode("utf-8")
+    named = len(FLYDJ_POPULATIONS) * FLYDJ_NEURONS_PER_POPULATION
+    populations = bytes(
+        (index // FLYDJ_NEURONS_PER_POPULATION) + 1 if index < named else 0
+        for index in range(FLYDJ_NEURON_COUNT)
+    )
+    cell_types = [
+        min(populations[index], 6) - 1 if populations[index] else 6
+        for index in range(FLYDJ_NEURON_COUNT)
+    ]
+    cell_types[-1] = 65535  # unknown cell type
+    body = bytearray(b"FDJG" + struct.pack("<I", len(header)) + header)
+    body += b"\x00" * ((-len(header)) % 4)
+    for _ in range(FLYDJ_NEURON_COUNT):
+        body += struct.pack("<3f", *point(1.0))
+    for _ in range(FLYDJ_SILHOUETTE_COUNT):
+        body += struct.pack("<3f", *shell_point())
+    body += struct.pack(f"<{FLYDJ_NEURON_COUNT}H", *cell_types)
+    body += populations
+    return bytes(body)
+
+
+def build_flydj_frame(rng, bio_ms):
+    """One stream frame (flydj/API.md, WS /v1/stream)."""
+    rates = [rng.uniform(1, 8) for _ in FLYDJ_POPULATIONS[:3]] + [rng.uniform(8, 30), rng.uniform(1, 6), rng.uniform(5, 25)]
+    spikes = rng.sample(range(FLYDJ_NEURON_COUNT), rng.randint(10, 60))
+    header = struct.pack("<BBHIdf", 0xF1, 1, len(rates), len(spikes), bio_ms, 0.84)
+    return header + struct.pack(f"<{len(rates)}f", *rates) + struct.pack(f"<{len(spikes)}I", *spikes)
+
+
+def websocket_binary_frame(payload):
+    """An unmasked server-to-client RFC 6455 binary frame."""
+    length = len(payload)
+    if length < 126:
+        header = struct.pack("!BB", 0x82, length)
+    elif length < 65536:
+        header = struct.pack("!BBH", 0x82, 126, length)
+    else:
+        header = struct.pack("!BBQ", 0x82, 127, length)
+    return header + payload
+
+
+class FlyDjStubHandler(BaseHTTPRequestHandler):
+    """Stand-in for the Python FlyDJ sidecar used by the owned FlyDJ configuration."""
+
+    protocol_version = "HTTP/1.1"  # .NET's ClientWebSocket (the app's stream relay) rejects an HTTP/1.0 upgrade
+    state_lock = threading.Lock()
+    running = False
+    stream_clients = 0
+    geometry = build_flydj_geometry()
+    geometry_etag = '"' + hashlib.sha1(geometry).hexdigest() + '"'
+    stopping = threading.Event()
+
+    @classmethod
+    def reset(cls):
+        with cls.state_lock:
+            cls.running = False
+            cls.stream_clients = 0
+        cls.stopping.clear()
+
+    @classmethod
+    def set_running(cls, running):
+        with cls.state_lock:
+            cls.running = running
+
+    def log_message(self, *args):
+        pass
+
+    def send_json(self, payload, status=200):
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def simulation_state(self):
+        cls = type(self)
+        with cls.state_lock:
+            running, clients = cls.running, cls.stream_clients
+        mode = "stopped" if not running else "continuous" if clients else "bursting"
+        return {
+            "mode": mode, "running": running, "viewers": clients, "bioTimeMs": 123456.7 if running else 0.0,
+            "realtimeFactor": 0.92 if running else 0.0, "cpuMsPerBioSecond": 310.5 if running else 0.0,
+            "spikesPerSecond": 1840.0 if running else 0.0, "engagement": 0.84 if running else None,
+            "populationRates": {"approach": 14.2, "startle": 3.1, "arousal": 22.0} if running else {"approach": 0.0, "startle": 0.0, "arousal": 0.0},
+            "listeningUrl": None, "lastFeatures": None, "modelStatus": "ready",
+        }
+
+    def model_info(self):
+        return {
+            "dataVersion": "smoke-stub", "scope": "auditory", "status": "ready", "buildProgress": 1.0, "message": None,
+            "neuronCount": FLYDJ_NEURON_COUNT, "connectionCount": 912345, "synapseCount": 4567890,
+            "populations": [
+                {"id": i, "key": key, "label": label, "role": role,
+                 "neuronCount": FLYDJ_NEURONS_PER_POPULATION}
+                for i, key, label, role in FLYDJ_POPULATIONS
+            ],
+            "attribution": [{"text": "Dorkenwald et al. 2024, Neuronal wiring diagram of an adult brain, Nature",
+                             "url": "https://doi.org/10.1038/s41586-024-07558-y"}],
+            "shuffleControl": {"realResponse": 2.41, "shuffledResponse": 0.37, "ratio": 6.5, "trials": 8},
+        }
+
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        if path == "/health":
+            self.send_json({"status": "ok", "modelStatus": "ready"})
+        elif path == "/v1/model":
+            self.send_json(self.model_info())
+        elif path == "/v1/state":
+            self.send_json(self.simulation_state())
+        elif path == "/v1/model/geometry":
+            cls = type(self)
+            if self.headers.get("If-None-Match") == cls.geometry_etag:
+                self.send_response(304)
+                self.send_header("ETag", cls.geometry_etag)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("ETag", cls.geometry_etag)
+            self.send_header("Content-Length", str(len(cls.geometry)))
+            self.end_headers()
+            self.wfile.write(cls.geometry)
+        elif path == "/v1/stream" and self.headers.get("Upgrade", "").lower() == "websocket":
+            self.serve_stream()
+        else:
+            self.send_json({"error": "not_found", "message": path}, 404)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        path = self.path.split("?", 1)[0]
+        cls = type(self)
+        if path in ("/v1/run/start", "/v1/run/stop"):
+            cls.set_running(path.endswith("start"))
+            self.send_json(self.simulation_state())
+        elif path == "/v1/audition":
+            features = {"low": 0.41, "mid": 0.33, "high": 0.26, "loudness": 0.62, "onsetRate": 2.1, "centroidHz": 1840.0}
+            results = [
+                {"id": c["id"], "ok": True, "error": None, "score": 1.27 - index * 0.4, "features": features,
+                 "populationRates": {"approach": 14.2, "startle": 3.1, "arousal": 22.0}}
+                for index, c in enumerate(body.get("candidates", []))
+            ]
+            self.send_json({"results": results, "bioMs": body.get("bioMs", 500),
+                            "baseline": {"approach": 2.0, "startle": 1.1, "arousal": 4.0}})
+        elif path == "/v1/listen":
+            self.send_json({"ok": True, "error": None, "engagement": 0.84, "features": None,
+                            "populationRates": {"approach": 14.2, "startle": 3.1, "arousal": 22.0}})
+        else:
+            self.send_json({"error": "not_found", "message": path}, 404)
+
+    def serve_stream(self):
+        cls = type(self)
+        key = self.headers.get("Sec-WebSocket-Key", "")
+        accept = base64.b64encode(hashlib.sha1((key + WEBSOCKET_GUID).encode("ascii")).digest()).decode("ascii")
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+        self.wfile.flush()
+        connection = self.connection
+        rng = random.Random(11)
+        bio_ms = 0.0
+        with cls.state_lock:
+            cls.stream_clients += 1
+        try:
+            # A few valid frames straight away, then a gentle trickle until the client goes away.
+            while not cls.stopping.is_set():
+                with cls.state_lock:
+                    running = cls.running
+                frame = build_flydj_frame(rng, bio_ms) if running else struct.pack("<BBHIdf", 0xF1, 1, 0, 0, bio_ms, float("nan"))
+                bio_ms += 66.0
+                connection.sendall(websocket_binary_frame(frame))
+                readable, _, _ = select.select([connection], [], [], 0.5 if running else 1.0)
+                if readable:
+                    data = connection.recv(4096)
+                    if not data or (data[0] & 0x0F) == 0x8:
+                        break
+        except (OSError, ValueError):
+            pass
+        finally:
+            with cls.state_lock:
+                cls.stream_clients = max(0, cls.stream_clients - 1)
+            self.close_connection = True
+
+
 def is_server_reachable():
     try:
         with urlopen(f"{BASE_URL}/auth/login", timeout=3):
@@ -138,7 +369,7 @@ def wait_for_server_ready(timeout_seconds, process=None):
     return False
 
 
-def start_local_server(with_speaker=False):
+def start_local_server(with_speaker=False, flydj_url=None):
     artifacts_dir = Path("artifacts")
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "mobile_smoke_server.log"
@@ -159,6 +390,8 @@ def start_local_server(with_speaker=False):
         "Stations": [{"Name": "Test radio", "Url": "http://127.0.0.1:1400/stream"}],
         "SpotifyTracks": [], "YouTubeCollections": [], "YouTubeMusicCollections": [],
     }
+    if flydj_url:
+        settings["FlyDj"] = {"TargetSpeakerIps": ["127.0.0.1"], "Volume": 20}
     (settings_dir / "config.json").write_text(json.dumps(settings), encoding="utf-8")
 
     process = subprocess.Popen(
@@ -168,7 +401,10 @@ def start_local_server(with_speaker=False):
         cwd=Path(__file__).resolve().parent,
         shell=False,
         env={
-            **os.environ,
+            **{key: value for key, value in os.environ.items() if key != "FLYDJ_ENABLED"},
+            # FlyDJ is opt-in: only the dedicated FlyDJ configuration enables it, with a stub sidecar.
+            "FlyDj__Enabled": "true" if flydj_url else "false",
+            **({"FlyDj__ServiceUrl": flydj_url} if flydj_url else {}),
             "BackgroundServices__Enabled": "false",
             "Automation__TimeZone": "UTC",
             "PlaybackSnapshots__Enabled": "true" if with_speaker else "false",
@@ -440,6 +676,17 @@ def try_login(page, username, password):
         error_text = error_alert.first.inner_text().strip()
 
     return False, page.url, error_text
+
+
+def login_or_fail(page, output_dir):
+    login_attempt_errors = []
+    for username, password in get_login_attempts():
+        succeeded, current_url, error_text = try_login(page, username, password)
+        if succeeded:
+            return
+        login_attempt_errors.append(f"{username}@{current_url} ({error_text or 'no error message'})")
+    page.screenshot(path=str(output_dir / "mobile_login_failure.png"), full_page=True)
+    raise AssertionError("Unable to log in. Set MOBILE_SMOKE_USERNAME and MOBILE_SMOKE_PASSWORD. " + "; ".join(login_attempt_errors))
 
 
 def assert_control_is_clickable(control):
@@ -894,7 +1141,82 @@ def verify_sleep_timer_workflow(page, browser, output_dir):
         raise
 
 
-def verify_application(playwright, output_dir, expected_speaker_state=None):
+def verify_flydj_disabled(page):
+    """FlyDJ is opt-in: without FlyDj__Enabled there is no nav link, no page and no API."""
+    expect(page.locator("a.nav-link", has_text="FlyDJ")).to_have_count(0)
+    page.goto(f"{BASE_URL}/flydj", wait_until="networkidle")
+    expect(page).to_have_url(re.compile("^" + re.escape(BASE_URL) + "/?$"), timeout=10000)
+    expect(page.locator("[data-qa='flydj-page']")).to_have_count(0)
+    status = page.request.get(f"{BASE_URL}/api/flydj/state").status
+    assert status == 404, f"Disabled FlyDJ must hide its API (got {status})."
+
+
+FLYDJ_VIEWPORTS = [("narrow", 375, 812), *VIEWPORTS]
+
+
+def assert_flydj_content_fits(page):
+    """Nothing inside the page may poke out of the viewport (clipped cards hide overflow from scrollWidth)."""
+    offenders = page.evaluate(
+        """
+        () => {
+            const limit = window.innerWidth + 1;
+            return [...document.querySelectorAll('[data-qa="flydj-page"] *')]
+                .filter(element => !element.closest('.flydj-table-scroll, .flydj-tooltip, svg') && element.getClientRects().length)
+                .filter(element => element.getBoundingClientRect().right > limit)
+                .slice(0, 5)
+                .map(element => `${element.tagName.toLowerCase()}.${element.className}`);
+        }
+        """
+    )
+    assert not offenders, f"FlyDJ content overflows the viewport: {offenders}"
+
+
+def open_flydj_from_navigation(page, width):
+    page.goto(f"{BASE_URL}/", wait_until="networkidle")
+    if width < 992:
+        page.locator("button.app-mobile-menu-button").first.click(force=True)
+        page.wait_for_timeout(150)
+    link = page.locator("a.nav-link", has_text="FlyDJ")
+    expect(link).to_have_count(1)
+    expect(link).to_be_visible(timeout=5000)
+    link.click()
+    expect(page).to_have_url(f"{BASE_URL}/flydj", timeout=10000)
+
+
+def verify_flydj_page(page, output_dir, width, slug, theme, running):
+    page.goto(f"{BASE_URL}/flydj", wait_until="networkidle")
+    apply_theme(page, theme)
+    expect(page.locator("[data-qa='flydj-page']")).to_be_visible(timeout=10000)
+    expect(page.get_by_role("heading", name="FlyDJ", exact=True)).to_be_visible()
+    toggle = page.locator("[data-qa='flydj-toggle']")
+    expect(toggle).to_be_enabled(timeout=15000)  # rooms chosen, library has a station, stub sidecar reachable
+    expect(toggle).to_have_attribute("role", "switch")
+    expect(toggle).to_have_attribute("aria-checked", "false")
+    assert_control_is_clickable(toggle)
+    assert toggle.bounding_box()["height"] >= 44, "FlyDJ switch is smaller than a 44px touch target."
+    stage = page.locator("[data-qa='flydj-brain-canvas']:not([hidden]), [data-qa='flydj-brain-fallback']").first
+    expect(stage).to_be_visible(timeout=10000)
+    webgl = page.locator("[data-qa='flydj-brain-canvas']:not([hidden])").count() > 0
+    expect(page.locator("[data-qa='flydj-stats']")).to_contain_text("Neurons", timeout=15000)
+    expect(page.locator("[data-qa='flydj-stats']")).to_contain_text("912,345")
+    expect(page.locator("[data-qa='flydj-settings']")).to_be_visible()
+    expect(page.locator("[data-qa='flydj-about']")).to_contain_text("Experimental approximation")
+    activity = page.locator("[data-qa='flydj-activity']")
+    overlay = page.locator("[data-qa='flydj-overlay']")
+    if running:
+        expect(activity).to_contain_text("14.2 Hz", timeout=15000)
+        if webgl:
+            expect(overlay).to_have_count(0, timeout=20000)
+    elif webgl:
+        expect(overlay).to_contain_text("paused", timeout=20000)
+    assert_no_horizontal_overflow(page)
+    assert_flydj_content_fits(page)
+    suffix = "_live" if running else ""
+    page.screenshot(path=str(output_dir / f"flydj_{slug}_{theme}{suffix}.png"), full_page=True)
+    return webgl
+
+
+def verify_flydj_application(playwright, output_dir):
     browser = launch_chromium(playwright)
     context = browser.new_context(viewport={"width": 390, "height": 844})
     try:
@@ -902,17 +1224,69 @@ def verify_application(playwright, output_dir, expected_speaker_state=None):
         browser_errors = []
         page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
         page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
-        login_attempt_errors = []
-        for username, password in get_login_attempts():
-            succeeded, current_url, error_text = try_login(page, username, password)
-            if succeeded:
-                break
-            login_attempt_errors.append(f"{username}@{current_url} ({error_text or 'no error message'})")
-        else:
-            page.screenshot(path=str(output_dir / "mobile_login_failure.png"), full_page=True)
-            raise AssertionError("Unable to log in. Set MOBILE_SMOKE_USERNAME and MOBILE_SMOKE_PASSWORD. " + "; ".join(login_attempt_errors))
+        login_or_fail(page, output_dir)
+        expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
+
+        # Sidecar idle: the paused overlay explains the empty brain.
+        modes = set()
+        for slug, width, height in FLYDJ_VIEWPORTS:
+            page.set_viewport_size({"width": width, "height": height})
+            open_flydj_from_navigation(page, width)
+            for theme in THEMES:
+                modes.add(verify_flydj_page(page, output_dir, width, slug, theme, running=False))
+
+        # Sidecar simulating: activity appears and the overlay goes away.
+        FlyDjStubHandler.set_running(True)
+        for slug, width, height in FLYDJ_VIEWPORTS:
+            page.set_viewport_size({"width": width, "height": height})
+            for theme in THEMES:
+                modes.add(verify_flydj_page(page, output_dir, width, slug, theme, running=True))
+        FlyDjStubHandler.set_running(False)
+
+        # The switch reacts. Background services are disabled in this fixture, so FlyDJ explains why it cannot run.
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(f"{BASE_URL}/flydj", wait_until="networkidle")
+        toggle = page.locator("[data-qa='flydj-toggle']")
+        expect(toggle).to_be_enabled(timeout=15000)
+        device_commands = SimulatedSpeakerHandler.command_count()
+        toggle.click()
+        expect(page.locator(".alert-danger")).to_contain_text("background services are disabled", timeout=10000)
+        expect(toggle).to_have_attribute("aria-checked", "false")
+        assert SimulatedSpeakerHandler.command_count() == device_commands, "FlyDJ must not command rooms when it cannot run."
+        assert_no_horizontal_overflow(page)
+
+        # Settings round trip.
+        page.get_by_label("Maximum time per station (min)").fill("30")
+        page.get_by_label("Maximum time per station (min)").press("Tab")
+        save = page.locator("[data-qa='flydj-save']")
+        expect(save).to_be_enabled()
+        save.click()
+        expect(page.get_by_text("FlyDJ settings saved.")).to_be_visible(timeout=10000)
+        page.reload(wait_until="networkidle")
+        expect(page.get_by_label("Maximum time per station (min)")).to_have_value("30", timeout=10000)
+
+        assert not browser_errors, "Browser errors detected:\n" + "\n".join(browser_errors)
+        print(f"FlyDJ smoke passed: {len(FLYDJ_VIEWPORTS)} viewports x {len(THEMES)} themes x 2 simulation states; 3D view rendered={True in modes}, 2D fallback used={False in modes}.")
+    finally:
+        context.close()
+        browser.close()
+
+
+def verify_application(playwright, output_dir, expected_speaker_state=None, expect_flydj_disabled=False):
+    browser = launch_chromium(playwright)
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    try:
+        page = context.new_page()
+        browser_errors = []
+        page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
+        page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
+        login_or_fail(page, output_dir)
 
         expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
+        if expect_flydj_disabled:
+            verify_flydj_disabled(page)
+            page.goto(f"{BASE_URL}/", wait_until="networkidle")
+            expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
         with_speaker = page.locator("[data-qa='home-setup']").count() == 0
         if expected_speaker_state is not None:
             assert with_speaker == expected_speaker_state, "Isolated speaker fixture did not match the expected configuration."
@@ -995,20 +1369,34 @@ def run():
             return
         if not AUTO_START_SERVER:
             raise RuntimeError(f"App is not reachable at {BASE_URL}. Start the app or enable auto-start.")
-        for with_speaker in [False, True]:
-            speaker = None
+        for configuration in ["empty", "speaker", "flydj"]:
+            with_speaker = configuration != "empty"
+            speaker = sidecar = None
             process = log_stream = runtime_dir = None
             try:
                 if with_speaker:
                     SimulatedSpeakerHandler.reset()
                     speaker = ThreadingHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
                     threading.Thread(target=speaker.serve_forever, daemon=True).start()
-                process, log_stream, log_path, runtime_dir = start_local_server(with_speaker)
+                flydj_url = None
+                if configuration == "flydj":
+                    FlyDjStubHandler.reset()
+                    sidecar = ThreadingHTTPServer(("127.0.0.1", 0), FlyDjStubHandler)
+                    threading.Thread(target=sidecar.serve_forever, daemon=True).start()
+                    flydj_url = f"http://127.0.0.1:{sidecar.server_address[1]}"
+                process, log_stream, log_path, runtime_dir = start_local_server(with_speaker, flydj_url)
                 if not wait_for_server_ready(SERVER_START_TIMEOUT_SECONDS, process):
                     raise RuntimeError(f"Timed out waiting for {BASE_URL} (exit code: {process.poll()}). Check {log_path}")
-                verify_application(playwright, output_dir, with_speaker)
+                if configuration == "flydj":
+                    verify_flydj_application(playwright, output_dir)
+                else:
+                    verify_application(playwright, output_dir, with_speaker, expect_flydj_disabled=True)
             finally:
                 stop_local_server(process, log_stream, runtime_dir)
+                if sidecar is not None:
+                    FlyDjStubHandler.stopping.set()
+                    sidecar.shutdown()
+                    sidecar.server_close()
                 if speaker is not None:
                     speaker.shutdown()
                     speaker.server_close()

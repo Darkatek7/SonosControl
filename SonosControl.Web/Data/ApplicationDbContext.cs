@@ -16,6 +16,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlaybackHistory> PlaybackStats { get; set; }
     public DbSet<UserFavouriteSource> UserFavouriteSources { get; set; }
     public DbSet<ManualPlaybackDeadline> ManualPlaybackDeadlines { get; set; }
+    public DbSet<FlyDjDecision> FlyDjDecisions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -69,6 +70,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(item => item.Reason).HasMaxLength(256).IsRequired();
             entity.Property(item => item.RuleKey).HasMaxLength(128);
             entity.HasIndex(item => item.StopAtUtc);
+        });
+
+        builder.Entity<FlyDjDecision>(entity =>
+        {
+            entity.HasIndex(decision => decision.DecidedAtUtc);
         });
 
         // You may need to adjust other Identity entities similarly if errors come up

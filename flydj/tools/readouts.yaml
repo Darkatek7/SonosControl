@@ -1,0 +1,97 @@
+# FlyDJ population definitions.
+#
+# Every population is a set of FlyWire neurons selected from the 783 release
+# annotations (flyconnectome/flywire_annotations, Supplemental_file1). A neuron
+# joins a population when its `cell_type` fully matches one of the regular
+# expressions in `cell_types`, or when its `synonyms` annotation contains one of
+# the strings in `synonyms`. Populations must be disjoint and non-empty; the
+# build fails otherwise. Populations are assigned in ascending `id` order and
+# the first match wins.
+#
+# The input populations are the Johnston's organ (JO) mechanosensory neurons of
+# the antenna. JO subgroups A and B respond to sound-like antennal vibration,
+# subgroups C and E to slow deflections such as wind and gravity (Kamikouchi et
+# al. 2006, 2009; Ishikawa et al. 2019, Front Physiol,
+# doi:10.3389/fphys.2019.01552). The audio features of a radio stream drive
+# them as Poisson input (see app/audio.py).
+#
+# The output populations are *interpretive readouts*, not a claim that a fly
+# "likes" a radio station. They collect neurons that the literature links to
+# the behavioural relevance of sound, so that their activity in the simulated
+# connectome can be compared between streams:
+#
+#   approach  courtship-song related neurons: the pC1 cluster (a-e) integrates
+#             song cues and social state (Deutsch et al. 2020 eLife
+#             doi:10.7554/eLife.59502; Zhou et al. 2015 eLife
+#             doi:10.7554/eLife.08477), the pC2l cluster is a song detector
+#             (Deutsch et al. 2019 Curr Biol doi:10.1016/j.cub.2019.08.008;
+#             Clemens et al. 2018 Neuron doi:10.1016/j.neuron.2017.12.033), and
+#             vpoEN drives female receptivity (Wang et al. 2021 Nature
+#             doi:10.1038/s41586-020-2972-7; Wang et al. 2020 Nature
+#             doi:10.1038/s41586-020-2055-9). Activity is read as "the song
+#             circuitry is engaged / the sound is attractive".
+#             Measured fact (see README): with Johnston's organ input alone these
+#             curated neurons are 2-4 synapses downstream, sit among thousands of
+#             other inputs and stay silent in the Shiu et al. model. The
+#             population therefore also contains, by rule, every
+#             fruitless/doublesex-expressing neuron (the genetic substrate of
+#             courtship circuitry, Zhou et al. 2015; Baker et al. 2022) that
+#             receives at least 5 direct synapses from Johnston's organ neurons
+#             and is not claimed by another population: the sexually dimorphic
+#             neurons positioned to "hear" the sound. These respond and make the
+#             readout informative.
+#   startle   the giant fibre (DNp01) and the descending neurons of the escape
+#             circuit (DNp02, DNp04, DNp06, DNp11) (Allen et al. 2006 Semin Cell
+#             Dev Biol doi:10.1016/j.semcdb.2005.11.011; von Reyn et al. 2014
+#             Nat Neurosci doi:10.1038/nn.3741; von Reyn et al. 2017 Neuron
+#             doi:10.1016/j.neuron.2017.05.036). DNp01 and DNp02 receive direct
+#             Johnston's organ input in the connectome (checked by the build
+#             report). Activity is read as "the sound is startling / harsh".
+#   arousal   second-order auditory neurons of the antennal mechanosensory and
+#             motor centre and the wedge: AMMC-A1 (Seki et al. 2011 Neurosci
+#             Res doi:10.1016/j.neures.2011.07.651), AMMC028, and the WV-WV
+#             song-feature neurons of Baker et al. 2022 Curr Biol
+#             doi:10.1016/j.cub.2022.06.019 (FlyWire types CB3877, CB3913,
+#             CB3914, CB3915, CB4045, CB4161, found through the annotation's
+#             synonyms column). Activity is read as "the auditory pathway is
+#             strongly driven" and is reported but not used in the score.
+#
+# Cell type names are those of the FlyWire annotations; `tools/build_connectome.py`
+# prints the number of matched neurons per type so a renamed type is noticed.
+
+version: 1
+
+populations:
+  jo_a:
+    id: 1
+    role: input
+    label: "JO-A (high-frequency sound)"
+    cell_types: ['JO-A\d+']
+  jo_b:
+    id: 2
+    role: input
+    label: "JO-B (low-frequency sound, beat)"
+    cell_types: ['JO-B\d+(_[a-z])?']
+  jo_ce:
+    id: 3
+    role: input
+    label: "JO-C/E (slow deflection, envelope)"
+    cell_types: ['JO-C[A-Z]*\d*', 'JO-E[DV]\d+(_[a-z])?']
+  approach:
+    id: 4
+    role: output
+    label: "Approach / courtship song"
+    cell_types: ['pC1[a-e]', 'vpoEN']
+    synonyms: ['Nojima 2021: pC2l']
+    fru_dsx: [fru, dsx, coexpress]
+    min_direct_input: 5
+  startle:
+    id: 5
+    role: output
+    label: "Startle / escape"
+    cell_types: ['DNp01', 'DNp02', 'DNp04', 'DNp06', 'DNp11']
+  arousal:
+    id: 6
+    role: output
+    label: "Auditory arousal (AMMC / wedge)"
+    cell_types: ['AMMC-A1', 'AMMC028', 'CB3877', 'CB3913', 'CB3914', 'CB3915', 'CB4045', 'CB4161']
