@@ -214,7 +214,7 @@ public partial class FlyDjPage : ComponentBase
             {
                 if (!IsRunning) return "Simulation paused. Turn on FlyDJ to watch it think.";
                 return _state.Status == FlyDjConductorStatus.Yielded
-                    ? "Resting while you are in control. The simulation is paused and uses no CPU."
+                    ? _state.YieldedSpeakers.Count > 0 ? "Resting while you are in control. The simulation is paused and uses no CPU." : "Waiting for scheduled playback to end. The simulation is paused."
                     : "Simulation paused for a moment...";
             }
             if (_brainMode == BrainMode.Webgl && _streamState is "offline" or "connecting") return "Connecting to the live view...";
@@ -273,12 +273,14 @@ public partial class FlyDjPage : ComponentBase
             if (ToggleDisabledReason is { } reason) return reason;
             if (IsRunning && _state.Status == FlyDjConductorStatus.Yielded)
             {
+                if (_state.YieldedSpeakers.Count == 0) return "Schedules currently own the selected rooms. FlyDJ waits until they end.";
                 return _state.NextDecisionAtUtc is { } resume
                     ? $"You took over, so FlyDJ is resting until {FormatClock(resume)}. Switch it off to stop for good."
                     : "You took over, so FlyDJ is resting. Switch it off to stop for good.";
             }
             if (IsRunning)
             {
+                if (_state.IsScheduled) return "FlyDJ is playing for a schedule, using that schedule's rooms and volumes. Switching it off skips the current FlyDJ schedule occurrence.";
                 var rooms = string.Join(", ", SavedTargetRooms.Select(room => room.Name));
                 return $"FlyDJ is choosing music for {rooms}. Anything you play by hand takes priority.";
             }
@@ -312,7 +314,7 @@ public partial class FlyDjPage : ComponentBase
         FlyDjConductorStatus.Starting => "Starting",
         FlyDjConductorStatus.Auditioning => "Auditioning stations",
         FlyDjConductorStatus.Playing => string.IsNullOrWhiteSpace(_state.CurrentStationName) ? "Playing" : $"Playing {_state.CurrentStationName}",
-        FlyDjConductorStatus.Yielded => "Yielded to manual control",
+        FlyDjConductorStatus.Yielded => _state.YieldedSpeakers.Count > 0 ? "Yielded to manual control" : "Waiting for schedules",
         FlyDjConductorStatus.Error => "Error",
         _ => "Stopped"
     };

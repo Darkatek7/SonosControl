@@ -114,6 +114,23 @@ Configure these values in `appsettings.json` or with environment variables:
 
 ## FlyDJ (optional, experimental)
 
+When FlyDJ is enabled on the server (`FLYDJ_ENABLED=true` or
+`FlyDj__Enabled=true`), the schedule editor offers **FlyDJ** under
+**Playback → Source type** (with **Specific source** selected). Choose the
+schedule's rooms, per-room volumes, synchronization and time window as usual;
+no source URL is needed. FlyDJ starts automatically during the winning time
+window, even if its standalone autopilot was off. It uses the candidate
+stations and decision preferences saved on the FlyDJ page. Multiple concurrent
+FlyDJ windows share station selection while retaining their own room settings.
+
+Normal schedule priorities and date exclusions still apply per room. At the
+window's end the schedule stops its playback and releases its rooms. A manual
+start during the window keeps that room away from FlyDJ for the rest of the
+occurrence. Turning FlyDJ off on its page skips the current FlyDJ occurrence;
+future occurrences can start again. FlyDJ is available only for timed schedules,
+not manual playback templates. If the server feature is disabled later, a saved
+FlyDJ schedule reports that FlyDJ must be enabled and sends no playback commands.
+
 FlyDJ is an optional, experimental radio DJ. It runs as a separate `flydj` Python container that is off by default and never published to the host: the web app reaches it at `http://flydj:8090` on the Compose network. The DJ chooses only between radio stations from your library and plays them on configured rooms. Its choices come from a simulation of the fruit-fly auditory connectome, which scores each candidate station by how the simulated brain responds to it. Manual control always wins; see [Operations and Observability](operations-and-observability.md#flydj-optional-experimental) for the playback ownership rules.
 
 ### Enable

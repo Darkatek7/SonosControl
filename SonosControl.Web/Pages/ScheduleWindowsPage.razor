@@ -187,7 +187,7 @@
 
                         @if (_editingWindow.Playback is not null)
                         {
-                            <PlaybackPayloadEditor Settings="_settings" Playback="_editingWindow.Playback" CanEdit="_canManage" OnChanged="PlaybackChanged" />
+                            <PlaybackPayloadEditor Settings="_settings" Playback="_editingWindow.Playback" CanEdit="_canManage" AllowFlyDj="_editingWindow.HasTimeSchedule" OnChanged="PlaybackChanged" />
                         }
 
                         <details class="schedule-editor-card schedule-advanced" data-qa="schedule-advanced">
@@ -363,6 +363,7 @@
     {
         if (string.IsNullOrWhiteSpace(window.Name)) return "Enter a name.";
         if (window.Priority is < 0 or > 1000) return "Priority must be between 0 and 1000.";
+        if (!window.HasTimeSchedule && window.Playback?.SourceType == SceneSourceType.FlyDj) return "FlyDJ requires a time schedule. Choose another source for a manual template.";
         if (!window.HasTimeSchedule) return null;
         if (window.RecurrenceType == ScheduleRecurrenceType.CustomDays && window.DaysOfWeek.Count == 0) return "Choose at least one day for custom recurrence.";
         if (window.StartDate.HasValue && window.EndDate.HasValue && window.EndDate < window.StartDate) return "End date must be on or after the start date.";

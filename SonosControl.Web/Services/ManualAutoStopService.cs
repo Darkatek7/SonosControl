@@ -96,7 +96,7 @@ public sealed class ManualAutoStopService(
 
     public async Task<IReadOnlyDictionary<string, long>> RegisterScheduleOccurrenceAsync(
         IEnumerable<string> speakerIps, ScheduleWindow window, CancellationToken cancellationToken = default,
-        bool includeRecoveryTargets = false)
+        bool includeRecoveryTargets = false, DateTimeOffset? executionStartedAtUtc = null)
     {
         var speakers = Normalize(speakerIps);
         if (speakers.Length == 0 || !window.HasTimeSchedule || !window.IsEnabled) return new Dictionary<string, long>();
@@ -119,7 +119,7 @@ public sealed class ManualAutoStopService(
                 // A successful manual start may have happened while this scheduled execution
                 // was running. Its later session owns the speaker, even when its active-window
                 // deadline has the same Schedule reason.
-                if (prior is not null && prior.StartedAtUtc > occurrenceStart.UtcDateTime) continue;
+                if (prior is not null && prior.StartedAtUtc > (executionStartedAtUtc ?? occurrenceStart).UtcDateTime) continue;
                 var releasedKey = GetReleasedRuleKey(prior);
                 releasedKey ??= DetermineReleasedRuleKey(settings, ip, occurrenceStart);
                 var key = ComposeScheduleKey(window.Id, releasedKey);

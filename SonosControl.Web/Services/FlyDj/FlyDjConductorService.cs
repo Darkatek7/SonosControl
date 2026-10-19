@@ -21,7 +21,7 @@ public interface IFlyDjConductor
 /// While running it auditions library stations on the sidecar, plays the winner on the automation
 /// lane, watches engagement, and steps away from any room that a person or a schedule takes over.
 /// </summary>
-public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
+public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, IFlyDjScheduleConductor
 {
     public const string DefaultActor = "flydj";
 
@@ -64,6 +64,11 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
 
     private volatile ActiveSelection? _active;
     private volatile bool _running;
+    private volatile bool _manualRunning;
+    private readonly HashSet<string> _startedSchedules = new(StringComparer.Ordinal);
+    private volatile IReadOnlyList<FlyDjSchedulePlayback> _schedules = [];
+    private readonly HashSet<string> _suppressedSchedules = new(StringComparer.Ordinal);
+    private string _scheduleRevision = "[]";
     private volatile bool _hostStarted;
     private volatile bool _sidecarActive;
     private volatile bool _modelReady;
@@ -176,30 +181,38 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
         await _lifecycle.WaitAsync(cancellationToken);
         try
         {
-            if (_running) return;
-            if (!_hostStarted)
-            {
-                SetStatus(FlyDjConductorStatus.Error, "FlyDJ cannot run because background services are disabled on this server.");
-                return;
-            }
-            lock (_stateLock)
-            {
-                _yielded.Clear();
-                _active = null;
-                _pendingOverrides.Clear();
-                _sessionCancellation?.Dispose();
-                _sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-                _sessionDone = NewSignal();
-                _nextDecisionAt = null;
-            }
-            _modelReady = false;
-            _running = true;
-            SetStatus(FlyDjConductorStatus.Starting, "Starting the fly brain...");
-            await PersistWasRunningAsync(true, cancellationToken);
-            await LogAsync("FlyDjStarted", "FlyDJ started.", performedBy ?? DefaultActor);
-            _startSignal.Release();
+            _manualRunning = true;
+            _suppressedSchedules.Clear();
+            await StartSessionAsync(performedBy, cancellationToken);
         }
         finally { _lifecycle.Release(); }
+    }
+
+    private async Task StartSessionAsync(string? performedBy, CancellationToken cancellationToken, bool preserveYielded = false)
+    {
+        if (_running) { Signal(); return; }
+        if (!_hostStarted)
+        {
+            SetStatus(FlyDjConductorStatus.Error, "FlyDJ cannot run because background services are disabled on this server.");
+            return;
+        }
+        lock (_stateLock)
+        {
+            if (!preserveYielded) _yielded.Clear();
+            _active = null;
+            _pendingOverrides.Clear();
+            _sessionCancellation?.Dispose();
+            _sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+            _sessionDone = NewSignal();
+            _nextDecisionAt = null;
+            _startedSchedules.Clear();
+        }
+        _modelReady = false;
+        _running = true;
+        SetStatus(FlyDjConductorStatus.Starting, "Starting the fly brain...");
+        await PersistWasRunningAsync(_manualRunning, cancellationToken);
+        await LogAsync("FlyDjStarted", "FlyDJ started.", performedBy ?? DefaultActor);
+        _startSignal.Release();
     }
 
     public async Task StopAsync(string? performedBy, CancellationToken cancellationToken = default)
@@ -207,38 +220,75 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
         await _lifecycle.WaitAsync(cancellationToken);
         try
         {
-            var wasRunning = _running;
-            _running = false;
-            CancellationTokenSource? cancellation;
-            TaskCompletionSource? done;
-            lock (_stateLock)
-            {
-                cancellation = _sessionCancellation;
-                done = _sessionDone;
-            }
-            if (cancellation is not null) await cancellation.CancelAsync();
-            if (wasRunning && done is not null) await done.Task.WaitAsync(cancellationToken);
+            _manualRunning = false;
+            foreach (var schedule in _schedules) _suppressedSchedules.Add(schedule.Key);
+            await StopSessionAsync(performedBy, cancellationToken);
+        }
+        finally { _lifecycle.Release(); }
+    }
 
-            var active = _active;
-            lock (_stateLock)
-            {
-                _active = null;
-                _yielded.Clear();
-                _nextDecisionAt = null;
-            }
-            _pendingOverrides.Clear();
-            if (active is not null) await EndDecisionAsync(active, _time.GetUtcNow());
+    private async Task StopSessionAsync(string? performedBy, CancellationToken cancellationToken, bool preserveYielded = false)
+    {
+        var wasRunning = _running;
+        _running = false;
+        CancellationTokenSource? cancellation;
+        TaskCompletionSource? done;
+        lock (_stateLock)
+        {
+            cancellation = _sessionCancellation;
+            done = _sessionDone;
+        }
+        if (cancellation is not null) await cancellation.CancelAsync();
+        if (wasRunning && done is not null) await done.Task.WaitAsync(cancellationToken);
 
-            if (wasRunning || _sidecarActive)
+        if (preserveYielded)
+            await ProcessOverridesAsync(_time.GetUtcNow(), (await LoadSettingsAsync(cancellationToken)).FlyDj);
+
+        var active = _active;
+        lock (_stateLock)
+        {
+            _active = null;
+            if (!preserveYielded) _yielded.Clear();
+            _nextDecisionAt = null;
+        }
+        _pendingOverrides.Clear();
+        if (active is not null) await EndDecisionAsync(active, _time.GetUtcNow());
+
+        if (wasRunning || _sidecarActive)
+        {
+            try { await _client.StopAsync(cancellationToken); }
+            catch (FlyDjException ex) { _logger.LogWarning(ex, "FlyDJ sidecar could not be stopped."); }
+        }
+        _sidecarActive = false;
+        _modelReady = false;
+        await PersistWasRunningAsync(false, cancellationToken);
+        if (wasRunning) await LogAsync("FlyDjStopped", "FlyDJ stopped.", performedBy ?? DefaultActor);
+        SetStatus(FlyDjConductorStatus.Stopped, null);
+    }
+
+    public async Task UpdateSchedulesAsync(IReadOnlyList<FlyDjSchedulePlayback> schedules, CancellationToken cancellationToken = default)
+    {
+        await _lifecycle.WaitAsync(cancellationToken);
+        try
+        {
+            _suppressedSchedules.IntersectWith(schedules.Select(schedule => schedule.Key));
+            var enabled = schedules.Where(schedule => !_suppressedSchedules.Contains(schedule.Key)).ToArray();
+            var revision = JsonSerializer.Serialize(enabled, Json);
+            if (revision == _scheduleRevision)
             {
-                try { await _client.StopAsync(cancellationToken); }
-                catch (FlyDjException ex) { _logger.LogWarning(ex, "FlyDJ sidecar could not be stopped."); }
+                if (!_running && (_manualRunning || enabled.Length > 0))
+                    await StartSessionAsync(DefaultActor, cancellationToken);
+                return;
             }
-            _sidecarActive = false;
-            _modelReady = false;
-            await PersistWasRunningAsync(false, cancellationToken);
-            if (wasRunning) await LogAsync("FlyDjStopped", "FlyDJ stopped.", performedBy ?? DefaultActor);
-            SetStatus(FlyDjConductorStatus.Stopped, null);
+            // Finish in-flight auditions/writes before replacing schedule rooms or volumes.
+            // A user stopping FlyDJ suppresses this occurrence, not tomorrow's schedule.
+            if (_running) await StopSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning);
+            _schedules = enabled;
+            _scheduleRevision = revision;
+            lock (_stateLock)
+                foreach (var ip in enabled.SelectMany(schedule => schedule.Targets)) _yielded.Remove(ip);
+            if (_manualRunning || enabled.Length > 0)
+                await StartSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning);
         }
         finally { _lifecycle.Release(); }
     }
@@ -313,19 +363,28 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
         await ProcessOverridesAsync(now, fly);
         ExpireYields(now, fly);
 
-        var configured = fly.TargetSpeakerIps
+        var schedules = CurrentSchedules(settings, now);
+        var scheduledRooms = schedules.SelectMany(schedule => schedule.Targets).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var configured = (_manualRunning ? fly.TargetSpeakerIps : [])
+            .Concat(scheduledRooms)
             .Select(ip => _speakerNames.Keys.FirstOrDefault(known => string.Equals(known, ip, StringComparison.OrdinalIgnoreCase)))
             .Where(ip => ip is not null).Select(ip => ip!)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (configured.Count == 0)
         {
             await DeactivateSidecarAsync(now, cancellationToken);
-            SetStatus(FlyDjConductorStatus.Error, "Select at least one configured room for FlyDJ.");
+            SetStatus(_manualRunning ? FlyDjConductorStatus.Error : FlyDjConductorStatus.Starting,
+                _manualRunning ? "Select at least one configured room for FlyDJ." : "The FlyDJ schedule has ended. Finishing scheduled playback...");
             return ScheduleRecheckInterval;
         }
 
         var owned = (_scheduleOwnership?.GetScheduleOwnedSpeakers(settings, now) ?? [])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        owned.ExceptWith(scheduledRooms);
+        // Manual playback later than the occurrence start keeps that room for the
+        // rest of this window; switching stations must never reclaim it.
+        foreach (var schedule in schedules)
+            owned.UnionWith(_commands.ManualSpeakersSince(schedule.StartUtc).Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)));
         await ReleaseUnavailableActiveRoomsAsync(now, configured, owned);
 
         List<string> available;
@@ -387,7 +446,18 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
             active = _active;
         }
 
-        return ComputeDwellDelay(active);
+        var delayUntilNextCheck = ComputeDwellDelay(active);
+        return schedules.Count > 0 ? TimeSpan.FromTicks(Math.Min(delayUntilNextCheck.Ticks, ScheduleRecheckInterval.Ticks)) : delayUntilNextCheck;
+    }
+
+    private IReadOnlyList<FlyDjSchedulePlayback> CurrentSchedules(SonosSettings settings, DateTimeOffset now)
+    {
+        // Re-evaluate before device writes as an audition can cross a boundary or
+        // race an edit. A scheduler poll authorizes starts, never stale windows.
+        var keys = _schedules.Select(schedule => schedule.Key).ToHashSet(StringComparer.Ordinal);
+        return (_scheduleOwnership?.GetFlyDjSchedules(settings, now) ?? [])
+            .Where(schedule => keys.Contains(schedule.Key) && schedule.StartUtc <= now && now < schedule.StopUtc)
+            .ToArray();
     }
 
     private TimeSpan ComputeDwellDelay(ActiveSelection? active)
@@ -507,6 +577,8 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
                 return TimeSpan.FromSeconds(1);
             }
             touchedRooms = result;
+            played = result;
+            if (played.Count == 0) return ScheduleRecheckInterval;
             commandAt = _time.GetUtcNow();
         }
 
@@ -530,7 +602,11 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
         {
             if (_autoStop is not null)
             {
-                try { await _autoStop.RegisterSuccessfulStartAsync(touchedRooms, cancellationToken); }
+                try
+                {
+                    var scheduled = _schedules.SelectMany(schedule => schedule.Targets).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    await _autoStop.RegisterSuccessfulStartAsync(touchedRooms.Where(ip => !scheduled.Contains(ip)), cancellationToken);
+                }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 { _logger.LogWarning(ex, "FlyDJ could not register stop rules for its rooms."); }
             }
@@ -545,6 +621,44 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
     private async Task<IReadOnlyCollection<string>?> PlayAsync(
         SonosSettings settings, List<string> rooms, FlyDjCandidate chosen, DateTimeOffset occurrenceStart, CancellationToken cancellationToken)
     {
+        settings = await LoadSettingsAsync(cancellationToken);
+        var now = _time.GetUtcNow();
+        var schedules = CurrentSchedules(settings, now);
+        var scheduled = schedules.SelectMany(schedule => schedule.Targets).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var blocked = (_scheduleOwnership?.GetScheduleOwnedSpeakers(settings, now) ?? [])
+            .Where(ip => !scheduled.Contains(ip)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var played = new List<string>();
+        foreach (var schedule in schedules)
+        {
+            var manual = _commands.ManualSpeakersSince(schedule.StartUtc).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var targets = rooms.Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase) && !manual.Contains(ip)).ToList();
+            var remaining = schedule.StopUtc - _time.GetUtcNow();
+            if (targets.Count == 0 || remaining <= TimeSpan.Zero) continue;
+            using var deadline = new CancellationTokenSource(remaining, _time);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+            try
+            {
+                var result = await PlayPartitionAsync(settings, targets, chosen, occurrenceStart, linked.Token, schedule);
+                if (result is not null) played.AddRange(result);
+            }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested) { }
+        }
+        var standalone = _manualRunning
+            ? rooms.Where(ip => !scheduled.Contains(ip) && !blocked.Contains(ip)
+                && settings.FlyDj.TargetSpeakerIps.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToList()
+            : [];
+        if (standalone.Count > 0)
+        {
+            var result = await PlayPartitionAsync(settings, standalone, chosen, occurrenceStart, cancellationToken);
+            if (result is not null) played.AddRange(result);
+        }
+        return played.Count == 0 ? null : played;
+    }
+
+    private async Task<IReadOnlyCollection<string>?> PlayPartitionAsync(
+        SonosSettings settings, List<string> rooms, FlyDjCandidate chosen, DateTimeOffset occurrenceStart,
+        CancellationToken cancellationToken, FlyDjSchedulePlayback? schedule = null)
+    {
         var fly = settings.FlyDj;
         var lease = await _commands.EnterAutomationAsync(rooms, occurrenceStart, cancellationToken);
         if (lease is null)
@@ -557,30 +671,43 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
         }
 
         var volume = Math.Clamp(fly.Volume, 0, settings.MaxVolume);
-        var scene = new Scene
-        {
-            Id = "flydj",
-            Name = "FlyDJ",
-            Description = "Station chosen by the FlyDJ connectome.",
-            Enabled = true,
-            SourceType = SceneSourceType.Station,
-            SourceSelectionMode = SceneSourceSelectionMode.Specific,
-            SourceUrl = chosen.Url,
-            IsSyncedPlayback = rooms.Count > 1,
-            SpeakerIps = rooms.ToList(),
-            Actions = rooms.Select(ip => new SceneAction { SpeakerIp = ip, Volume = volume, IncludeInPlayback = true }).ToList()
-        };
+        var scene = schedule?.Window.Playback is { } playback
+            ? SettingsChanges.MergeEntity(playback, playback, playback)
+            : new Scene
+            {
+                Id = "flydj",
+                Name = "FlyDJ",
+                Description = "Station chosen by the FlyDJ connectome.",
+                Enabled = true,
+                SourceType = SceneSourceType.Station,
+                SourceSelectionMode = SceneSourceSelectionMode.Specific,
+                SourceUrl = chosen.Url,
+                IsSyncedPlayback = rooms.Count > 1,
+                SpeakerIps = rooms.ToList(),
+                Actions = rooms.Select(ip => new SceneAction { SpeakerIp = ip, Volume = volume, IncludeInPlayback = true }).ToList()
+            };
+        scene.SourceType = SceneSourceType.Station;
+        scene.SourceSelectionMode = SceneSourceSelectionMode.Specific;
+        scene.SourceUrl = chosen.Url;
         await using var context = new SceneExecutionContext(_commands, PlaybackCommandOrigin.Automation, occurrenceStart, cancellationToken, lease);
         try
         {
             using var scope = _scopes.CreateScope();
             var orchestration = scope.ServiceProvider.GetRequiredService<ISceneOrchestrationService>();
+            // Arm the boundary before the first device write, so a partial failure
+            // or cancellation cannot leave scheduled music without a stop deadline.
+            if (schedule is not null && _autoStop is not null)
+                await _autoStop.RegisterScheduleOccurrenceAsync(rooms, schedule.Window, context.CancellationToken,
+                    executionStartedAtUtc: occurrenceStart);
             var touched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var result = await orchestration.ApplySceneWithContextAsync(
                 scene, DefaultActor, context, ips => { lock (touched) touched.UnionWith(ips); },
                 context.CancellationToken, rooms, allowRecovery: false);
             if (!result.Success)
                 throw new InvalidOperationException($"Could not start {chosen.Name}: {result.Message}");
+            if (schedule is not null && _startedSchedules.Add(schedule.Key) && schedule.Window.FadeInSeconds > 0)
+                await AutomationSchedulerService.ApplyFadeInAsync(result.TargetSpeakers, schedule.Window.FadeInSeconds,
+                    scope.ServiceProvider.GetRequiredService<ISonosConnectorRepo>(), context.CancellationToken);
             return result.TargetSpeakers.Count > 0 ? result.TargetSpeakers : rooms;
         }
         catch (OperationCanceledException) when (context.WasPreempted && !cancellationToken.IsCancellationRequested)
@@ -960,7 +1087,8 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor
             YieldedSpeakers = yielded,
             LastDecision = recent.FirstOrDefault(),
             RecentDecisions = recent,
-            NextDecisionAtUtc = status is FlyDjConductorStatus.Stopped ? null : next
+            NextDecisionAtUtc = status is FlyDjConductorStatus.Stopped ? null : next,
+            IsScheduled = _schedules.Count > 0 && _running
         });
     }
 

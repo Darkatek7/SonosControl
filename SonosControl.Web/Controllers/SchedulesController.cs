@@ -36,6 +36,8 @@ public sealed class SchedulesController : ControllerBase
         var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
         var window = settings.ScheduleWindows.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
         if (window?.Playback is null) return NotFound();
+        if (window.Playback.SourceType == SceneSourceType.FlyDj)
+            return BadRequest("FlyDJ starts automatically during its scheduled time window.");
         var result = await _sceneOrchestrationService.ApplySceneAsync(window.Playback, User.Identity?.Name, cancellationToken);
         return result.Success ? Ok(result) : BadRequest(result);
     }

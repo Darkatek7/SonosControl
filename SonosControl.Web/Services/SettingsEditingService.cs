@@ -23,6 +23,7 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
             var candidate = original is not null && current is not null
                 ? SettingsChanges.MergeEntity(current, original, draft)
                 : Clone(draft);
+            Check(candidate.SourceType != SceneSourceType.FlyDj, "FlyDJ requires a time schedule.");
             ValidateScene(candidate, settings);
             candidate.LastModifiedUtc = DateTime.UtcNow;
             if (index < 0) settings.Scenes.Add(candidate); else settings.Scenes[index] = candidate;
@@ -106,7 +107,13 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         Check(Enum.IsDefined(scene.SourceType) && Enum.IsDefined(scene.SourceSelectionMode), "Invalid scene source selection.");
         Check(scene.TimerMinutes is null or >= 0, "Timer minutes cannot be negative.");
         if (scene.TimerMinutes == 0) scene.TimerMinutes = null;
-        if (scene.SourceSelectionMode == SceneSourceSelectionMode.Resume || scene.SourceType == SceneSourceType.None)
+        if (scene.SourceType == SceneSourceType.FlyDj)
+        {
+            scene.SourceSelectionMode = SceneSourceSelectionMode.Specific;
+            scene.SourceUrl = null;
+            scene.TimerMinutes = null;
+        }
+        else if (scene.SourceSelectionMode == SceneSourceSelectionMode.Resume || scene.SourceType == SceneSourceType.None)
         {
             scene.SourceType = SceneSourceType.None;
             scene.SourceSelectionMode = SceneSourceSelectionMode.Resume;
@@ -143,6 +150,7 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         Check(!window.IsEnabled || window.Playback is { Enabled: true }, "An enabled schedule must include enabled playback.");
         if (window.Playback is not null)
         {
+            Check(window.HasTimeSchedule || window.Playback.SourceType != SceneSourceType.FlyDj, "FlyDJ requires a time schedule.");
             Check(window.Playback.SpeakerIps?.Count > 0 || window.Playback.Actions?.Any(a => !string.IsNullOrWhiteSpace(a.SpeakerIp)) == true, "Select at least one speaker for schedule playback.");
             ValidateScene(window.Playback, settings, checkUniqueName: false);
             window.SceneId = null;

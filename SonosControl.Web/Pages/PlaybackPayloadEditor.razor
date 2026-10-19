@@ -1,6 +1,9 @@
 @using System.Globalization
 @using SonosControl.DAL.Models
 @using SonosControl.Web.Services
+@using SonosControl.Web.Services.FlyDj
+@using Microsoft.Extensions.Options
+@inject IServiceProvider Services
 
 @if (Settings is not null && Playback is not null)
 {
@@ -9,7 +12,7 @@
         <div class="schedule-form-grid">
             <div class="schedule-field">
                 <label class="form-label" for="payload-source-mode">Selection</label>
-                <select id="payload-source-mode" class="form-select" @bind="Playback.SourceSelectionMode" @bind:after="Changed" disabled="@(!CanEdit)">
+                <select id="payload-source-mode" class="form-select" @bind="Playback.SourceSelectionMode" @bind:after="Changed" disabled="@(!CanEdit || Playback.SourceType == SceneSourceType.FlyDj)">
                     <option value="@SceneSourceSelectionMode.Resume">Resume current source</option>
                     <option value="@SceneSourceSelectionMode.Specific">Specific source</option>
                     <option value="@SceneSourceSelectionMode.Random">Random by type</option>
@@ -17,10 +20,24 @@
             </div>
             <div class="schedule-field">
                 <label class="form-label" for="payload-source-type">Source type</label>
-                <select id="payload-source-type" class="form-select" @bind="Playback.SourceType" @bind:after="Changed" disabled="@(!CanEdit || Playback.SourceSelectionMode == SceneSourceSelectionMode.Resume)">
+                <select id="payload-source-type" class="form-select" @bind="Playback.SourceType" @bind:after="SourceTypeChanged" disabled="@(!CanEdit || Playback.SourceSelectionMode == SceneSourceSelectionMode.Resume)">
                     <option value="@SceneSourceType.None">None</option><option value="@SceneSourceType.Station">Station</option><option value="@SceneSourceType.Spotify">Spotify</option><option value="@SceneSourceType.YouTube">YouTube</option><option value="@SceneSourceType.YouTubeMusic">YouTube Music</option>
+                    @if (AllowFlyDj && Services.GetService<IOptions<FlyDjOptions>>()?.Value.Enabled == true)
+                    {
+                        <option value="@SceneSourceType.FlyDj">FlyDJ</option>
+                    }
+                    else if (Playback.SourceType == SceneSourceType.FlyDj)
+                    {
+                        <option value="@SceneSourceType.FlyDj" disabled>FlyDJ (unavailable)</option>
+                    }
                 </select>
             </div>
+            @if (Playback.SourceType == SceneSourceType.FlyDj)
+            {
+                <div class="schedule-field schedule-field--wide"><p class="text-muted">FlyDJ chooses and changes radio stations during this schedule. It uses the candidate stations from <a href="/flydj">FlyDJ settings</a> and the rooms and volumes below.</p></div>
+            }
+            else
+            {
             <div class="schedule-field schedule-field--wide">
                 <label class="form-label" for="payload-source-url">Source URL</label>
                 <input id="payload-source-url" class="form-control" @bind="Playback.SourceUrl" @bind:event="oninput" @bind:after="Changed" disabled="@(!CanEdit || Playback.SourceSelectionMode != SceneSourceSelectionMode.Specific || Playback.SourceType == SceneSourceType.None)" />
@@ -32,6 +49,7 @@
                 }
             </div>
             <div class="schedule-field"><label class="form-label" for="payload-timer">Playback timer (minutes)</label><input id="payload-timer" class="form-control" type="number" min="0" @bind="TimerMinutes" disabled="@(!CanEdit)" /></div>
+            }
             <div class="schedule-field"><label class="form-label" for="payload-synced">Synchronized playback</label><div class="form-check form-switch"><input id="payload-synced" class="form-check-input" type="checkbox" @bind="Playback.IsSyncedPlayback" @bind:after="Changed" disabled="@(!CanEdit)" /></div></div>
             <div class="schedule-field schedule-field--wide"><label class="form-label" for="payload-master">Master room</label><select id="payload-master" class="form-select" @bind="Playback.MasterSpeakerIp" @bind:after="Changed" disabled="@(!CanEdit || !Playback.IsSyncedPlayback)"><option value="">Auto</option>@foreach (var speaker in Settings.Speakers.OrderBy(s => s.Name)) { <option value="@speaker.IpAddress">@speaker.Name</option> }</select></div>
         </div>
@@ -56,10 +74,21 @@
     [Parameter, EditorRequired] public SonosSettings Settings { get; set; } = default!;
     [Parameter, EditorRequired] public Scene Playback { get; set; } = default!;
     [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public bool AllowFlyDj { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private int TimerMinutes { get => Playback.TimerMinutes ?? 0; set { Playback.TimerMinutes = value <= 0 ? null : value; _ = Changed(); } }
     private Task Changed() => OnChanged.InvokeAsync();
+    private async Task SourceTypeChanged()
+    {
+        if (Playback.SourceType == SceneSourceType.FlyDj)
+        {
+            Playback.SourceSelectionMode = SceneSourceSelectionMode.Specific;
+            Playback.SourceUrl = null;
+            Playback.TimerMinutes = null;
+        }
+        await Changed();
+    }
     private SceneAction? FindAction(string ip) => Playback.Actions?.FirstOrDefault(x => string.Equals(x.SpeakerIp, ip, StringComparison.OrdinalIgnoreCase));
     private SceneAction GetOrCreateAction(string ip)
     {
