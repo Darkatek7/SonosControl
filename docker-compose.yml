@@ -19,6 +19,9 @@ services:
       ConnectionStrings__DefaultConnection: Data Source=/app/Data/app.db
       ASPNETCORE_URLS: http://+:8080
       DataProtection__KeysDirectory: /app/DataProtectionKeys
+      FlyDj__Enabled: ${FLYDJ_ENABLED:-false}
+      FlyDj__ServiceUrl: http://flydj:8090
+      FlyDj__SharedSecret: ${FLYDJ_SHARED_SECRET:-}
     volumes:
       - ./Data:/app/Data
       - ./DataProtectionKeys:/app/DataProtectionKeys
@@ -29,3 +32,21 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  flydj:
+    container_name: sonoscontrol-flydj
+    build:
+      context: ./flydj
+      dockerfile: Dockerfile
+    image: sonoscontrol-flydj:local
+    restart: on-failure
+    expose:
+      - "8090"
+    environment:
+      TZ: ${TZ:-Europe/Vienna}
+      FLYDJ_ENABLED: ${FLYDJ_ENABLED:-false}
+      FLYDJ_CONNECTOME_SCOPE: ${FLYDJ_CONNECTOME_SCOPE:-auditory}
+      FLYDJ_SIM_SPEED: ${FLYDJ_SIM_SPEED:-1.0}
+      FLYDJ_SHARED_SECRET: ${FLYDJ_SHARED_SECRET:-}
+    cpus: ${FLYDJ_CPUS:-1.0}
+    mem_limit: ${FLYDJ_MEM_LIMIT:-512m}

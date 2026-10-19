@@ -1,0 +1,21 @@
+# Runtime dependencies of the FlyDJ sidecar (Python 3.13; wheels exist for
+# linux/amd64, linux/arm64 and macOS arm64 - checked with `pip download --only-binary`).
+numpy==2.5.4
+numba==0.68.0
+llvmlite==0.50.0
+opentelemetry-api==1.45.1
+fastapi==0.146.0
+starlette==1.9.0
+pydantic==2.14.1
+pydantic_core==2.50.1
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+idna==3.20
+typing_extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.54.0
+click==8.5.0
+h11==0.16.0
+websockets==17.2
+av==19.0.1

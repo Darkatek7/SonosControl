@@ -26,10 +26,32 @@ services:
       ADMIN_EMAIL: admin@example.com
       ADMIN_PASSWORD: ChangeMe123!
       PLAYBACK_PUBLIC_BASE_URL: http://192.168.1.50:8080
+      FlyDj__Enabled: ${FLYDJ_ENABLED:-false}
+      FlyDj__ServiceUrl: http://flydj:8090
+      FlyDj__SharedSecret: ${FLYDJ_SHARED_SECRET:-}
     volumes:
       - ./Data:/app/Data
       - ./DataProtectionKeys:/app/DataProtectionKeys
       - ./artifacts:/app/artifacts
+
+  # Optional experimental FlyDJ sidecar. Stays stopped (exit 0) unless FLYDJ_ENABLED=true.
+  flydj:
+    build:
+      context: ./flydj
+      dockerfile: Dockerfile
+    image: sonoscontrol-flydj:local
+    container_name: sonoscontrol-flydj
+    restart: on-failure
+    expose:
+      - "8090"
+    environment:
+      TZ: ${TZ:-Europe/Vienna}
+      FLYDJ_ENABLED: ${FLYDJ_ENABLED:-false}
+      FLYDJ_CONNECTOME_SCOPE: ${FLYDJ_CONNECTOME_SCOPE:-auditory}
+      FLYDJ_SIM_SPEED: ${FLYDJ_SIM_SPEED:-1.0}
+      FLYDJ_SHARED_SECRET: ${FLYDJ_SHARED_SECRET:-}
+    cpus: ${FLYDJ_CPUS:-1.0}
+    mem_limit: ${FLYDJ_MEM_LIMIT:-512m}
 ```
 
 ```bash
@@ -39,6 +61,7 @@ docker compose up -d --build
 
 Open `http://localhost:8080` and sign in with the seeded admin account.
 Set `PLAYBACK_PUBLIC_BASE_URL` to the LAN URL that your Sonos devices can reach. `localhost` does not work for YouTube or uploaded MP3 audio streaming to Sonos.
+The core app runs without the FlyDJ sidecar; leave `FLYDJ_ENABLED` at `false` to keep it stopped. See [FlyDJ (optional, experimental)](docs/deploy-and-config.md#flydj-optional-experimental) to enable it.
 
 ### 2. Run locally with .NET 10
 
@@ -99,10 +122,12 @@ Then open `http://localhost:5107`.
 - Responsive listening statistics and a searchable read-only activity trail.
 - Separate administration areas for devices, system settings, users, and recoverable configuration backups.
 - Health and metrics endpoints (`/healthz`, `/metricsz`) for basic monitoring.
-- Docker image includes `ffmpeg` and `yt-dlp` for YouTube audio playback without extra sidecars.
+- Docker image includes `ffmpeg` and `yt-dlp` for YouTube audio playback. The core app needs no extra sidecar containers.
+- Optional, experimental FlyDJ: an autonomous radio DJ driven by a fruit-fly connectome simulation, running as its own `flydj` container and off by default. It chooses only between your library's radio stations and always yields to manual control.
 
 ## Docs Index
 - [Deploy and Config Guide](docs/deploy-and-config.md)
+- [FlyDJ (optional, experimental)](docs/deploy-and-config.md#flydj-optional-experimental)
 - [Docker Operations](docs/docker-operations.md)
 - [Operations and Observability](docs/operations-and-observability.md)
 - [Testing and Troubleshooting](docs/testing-and-troubleshooting.md)

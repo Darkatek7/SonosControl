@@ -1,0 +1,469 @@
+@page "/flydj"
+@using SonosControl.Web.Services.FlyDj
+@implements IAsyncDisposable
+@attribute [Authorize(Roles = FlyDjServiceCollectionExtensions.AllowedRoles)]
+
+<PageTitle>FlyDJ - SonosControl</PageTitle>
+
+@if (!_featureEnabled)
+{
+    <div class="workspace-page flydj-page" data-qa="flydj-page">
+        <EmptyState IconName="default"
+                    Title="FlyDJ is not enabled"
+                    Description="This experimental feature is switched off on this server. Set FLYDJ_ENABLED=true and start the FlyDJ service to use it.">
+            <a class="btn btn-primary" href="">Back to Home</a>
+        </EmptyState>
+    </div>
+    return;
+}
+
+<div class="workspace-page flydj-page" data-qa="flydj-page" data-ready="@(_initialized ? "true" : "false")">
+    <header class="workspace-header">
+        <div>
+            <span class="workspace-eyebrow">Experimental</span>
+            <h1>FlyDJ</h1>
+            <p>A simulated fruit-fly brain listens to your radio stations and picks what plays next.</p>
+        </div>
+        <div class="flydj-health @PillClass" role="status" data-qa="flydj-status">
+            <span class="flydj-health__dot" aria-hidden="true"></span>
+            <span>@PillLabel</span>
+        </div>
+    </header>
+
+    <section class="flydj-control" aria-label="FlyDJ autopilot">
+        <div class="flydj-control__copy">
+            <strong id="flydj-toggle-label">FlyDJ autopilot</strong>
+            <p id="flydj-toggle-hint" class="flydj-control__hint">@ToggleHint</p>
+        </div>
+        <button type="button"
+                role="switch"
+                class="flydj-switch @(IsRunning ? "is-on" : null)"
+                aria-checked="@(IsRunning ? "true" : "false")"
+                aria-labelledby="flydj-toggle-label"
+                aria-describedby="flydj-toggle-hint"
+                data-qa="flydj-toggle"
+                disabled="@(ToggleDisabledReason is not null || _toggleBusy)"
+                @onclick="ToggleAsync">
+            <span class="flydj-switch__track" aria-hidden="true"><span class="flydj-switch__thumb"></span></span>
+            <span class="flydj-switch__label">@(IsRunning ? "On" : "Off")</span>
+        </button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <div class="alert alert-danger" role="alert">@_actionError</div>
+    }
+    @if (_state.Status == FlyDjConductorStatus.Error && !string.IsNullOrWhiteSpace(_state.StatusMessage))
+    {
+        <div class="alert alert-danger" role="alert"><strong>FlyDJ stopped.</strong> @_state.StatusMessage</div>
+    }
+    else if (_firstRefreshDone && !_state.SidecarReachable)
+    {
+        <div class="alert alert-warning" role="status" data-qa="flydj-offline">
+            <strong>The FlyDJ service is not reachable.</strong> Check that the flydj container is running. The page reconnects on its own.
+        </div>
+    }
+
+    <div class="flydj-grid">
+        <div class="flydj-col flydj-col--primary">
+            <div class="flydj-card flydj-card--brain">
+                <SectionCard Title="Live brain" Icon="brain" Subtitle="Each dot is a neuron. Neurons flash when they fire." Id="flydj-brain-title">
+                <div class="flydj-stage" data-mode="@BrainModeAttribute">
+                    <canvas @ref="_canvas"
+                            class="flydj-canvas"
+                            data-qa="flydj-brain-canvas"
+                            role="img"
+                            aria-label="Live 3D view of the simulated fly brain"
+                            hidden="@(_brainMode == BrainMode.Fallback)"></canvas>
+                    <div @ref="_tooltip" class="flydj-tooltip" aria-hidden="true"></div>
+                    @if (_brainMode == BrainMode.Fallback)
+                    {
+                        <div class="flydj-fallback" data-qa="flydj-brain-fallback">
+                            <p class="flydj-fallback__note">3D view is unavailable in this browser. Showing population activity instead.</p>
+                            @foreach (var population in OutputPopulations)
+                            {
+                                <div class="flydj-bar-row">
+                                    <span class="flydj-bar-row__label"><span class="flydj-chip" style="@ChipStyle(population.Key)"></span>@PopulationShortLabel(population.Key)</span>
+                                    <span class="flydj-bar" aria-hidden="true"><span class="flydj-bar__fill" style="@BarStyle(population.Key, population.Rate)"></span></span>
+                                    <span class="flydj-bar-row__value">@FormatRate(population.Rate)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (OverlayText is not null)
+                    {
+                        <div class="flydj-overlay" role="status" data-qa="flydj-overlay">
+                            <span>@OverlayText</span>
+                        </div>
+                    }
+                </div>
+                @if (_state.Model is { Populations.Count: > 0 } model)
+                {
+                    <ul class="flydj-legend" aria-label="Neuron populations">
+                        @foreach (var population in model.Populations)
+                        {
+                            <li>
+                                <span class="flydj-chip" style="@ChipStyle(population.Key)" aria-hidden="true"></span>
+                                <span class="flydj-legend__label">@population.Label</span>
+                                <span class="flydj-legend__count">@FormatCount(population.NeuronCount)</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (_brainMode != BrainMode.Fallback)
+                {
+                    <p class="flydj-hint">drag to rotate &middot; scroll to zoom</p>
+                }
+                </SectionCard>
+            </div>
+
+            <div class="flydj-card flydj-card--activity">
+                <SectionCard Title="Activity" Icon="graph" Subtitle="How strongly each output group of the brain is firing." Id="flydj-activity-title">
+                @if (_state.Simulation is { } simulation)
+                {
+                    <div class="flydj-activity" data-qa="flydj-activity">
+                        @foreach (var population in OutputPopulations)
+                        {
+                            <div class="flydj-activity__row">
+                                <div class="flydj-bar-row">
+                                    <span class="flydj-bar-row__label"><span class="flydj-chip" style="@ChipStyle(population.Key)"></span>@PopulationShortLabel(population.Key)</span>
+                                    <span class="flydj-bar" role="meter" aria-label="@PopulationShortLabel(population.Key) firing rate" aria-valuemin="0" aria-valuemax="@FormatNumber(MaxRate)" aria-valuenow="@FormatNumber(population.Rate)">
+                                        <span class="flydj-bar__fill" style="@BarStyle(population.Key, population.Rate)"></span>
+                                    </span>
+                                    <span class="flydj-bar-row__value">@FormatRate(population.Rate)</span>
+                                </div>
+                                <svg class="flydj-spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true" style="@SparkStyle(population.Key)">
+                                    <polyline points="@SparkPoints(population.Key)" />
+                                </svg>
+                            </div>
+                        }
+                        <div class="flydj-activity__row">
+                            <div class="flydj-bar-row">
+                                <span class="flydj-bar-row__label">Engagement</span>
+                                <span class="flydj-bar-row__value flydj-bar-row__value--wide">@(simulation.Engagement is { } engagement ? FormatNumber(engagement, "0.00") : "-")</span>
+                            </div>
+                            <svg class="flydj-spark flydj-spark--engagement" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
+                                <polyline points="@EngagementSparkPoints()" />
+                            </svg>
+                        </div>
+                        <p class="flydj-activity__foot">
+                            <span>Spikes per second</span>
+                            <strong>@FormatCount((long)Math.Round(simulation.SpikesPerSecond))</strong>
+                        </p>
+                        @if (string.Equals(simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <p class="flydj-muted">The simulation is idle. It starts when FlyDJ does.</p>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="flydj-muted" data-qa="flydj-activity-empty">No live data yet. Activity appears once the FlyDJ service answers.</p>
+                }
+                </SectionCard>
+            </div>
+
+            <div class="flydj-card flydj-card--stats">
+                <SectionCard Title="Statistics" Icon="stats" Subtitle="The size of the brain model and what it costs to run." Id="flydj-stats-title">
+                @if (_state.Model is { } info)
+                {
+                    <dl class="flydj-stats" data-qa="flydj-stats">
+                        <div><dt>Neurons</dt><dd>@FormatCount(info.NeuronCount)</dd></div>
+                        <div><dt>Connections</dt><dd>@FormatCount(info.ConnectionCount)</dd></div>
+                        <div><dt>Synapses</dt><dd>@FormatCount(info.SynapseCount)</dd></div>
+                        <div><dt>Data</dt><dd>@info.DataVersion &middot; @info.Scope</dd></div>
+                        <div><dt>Model</dt><dd>@ModelStatusLabel(info)</dd></div>
+                        <div><dt>Mode</dt><dd>@ModeLabel(_state.Simulation?.Mode)</dd></div>
+                        <div><dt>Realtime factor</dt><dd>@(_state.Simulation is { } sim ? $"{FormatNumber(sim.RealtimeFactor, "0.00")}x" : "-")</dd></div>
+                        <div><dt>CPU per second of brain time</dt><dd>@(_state.Simulation is { } cpu ? $"{FormatNumber(cpu.CpuMsPerBioSecond, "0")} ms" : "-")</dd></div>
+                        <div><dt>Live viewers</dt><dd>@(_state.Simulation is { } viewers ? viewers.Viewers.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")</dd></div>
+                    </dl>
+                    @if (string.Equals(info.Status, "building", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <div class="flydj-progress" data-qa="flydj-build-progress">
+                            <div class="flydj-progress__head"><span>Building the model</span><strong>@FormatNumber(Math.Clamp(info.BuildProgress, 0, 1) * 100, "0")%</strong></div>
+                            <progress max="100" value="@FormatNumber(Math.Clamp(info.BuildProgress, 0, 1) * 100, "0")" aria-label="Model build progress"></progress>
+                            <p class="flydj-muted">The first start of the full brain takes a while. FlyDJ becomes available when this reaches 100%.</p>
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(info.Message))
+                    {
+                        <p class="flydj-muted">@info.Message</p>
+                    }
+                    @if (info.ShuffleControl is { } shuffle)
+                    {
+                        <div class="flydj-shuffle" data-qa="flydj-shuffle">
+                            <h4>Does the real wiring matter?</h4>
+                            <div class="flydj-shuffle__numbers">
+                                <div><span>Real brain</span><strong>@FormatNumber(shuffle.RealResponse, "0.00")</strong></div>
+                                <div><span>Shuffled wiring</span><strong>@FormatNumber(shuffle.ShuffledResponse, "0.00")</strong></div>
+                                <div><span>Ratio</span><strong>@(shuffle.Ratio is { } ratio ? FormatNumber(ratio, "0.0") + "x" : "silent when shuffled")</strong></div>
+                            </div>
+                            <p class="flydj-muted">As a control, the same sounds are also played into a copy of the brain whose connections were randomly shuffled. A real response much larger than the shuffled one (over @shuffle.Trials trials) shows that the output comes from the actual wiring, not from chance.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="flydj-muted">The wiring control (real versus shuffled connections) has not been computed yet.</p>
+                    }
+                }
+                else
+                {
+                    <p class="flydj-muted" data-qa="flydj-stats-empty">Waiting for the FlyDJ service to describe its model.</p>
+                }
+                </SectionCard>
+            </div>
+        </div>
+
+        <div class="flydj-col flydj-col--secondary">
+            <div class="flydj-card flydj-card--now">
+                <SectionCard Title="Now & why" Icon="music" Subtitle="What is playing, and the evidence behind the choice." Id="flydj-now-title">
+                <dl class="flydj-kv" data-qa="flydj-now">
+                    <div>
+                        <dt>Station</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(_state.CurrentStationName) ? "Nothing chosen yet" : _state.CurrentStationName)</dd>
+                    </div>
+                    <div>
+                        <dt>Rooms</dt>
+                        <dd>@(_state.ActiveSpeakerIps.Count == 0 ? "None" : string.Join(", ", _state.ActiveSpeakerIps.Select(RoomName)))</dd>
+                    </div>
+                    <div>
+                        <dt>Next decision</dt>
+                        <dd>@(_state.NextDecisionAtUtc is { } next ? $"{FormatClock(next)} ({FormatRelative(next)})" : "Not scheduled")</dd>
+                    </div>
+                </dl>
+                @if (!string.IsNullOrWhiteSpace(_state.StatusMessage) && _state.Status != FlyDjConductorStatus.Error)
+                {
+                    <p class="flydj-muted">@_state.StatusMessage</p>
+                }
+
+                @if (_state.YieldedSpeakers.Count > 0)
+                {
+                    <div class="flydj-yielded" data-qa="flydj-yielded">
+                        <h4>Rooms FlyDJ stepped away from</h4>
+                        <ul>
+                            @foreach (var yielded in _state.YieldedSpeakers)
+                            {
+                                <li>
+                                    <strong>@(string.IsNullOrWhiteSpace(yielded.SpeakerName) ? RoomName(yielded.SpeakerIp) : yielded.SpeakerName)</strong>
+                                    <span>until @FormatClock(yielded.UntilUtc) &middot; @yielded.Reason</span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_state.LastDecision is { } decision)
+                {
+                    <div class="flydj-decision">
+                        <h4>Why @decision.StationName</h4>
+                        <p class="flydj-reason" data-qa="flydj-reason">@decision.Reason</p>
+                    </div>
+                    <div class="flydj-table-scroll" data-qa="flydj-candidates" tabindex="0" role="region" aria-label="Audition results">
+                        <table class="table flydj-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Station</th>
+                                    <th scope="col" class="num">Brain</th>
+                                    <th scope="col" class="num flydj-col-detail">Prior</th>
+                                    <th scope="col" class="num">Final</th>
+                                    <th scope="col" class="num">Chance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var candidate in decision.Candidates.OrderByDescending(c => c.Probability).ThenByDescending(c => c.FinalScore))
+                                {
+                                    var failed = !string.IsNullOrWhiteSpace(candidate.Error);
+                                    <tr class="@(failed ? "is-failed" : null) @(IsChosen(decision, candidate) ? "is-chosen" : null)">
+                                        <th scope="row">
+                                            <span class="flydj-table__name">@candidate.Name</span>
+                                            @if (failed)
+                                            {
+                                                <span class="flydj-table__error">Could not be heard: @candidate.Error</span>
+                                            }
+                                            else if (IsChosen(decision, candidate))
+                                            {
+                                                <span class="flydj-table__chosen">Chosen</span>
+                                            }
+                                        </th>
+                                        <td class="num">@(candidate.BrainScore is { } brain ? FormatNumber(brain, "0.00") : "-")</td>
+                                        <td class="num flydj-col-detail">@FormatNumber(candidate.PriorScore, "0.00")</td>
+                                        <td class="num">@(failed ? "-" : FormatNumber(candidate.FinalScore, "0.00"))</td>
+                                        <td class="num">@FormatPercent(candidate.Probability)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="flydj-muted" data-qa="flydj-no-decision">No decision yet. Start FlyDJ and the first audition appears here.</p>
+                }
+
+                @if (_state.RecentDecisions.Count > 0)
+                {
+                    <div class="flydj-recent" data-qa="flydj-recent">
+                        <h4>Recent decisions</h4>
+                        <ol>
+                            @foreach (var recent in _state.RecentDecisions)
+                            {
+                                <li>
+                                    <time datetime="@recent.DecidedAtUtc.ToString("O", System.Globalization.CultureInfo.InvariantCulture)">@FormatClock(recent.DecidedAtUtc)</time>
+                                    <span class="flydj-recent__station">@recent.StationName</span>
+                                    <span class="flydj-recent__meta">@(recent.DwellSeconds is { } dwell ? $"{Math.Max(1, (int)Math.Round(dwell / 60))} min" : "")</span>
+                                    @if (recent.OverriddenByUser)
+                                    {
+                                        <span class="badge flydj-badge">Overridden</span>
+                                    }
+                                </li>
+                            }
+                        </ol>
+                    </div>
+                }
+                </SectionCard>
+            </div>
+
+            @if (_canEdit)
+            {
+                <div class="flydj-card flydj-card--settings">
+                    <SectionCard Title="Settings" Icon="settings" Subtitle="Where FlyDJ plays and what it may choose from." Id="flydj-settings-title">
+                    <div data-qa="flydj-settings">
+                        @if (_settings is null)
+                        {
+                            <p class="flydj-muted">@(_settingsError ?? "Loading settings...")</p>
+                        }
+                        else
+                        {
+                            <UnsavedChangesGuard HasChanges="@IsDirty" OnDiscard="DiscardChanges" />
+                            <form class="flydj-form" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
+                                <fieldset class="flydj-fieldset">
+                                    <legend>Target rooms</legend>
+                                    @if (_settings.Speakers.Count == 0)
+                                    {
+                                        <p class="flydj-muted">No rooms are set up yet. Add speakers under Administration, Devices.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="flydj-checklist">
+                                            @for (var i = 0; i < _settings.Speakers.Count; i++)
+                                            {
+                                                var speaker = _settings.Speakers[i];
+                                                var ip = speaker.IpAddress;
+                                                var id = $"flydj-room-{i}";
+                                                <div class="form-check flydj-check">
+                                                    <input class="form-check-input" type="checkbox" id="@id" data-qa="flydj-room-option"
+                                                           checked="@_draftRooms.Contains(ip)"
+                                                           @onchange="e => SetMember(_draftRooms, ip, e)" />
+                                                    <label class="form-check-label" for="@id">@speaker.Name <small>@ip</small></label>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </fieldset>
+
+                                <div class="flydj-field">
+                                    <VolumeControl Label="FlyDJ volume" IdPrefix="flydj-volume" Value="@_draftVolume" MaxVolume="@MaxVolume" ValueChanged="SetVolume" />
+                                    <p class="form-text">Applied to the target rooms when FlyDJ starts playing. Capped at the maximum volume of @MaxVolume%.</p>
+                                </div>
+
+                                <fieldset class="flydj-fieldset">
+                                    <legend>Candidate stations</legend>
+                                    <p class="form-text">Stations from your library that FlyDJ may audition. Select none to allow all of them.</p>
+                                    @if (LibraryStations.Count == 0)
+                                    {
+                                        <p class="flydj-muted">The library has no radio stations yet. Add some under Library.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="flydj-checklist flydj-checklist--scroll">
+                                            @for (var i = 0; i < LibraryStations.Count; i++)
+                                            {
+                                                var station = LibraryStations[i];
+                                                var url = station.Url;
+                                                var id = $"flydj-station-{i}";
+                                                <div class="form-check flydj-check">
+                                                    <input class="form-check-input" type="checkbox" id="@id" data-qa="flydj-station-option"
+                                                           checked="@_draftStations.Contains(url)"
+                                                           @onchange="e => SetMember(_draftStations, url, e)" />
+                                                    <label class="form-check-label" for="@id">@station.Name</label>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </fieldset>
+
+                                <div class="flydj-numbers">
+                                    <div>
+                                        <label class="form-label" for="flydj-min-dwell">Minimum time per station (min)</label>
+                                        <input id="flydj-min-dwell" class="form-control" type="number" inputmode="numeric" min="1" max="240" step="1" @bind="_draftMinDwell" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="flydj-max-dwell">Maximum time per station (min)</label>
+                                        <input id="flydj-max-dwell" class="form-control" type="number" inputmode="numeric" min="1" max="600" step="1" @bind="_draftMaxDwell" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label" for="flydj-cooldown">Stay away after manual control (min)</label>
+                                        <input id="flydj-cooldown" class="form-control" type="number" inputmode="numeric" min="0" max="1440" step="1" @bind="_draftCooldown" />
+                                    </div>
+                                </div>
+
+                                <div class="form-check form-switch flydj-check flydj-check--switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="flydj-auto-resume" @bind="_draftAutoResume" />
+                                    <label class="form-check-label" for="flydj-auto-resume">Resume automatically after a restart</label>
+                                </div>
+
+                                <FormStatus StatusMessage="@_saveMessage" Severity="@(_saveFailed ? FormStatus.AlertSeverity.Danger : FormStatus.AlertSeverity.Success)" />
+
+                                <div class="flydj-form__actions">
+                                    <button type="submit" class="btn btn-primary" data-qa="flydj-save" disabled="@(_saving || !IsDirty)">
+                                        @(_saving ? "Saving..." : "Save settings")
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" disabled="@(_saving || !IsDirty)" @onclick="DiscardChanges">Revert</button>
+                                </div>
+                            </form>
+                        }
+                    </div>
+                    </SectionCard>
+                </div>
+            }
+
+            <div class="flydj-card flydj-card--about">
+                <SectionCard Title="About FlyDJ" Icon="alert" Subtitle="An experiment, not a measurement." Id="flydj-about-title">
+                <div class="flydj-about" data-qa="flydj-about">
+                    <p><strong>Experimental approximation.</strong> FlyDJ simulates a published map of a fruit fly's brain. The audio it hears is reduced to a few rough features, so the result is a playful guess about taste, not neuroscience.</p>
+                    <ol class="flydj-steps">
+                        <li><strong>Listen.</strong> A few seconds of each candidate station become loudness, rhythm and low, mid and high tone energy. These drive the neurons of the fly's hearing organ.</li>
+                        <li><strong>Simulate.</strong> The signal spreads through the real wiring. Three output groups respond: approach, startle and arousal.</li>
+                        <li><strong>Choose.</strong> Stations that attract more than they startle score higher. FlyDJ plays a likely winner on your chosen rooms. Anything you do by hand wins, and those rooms are left alone for a while.</li>
+                    </ol>
+                    @if (_state.Model is { Attribution.Count: > 0 } modelInfo)
+                    {
+                        <h4>Data credits reported by the service</h4>
+                        <ul class="flydj-credits" data-qa="flydj-attribution">
+                            @foreach (var credit in modelInfo.Attribution)
+                            {
+                                <li>
+                                    @if (IsWebUrl(credit.Url))
+                                    {
+                                        <a href="@credit.Url" target="_blank" rel="noopener noreferrer">@credit.Text</a>
+                                    }
+                                    else
+                                    {
+                                        @credit.Text
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    <h4>Sources</h4>
+                    <ul class="flydj-credits">
+                        <li>FlyWire connectome: <a href="https://doi.org/10.1038/s41586-024-07558-y" target="_blank" rel="noopener noreferrer">Dorkenwald et al. 2024</a> and <a href="https://doi.org/10.1038/s41586-024-07686-5" target="_blank" rel="noopener noreferrer">Schlegel et al. 2024</a>, Nature. Licensed CC BY 4.0.</li>
+                        <li>Whole-brain model: <a href="https://doi.org/10.1038/s41586-024-07763-9" target="_blank" rel="noopener noreferrer">Shiu et al. 2024</a>, Nature. MIT license.</li>
+                    </ul>
+                </div>
+                </SectionCard>
+            </div>
+        </div>
+    </div>
+</div>

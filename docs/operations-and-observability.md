@@ -8,6 +8,7 @@ This guide summarizes runtime checks, telemetry endpoints, and day-2 operational
 - Endpoint: `GET /healthz`
 - Purpose: validates database connectivity and settings-file readability
 - Expected behavior: returns healthy status when dependencies are available
+- If the FlyDJ sidecar is unreachable, the health check reports Degraded, not Unhealthy, so an optional feature does not mark the core app unhealthy.
 
 ### Metrics
 - Endpoint: `GET /metricsz`
@@ -78,6 +79,33 @@ timer armed; when its deadline arrives it takes command priority and pauses its
 room. Sleep timers are independent of the persisted manual and scheduled stop
 deadlines, and a running sleep timer is not persisted across application
 restarts.
+
+## FlyDJ (optional, experimental)
+
+FlyDJ is an optional autonomous radio DJ in its own sidecar container. Its
+playback runs in an automation lane with these ownership rules:
+
+- Manual control always wins. Manual playback in SonosControl, in the Sonos app,
+  or with the speaker's hardware buttons pauses FlyDJ for that room and starts a
+  cooldown. External changes are detected through the playback snapshot monitor,
+  so changes made outside the web app also count. When the cooldown ends, FlyDJ
+  only takes the room back if it is quiet; while your own music is still
+  playing, the cooldown starts over. When every room rests, the simulation is
+  stopped so it uses no CPU.
+- Schedules own their rooms. FlyDJ does not start or change playback on a room
+  while a schedule or template owns it.
+- Sleep timers and daily auto-stop rules still apply to rooms FlyDJ plays.
+- FlyDJ only chooses between radio stations from the library.
+
+The sidecar runs in one of three load modes. See the
+[sidecar API contract](../flydj/API.md#load-modes) for details.
+
+- `stopped`: no simulation work. The loop waits for a start request.
+- `bursting`: running with no live view open. Only short bursts run, for the
+  station audition and listening measurements.
+- `continuous`: running while a FlyDJ page is open. The simulation runs
+  continuously for the live 3D view, throttled to `FLYDJ_SIM_SPEED` times real
+  time.
 
 ## Backup and Restore
 Back up these paths together:

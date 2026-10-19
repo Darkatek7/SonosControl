@@ -156,6 +156,8 @@ public class SettingsRepo : ISettingsRepo, IDisposable
         settings.QueueSnapshots ??= new();
         settings.DeviceHealthStatuses ??= new();
         settings.Jukebox ??= new();
+        settings.FlyDj ??= new();
+        settings.FlyDj.Normalize();
         settings.JukeboxSuggestions ??= new();
 
         foreach (var suggestion in settings.JukeboxSuggestions)

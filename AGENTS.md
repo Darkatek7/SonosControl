@@ -22,7 +22,8 @@
 | `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
 | `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `python3 verify_mobile_smoke.py` on macOS/Linux or `.\run-mobile-smoke.ps1` on Windows |
 | `*.cs`, `*.csproj`, `*.razor`, `*.razor.cs`, `SonosControl.sln` | Run `dotnet format SonosControl.sln --verify-no-changes --no-restore` and the NuGet audit command below |
-| `README.md`, `docs/**`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md`, `SonosControl.Web/wwwroot/css/README.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
+| `README.md`, `docs/**`, `flydj/*.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md`, `SonosControl.Web/wwwroot/css/README.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
+| `flydj/**` | Run `python3 -m pytest flydj/tests -q` inside a venv with `flydj/requirements-dev.txt` (locally `artifacts/flydj-venv`) |
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
 
 ## Required Verification Commands
@@ -49,20 +50,28 @@ On Windows, the PowerShell wrapper is also supported:
 .\run-mobile-smoke.ps1
 ```
 
-On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. Auto-start uses isolated temporary settings, SQLite, and Data Protection paths under `artifacts`, disables background services, and never reads configured Sonos addresses. Auto-start verifies two configurations: an empty setup and a simulated speaker on loopback port 1400. Only the owned configured fixture enables the shared playback snapshot monitor; it polls every five seconds and marks snapshots stale after fifteen seconds without a successful poll. The empty configuration must have no player or dock clearance; the configured state checks the player against its bottom inset and reserves both its height and that inset. A caller-supplied running app is checked in its current configuration without modifying it. The owned configured fixture also exercises external fake Play/Pause and volume changes across Home, dock, and room cards; unified schedule and manual-template saves with embedded source, speaker selection, per-room volumes, and synchronized playback; empty room selection rejection with zero device commands; legacy scene-to-template compatibility; daily room stop rules and copy-to-all-days; the editor's time control toggle round trip and collapsible advanced section; a "Stops at" auto-stop reason on the room card and player (the fixture pins the automation time zone to UTC); saved source changes; editor labels, nested dialog focus, dirty-draft decisions, responsive resizing, small screens, and 200% text. It verifies volume limits during typing and after reload, nullable room volumes, lower-limit schedule draft saving, a shared sleep timer across reloads and browser contexts, and a spinning record after manual playback with broken artwork. The timer remains armed after manual playback and eventually pauses the fake room. These writing scenarios never run against a caller-supplied app. Fullscreen editors must keep their save actions clickable above all other surfaces; visibility alone is insufficient.
+On macOS, the smoke runner auto-detects Google Chrome at `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`. If needed, set `PLAYWRIGHT_CHROME_PATH` explicitly. Auto-start uses isolated temporary settings, SQLite, and Data Protection paths under `artifacts`, disables background services, and never reads configured Sonos addresses. Auto-start verifies three configurations: an empty setup and a simulated speaker on loopback port 1400, both with FlyDJ explicitly disabled (no `FlyDJ` nav link, `/flydj` returns Home, `/api/flydj` answers 404), and a FlyDJ configuration that adds a stub sidecar on a free loopback port (`FlyDj__Enabled=true`, HTTP endpoints plus a minimal WebSocket stream, with `FLYDJ_ENABLED` cleared in every child environment). The FlyDJ configuration checks the nav link in the sidebar and drawer, `/flydj` at 375, 390, 768, and 1280 px in both themes with the simulation idle and running (no overflow, no console or page errors, a topmost 44 px switch, the 3D canvas or its 2D fallback, statistics, activity), the switch reacting without device commands while background services stay disabled, and a settings save round trip. Only the owned configured fixture enables the shared playback snapshot monitor; it polls every five seconds and marks snapshots stale after fifteen seconds without a successful poll. The empty configuration must have no player or dock clearance; the configured state checks the player against its bottom inset and reserves both its height and that inset. A caller-supplied running app is checked in its current configuration without modifying it. The owned configured fixture also exercises external fake Play/Pause and volume changes across Home, dock, and room cards; unified schedule and manual-template saves with embedded source, speaker selection, per-room volumes, and synchronized playback; empty room selection rejection with zero device commands; legacy scene-to-template compatibility; daily room stop rules and copy-to-all-days; the editor's time control toggle round trip and collapsible advanced section; a "Stops at" auto-stop reason on the room card and player (the fixture pins the automation time zone to UTC); saved source changes; editor labels, nested dialog focus, dirty-draft decisions, responsive resizing, small screens, and 200% text. It verifies volume limits during typing and after reload, nullable room volumes, lower-limit schedule draft saving, a shared sleep timer across reloads and browser contexts, and a spinning record after manual playback with broken artwork. The timer remains armed after manual playback and eventually pauses the fake room. These writing scenarios never run against a caller-supplied app. Fullscreen editors must keep their save actions clickable above all other surfaces; visibility alone is insufficient.
+
+FlyDJ sidecar tests (`flydj/**`; the CI `flydj` job runs the same command). Use a virtual environment so the dev dependencies stay isolated. On Windows, use `artifacts\flydj-venv\Scripts\python` in place of `artifacts/flydj-venv/bin/python`:
+
+```bash
+python3 -m venv artifacts/flydj-venv
+artifacts/flydj-venv/bin/python -m pip install --requirement flydj/requirements-dev.txt
+artifacts/flydj-venv/bin/python -m pytest flydj/tests -q
+```
 
 ```powershell
-markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 If `markdownlint-cli2` is not installed globally, use:
 
 ```powershell
-npx --yes markdownlint-cli2 README.md "docs/**/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+npx --yes markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 ```powershell
-python scripts/check_markdown_links.py README.md docs CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+python scripts/check_markdown_links.py README.md docs flydj/API.md flydj/NOTICE.md flydj/README.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 ## Optional Verification Commands

@@ -64,6 +64,7 @@ namespace SonosControl.DAL.Models
         public List<QueueSnapshot> QueueSnapshots { get; set; } = new();
         public List<DeviceHealthStatus> DeviceHealthStatuses { get; set; } = new();
         public JukeboxSettings Jukebox { get; set; } = new();
+        public FlyDjSettings FlyDj { get; set; } = new();
         public List<JukeboxSuggestion> JukeboxSuggestions { get; set; } = new();
 
         public List<DayOfWeek> ActiveDays { get; set; } = new();

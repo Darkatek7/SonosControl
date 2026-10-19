@@ -1,6 +1,7 @@
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Repos;
 using SonosControl.Web.Services;
+using SonosControl.Web.Services.FlyDj;
 using SonosControl.Web.Services.HealthChecks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
@@ -84,6 +85,7 @@ if (builder.Configuration.GetValue("BackgroundServices:Enabled", true))
     builder.Services.AddHostedService<YouTubePlaybackCleanupService>();
     builder.Services.AddHostedService<Mp3UploadCleanupService>();
 }
+builder.Services.AddFlyDj(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ActionLogger>();
 builder.Services.AddScoped<IClaimsTransformation, RoleClaimsTransformation>();
@@ -200,6 +202,8 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
+app.UseFlyDj();
+
 app.UseRequestLocalization();
 
 app.UseRouting();
@@ -210,6 +214,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapDefaultControllerRoute();
 app.MapBlazorHub();
+app.MapFlyDj();
 app.MapHealthChecks("/healthz", new HealthCheckOptions
 {
     AllowCachingResponses = false

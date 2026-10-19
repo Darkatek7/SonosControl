@@ -10,7 +10,13 @@ public interface IAutomationScheduler
     Task EvaluateNowAsync(CancellationToken cancellationToken = default);
 }
 
-public sealed class AutomationSchedulerService : BackgroundService, IAutomationScheduler
+/// <summary>Read-only view of which rooms an active schedule window currently owns.</summary>
+public interface IScheduleRoomOwnership
+{
+    IReadOnlyCollection<string> GetScheduleOwnedSpeakers(SonosSettings settings, DateTimeOffset utcNow);
+}
+
+public sealed class AutomationSchedulerService : BackgroundService, IAutomationScheduler, IScheduleRoomOwnership
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
 
@@ -105,11 +111,7 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             settings.NormalizeAutomationDateExceptions();
             settings.ScheduleWindows ??= new();
             settings.Scenes ??= new();
-            var eligibleWindows = settings.ScheduleWindows
-                .Where(window => window.IsEnabled)
-                .Where(window => window.HasTimeSchedule)
-                .Where(window => window.Playback is { Enabled: true })
-                .ToList();
+            var eligibleWindows = GetEligibleWindows(settings);
 
             var utcNow = _timeProvider.GetUtcNow();
             var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
@@ -133,6 +135,31 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
             _runtimeStatus.RecordEvaluation(null, _timeProvider.GetUtcNow());
         }
         finally { Volatile.Write(ref _evaluating, 0); }
+    }
+
+    private static List<ScheduleWindow> GetEligibleWindows(SonosSettings settings)
+        => settings.ScheduleWindows
+            .Where(window => window.IsEnabled)
+            .Where(window => window.HasTimeSchedule)
+            .Where(window => window.Playback is { Enabled: true })
+            .ToList();
+
+    /// <summary>
+    /// Rooms targeted by the schedule windows that are active (and winning) at <paramref name="utcNow"/>,
+    /// using the same selection as the evaluation loop. Other automation, such as FlyDJ, stays out of them.
+    /// </summary>
+    public IReadOnlyCollection<string> GetScheduleOwnedSpeakers(SonosSettings settings, DateTimeOffset utcNow)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion) return [];
+        settings.NormalizeAutomationDateExceptions();
+        settings.Speakers ??= new();
+        settings.Scenes ??= new();
+        var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
+        return SelectWinningWindows(GetEligibleWindows(settings), localNow, settings)
+            .SelectMany(item => item.Targets)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static List<(ScheduleWindow Window, List<string> Targets)> SelectWinningWindows(

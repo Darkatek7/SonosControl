@@ -1,0 +1,5 @@
+-r requirements.txt
+-r requirements-build.txt
+pytest==9.1.1
+httpx==0.28.1
+# optional: `pip install brian2` enables tests/test_brian_parity.py
