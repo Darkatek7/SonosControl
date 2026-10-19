@@ -56,6 +56,8 @@ if (builder.Configuration.GetValue("PlaybackSnapshots:Enabled", builder.Configur
     builder.Services.AddHostedService(sp => sp.GetRequiredService<PlaybackSnapshotMonitorService>());
 builder.Services.AddSingleton<SleepTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SleepTimerService>());
+builder.Services.AddSingleton<ManualAutoStopService>();
+builder.Services.AddSingleton<IManualAutoStopStatusProvider>(sp => sp.GetRequiredService<ManualAutoStopService>());
 builder.Services.AddSingleton<SceneTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SceneTimerService>());
 builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
@@ -74,6 +76,7 @@ builder.Services.AddSingleton<AutomationSchedulerService>();
 builder.Services.AddSingleton<IAutomationScheduler>(sp => sp.GetRequiredService<AutomationSchedulerService>());
 if (builder.Configuration.GetValue("BackgroundServices:Enabled", true))
 {
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ManualAutoStopService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<AutomationSchedulerService>());
     builder.Services.AddHostedService<PlaybackMonitorService>();
     builder.Services.AddHostedService<DeviceHealthMonitorService>();
@@ -160,6 +163,10 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate(); // Apply pending migrations or create DB schema
 }
+
+// The canonical editor and compatibility APIs require migrated settings even
+// when device-facing background services are disabled.
+await app.Services.GetRequiredService<ISettingsSchemaMigrationService>().MigrateIfRequiredAsync();
 
 // Seed admin user/role
 using (var scope = app.Services.CreateScope())

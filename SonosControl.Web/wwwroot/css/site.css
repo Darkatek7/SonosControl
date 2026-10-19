@@ -1994,6 +1994,15 @@ h3[tabindex="-1"]:focus {
     display: none;
 }
 
+.global-player-bar__meta .global-player-bar__stop-reason {
+    display: block;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: .72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .global-player-bar__meta strong {
     color: var(--text-primary);
     font-size: var(--font-size-sm);

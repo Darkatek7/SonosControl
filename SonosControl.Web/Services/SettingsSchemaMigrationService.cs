@@ -174,10 +174,13 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
                 ScheduleWindowOrdering.AssignPriorities(ScheduleWindowOrdering.Order(settings.ScheduleWindows).ToList());
                 repairs.Add("Schedule priorities were repaired to the range 0–1000, preserving their run order.");
             }
-            repairs.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: false));
+            repairs.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: true));
             return repairs;
         }
-        var warnings = MigrateToVersion2(settings);
+        var warnings = settings.SettingsSchemaVersion < 2
+            ? MigrateToVersion2(settings)
+            : new List<string>();
+        warnings.AddRange(MigrateToVersion3(settings));
         warnings.AddRange(ValidateCanonicalSettings(settings, disableInvalidWindows: true));
         settings.SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion;
         return warnings;
@@ -309,6 +312,76 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
         return warnings;
     }
 
+    private static List<string> MigrateToVersion3(SonosSettings settings)
+    {
+        settings.Scenes ??= new();
+        settings.ScheduleWindows ??= new();
+        var warnings = new List<string>();
+        var referencedIds = settings.ScheduleWindows
+            .Select(window => window.SceneId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var window in settings.ScheduleWindows)
+        {
+            if (string.IsNullOrWhiteSpace(window.SceneId)) continue;
+            var scene = settings.Scenes.FirstOrDefault(item => string.Equals(item.Id, window.SceneId, StringComparison.OrdinalIgnoreCase));
+            if (scene is null)
+            {
+                window.IsEnabled = false;
+                window.Playback = null;
+                warnings.Add($"Schedule '{window.Name}' was disabled because its scene is missing.");
+            }
+            else
+            {
+                window.Playback = CloneScene(scene);
+                window.Playback.Id = window.HasTimeSchedule ? $"{window.Id}-playback" : scene.Id;
+                if (!scene.Enabled)
+                {
+                    window.IsEnabled = false;
+                    warnings.Add($"Schedule '{window.Name}' was disabled because its scene is disabled.");
+                }
+            }
+            window.SceneId = null;
+        }
+        foreach (var scene in settings.Scenes.Where(item => !referencedIds.Contains(item.Id)))
+        {
+            settings.ScheduleWindows.Add(new ScheduleWindow
+            {
+                Id = StableId("scene-template", scene.Id),
+                Name = scene.Name,
+                IsEnabled = scene.Enabled,
+                HasTimeSchedule = false,
+                Playback = CloneScene(scene),
+                LastModifiedUtc = scene.LastModifiedUtc
+            });
+        }
+        ScheduleWindowOrdering.AssignPriorities(ScheduleWindowOrdering.Order(settings.ScheduleWindows).ToList());
+        return warnings;
+    }
+
+    private static Scene CloneScene(Scene scene) => new()
+    {
+        Id = scene.Id,
+        Name = scene.Name,
+        Description = scene.Description,
+        Enabled = scene.Enabled,
+        SourceSelectionMode = scene.SourceSelectionMode,
+        SourceType = scene.SourceType,
+        SourceUrl = scene.SourceUrl,
+        IsSyncedPlayback = scene.IsSyncedPlayback,
+        MasterSpeakerIp = scene.MasterSpeakerIp,
+        TimerMinutes = scene.TimerMinutes,
+        SpeakerIps = scene.SpeakerIps?.ToList() ?? new(),
+        Actions = scene.Actions?.Select(action => new SceneAction
+        {
+            SpeakerIp = action.SpeakerIp,
+            Volume = action.Volume,
+            IncludeInPlayback = action.IncludeInPlayback,
+            IsMaster = action.IsMaster
+        }).ToList() ?? new(),
+        LastModifiedUtc = scene.LastModifiedUtc
+    };
+
     private static LegacyProfile BuildProfile(SonosSettings settings, DayOfWeek day)
     {
         if (settings.DailySchedules.TryGetValue(day, out var schedule) && schedule is not null)
@@ -400,17 +473,12 @@ public sealed class SettingsSchemaMigrationService : ISettingsSchemaMigrationSer
         settings.Scenes ??= new();
         settings.ScheduleWindows ??= new();
         var warnings = new List<string>();
-        var sceneIds = settings.Scenes
-            .Where(scene => scene.Enabled && !string.IsNullOrWhiteSpace(scene.Id))
-            .Select(scene => scene.Id)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         foreach (var window in settings.ScheduleWindows)
         {
             window.DaysOfWeek ??= new();
             window.ExcludedDates ??= new();
             window.AnnualExcludedDates ??= new();
-            if (!window.IsEnabled || (!string.IsNullOrWhiteSpace(window.SceneId) && sceneIds.Contains(window.SceneId)))
+            if (!window.IsEnabled || window.Playback is not null)
             {
                 continue;
             }

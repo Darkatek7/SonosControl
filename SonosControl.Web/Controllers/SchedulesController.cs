@@ -15,16 +15,29 @@ public sealed class SchedulesController : ControllerBase
     private readonly SettingsEditingService _editing;
     private readonly ActionLogger _actionLogger;
     private readonly ConfiguredTimeZoneService _appTimeZone;
+    private readonly ISceneOrchestrationService _sceneOrchestrationService;
 
     public SchedulesController(
         ISettingsRepo settingsRepo, SettingsEditingService editing,
         ActionLogger actionLogger,
-        ConfiguredTimeZoneService appTimeZone)
+        ConfiguredTimeZoneService appTimeZone,
+        ISceneOrchestrationService? sceneOrchestrationService = null)
     {
         _settingsRepo = settingsRepo;
         _editing = editing;
         _actionLogger = actionLogger;
         _appTimeZone = appTimeZone;
+        _sceneOrchestrationService = sceneOrchestrationService!;
+    }
+
+    [HttpPost("{id}/apply")]
+    public async Task<ActionResult<SceneApplyResult>> Apply(string id, CancellationToken cancellationToken)
+    {
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
+        var window = settings.ScheduleWindows.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (window?.Playback is null) return NotFound();
+        var result = await _sceneOrchestrationService.ApplySceneAsync(window.Playback, User.Identity?.Name, cancellationToken);
+        return result.Success ? Ok(result) : BadRequest(result);
     }
 
     [HttpGet]
@@ -58,11 +71,29 @@ public sealed class SchedulesController : ControllerBase
         return Ok(active);
     }
 
+    // The legacy /active endpoint remains a single-window summary. This endpoint
+    // reports the actual winning schedule for every selected room.
+    [HttpGet("active/rooms")]
+    public async Task<ActionResult<IReadOnlyDictionary<string, ScheduleWindow>>> GetActiveRooms()
+    {
+        var settings = await _settingsRepo.GetSettings() ?? new SonosSettings();
+        var active = new Dictionary<string, ScheduleWindow>(StringComparer.OrdinalIgnoreCase);
+        foreach (var window in ScheduleWindowOrdering.Order(settings.ScheduleWindows.Where(window =>
+            window.HasTimeSchedule && window.Playback is { Enabled: true }
+            && ScheduleWindowEvaluator.IsWindowActive(window, _appTimeZone.Now, settings))))
+        {
+            foreach (var ip in SceneTargetResolver.Resolve(window.Playback!, settings))
+                active.TryAdd(ip, window);
+        }
+        return Ok(active);
+    }
+
     [HttpPost]
     [Authorize(Roles = "admin,superadmin")]
     public async Task<ActionResult<ScheduleWindow>> Create([FromBody] ScheduleWindow window)
     {
         if (window is null) return BadRequest("ScheduleWindow payload is required.");
+        if (!ApiIdValidator.IsValidOptionalId(window.Id)) return BadRequest(ApiIdValidator.Message);
         try
         {
             window.Id = string.IsNullOrWhiteSpace(window.Id) ? Guid.NewGuid().ToString("N") : window.Id.Trim();
@@ -101,5 +132,23 @@ public sealed class SchedulesController : ControllerBase
             return NoContent();
         }
         catch (SettingsEditException ex) { return StatusCode(ex.StatusCode, ex.Message); }
+    }
+}
+
+/// <summary>
+/// Caller supplied ids end up inside persisted auto-stop rule keys (128 character column), so
+/// they are limited to a short, delimiter-free alphabet.
+/// </summary>
+internal static class ApiIdValidator
+{
+    public const int MaxLength = 64;
+    public const string Message = "Id may only contain letters, digits, '-', '_' and '.' and must be at most 64 characters.";
+
+    public static bool IsValidOptionalId(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return true;
+        var trimmed = id.Trim();
+        return trimmed.Length <= MaxLength
+            && trimmed.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
     }
 }

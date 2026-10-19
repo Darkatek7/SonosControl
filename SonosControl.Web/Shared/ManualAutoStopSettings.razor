@@ -1,0 +1,132 @@
+@inject ISettingsRepo SettingsRepo
+@using System.Text.Json
+@implements IDisposable
+
+<details class="manual-stop-settings">
+    <summary><strong>Daily stop rules</strong><span>@(EnabledDays > 0 ? $"{EnabledDays} day(s) enabled" : "Off")</span></summary>
+    <div class="manual-stop-settings__body">
+        <label class="form-label" for="manual-stop-limit-@Id">Manual playback limit (minutes)</label>
+        <input id="manual-stop-limit-@Id" class="form-control" type="number" min="1" value="@_draftMinutes" @onchange="SetManualLimit" />
+        <p class="manual-stop-help">After the daily Stop time, manual playback is limited to this many minutes (for example, 22:10 + 30 minutes stops at 22:40). Playback stays blocked until Release; when Release is earlier than Stop, it is the next day.</p>
+        <div class="manual-stop-days">
+            @foreach (var day in Enum.GetValues<DayOfWeek>())
+            {
+                var rule = GetRule(day);
+                <div class="manual-stop-day">
+                    <label class="form-check"><input class="form-check-input" type="checkbox" checked="@rule.Enabled" @onchange="e => rule.Enabled = e.Value is true" /><span class="form-check-label">@day</span></label>
+                    <label>Stop <input class="form-control" type="time" value="@rule.StopTime.ToString("HH\\:mm")" @onchange="e => SetRuleTime(rule, true, e.Value)" disabled="@(!rule.Enabled)" /></label>
+                    <label>Release <input class="form-control" type="time" value="@rule.ReleaseTime.ToString("HH\\:mm")" @onchange="e => SetRuleTime(rule, false, e.Value)" disabled="@(!rule.Enabled)" /></label>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => CopyRuleToAllDays(day)">Copy to all days</button>
+                </div>
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_status)) { <div class="alert @(_isError ? "alert-danger" : "alert-success")" role="status">@_status</div> }
+        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="SaveAsync" disabled="@_saving">Save stop rules</button>
+    </div>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public SonosSpeaker Speaker { get; set; } = default!;
+    private string Id => new(Speaker.IpAddress.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+    private int EnabledDays => _draftDays.Values.Count(rule => rule.Enabled);
+    private string? _loadedIp;
+    private string? _lastIncoming;
+    private string? _baseline;
+    private int? _draftMinutes;
+    private Dictionary<DayOfWeek, ManualAutoStopDay> _draftDays = new();
+    private bool _saving;
+    private string? _status;
+    private bool _isError;
+
+    protected override void OnParametersSet()
+    {
+        var incoming = Snapshot(Speaker.ManualAutoStopMinutes, Speaker.ManualAutoStopDays);
+        if (!string.Equals(_loadedIp, Speaker.IpAddress, StringComparison.OrdinalIgnoreCase))
+        {
+            _loadedIp = Speaker.IpAddress;
+            LoadDraft(incoming);
+            return;
+        }
+        if (incoming == _lastIncoming) return;
+        _lastIncoming = incoming;
+        // Settings changed elsewhere (for example a backup restore): refresh only when nothing is being edited.
+        if (Snapshot(_draftMinutes, _draftDays) == _baseline) LoadDraft(incoming);
+    }
+
+    private void LoadDraft(string incoming)
+    {
+        _lastIncoming = incoming;
+        _baseline = incoming;
+        _draftMinutes = Speaker.ManualAutoStopMinutes;
+        _draftDays = Speaker.ManualAutoStopDays?.ToDictionary(pair => pair.Key, pair => Clone(pair.Value)) ?? new();
+    }
+
+    // Unconfigured days are equivalent to default rules, so rendering them never makes the draft dirty.
+    private static string Snapshot(int? minutes, IDictionary<DayOfWeek, ManualAutoStopDay>? days) =>
+        JsonSerializer.Serialize(new
+        {
+            minutes,
+            days = Enum.GetValues<DayOfWeek>().Select(day =>
+            {
+                var rule = days is not null && days.TryGetValue(day, out var found) ? found : new ManualAutoStopDay();
+                return new { rule.Enabled, rule.StopTime, rule.ReleaseTime };
+            })
+        });
+
+    private ManualAutoStopDay GetRule(DayOfWeek day)
+    {
+        if (_draftDays.TryGetValue(day, out var rule)) return rule;
+        rule = new();
+        _draftDays[day] = rule;
+        return rule;
+    }
+
+    private void SetManualLimit(ChangeEventArgs e) =>
+        _draftMinutes = int.TryParse(e.Value?.ToString(), out var value) ? value : null;
+
+    private static void SetRuleTime(ManualAutoStopDay rule, bool stop, object? value)
+    {
+        if (!TimeOnly.TryParse(value?.ToString(), out var parsed)) return;
+        if (stop) rule.StopTime = parsed; else rule.ReleaseTime = parsed;
+    }
+
+    private void CopyRuleToAllDays(DayOfWeek sourceDay)
+    {
+        var source = GetRule(sourceDay);
+        foreach (var day in Enum.GetValues<DayOfWeek>())
+            _draftDays[day] = new ManualAutoStopDay { Enabled = source.Enabled, StopTime = source.StopTime, ReleaseTime = source.ReleaseTime };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        if (EnabledDays > 0 && _draftMinutes is not > 0)
+        {
+            SetStatus("Enter a positive manual playback limit before enabling daily stop rules.", true);
+            return;
+        }
+        _saving = true;
+        try
+        {
+            var ip = Speaker.IpAddress;
+            var minutes = _draftMinutes;
+            var rules = _draftDays.ToDictionary(pair => pair.Key, pair => Clone(pair.Value));
+            await SettingsRepo.UpdateSettingsAsync(settings =>
+            {
+                var target = settings.Speakers.FirstOrDefault(item => string.Equals(item.IpAddress, ip, StringComparison.OrdinalIgnoreCase));
+                if (target is null) return;
+                target.ManualAutoStopMinutes = minutes;
+                target.ManualAutoStopDays = rules;
+            });
+            _baseline = Snapshot(minutes, rules);
+            SetStatus("Daily stop rules saved.");
+        }
+        catch (Exception ex) { SetStatus($"Could not save stop rules: {ex.Message}", true); }
+        finally { _saving = false; }
+    }
+
+    private static ManualAutoStopDay Clone(ManualAutoStopDay rule) => new() { Enabled = rule.Enabled, StopTime = rule.StopTime, ReleaseTime = rule.ReleaseTime };
+
+    private void SetStatus(string message, bool error = false) { _status = message; _isError = error; }
+    public void Dispose() { }
+}

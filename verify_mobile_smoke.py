@@ -2,6 +2,7 @@ import os
 import html
 import json
 import threading
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import platform
 import re
@@ -35,7 +36,7 @@ THEMES = ["light", "dark"]
 ROUTES = [
     ("/", "home", "Quick access"),
     ("/library", "library", "Library"),
-    ("/automation", "automation", "Automation"),
+    ("/automation", "automation", "Schedules"),
     ("/insights", "insights", "Insights"),
     ("/administration/devices", "devices", "Devices"),
     ("/administration/settings", "settings", "System settings"),
@@ -169,6 +170,7 @@ def start_local_server(with_speaker=False):
         env={
             **os.environ,
             "BackgroundServices__Enabled": "false",
+            "Automation__TimeZone": "UTC",
             "PlaybackSnapshots__Enabled": "true" if with_speaker else "false",
             "Settings__DataDirectory": str(settings_dir),
             "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
@@ -465,12 +467,26 @@ def assert_focus_in_dialog(page, dialog):
     assert dialog.evaluate("element => element.contains(document.activeElement)"), "Focus escaped the active dialog."
 
 
-def verify_editor_sizes(page, editor, save_name):
+def open_advanced(editor):
+    advanced = editor.locator("[data-qa='schedule-advanced']")
+    expect(advanced).to_have_count(1)
+    if advanced.get_attribute("open") is None:
+        advanced.locator("summary").click()
+    expect(advanced.get_by_label("Priority", exact=True)).to_be_visible()
+    return advanced
+
+
+def verify_editor_sizes(page, editor, save_name, advanced_labels=()):
     for width, height, text_scale in [(390, 844, 100), (320, 640, 100), (390, 640, 200)]:
         page.set_viewport_size({"width": width, "height": height})
         page.evaluate("scale => document.documentElement.style.fontSize = scale + '%'", text_scale)
         for theme in THEMES:
             apply_theme(page, theme)
+            if advanced_labels:
+                advanced = open_advanced(editor)
+                for label in advanced_labels:
+                    assert_control_is_clickable(advanced.get_by_label(label, exact=True))
+                assert_control_is_clickable(advanced.get_by_role("button", name="Add exclusion", exact=True))
             body = editor.locator(".app-dialog__body")
             body.evaluate("element => element.scrollTop = element.scrollHeight")
             assert body.evaluate("element => Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop) <= 1"), "Editor form did not scroll to its end."
@@ -480,67 +496,92 @@ def verify_editor_sizes(page, editor, save_name):
     page.set_viewport_size({"width": 390, "height": 844})
 
 
+def stop_rule_times():
+    """Daily stop rule whose cutoff passed 15 minutes ago and releases in 3 hours (fixture time zone is UTC)."""
+    now = datetime.now(timezone.utc)
+    return (now - timedelta(minutes=15)).strftime("%H:%M"), (now + timedelta(hours=3)).strftime("%H:%M")
+
+
+def inactive_schedule_times():
+    """A window two to four hours ahead, so no schedule is active when the manual start happens."""
+    now = datetime.now(timezone.utc)
+    return (now + timedelta(hours=2)).strftime("%H:%M"), (now + timedelta(hours=4)).strftime("%H:%M")
+
+
+def assert_stops_at(locator, expected_minutes_from_now):
+    """Locator shows 'Stops at HH:MM · <reason>' close to the expected wall-clock time."""
+    expect(locator).to_contain_text(re.compile(r"Stops at \d{2}:\d{2} · \S"), timeout=15000)
+    match = re.search(r"Stops at (\d{2}):(\d{2}) · (.+)", locator.inner_text())
+    assert match, f"Missing stop text: {locator.inner_text()!r}"
+    assert match.group(3).strip(), "Stop text has no reason."
+    shown = int(match.group(1)) * 60 + int(match.group(2))
+    now = datetime.now(timezone.utc)
+    expected = (now.hour * 60 + now.minute + expected_minutes_from_now) % 1440
+    distance = min((shown - expected) % 1440, (expected - shown) % 1440)
+    assert distance <= 6, f"Stop time {match.group(1)}:{match.group(2)} is not about {expected_minutes_from_now} minutes from now."
+    return match.group(3).strip()
+
+
+def verify_time_control_round_trip(page, editor):
+    time_control = editor.get_by_label("Time control", exact=True)
+    expect(time_control).to_be_checked()
+    start = editor.get_by_label("Start", exact=True)
+    start_value = start.input_value()
+    time_control.uncheck()
+    for label in ["Start", "Stop", "Recurrence"]:
+        expect(editor.get_by_label(label, exact=True)).to_have_count(0)
+    expect(editor.get_by_role("button", name="Save template", exact=True)).to_be_visible()
+    open_advanced(editor)
+    expect(editor.get_by_label("Fade In (sec)", exact=True)).to_have_count(0)
+    time_control.check()
+    expect(editor.get_by_label("Start", exact=True)).to_have_value(start_value)
+    expect(editor.get_by_role("button", name="Save schedule", exact=True)).to_be_visible()
+
+
 def verify_editor_workflows(page, output_dir, browser):
-    # This function writes only to the runner's disposable, configured fixture.
+    # Writes only to the runner's disposable, configured fixture.
+    schedule_start, schedule_stop = inactive_schedule_times()
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
-    expect(page.get_by_role("button", name="New schedule", exact=True)).to_have_count(0)
-    page.get_by_role("button", name="Create scene", exact=True).click()
-    scene = page.get_by_role("dialog", name="Scene editor", exact=True)
-    expect(scene).to_be_visible()
-    assert_editor_labels(scene)
-    page.wait_for_function("document.querySelector('.responsive-editor-dialog').contains(document.activeElement)")
-    scene.get_by_role("button", name="Close scene editor").press("Shift+Tab")
-    assert_focus_in_dialog(page, scene)
-    page.keyboard.press("Tab")
-    assert_focus_in_dialog(page, scene)
-    expect(scene.get_by_role("button", name="Close scene editor")).to_be_focused()
-    scene.get_by_label("Name", exact=True).fill("Browser smoke scene")
-    mixer_volume = scene.get_by_label("Volume for Test room", exact=True)
-    verify_volume_input(mixer_volume)
-    mixer_volume.fill("")
-    expect(mixer_volume).to_have_value("")
-    verify_editor_sizes(page, scene, "Save Scene")
-    save = scene.get_by_role("button", name="Save Scene", exact=True)
-    assert_control_is_clickable(save)
-    save.click()
-    expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
-    expect(mixer_volume).to_have_value("")
-
-    scene.get_by_role("checkbox", name="Include Test room in playback", exact=True).uncheck()
-    command_count = SimulatedSpeakerHandler.command_count()
-    save.click()
-    expect(scene.get_by_text("Select at least one speaker.", exact=True)).to_be_visible()
-    scene.get_by_role("button", name="Apply Now", exact=True).click()
-    expect(scene.get_by_text("Select at least one speaker.", exact=True)).to_be_visible()
-    assert SimulatedSpeakerHandler.command_count() == command_count, "An empty scene selection sent a Sonos command."
-    scene.get_by_role("checkbox", name="Include Test room in playback", exact=True).check()
-    save.click()
-    expect(scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
-    scene.get_by_label("Name", exact=True).fill("Unsaved scene")
-    scene.get_by_role("button", name="Close scene editor").click()
-    confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
-    expect(confirmation).to_be_visible()
-    page.wait_for_function("document.querySelector('[role=alertdialog]').contains(document.activeElement)")
-    confirmation.get_by_role("button", name="Close dialog").press("Shift+Tab")
-    assert_focus_in_dialog(page, confirmation)
-    confirmation.get_by_role("button", name="Keep editing").click()
-    expect(confirmation).to_have_count(0)
-    page.wait_for_function("document.querySelector('.responsive-editor-dialog').contains(document.activeElement)")
-    expect(scene.get_by_label("Name", exact=True)).to_have_value("Unsaved scene")
-    scene.get_by_label("Name", exact=True).fill("Browser smoke scene")
-    scene.get_by_role("button", name="Close scene editor").press("Escape")
-    expect(scene).to_have_count(0)
-    expect(confirmation).to_have_count(0)
-
+    page.get_by_role("tab", name="Date exceptions", exact=True).click()
     page.get_by_role("tab", name="Schedules", exact=True).click()
+    expect(page.get_by_role("button", name="New schedule", exact=True)).to_be_visible()
     page.get_by_role("button", name="New schedule", exact=True).click()
     schedule = page.get_by_role("dialog", name="Schedule editor", exact=True)
     expect(schedule).to_be_visible()
     assert_editor_labels(schedule)
+    page.wait_for_function("document.querySelector('.responsive-editor-dialog').contains(document.activeElement)")
+    schedule.get_by_role("button", name="Close schedule editor").press("Shift+Tab")
+    assert_focus_in_dialog(page, schedule)
+    page.keyboard.press("Tab")
+    assert_focus_in_dialog(page, schedule)
     schedule.get_by_label("Name", exact=True).fill("Browser smoke schedule")
-    schedule.get_by_label("Scene", exact=True).select_option(label="Browser smoke scene")
-    verify_editor_sizes(page, schedule, "Save schedule")
+    schedule.get_by_label("Volume for Test room", exact=True).fill("80")
+    schedule.get_by_label("Selection", exact=True).select_option(label="Specific source")
+    schedule.get_by_label("Source type", exact=True).select_option(label="Station")
+    schedule.get_by_label("Source URL", exact=True).fill("http://127.0.0.1:1400/stream")
+    schedule.get_by_label("Start", exact=True).fill(schedule_start)
+    schedule.get_by_label("Stop", exact=True).fill(schedule_stop)
+    schedule.get_by_role("checkbox", name="Include Test room in playback", exact=True).uncheck()
+    command_count = SimulatedSpeakerHandler.command_count()
+    schedule.get_by_role("button", name="Save schedule", exact=True).click()
+    expect(schedule.get_by_text("Select at least one speaker.", exact=True)).to_be_visible()
+    assert SimulatedSpeakerHandler.command_count() == command_count, "An empty playback target sent a Sonos command."
+    schedule.get_by_role("checkbox", name="Include Test room in playback", exact=True).check()
+
+    # Advanced groups priority, dates, fades and per-schedule exclusions; time control hides timing but keeps it.
+    advanced = open_advanced(schedule)
+    for label in ["Priority", "Start Date (optional)", "End Date (optional)", "Fade In (sec)", "Fade Out (sec)", "Excluded date"]:
+        expect(advanced.get_by_label(label, exact=True)).to_be_visible()
+    advanced.get_by_label("Fade In (sec)", exact=True).fill("5")
+    advanced.get_by_label("Excluded date", exact=True).fill("2026-12-25")
+    advanced.get_by_label("Repeat", exact=True).select_option("yearly")
+    advanced.get_by_role("button", name="Add exclusion", exact=True).click()
+    expect(advanced.get_by_text("25/12 · Every year", exact=True)).to_be_visible()
+    verify_time_control_round_trip(page, schedule)
+    expect(schedule.get_by_label("Fade In (sec)", exact=True)).to_have_value("5")
+    expect(schedule.get_by_text("25/12 · Every year", exact=True)).to_be_visible()
+    verify_editor_sizes(page, schedule, "Save schedule", advanced_labels=["Priority", "Fade Out (sec)", "Excluded date"])
     schedule.get_by_role("button", name="Save schedule", exact=True).click()
     expect(schedule.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
     page.screenshot(path=str(output_dir / "schedule_mobile_editor_saved.png"))
@@ -548,56 +589,54 @@ def verify_editor_workflows(page, output_dir, browser):
     page.set_viewport_size({"width": 1280, "height": 900})
     expect(schedule).to_have_count(0)
     expect(page.get_by_label("Name", exact=True)).to_have_value("Kept across resize")
-    page.get_by_role("tab", name="Scenes", exact=True).click()
+    page.get_by_role("button", name="Close schedule editor").click()
+    confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
     expect(confirmation).to_be_visible()
+    page.wait_for_function("document.querySelector('[role=alertdialog]').contains(document.activeElement)")
+    confirmation.get_by_role("button", name="Close dialog").press("Shift+Tab")
+    assert_focus_in_dialog(page, confirmation)
     confirmation.get_by_role("button", name="Keep editing").click()
     expect(page.get_by_label("Name", exact=True)).to_have_value("Kept across resize")
-    page.get_by_role("tab", name="Scenes", exact=True).click()
-    expect(confirmation).to_be_visible()
-    confirmation.get_by_role("button", name="Discard changes").click()
-    expect(page.get_by_role("tab", name="Scenes", exact=True)).to_have_attribute("aria-selected", "true")
-    page.set_viewport_size({"width": 390, "height": 844})
-    legacy_card = page.locator(".scene-card__main").filter(has_text="Legacy smoke scene")
-    legacy_card.click()
-    legacy_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
-    legacy_toggle = legacy_scene.get_by_role("checkbox", name="Include Test room in playback", exact=True)
-    expect(legacy_toggle).to_be_checked()
-    legacy_scene.get_by_role("button", name="Save Scene", exact=True).click()
-    expect(legacy_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
-    expect(legacy_toggle).to_be_checked()
-    legacy_scene.get_by_role("button", name="Close scene editor").click()
-    page.locator(".scene-card__main").filter(has_text="Browser smoke scene").click()
-    cap_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
-    cap_scene.get_by_label("Volume for Test room", exact=True).fill("80")
-    cap_scene.get_by_role("button", name="Save Scene", exact=True).click()
-    expect(cap_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
-    cap_scene.get_by_role("button", name="Close scene editor").click()
-    page.go_back(wait_until="domcontentloaded")
-    expect(page.get_by_role("tab", name="Schedules", exact=True)).to_have_attribute("aria-selected", "true")
-    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
-    page.get_by_label("Name", exact=True).fill("Back navigation draft")
-    page.go_back(wait_until="domcontentloaded")
-    expect(confirmation).to_be_visible()
-    confirmation.get_by_role("button", name="Keep editing").click()
-    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
-    leave_dialogs = []
-    def cancel_reload(dialog):
-        leave_dialogs.append(dialog.type)
-        dialog.dismiss()
-    page.on("dialog", cancel_reload)
-    try:
-        page.reload(wait_until="domcontentloaded", timeout=5000)
-    except Error:
-        pass  # A dismissed beforeunload dialog cancels the reload.
-    finally:
-        page.remove_listener("dialog", cancel_reload)
-    assert leave_dialogs == ["beforeunload"], "Dirty draft did not protect reload."
-    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
     page.get_by_role("button", name="Close schedule editor").click()
     confirmation.get_by_role("button", name="Discard changes").click()
 
-    page.goto(f"{BASE_URL}/library", wait_until="networkidle")
     page.set_viewport_size({"width": 390, "height": 844})
+    page.get_by_role("button", name="Manual template", exact=True).click()
+    template = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    expect(template.get_by_text("Manual template", exact=True).first).to_be_visible()
+    expect(template.get_by_label("Time control", exact=True)).not_to_be_checked()
+    template.get_by_label("Name", exact=True).fill("Browser smoke manual template")
+    template.get_by_label("Volume for Test room", exact=True).fill("32")
+    template.get_by_role("button", name="Save template", exact=True).click()
+    expect(template.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    template.get_by_label("Time control", exact=True).check()
+    expect(template.get_by_role("button", name="Save schedule", exact=True)).to_be_visible()
+    template.get_by_label("Time control", exact=True).uncheck()
+    template.get_by_role("button", name="Close schedule editor").click()
+    expect(page.get_by_role("alertdialog", name="Unsaved changes")).to_have_count(0)
+
+    # An existing schedule becomes a manual template and back without losing its timing.
+    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
+    round_trip = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    round_trip.get_by_label("Time control", exact=True).uncheck()
+    round_trip.get_by_role("button", name="Save template", exact=True).click()
+    expect(round_trip.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    round_trip.get_by_role("button", name="Close schedule editor").click()
+    card = page.locator(".schedule-window-card").filter(has_text="Browser smoke schedule")
+    expect(card.get_by_text("Manual playback template")).to_be_visible()
+    expect(card.get_by_role("button", name="Start now Browser smoke schedule", exact=True)).to_be_visible()
+    card.locator(".schedule-window-card__main").click()
+    round_trip = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    round_trip.get_by_label("Time control", exact=True).check()
+    expect(round_trip.get_by_label("Start", exact=True)).to_have_value(schedule_start)
+    expect(round_trip.get_by_label("Stop", exact=True)).to_have_value(schedule_stop)
+    round_trip.get_by_role("button", name="Save schedule", exact=True).click()
+    expect(round_trip.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    round_trip.get_by_role("button", name="Close schedule editor").click()
+    expect(page.locator(".schedule-window-card").filter(has_text="Browser smoke schedule").get_by_text(f"{schedule_start}-{schedule_stop}")).to_be_visible()
+
+    # Keep the real source-editor validation and save path covered.
+    page.goto(f"{BASE_URL}/library", wait_until="networkidle")
     page.get_by_role("button", name="Add source", exact=True).click()
     source = page.get_by_role("dialog", name="Add source", exact=True)
     source.get_by_role("button", name="Save source", exact=True).click()
@@ -614,12 +653,14 @@ def verify_editor_workflows(page, output_dir, browser):
     expect(source).to_have_count(0)
     expect(page.get_by_role("heading", name="Browser smoke source", exact=True)).to_be_visible()
 
+    # Device volumes: bounded typing, reload persistence, manual form and removal dialog focus.
     page.goto(f"{BASE_URL}/administration/devices", wait_until="networkidle")
     card = page.locator(".device-card").first
     startup = page.get_by_label("Startup volume for Test room", exact=True)
     verify_volume_input(startup)
     startup.press("Tab")
     page.reload(wait_until="networkidle")
+    startup = page.get_by_label("Startup volume for Test room", exact=True)
     expect(startup).to_have_value("100")
     manual_volume = page.locator("#manual-speaker-volume")
     verify_volume_input(manual_volume)
@@ -636,6 +677,44 @@ def verify_editor_workflows(page, output_dir, browser):
     device.get_by_role("button", name="Cancel", exact=True).press("Escape")
     expect(device).to_have_count(0)
     page.wait_for_function("document.activeElement.getAttribute('aria-label') === 'Remove Test room'")
+
+    # Per-speaker stop rules enforce a positive manual limit and persist across reload. The cutoff has
+    # already passed so the next manual start is limited by the manual minutes.
+    stop_time, release_time = stop_rule_times()
+    room_rules = page.locator(".device-card").filter(has_text="Test room").locator(".manual-stop-settings")
+    room_rules.locator("summary").click()
+    room_rules.get_by_label("Manual playback limit (minutes)").fill("")
+    monday = room_rules.locator(".manual-stop-day").filter(has=page.get_by_text("Monday", exact=True))
+    monday.get_by_role("checkbox").check()
+    room_rules.get_by_role("button", name="Save stop rules").click()
+    expect(room_rules.get_by_role("status").filter(has_text="positive manual playback limit")).to_be_visible()
+    room_rules.get_by_label("Manual playback limit (minutes)").fill("45")
+    monday.locator("input[type='time']").nth(0).fill(stop_time)
+    monday.locator("input[type='time']").nth(1).fill(release_time)
+    monday.get_by_role("button", name="Copy to all days").click()
+    room_rules.get_by_role("button", name="Save stop rules").click()
+    expect(room_rules.get_by_role("status").filter(has_text="Daily stop rules saved")).to_be_visible()
+    page.reload(wait_until="networkidle")
+    room_rules = page.locator(".device-card").filter(has_text="Test room").locator(".manual-stop-settings")
+    room_rules.locator("summary").click()
+    expect(room_rules.get_by_label("Manual playback limit (minutes)")).to_have_value("45")
+    monday = room_rules.locator(".manual-stop-day").filter(has=page.get_by_text("Monday", exact=True))
+    expect(monday.get_by_role("checkbox")).to_be_checked()
+    expect(monday.locator("input[type='time']").nth(0)).to_have_value(stop_time)
+    assert room_rules.locator(".manual-stop-day").count() == 7
+
+    # Legacy scenes are converted to manual templates by settings migration.
+    page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
+    legacy = page.locator(".schedule-window-card__main").filter(has_text="Legacy smoke scene")
+    expect(legacy).to_be_visible()
+    legacy.click()
+    legacy_editor = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    expect(legacy_editor.get_by_label("Include Test room in playback")).to_be_checked()
+    legacy_editor.get_by_role("button", name="Save template", exact=True).click()
+    expect(legacy_editor.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    legacy_editor.get_by_role("button", name="Close schedule editor").click()
+
+    # Maximum volume: bounded typing, blur commit, reload persistence, then a lower cap clamps an embedded draft.
     page.goto(f"{BASE_URL}/administration/settings", wait_until="networkidle")
     verify_volume_input(page.locator("#maxVolume"))
     page.locator("#maxVolume").press("Tab")
@@ -644,38 +723,82 @@ def verify_editor_workflows(page, output_dir, browser):
     save_status = page.get_by_role("status", name="Configuration save status")
     page.locator("#maxVolume").fill("40")
     expect(page.locator("#maxVolume")).to_have_value("40")
-    expect(save_status).to_have_text("Saving…")
     expect(save_status).to_have_text("Saved")
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("40")
-    page.goto(f"{BASE_URL}/automation?tab=scenes", wait_until="networkidle")
-    page.locator(".scene-card__main").filter(has_text="Browser smoke scene").click()
-    cap_scene = page.get_by_role("dialog", name="Scene editor", exact=True)
-    capped_volume = cap_scene.get_by_label("Volume for Test room", exact=True)
+    page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
+    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
+    cap_editor = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    capped_volume = cap_editor.get_by_label("Volume for Test room", exact=True)
+    capped_volume.fill("80")
     expect(capped_volume).to_have_value("40")
-    expect(cap_scene.get_by_role("button", name="Save Scene", exact=True)).to_be_enabled()
-    cap_scene.get_by_role("button", name="Save Scene", exact=True).click()
-    expect(cap_scene.get_by_text("Scene saved.", exact=True)).to_be_visible()
+    cap_editor.get_by_role("button", name="Save schedule", exact=True).click()
+    expect(cap_editor.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
+    cap_editor.get_by_role("button", name="Close schedule editor").click()
+    page.reload(wait_until="networkidle")
+    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
+    cap_editor = page.get_by_role("dialog", name="Schedule editor", exact=True)
+    expect(cap_editor.get_by_label("Volume for Test room", exact=True)).to_have_value("40")
+    cap_editor.get_by_role("button", name="Save schedule", exact=True).click()
+    expect(cap_editor.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
     page.goto(f"{BASE_URL}/administration/settings", wait_until="networkidle")
     page.locator("#maxVolume").fill("100")
-    expect(page.locator("#maxVolume")).to_have_value("100")
-    save_status = page.get_by_role("status", name="Configuration save status")
-    expect(save_status).to_have_text("Saving…")
-    expect(save_status).to_have_text("Saved")
+    expect(page.get_by_role("status", name="Configuration save status")).to_have_text("Saved")
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("100")
+
+    # Browser back and reload both protect a dirty draft.
+    confirmation = page.get_by_role("alertdialog", name="Unsaved changes")
+    page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
+    page.get_by_role("tab", name="Date exceptions", exact=True).click()
+    page.get_by_role("tab", name="Schedules", exact=True).click()
+    page.locator(".schedule-window-card__main").filter(has_text="Browser smoke schedule").click()
+    page.get_by_label("Name", exact=True).fill("Back navigation draft")
+    page.go_back(wait_until="domcontentloaded")
+    expect(confirmation).to_be_visible()
+    confirmation.get_by_role("button", name="Keep editing").click()
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
+    leave_dialogs = []
+
+    def cancel_reload(dialog):
+        leave_dialogs.append(dialog.type)
+        dialog.dismiss()
+
+    page.on("dialog", cancel_reload)
+    try:
+        page.reload(wait_until="domcontentloaded", timeout=5000)
+    except Error:
+        pass  # A dismissed beforeunload dialog cancels the reload.
+    finally:
+        page.remove_listener("dialog", cancel_reload)
+    assert leave_dialogs == ["beforeunload"], "Dirty draft did not protect reload."
+    expect(page.get_by_label("Name", exact=True)).to_have_value("Back navigation draft")
+    page.get_by_role("button", name="Close schedule editor").click()
+    confirmation.get_by_role("button", name="Discard changes").click()
+
+    # Manual start from the template: Home stays compact and shows the persisted stop with its reason.
+    page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
+    page.get_by_role("button", name="Start now Browser smoke manual template", exact=True).click()
+    expect(page.get_by_text("Browser smoke manual template started.", exact=True)).to_be_visible()
     page.goto(f"{BASE_URL}/", wait_until="networkidle")
+    expect(page.locator(".np-hero__playback-state")).to_have_text("Playing", timeout=10000)
     hero = page.locator("[data-qa='now-playing-hero']")
     assert hero.evaluate("element => element.getBoundingClientRect().height") <= 400
     assert page.locator("#home-rooms-heading").evaluate("element => element.getBoundingClientRect().bottom") < page.locator(".global-player-bar").evaluate("element => element.getBoundingClientRect().top")
-    verify_volume_input(page.locator("#mobile-player-volume-number"))
-    page.locator("#mobile-player-volume-number").fill("34")
+    volume_field = page.locator("#home-now-playing-volume-number")
+    verify_volume_input(volume_field)
+    volume_field.fill("34")
     expect(hero.locator(".np-hero__record")).to_be_visible()
     expect(hero.locator(".np-hero__record.is-spinning")).to_be_visible()
     expect(hero.locator("img")).to_have_count(0)
     page.screenshot(path=str(output_dir / "playback_broken_cover_fallback.png"))
-    print("Editor workflows passed: real saves, labels, focus, draft protection, browser back, resizing, 200% text and compact Home.")
-    print("Editor and playback checks passed: empty and legacy scene targets, lower volume caps, bounded typing, nullable volumes, and broken-cover fallback.")
+    room_stop = page.locator("[data-qa='room-card'] .room-card__auto-stop").first
+    room_reason = assert_stops_at(room_stop, 45)
+    player_stop = page.locator(".global-player-bar__stop-reason")
+    player_reason = assert_stops_at(player_stop, 45)
+    assert room_reason == player_reason == "Daily auto-stop", f"Unexpected stop reasons: {room_reason!r}, {player_reason!r}"
+    print("Editor workflows passed: real saves, time control round trip, advanced section, labels, focus, draft protection, browser back/reload, resizing, 200% text and compact Home.")
+    print("Editor and playback checks passed: empty targets, legacy scenes, volume caps, bounded typing, nullable volumes, broken-cover fallback and stop-rule 'Stops at' on room card and player.")
 
 
 def verify_volume_input(field):
@@ -816,7 +939,7 @@ def verify_application(playwright, output_dir, expected_speaker_state=None):
                     if route == "/library":
                         assert_library_cards_are_uniform(page)
                     if route == "/automation":
-                        assert page.locator(".scenes-editor-panel").evaluate(
+                        assert page.locator(".schedule-editor-panel").evaluate(
                             "element => parseFloat(getComputedStyle(element).borderTopWidth) > 0"
                         ), "Reusable editor lost its panel styling."
                     suffix = "" if with_speaker else "_setup"

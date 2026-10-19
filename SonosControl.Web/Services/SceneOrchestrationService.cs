@@ -11,6 +11,7 @@ public interface ISceneOrchestrationService
     Task<SceneApplyResult> ApplySceneAsync(Scene scene, string? performedBy = null, CancellationToken cancellationToken = default);
     Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy, PlaybackCommandOrigin origin, Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true);
     Task<SceneApplyResult> ApplySceneByIdWithContextAsync(string sceneId, string? performedBy, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true);
+    Task<SceneApplyResult> ApplySceneWithContextAsync(Scene scene, string? performedBy, SceneExecutionContext context, Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true);
 }
 
 public sealed record SceneApplyResult(
@@ -36,6 +37,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
     private readonly SceneTimerService _sceneTimers;
     private readonly PlaybackCommandCoordinator? _commands;
     private readonly PlaybackSnapshotMonitorService? _playbackSnapshots;
+    private readonly ManualAutoStopService? _autoStop;
 
     public SceneOrchestrationService(
         ISettingsRepo settingsRepo, ISonosConnectorRepo sonosConnectorRepo,
@@ -44,7 +46,8 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         ActionLogger actionLogger,
         ILogger<SceneOrchestrationService> logger,
         PlaybackCommandCoordinator? commands = null,
-        PlaybackSnapshotMonitorService? playbackSnapshots = null)
+        PlaybackSnapshotMonitorService? playbackSnapshots = null,
+        ManualAutoStopService? autoStop = null)
     {
         _settingsRepo = settingsRepo;
         _sonosConnectorRepo = sonosConnectorRepo;
@@ -54,6 +57,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         _logger = logger;
         _commands = commands;
         _playbackSnapshots = playbackSnapshots;
+        _autoStop = autoStop;
     }
 
     public async Task<SceneApplyResult> ApplySceneByIdAsync(string sceneId, string? performedBy = null, CancellationToken cancellationToken = default)
@@ -99,7 +103,10 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             await using var context = _commands is null || commandLease is null
                 ? null
                 : new SceneExecutionContext(_commands, origin, DateTimeOffset.MinValue, cancellationToken, commandLease);
-            return await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
+            var result = await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
+            if (result.Success && origin != PlaybackCommandOrigin.Automation && _autoStop is not null)
+                await _autoStop.RegisterSuccessfulStartAsync(result.TargetSpeakers, cancellationToken);
+            return result;
         }
         throw new InvalidOperationException("Unable to prepare scene playback.");
     }
@@ -130,6 +137,29 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         return await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
     }
 
+    public async Task<SceneApplyResult> ApplySceneWithContextAsync(Scene scene, string? performedBy, SceneExecutionContext context,
+        Action<IReadOnlyCollection<string>>? recordTargets, CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? targetOverride = null, bool allowRecovery = true)
+    {
+        var loaded = await _settingsRepo.GetSettings();
+        if (loaded is null) return new SceneApplyResult(false, "Settings could not be loaded.", scene.Id, Array.Empty<string>());
+        var settings = SettingsChanges.MergeEntity(loaded, loaded, loaded);
+        var preparedScene = SettingsChanges.MergeEntity(scene, scene, scene);
+        if (!preparedScene.Enabled) return new SceneApplyResult(false, $"Scene '{preparedScene.Name}' is disabled.", preparedScene.Id, Array.Empty<string>());
+        SettingsEditingService.ValidateScene(preparedScene, settings, checkUniqueName: false);
+        if (context.CurrentLease is null)
+            return new SceneApplyResult(false, "Playback ownership is no longer available.", preparedScene.Id, Array.Empty<string>());
+        var targets = await ResolveExecutionTargetsAsync(preparedScene, settings, targetOverride, allowRecovery: false, cancellationToken);
+        if (!context.CurrentLease.Speakers.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(targets.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+        {
+            await context.ReplaceTargetsAsync(targets, cancellationToken);
+            var revalidated = await ResolveExecutionTargetsAsync(preparedScene, settings, targetOverride, allowRecovery: false, cancellationToken);
+            if (context.CurrentLease is null || !context.CurrentLease.Speakers.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(revalidated.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+                return new SceneApplyResult(false, "Speaker group kept changing while waiting for playback ownership. Apply it again.", preparedScene.Id, Array.Empty<string>());
+        }
+        return await ApplySceneInternalAsync(preparedScene, settings, performedBy, allowRecovery, cancellationToken, recordTargets, targetOverride, context);
+    }
+
     public async Task<SceneApplyResult> ApplySceneAsync(Scene scene, string? performedBy = null, CancellationToken cancellationToken = default)
     {
         var draft = SettingsChanges.MergeEntity(scene, scene, scene);
@@ -137,7 +167,7 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
         {
             var loaded = await _settingsRepo.GetSettings() ?? throw new InvalidOperationException("Settings could not be loaded.");
             var settings = SettingsChanges.MergeEntity(loaded, loaded, loaded);
-            SettingsEditingService.ValidateScene(draft, settings);
+            SettingsEditingService.ValidateScene(draft, settings, checkUniqueName: false);
             if (!draft.Enabled) return new SceneApplyResult(false, $"Scene '{draft.Name}' is disabled.", draft.Id, Array.Empty<string>());
             var targets = await ResolveExecutionTargetsAsync(draft, settings, null, allowRecovery: false, cancellationToken);
             await using var commandLease = _commands is null || targets.Count == 0
@@ -160,7 +190,10 @@ public sealed class SceneOrchestrationService : ISceneOrchestrationService
             await using var context = _commands is null || commandLease is null
                 ? null
                 : new SceneExecutionContext(_commands, PlaybackCommandOrigin.Manual, DateTimeOffset.MinValue, cancellationToken, commandLease);
-            return await ApplySceneInternalAsync(draft, settings, performedBy, allowRecovery: true, cancellationToken, null, null, context);
+            var result = await ApplySceneInternalAsync(draft, settings, performedBy, allowRecovery: true, cancellationToken, null, null, context);
+            if (result.Success && _autoStop is not null)
+                await _autoStop.RegisterSuccessfulStartAsync(result.TargetSpeakers, cancellationToken);
+            return result;
         }
         throw new InvalidOperationException("Unable to prepare scene playback.");
     }

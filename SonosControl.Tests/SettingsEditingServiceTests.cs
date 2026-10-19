@@ -38,6 +38,36 @@ public class SettingsEditingServiceTests
         finally { Directory.Delete(directory, true); }
     }
 
+    [Fact]
+    public async Task SavingCanonicalSchedulePersistsDetachedPlaybackWithoutSceneReference()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        try
+        {
+            using var repository = new SettingsRepo(directory);
+            var editor = new SettingsEditingService(repository);
+            var draft = new ScheduleWindow
+            {
+                Playback = new Scene
+                {
+                    Id = "legacy-id",
+                    Name = "Window playback",
+                    SpeakerIps = ["192.0.2.10"],
+                    SourceSelectionMode = SceneSourceSelectionMode.Resume,
+                    SourceType = SceneSourceType.None
+                }
+            };
+
+            var saved = await editor.SaveWindowAsync(draft, create: true);
+
+            var window = Assert.Single(saved.ScheduleWindows);
+            Assert.Null(window.SceneId);
+            Assert.Equal("Window playback", window.Playback!.Name);
+            Assert.Empty(saved.Scenes);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     [Theory]
     [InlineData("name")]
     [InlineData("duplicate")]

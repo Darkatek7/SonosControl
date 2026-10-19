@@ -64,6 +64,35 @@ public class SettingsBackupServiceTests
     }
 
     [Fact]
+    public async Task ImportAsync_RejectsEnabledAutoStopRulesWithoutPositiveMinutes()
+    {
+        using var fixture = new BackupFixture();
+        var settings = new SonosSettings
+        {
+            SettingsSchemaVersion = SonosSettings.CurrentSettingsSchemaVersion,
+            Speakers =
+            [
+                new SonosSpeaker
+                {
+                    Name = "Office", IpAddress = "192.0.2.10",
+                    ManualAutoStopDays = new Dictionary<DayOfWeek, ManualAutoStopDay>
+                    {
+                        [DayOfWeek.Monday] = new ManualAutoStopDay { Enabled = true }
+                    }
+                }
+            ]
+        };
+        await using var content = new MemoryStream(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(settings)));
+
+        var error = await Assert.ThrowsAsync<SettingsBackupException>(() =>
+            fixture.Service.ImportAsync("invalid-auto-stop.json", content, content.Length));
+
+        Assert.Contains("minutes must be positive", error.Message);
+        fixture.SettingsRepo.Verify(repository => repository.ReplaceSettingsAsync(
+            It.IsAny<SonosSettings>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ImportAsync_CreatesSafetyBackupAndAppliesValidatedSettings()
     {
         using var fixture = new BackupFixture();

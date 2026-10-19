@@ -31,6 +31,7 @@ public sealed class DraftTracker
     {
         window.Name,
         window.IsEnabled,
+        window.HasTimeSchedule,
         window.Priority,
         window.StartTime,
         window.StopTime,
@@ -39,6 +40,7 @@ public sealed class DraftTracker
         window.StartDate,
         window.EndDate,
         window.SceneId,
+        Playback = window.Playback is null ? null : Values(window.Playback),
         window.FadeInSeconds,
         window.FadeOutSeconds
     };

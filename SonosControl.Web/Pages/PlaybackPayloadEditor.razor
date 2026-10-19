@@ -1,0 +1,95 @@
+@using System.Globalization
+@using SonosControl.DAL.Models
+@using SonosControl.Web.Services
+
+@if (Settings is not null && Playback is not null)
+{
+    <section class="schedule-editor-card" aria-label="Playback template">
+        <div class="schedule-editor-card__header"><h3><Icon Name="music" Size="16" /> Playback</h3><span>Source, rooms, and volume</span></div>
+        <div class="schedule-form-grid">
+            <div class="schedule-field">
+                <label class="form-label" for="payload-source-mode">Selection</label>
+                <select id="payload-source-mode" class="form-select" @bind="Playback.SourceSelectionMode" @bind:after="Changed" disabled="@(!CanEdit)">
+                    <option value="@SceneSourceSelectionMode.Resume">Resume current source</option>
+                    <option value="@SceneSourceSelectionMode.Specific">Specific source</option>
+                    <option value="@SceneSourceSelectionMode.Random">Random by type</option>
+                </select>
+            </div>
+            <div class="schedule-field">
+                <label class="form-label" for="payload-source-type">Source type</label>
+                <select id="payload-source-type" class="form-select" @bind="Playback.SourceType" @bind:after="Changed" disabled="@(!CanEdit || Playback.SourceSelectionMode == SceneSourceSelectionMode.Resume)">
+                    <option value="@SceneSourceType.None">None</option><option value="@SceneSourceType.Station">Station</option><option value="@SceneSourceType.Spotify">Spotify</option><option value="@SceneSourceType.YouTube">YouTube</option><option value="@SceneSourceType.YouTubeMusic">YouTube Music</option>
+                </select>
+            </div>
+            <div class="schedule-field schedule-field--wide">
+                <label class="form-label" for="payload-source-url">Source URL</label>
+                <input id="payload-source-url" class="form-control" @bind="Playback.SourceUrl" @bind:event="oninput" @bind:after="Changed" disabled="@(!CanEdit || Playback.SourceSelectionMode != SceneSourceSelectionMode.Specific || Playback.SourceType == SceneSourceType.None)" />
+                @if (GetCatalog().Count > 0)
+                {
+                    <select class="form-select mt-2" aria-label="Choose saved source" @onchange="SelectCatalog" disabled="@(!CanEdit)">
+                        <option value="">Choose saved source</option>@foreach (var item in GetCatalog()) { <option value="@item.Url">@item.Name</option> }
+                    </select>
+                }
+            </div>
+            <div class="schedule-field"><label class="form-label" for="payload-timer">Playback timer (minutes)</label><input id="payload-timer" class="form-control" type="number" min="0" @bind="TimerMinutes" disabled="@(!CanEdit)" /></div>
+            <div class="schedule-field"><label class="form-label" for="payload-synced">Synchronized playback</label><div class="form-check form-switch"><input id="payload-synced" class="form-check-input" type="checkbox" @bind="Playback.IsSyncedPlayback" @bind:after="Changed" disabled="@(!CanEdit)" /></div></div>
+            <div class="schedule-field schedule-field--wide"><label class="form-label" for="payload-master">Master room</label><select id="payload-master" class="form-select" @bind="Playback.MasterSpeakerIp" @bind:after="Changed" disabled="@(!CanEdit || !Playback.IsSyncedPlayback)"><option value="">Auto</option>@foreach (var speaker in Settings.Speakers.OrderBy(s => s.Name)) { <option value="@speaker.IpAddress">@speaker.Name</option> }</select></div>
+        </div>
+        <div class="schedule-speaker-list" role="group" aria-label="Playback rooms">
+            @foreach (var speaker in Settings.Speakers.OrderBy(s => s.Name))
+            {
+                var action = FindAction(speaker.IpAddress);
+                var included = action?.IncludeInPlayback ?? SceneTargetResolver.Resolve(Playback, Settings).Contains(speaker.IpAddress, StringComparer.OrdinalIgnoreCase);
+                var id = $"payload-speaker-{speaker.IpAddress.Replace('.', '-')}";
+                <article class="schedule-speaker-row">
+                    <input class="form-check-input" type="checkbox" aria-label="@($"Include {speaker.Name} in playback")" checked="@included" @onchange="e => SetIncluded(speaker.IpAddress, e.Value)" disabled="@(!CanEdit)" />
+                    <div><strong>@speaker.Name</strong><small>@speaker.IpAddress</small></div>
+                    <label><span>Volume</span><VolumeNumberInput class="form-control form-control-sm" id="@($"{id}-volume")" aria-label="@($"Volume for {speaker.Name}")" MaxVolume="@Settings.MaxVolume" Value="@action?.Volume" ValueChanged="value => SetVolume(speaker.IpAddress, value)" disabled="@(!CanEdit || !included)" /></label>
+                    <label class="schedule-master"><input class="form-check-input" type="radio" name="payload-master-speaker" aria-label="@($"Use {speaker.Name} as master room")" checked="@string.Equals(Playback.MasterSpeakerIp, speaker.IpAddress, StringComparison.OrdinalIgnoreCase)" @onchange="() => SetMaster(speaker.IpAddress)" disabled="@(!CanEdit || !Playback.IsSyncedPlayback || !included)" /> Master</label>
+                </article>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public SonosSettings Settings { get; set; } = default!;
+    [Parameter, EditorRequired] public Scene Playback { get; set; } = default!;
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private int TimerMinutes { get => Playback.TimerMinutes ?? 0; set { Playback.TimerMinutes = value <= 0 ? null : value; _ = Changed(); } }
+    private Task Changed() => OnChanged.InvokeAsync();
+    private SceneAction? FindAction(string ip) => Playback.Actions?.FirstOrDefault(x => string.Equals(x.SpeakerIp, ip, StringComparison.OrdinalIgnoreCase));
+    private SceneAction GetOrCreateAction(string ip)
+    {
+        Playback.Actions ??= new();
+        var action = FindAction(ip);
+        if (action is not null) return action;
+        action = new SceneAction
+        {
+            SpeakerIp = ip,
+            IncludeInPlayback = SceneTargetResolver.Resolve(Playback, Settings).Contains(ip, StringComparer.OrdinalIgnoreCase),
+            Volume = Settings.Speakers.FirstOrDefault(s => s.IpAddress == ip)?.StartupVolume
+        };
+        Playback.Actions.Add(action);
+        return action;
+    }
+    private async Task SetIncluded(string ip, object? value)
+    {
+        var action = GetOrCreateAction(ip); action.IncludeInPlayback = value is true;
+        if (!action.IncludeInPlayback && string.Equals(Playback.MasterSpeakerIp, ip, StringComparison.OrdinalIgnoreCase)) Playback.MasterSpeakerIp = null;
+        await Changed();
+    }
+    private async Task SetVolume(string ip, int? value) { GetOrCreateAction(ip).Volume = value is null ? null : Math.Clamp(value.Value, 0, Settings.MaxVolume); await Changed(); }
+    private async Task SetMaster(string ip) { Playback.MasterSpeakerIp = ip; await Changed(); }
+    private async Task SelectCatalog(ChangeEventArgs e) { if (!string.IsNullOrWhiteSpace(e.Value?.ToString())) Playback.SourceUrl = e.Value.ToString(); await Changed(); }
+    private List<(string Url, string Name)> GetCatalog() => Playback.SourceType switch
+    {
+        SceneSourceType.Station => Settings.Stations.Where(x => !string.IsNullOrWhiteSpace(x.Url)).Select(x => (x.Url.Trim(), string.IsNullOrWhiteSpace(x.Name) ? x.Url.Trim() : x.Name.Trim())).ToList(),
+        SceneSourceType.Spotify => Settings.SpotifyTracks.Where(x => !string.IsNullOrWhiteSpace(x.Url)).Select(x => (x.Url.Trim(), string.IsNullOrWhiteSpace(x.Name) ? x.Url.Trim() : x.Name.Trim())).ToList(),
+        SceneSourceType.YouTube => Settings.YouTubeCollections.Where(x => !string.IsNullOrWhiteSpace(x.Url)).Select(x => (x.Url.Trim(), string.IsNullOrWhiteSpace(x.Name) ? x.Url.Trim() : x.Name.Trim())).ToList(),
+        SceneSourceType.YouTubeMusic => Settings.YouTubeMusicCollections.Where(x => !string.IsNullOrWhiteSpace(x.Url)).Select(x => (x.Url.Trim(), string.IsNullOrWhiteSpace(x.Name) ? x.Url.Trim() : x.Name.Trim())).ToList(),
+        _ => new()
+    };
+}

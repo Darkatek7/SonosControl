@@ -39,6 +39,7 @@ public class SettingsRepo : ISettingsRepo, IDisposable
             var before = SettingsChanges.Serialize(settings);
             update(settings);
             Normalize(settings);
+            ValidateAutoStopRules(settings);
             var after = SettingsChanges.Serialize(settings);
             if (before != after)
             {
@@ -63,6 +64,7 @@ public class SettingsRepo : ISettingsRepo, IDisposable
         ArgumentNullException.ThrowIfNull(settings);
         var candidate = SettingsChanges.Deserialize(SettingsChanges.Serialize(settings));
         Normalize(candidate);
+        ValidateAutoStopRules(candidate);
         var json = SettingsChanges.Serialize(candidate);
         await Gate.WaitAsync(cancellationToken);
         try
@@ -120,13 +122,27 @@ public class SettingsRepo : ISettingsRepo, IDisposable
         finally { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
     }
 
+    private static void ValidateAutoStopRules(SonosSettings settings)
+    {
+        foreach (var speaker in settings.Speakers)
+        {
+            if (speaker.ManualAutoStopDays.Keys.Any(day => !Enum.IsDefined(day)))
+                throw new InvalidOperationException("Auto-stop rules must use valid weekdays.");
+            if (speaker.ManualAutoStopDays.Values.Any(rule => rule.Enabled) && speaker.ManualAutoStopMinutes is not > 0)
+                throw new InvalidOperationException($"Set a positive manual playback limit for {speaker.Name} before enabling daily stop rules.");
+        }
+    }
+
     private static void Normalize(SonosSettings settings)
     {
         settings.MaxVolume = Math.Clamp(settings.MaxVolume, 0, 100);
         settings.Volume = Math.Clamp(settings.Volume, 0, settings.MaxVolume);
         settings.Speakers ??= new();
         foreach (var speaker in settings.Speakers)
+        {
             if (speaker.StartupVolume.HasValue) speaker.StartupVolume = Math.Clamp(speaker.StartupVolume.Value, 0, 100);
+            speaker.ManualAutoStopDays ??= new();
+        }
         settings.Stations ??= new();
         settings.SpotifyTracks ??= new();
         settings.YouTubeCollections ??= new();

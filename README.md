@@ -1,7 +1,7 @@
 # SonosControl - Self-Hosted Sonos Automation Dashboard
 [![Dockerhub](https://github.com/Darkatek7/SonosControl/actions/workflows/dockerhubpush.yml/badge.svg)](https://github.com/Darkatek7/SonosControl/actions/workflows/dockerhubpush.yml)
 
-SonosControl is a deployer-friendly Blazor control centre organised around everyday playback, a unified source library, scene-based automation, listening insights, and role-aware administration.
+SonosControl is a deployer-friendly Blazor control centre organised around everyday playback, a unified source library, schedule-based automation, listening insights, and role-aware administration.
 
 ![SonosControl playback dashboard in dark theme](docs/assets/readme/images/desktop-dark-home.png)
 
@@ -91,7 +91,9 @@ Then open `http://localhost:5107`.
 - One Library for saved TuneIn, Spotify, YouTube, and YouTube Music sources, with link examples, field validation, Radio Browser discovery, and recommendations.
 - Home Quick access lists favourites first and labels suggested sources.
 - Temporary MP3 uploads in Library with immediate speaker playback and configurable automatic deletion.
-- Reusable scenes, ordered recurring schedules, date exceptions, fades, and migration from legacy day-based automation.
+- One Schedules surface: each entry embeds its own source, speakers, per-room volume, and synced playback. Entries without a time can be saved as manual templates and started with Start now.
+- Ordered recurring schedules with date exceptions, fades, and automatic migration from legacy scenes and day-based automation.
+- Per-speaker daily auto-stop rules with a grace period for manual playback, shown on room cards and the player.
 - Mobile fullscreen editors keep save actions visible and protect unsaved drafts when closing or navigating.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
 - Responsive listening statistics and a searchable read-only activity trail.
