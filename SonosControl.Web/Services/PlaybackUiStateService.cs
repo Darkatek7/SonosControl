@@ -20,6 +20,7 @@ public sealed class PlaybackUiStateService : IDisposable
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly SemaphoreSlim _initializeLock = new(1, 1);
     private readonly SemaphoreSlim _volumeUpdateLock = new(1, 1);
+    private readonly SemaphoreSlim _logLock = new(1, 1);
     private readonly object _volumeSync = new();
     private CancellationTokenSource? _volumeDebounceCts;
     private long _volumeGeneration;
@@ -192,6 +193,8 @@ public sealed class PlaybackUiStateService : IDisposable
                 if (_manualPlayback is not null) await _manualPlayback.PlaybackSucceededAsync([speakerIp]);
             }
 
+            await TryLogPlaybackCommandAsync(shouldPlay ? "Playback Started" : "Playback Paused", speakerIp);
+
             var stillActive = string.Equals(speakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
             if (stillActive || _snapshotMonitor is not null) await RefreshSharedPlaybackAsync();
             if (string.Equals(speakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase) && _snapshotMonitor is null)
@@ -261,9 +264,10 @@ public sealed class PlaybackUiStateService : IDisposable
 
                 var latest = await _settingsRepo.GetSettings();
                 var finalVolume = Math.Clamp(requestedVolume, 0, Math.Clamp(latest?.MaxVolume ?? MaxVolume, 0, 100));
-                await using (var manualLease = _manualPlayback is null ? null : await _manualPlayback.BeginAsync(targetSpeakerIp, token))
+                await using (var volumeLease = _manualPlayback is null ? null : await _manualPlayback.BeginVolumeAsync(targetSpeakerIp, token))
                 {
                     await _sonosConnectorRepo.SetVolume(targetSpeakerIp, finalVolume);
+                    await TryLogPlaybackCommandAsync("Volume Changed", $"{targetSpeakerIp}: {finalVolume}% (playback ownership unchanged)");
                     await RefreshSharedPlaybackAsync(token);
                 }
 
@@ -338,6 +342,7 @@ public sealed class PlaybackUiStateService : IDisposable
         {
             await using var manualLease = _manualPlayback is null ? null : await _manualPlayback.BeginAsync(speakerIp);
             await _sonosConnectorRepo.NextTrack(speakerIp);
+            await TryLogPlaybackCommandAsync("Next Track", speakerIp);
             var stillActive = string.Equals(speakerIp, ActiveSpeakerIp, StringComparison.OrdinalIgnoreCase);
             if (stillActive || _snapshotMonitor is not null)
             {
@@ -761,16 +766,27 @@ public sealed class PlaybackUiStateService : IDisposable
 
     private async Task AddLogAsync(string action, string? details = null)
     {
-        var log = new LogEntry
+        await _logLock.WaitAsync();
+        try
         {
-            Action = action,
-            PerformedBy = await GetCurrentUserAsync(),
-            Timestamp = DateTime.UtcNow,
-            Details = details
-        };
+            var log = new LogEntry
+            {
+                Action = action,
+                PerformedBy = await GetCurrentUserAsync(),
+                Timestamp = DateTime.UtcNow,
+                Details = details
+            };
 
-        _db.Logs.Add(log);
-        await _db.SaveChangesAsync();
+            _db.Logs.Add(log);
+            await _db.SaveChangesAsync();
+        }
+        finally { _logLock.Release(); }
+    }
+
+    private async Task TryLogPlaybackCommandAsync(string action, string details)
+    {
+        try { await AddLogAsync(action, details); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not audit playback command {Action}.", action); }
     }
 
     private async Task<string> GetCurrentUserAsync()

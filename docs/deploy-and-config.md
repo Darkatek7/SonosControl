@@ -128,7 +128,13 @@ window's end the schedule stops its playback and releases its rooms. A manual
 start during the window keeps that room away from FlyDJ for the rest of the
 occurrence. Turning FlyDJ off on its page skips the current FlyDJ occurrence;
 future occurrences can start again. FlyDJ is available only for timed schedules,
-not manual playback templates. If the server feature is disabled later, a saved
+not manual playback templates. Changing a room's volume does not take over its
+playback or cancel its stop timer; FlyDJ can keep choosing stations. Successful play/pause,
+next-track and volume commands from the app are recorded in Insights → Activity
+with the user and affected room. A room taken over by manual playback is shown
+as skipped for the rest of its schedule, without a misleading cooldown retry.
+Paused simulations hide retained activity measurements instead of presenting
+them as live values. If the server feature is disabled later, a saved
 FlyDJ schedule reports that FlyDJ must be enabled and sends no playback commands.
 
 FlyDJ is an optional, experimental radio DJ. It runs as a separate `flydj` Python container that is off by default and never published to the host: the web app reaches it at `http://flydj:8090` on the Compose network. The DJ chooses only between radio stations from your library and plays them on configured rooms. Its choices come from a simulation of the fruit-fly auditory connectome, which scores each candidate station by how the simulated brain responds to it. Manual control always wins; see [Operations and Observability](operations-and-observability.md#flydj-optional-experimental) for the playback ownership rules.

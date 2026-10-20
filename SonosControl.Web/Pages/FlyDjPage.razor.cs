@@ -133,7 +133,12 @@ public partial class FlyDjPage : ComponentBase
 
     private void Capture(FlyDjDashboardState state)
     {
-        if (state.Simulation is not { } simulation) return;
+        if (state.Simulation is not { } simulation || !state.SidecarReachable || !simulation.Running
+            || string.Equals(simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase))
+        {
+            _history.Clear();
+            return;
+        }
         if (_history.Count > 0 && state.UpdatedUtc - _history[^1].At < MinSampleSpacing) return;
         _history.Add(new ActivitySample(state.UpdatedUtc, simulation.PopulationRates, simulation.Engagement));
         if (_history.Count > HistoryLimit) _history.RemoveRange(0, _history.Count - HistoryLimit);
@@ -214,7 +219,7 @@ public partial class FlyDjPage : ComponentBase
             {
                 if (!IsRunning) return "Simulation paused. Turn on FlyDJ to watch it think.";
                 return _state.Status == FlyDjConductorStatus.Yielded
-                    ? _state.YieldedSpeakers.Count > 0 ? "Resting while you are in control. The simulation is paused and uses no CPU." : "Waiting for scheduled playback to end. The simulation is paused."
+                    ? _state.YieldedSpeakers.Count > 0 || _state.IsScheduled ? "Playback was taken over. The simulation is paused and uses no CPU." : "Waiting for scheduled playback to end. The simulation is paused."
                     : "Simulation paused for a moment...";
             }
             if (_brainMode == BrainMode.Webgl && _streamState is "offline" or "connecting") return "Connecting to the live view...";
@@ -273,10 +278,11 @@ public partial class FlyDjPage : ComponentBase
             if (ToggleDisabledReason is { } reason) return reason;
             if (IsRunning && _state.Status == FlyDjConductorStatus.Yielded)
             {
+                if (_state.IsScheduled) return "Manual playback took over the scheduled rooms. FlyDJ skips those rooms for the rest of this schedule.";
                 if (_state.YieldedSpeakers.Count == 0) return "Schedules currently own the selected rooms. FlyDJ waits until they end.";
                 return _state.NextDecisionAtUtc is { } resume
-                    ? $"You took over, so FlyDJ is resting until {FormatClock(resume)}. Switch it off to stop for good."
-                    : "You took over, so FlyDJ is resting. Switch it off to stop for good.";
+                    ? $"Playback was taken over, so FlyDJ is resting until {FormatClock(resume)}. Switch it off to stop for good."
+                    : "Playback was taken over, so FlyDJ is resting. Switch it off to stop for good.";
             }
             if (IsRunning)
             {
@@ -314,7 +320,7 @@ public partial class FlyDjPage : ComponentBase
         FlyDjConductorStatus.Starting => "Starting",
         FlyDjConductorStatus.Auditioning => "Auditioning stations",
         FlyDjConductorStatus.Playing => string.IsNullOrWhiteSpace(_state.CurrentStationName) ? "Playing" : $"Playing {_state.CurrentStationName}",
-        FlyDjConductorStatus.Yielded => _state.YieldedSpeakers.Count > 0 ? "Yielded to manual control" : "Waiting for schedules",
+        FlyDjConductorStatus.Yielded => _state.YieldedSpeakers.Count > 0 || _state.IsScheduled ? "Yielded to manual control" : "Waiting for schedules",
         FlyDjConductorStatus.Error => "Error",
         _ => "Stopped"
     };
@@ -329,11 +335,14 @@ public partial class FlyDjPage : ComponentBase
 
     // ---- activity and statistics --------------------------------------------------------
 
+    private bool HasActivity => _state.SidecarReachable && _state.Simulation is { Running: true }
+        && !string.Equals(_state.Simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase);
+
     private IEnumerable<(string Key, double Rate)> OutputPopulations
     {
         get
         {
-            var rates = _state.Simulation?.PopulationRates;
+            var rates = HasActivity ? _state.Simulation?.PopulationRates : null;
             return OutputKeys.Select(key => (key, rates is not null && rates.TryGetValue(key, out var rate) ? rate : 0d));
         }
     }
@@ -353,6 +362,7 @@ public partial class FlyDjPage : ComponentBase
 
     private string SparkPoints(string key)
     {
+        if (!HasActivity) return string.Empty;
         var max = MaxRate;
         var values = _history.Select(sample => sample.Rates.TryGetValue(key, out var rate) ? rate : 0d).ToList();
         return BuildPoints(values, 0, max);
@@ -360,6 +370,7 @@ public partial class FlyDjPage : ComponentBase
 
     private string EngagementSparkPoints()
     {
+        if (!HasActivity) return string.Empty;
         var values = _history.Select(sample => sample.Engagement).Where(value => value.HasValue && double.IsFinite(value.Value)).Select(value => value!.Value).ToList();
         if (values.Count < 2) return string.Empty;
         var min = Math.Min(0, values.Min());

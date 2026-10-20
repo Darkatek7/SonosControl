@@ -21,6 +21,32 @@ namespace SonosControl.Tests;
 
 public class FlyDjPageTests
 {
+    [Fact]
+    public void PausedSimulationHidesRetainedMeasurementsAndNamesTheLastChoice()
+    {
+        using var harness = new Harness();
+        var cut = harness.Render();
+        harness.Store.Update(state => state with
+        {
+            Status = FlyDjConductorStatus.Yielded,
+            Simulation = Simulation("stopped"),
+            CurrentStationName = null,
+            LastDecision = Decision()
+        });
+        cut.WaitForAssertion(() =>
+        {
+            var activity = cut.Find("[data-qa='flydj-activity']").TextContent;
+            Assert.Contains("Simulation paused", activity);
+            Assert.DoesNotContain("14.2 Hz", activity);
+            Assert.DoesNotContain("1,840", activity);
+            Assert.All(cut.FindAll("[data-qa='flydj-activity'] polyline"), line => Assert.True(string.IsNullOrEmpty(line.GetAttribute("points"))));
+            Assert.Contains("Last FlyDJ choice", cut.Find("[data-qa='flydj-now']").TextContent);
+            Assert.Contains("Radio One", cut.Find("[data-qa='flydj-now']").TextContent);
+        });
+        harness.Store.Update(state => state with { Simulation = Simulation("continuous"), Status = FlyDjConductorStatus.Playing });
+        cut.WaitForAssertion(() => Assert.Contains("14.2 Hz", cut.Find("[data-qa='flydj-activity']").TextContent));
+    }
+
     private static readonly DateTimeOffset Moment = DateTimeOffset.UtcNow;
 
     private sealed class Harness : IDisposable

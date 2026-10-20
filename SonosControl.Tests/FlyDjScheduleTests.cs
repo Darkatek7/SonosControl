@@ -132,6 +132,36 @@ public sealed class FlyDjScheduleTests
     }
 
     [Fact]
+    public async Task ScheduledManualTakeoverReportsWindowEndInsteadOfPromisingACooldownRetry()
+    {
+        await using var fixture = await FixtureAsync(Window());
+        await fixture.Scheduler.EvaluateNowAsync();
+        await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, parked: true);
+        await fixture.AdvanceAsync(TimeSpan.FromSeconds(1));
+        await fixture.TakeManualControlAsync(FlyDjConductorFixture.KitchenIp, FlyDjConductorFixture.LivingIp);
+        await fixture.StepAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(FlyDjConductorStatus.Yielded, fixture.Store.Current.Status);
+        Assert.Null(fixture.Store.Current.NextDecisionAtUtc);
+        Assert.Contains("rest of this schedule", fixture.Store.Current.StatusMessage);
+        Assert.Equal(2, fixture.Store.Current.YieldedSpeakers.Count);
+        Assert.All(fixture.Store.Current.YieldedSpeakers, room => Assert.Equal(FlyDjConductorFixture.StartTime.AddHours(1), room.ScheduleEndsUtc));
+    }
+
+    [Fact]
+    public async Task VolumeAdjustmentDoesNotYieldScheduledPlayback()
+    {
+        await using var fixture = await FixtureAsync(Window());
+        await fixture.Scheduler.EvaluateNowAsync();
+        await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, parked: true);
+        await fixture.AdvanceAsync(TimeSpan.FromSeconds(1));
+        await using (await fixture.Commands.EnterVolumeAsync(FlyDjConductorFixture.KitchenIp)) { }
+        await fixture.StepAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(FlyDjConductorStatus.Playing, fixture.Store.Current.Status);
+        Assert.Empty(fixture.Store.Current.YieldedSpeakers);
+        Assert.Equal(2, fixture.Store.Current.ActiveSpeakerIps.Count);
+    }
+
+    [Fact]
     public async Task StopSwitchSuppressesCurrentOccurrenceButNextDayStartsAgain()
     {
         await using var fixture = await FixtureAsync(Window());

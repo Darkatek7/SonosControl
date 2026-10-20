@@ -85,7 +85,7 @@
                                 <div class="flydj-bar-row">
                                     <span class="flydj-bar-row__label"><span class="flydj-chip" style="@ChipStyle(population.Key)"></span>@PopulationShortLabel(population.Key)</span>
                                     <span class="flydj-bar" aria-hidden="true"><span class="flydj-bar__fill" style="@BarStyle(population.Key, population.Rate)"></span></span>
-                                    <span class="flydj-bar-row__value">@FormatRate(population.Rate)</span>
+                                    <span class="flydj-bar-row__value">@(HasActivity ? FormatRate(population.Rate) : "-")</span>
                                 </div>
                             }
                         </div>
@@ -130,7 +130,7 @@
                                     <span class="flydj-bar" role="meter" aria-label="@PopulationShortLabel(population.Key) firing rate" aria-valuemin="0" aria-valuemax="@FormatNumber(MaxRate)" aria-valuenow="@FormatNumber(population.Rate)">
                                         <span class="flydj-bar__fill" style="@BarStyle(population.Key, population.Rate)"></span>
                                     </span>
-                                    <span class="flydj-bar-row__value">@FormatRate(population.Rate)</span>
+                                    <span class="flydj-bar-row__value">@(HasActivity ? FormatRate(population.Rate) : "-")</span>
                                 </div>
                                 <svg class="flydj-spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true" style="@SparkStyle(population.Key)">
                                     <polyline points="@SparkPoints(population.Key)" />
@@ -140,7 +140,7 @@
                         <div class="flydj-activity__row">
                             <div class="flydj-bar-row">
                                 <span class="flydj-bar-row__label">Engagement</span>
-                                <span class="flydj-bar-row__value flydj-bar-row__value--wide">@(simulation.Engagement is { } engagement ? FormatNumber(engagement, "0.00") : "-")</span>
+                                <span class="flydj-bar-row__value flydj-bar-row__value--wide">@(HasActivity && simulation.Engagement is { } engagement ? FormatNumber(engagement, "0.00") : "-")</span>
                             </div>
                             <svg class="flydj-spark flydj-spark--engagement" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
                                 <polyline points="@EngagementSparkPoints()" />
@@ -148,11 +148,11 @@
                         </div>
                         <p class="flydj-activity__foot">
                             <span>Spikes per second</span>
-                            <strong>@FormatCount((long)Math.Round(simulation.SpikesPerSecond))</strong>
+                            <strong>@(HasActivity ? FormatCount((long)Math.Round(simulation.SpikesPerSecond)) : "-")</strong>
                         </p>
                         @if (string.Equals(simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase))
                         {
-                            <p class="flydj-muted">The simulation is idle. It starts when FlyDJ does.</p>
+                            <p class="flydj-muted">Simulation paused. No live activity is being measured; previous samples are hidden.</p>
                         }
                     </div>
                 }
@@ -220,8 +220,8 @@
                 <SectionCard Title="Now & why" Icon="music" Subtitle="What is playing, and the evidence behind the choice." Id="flydj-now-title">
                 <dl class="flydj-kv" data-qa="flydj-now">
                     <div>
-                        <dt>Station</dt>
-                        <dd>@(string.IsNullOrWhiteSpace(_state.CurrentStationName) ? "Nothing chosen yet" : _state.CurrentStationName)</dd>
+                        <dt>@(_state.CurrentStationName is null && _state.LastDecision is not null ? "Last FlyDJ choice" : "Station")</dt>
+                        <dd>@(_state.CurrentStationName ?? _state.LastDecision?.StationName ?? "Nothing chosen yet")</dd>
                     </div>
                     <div>
                         <dt>Rooms</dt>
@@ -246,7 +246,7 @@
                             {
                                 <li>
                                     <strong>@(string.IsNullOrWhiteSpace(yielded.SpeakerName) ? RoomName(yielded.SpeakerIp) : yielded.SpeakerName)</strong>
-                                    <span>until @FormatClock(yielded.UntilUtc) &middot; @yielded.Reason</span>
+                                    <span>@(yielded.ScheduleEndsUtc is { } end ? $"Rest of schedule (until {FormatClock(end)})" : $"until {FormatClock(yielded.UntilUtc)}") &middot; @yielded.Reason</span>
                                 </li>
                             }
                         </ul>
@@ -435,7 +435,7 @@
                     <ol class="flydj-steps">
                         <li><strong>Listen.</strong> A few seconds of each candidate station become loudness, rhythm and low, mid and high tone energy. These drive the neurons of the fly's hearing organ.</li>
                         <li><strong>Simulate.</strong> The signal spreads through the real wiring. Three output groups respond: approach, startle and arousal.</li>
-                        <li><strong>Choose.</strong> Stations that attract more than they startle score higher. FlyDJ plays a likely winner on your chosen rooms. Anything you do by hand wins, and those rooms are left alone for a while.</li>
+                        <li><strong>Choose.</strong> Stations that attract more than they startle score higher. FlyDJ plays a likely winner on your chosen rooms. Playing, pausing, skipping or choosing another source by hand takes priority; adjusting volume keeps FlyDJ running.</li>
                     </ol>
                     @if (_state.Model is { Attribution.Count: > 0 } modelInfo)
                     {

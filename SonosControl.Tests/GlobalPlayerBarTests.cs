@@ -285,7 +285,7 @@ public class GlobalPlayerBarTests
     }
 
     [Fact]
-    public async Task VolumeCommandPreemptsAnActiveAutomationLease()
+    public async Task VolumeCommandPreservesPlaybackOwnershipWhileWaitingForAutomation()
     {
         await using var ctx = new BunitContext();
         RepositoryTestServices.AddDefaults(ctx.Services);
@@ -295,18 +295,14 @@ public class GlobalPlayerBarTests
         var coordinator = ctx.Services.GetRequiredService<PlaybackCommandCoordinator>();
         var automation = await coordinator.EnterAutomationAsync(["10.0.0.1"], DateTimeOffset.UtcNow.AddSeconds(-1));
         Assert.NotNull(automation);
-        var automationFinished = Task.Run(async () =>
-        {
-            try { await Task.Delay(Timeout.Infinite, automation!.CancellationToken); }
-            catch (OperationCanceledException) { }
-            finally { await automation!.DisposeAsync(); }
-        });
         var claimedSince = DateTimeOffset.UtcNow.AddSeconds(-1);
 
-        await state.SetVolumeAsync(46);
-        await automationFinished;
+        var volume = state.SetVolumeAsync(46);
+        Assert.False(automation.WasPreempted);
+        await automation.DisposeAsync();
+        await volume.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Contains("10.0.0.1", coordinator.ManualSpeakersSince(claimedSince));
+        Assert.Empty(coordinator.ManualSpeakersSince(claimedSince));
         connector.Verify(repo => repo.SetVolume("10.0.0.1", 46), Times.Once);
     }
 

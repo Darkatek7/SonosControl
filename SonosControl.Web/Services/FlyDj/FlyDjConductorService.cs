@@ -76,7 +76,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
     private CancellationTokenSource? _sessionCancellation;
     private TaskCompletionSource? _sessionDone;
 
-    private sealed record YieldInfo(string SpeakerName, DateTimeOffset UntilUtc, DateTimeOffset YieldedAtUtc, string Reason);
+    private sealed record YieldInfo(string SpeakerName, DateTimeOffset UntilUtc, DateTimeOffset YieldedAtUtc, string Reason, DateTimeOffset? ScheduleEndsUtc = null);
 
     private sealed record ActiveSelection(
         long DecisionId,
@@ -481,11 +481,13 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         bool scheduleBlocked;
         lock (_stateLock)
         {
-            earliest = _yielded.Count == 0 ? null : _yielded.Values.Min(item => item.UntilUtc);
+            earliest = _yielded.Values.Where(item => item.ScheduleEndsUtc is null).Select(item => (DateTimeOffset?)item.UntilUtc).Min();
             scheduleBlocked = configured.Any(ip => owned.Contains(ip));
         }
         string message;
-        if (earliest is not null)
+        if (earliest is null && _schedules.Count > 0 && configured.All(ip => _schedules.Any(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase))))
+            message = "Manual playback took over the scheduled rooms. FlyDJ skips those rooms for the rest of this schedule; the next scheduled occurrence can start again.";
+        else if (earliest is not null)
             message = $"Every FlyDJ room is resting after a takeover. FlyDJ resumes at {FormatClock(earliest.Value)} unless someone is still playing.";
         else
             message = "Every FlyDJ room is currently used by a schedule. FlyDJ waits for it to end.";
@@ -801,7 +803,10 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         lock (_stateLock)
         {
             foreach (var ip in rooms)
-                _yielded[ip] = new YieldInfo(_speakerNames.GetValueOrDefault(ip, ip), now + cooldown, now, reason);
+            {
+                var scheduleEnd = _schedules.FirstOrDefault(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase) && schedule.StopUtc > now)?.StopUtc;
+                _yielded[ip] = new YieldInfo(_speakerNames.GetValueOrDefault(ip, ip), scheduleEnd ?? now + cooldown, now, reason, scheduleEnd);
+            }
             var active = _active;
             if (active is not null)
             {
@@ -824,7 +829,8 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         if (ended is not null) await EndDecisionAsync(ended, now);
         else if (flagged is not null) await UpdateDecisionAsync(flagged.DecisionId, decision => decision.OverriddenByUser = true);
         var names = string.Join(", ", rooms.Select(ip => _speakerNames.GetValueOrDefault(ip, ip)));
-        await LogAsync("FlyDjYielded", $"{reason} in {names}; FlyDJ steps away for {fly.YieldCooldownMinutes} min.", DefaultActor);
+        var scheduled = rooms.Any(ip => _schedules.Any(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)));
+        await LogAsync("FlyDjYielded", $"{reason} in {names}; " + (scheduled ? "FlyDJ skips scheduled rooms for the rest of their occurrence." : $"FlyDJ steps away for {fly.YieldCooldownMinutes} min."), DefaultActor);
         PublishStation();
     }
 
@@ -1075,7 +1081,10 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             next = _nextDecisionAt;
             recent = _recent;
             yielded = _yielded.OrderBy(pair => pair.Value.UntilUtc).ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(pair => new FlyDjYieldedSpeaker(pair.Key, pair.Value.SpeakerName, pair.Value.UntilUtc, pair.Value.Reason)).ToList();
+                .Select(pair => new FlyDjYieldedSpeaker(pair.Key, pair.Value.SpeakerName, pair.Value.UntilUtc, pair.Value.Reason)
+                {
+                    ScheduleEndsUtc = pair.Value.ScheduleEndsUtc is { } end && end > _time.GetUtcNow() ? end : null
+                }).ToList();
         }
         _state.Update(state => state with
         {
