@@ -4,7 +4,8 @@ public enum PlaybackCommandOrigin
 {
     Manual,
     Automation,
-    SleepTimer
+    SleepTimer,
+    Volume
 }
 
 /// <summary>Coordinates playback writes by speaker and lets manual work preempt overlapping automation.</summary>
@@ -133,6 +134,15 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         lock (_manualSync)
             foreach (var ip in speakers) _manualStarts[ip] = acquiredAt;
         return new PlaybackCommandLease(this, null, origin, speakers, cancellationToken, gates);
+    }
+
+    /// <summary>Serializes a room's volume write without claiming its playback or cancelling automation.</summary>
+    public async Task<PlaybackCommandLease> EnterVolumeAsync(string speakerIp, CancellationToken cancellationToken = default)
+    {
+        var speakers = Normalize([speakerIp]);
+        if (speakers.Length == 0) throw new ArgumentException("A speaker target is required.", nameof(speakerIp));
+        var gates = await AcquireGatesAsync(speakers, cancellationToken);
+        return new PlaybackCommandLease(this, null, PlaybackCommandOrigin.Volume, speakers, cancellationToken, gates);
     }
 
     public void TakeManualControl(IEnumerable<string> speakers)

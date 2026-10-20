@@ -15,6 +15,31 @@ namespace SonosControl.Tests;
 public class SceneTimerServiceTests
 {
     [Fact]
+    public async Task VolumeAdjustmentPreservesTheSceneTimerAndDoesNotExpandToTheWholeGroup()
+    {
+        var clock = new ManualClock();
+        var connector = Connector();
+        var paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connector.Setup(repo => repo.PausePlaying("A")).Callback(() => paused.TrySetResult()).Returns(Task.CompletedTask);
+        var services = Services(connector.Object);
+        var commands = new PlaybackCommandCoordinator(clock);
+        services.AddSingleton(commands);
+        services.AddSingleton<SceneTimerService>(provider => new(provider.GetRequiredService<IServiceScopeFactory>(), clock, NullLogger<SceneTimerService>.Instance));
+        services.AddSingleton<ILogger<ManualPlaybackService>>(NullLogger<ManualPlaybackService>.Instance);
+        services.AddScoped<ManualPlaybackService>();
+        await using var provider = services.BuildServiceProvider();
+        var timers = provider.GetRequiredService<SceneTimerService>();
+        await using (await timers.BeginSceneAsync(["A"], CancellationToken.None)) timers.Schedule("scheduled", "Scheduled", ["A"], 1);
+        using var scope = provider.CreateScope();
+        await using (await scope.ServiceProvider.GetRequiredService<ManualPlaybackService>().BeginVolumeAsync("A")) { }
+        Assert.Empty(commands.ManualSpeakersSince(DateTimeOffset.MinValue));
+        connector.Verify(repo => repo.GetAllSpeakersInGroup(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        clock.Advance(TimeSpan.FromMinutes(2));
+        await paused.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await timers.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ManualPlaybackCancelsSceneTimersForTheWholeCurrentGroup()
     {
         var clock = new ManualClock();

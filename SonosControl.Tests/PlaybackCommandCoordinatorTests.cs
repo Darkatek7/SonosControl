@@ -6,6 +6,25 @@ namespace SonosControl.Tests;
 public sealed class PlaybackCommandCoordinatorTests
 {
     [Fact]
+    public async Task VolumeWaitsForAutomationWithoutPreemptingItOrClaimingPlayback()
+    {
+        var coordinator = new PlaybackCommandCoordinator(TimeProvider.System);
+        var start = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var automation = await coordinator.EnterAutomationAsync(["room-a"], start);
+        Assert.NotNull(automation);
+        var volumeTask = coordinator.EnterVolumeAsync("room-a");
+        Assert.False(volumeTask.IsCompleted);
+        Assert.False(automation.WasPreempted);
+        Assert.False(automation.CancellationToken.IsCancellationRequested);
+        await automation.DisposeAsync();
+        await using (var volume = await volumeTask.WaitAsync(TimeSpan.FromSeconds(2)))
+            Assert.Equal(PlaybackCommandOrigin.Volume, volume.Origin);
+        Assert.Empty(coordinator.ManualSpeakersSince(start));
+        await using var nextStation = await coordinator.EnterAutomationAsync(["room-a"], start);
+        Assert.NotNull(nextStation);
+    }
+
+    [Fact]
     public async Task ManualLeaseCancelsOverlappingAutomationBeforeAcquiringTarget()
     {
         var coordinator = new PlaybackCommandCoordinator(TimeProvider.System);

@@ -5,6 +5,10 @@ namespace SonosControl.Web.Services;
 public sealed class ManualPlaybackService(PlaybackCommandCoordinator commands, IServiceProvider services,
     ISonosConnectorRepo connector, ILogger<ManualPlaybackService> logger, ManualAutoStopService? autoStop = null)
 {
+    /// <summary>A per-room volume adjustment preserves playback ownership and existing timers.</summary>
+    public async Task<IAsyncDisposable> BeginVolumeAsync(string speakerIp, CancellationToken cancellationToken = default)
+        => await commands.EnterVolumeAsync(speakerIp, cancellationToken);
+
     public async Task<IAsyncDisposable> BeginAsync(string speakerIp, CancellationToken cancellationToken = default,
         PlaybackCommandOrigin origin = PlaybackCommandOrigin.Manual)
         => await BeginAsync([speakerIp], cancellationToken, origin);

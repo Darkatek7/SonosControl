@@ -14,7 +14,10 @@ public enum FlyDjConductorStatus
 }
 
 /// <summary>A room FlyDJ stepped away from because someone (or a schedule) took over.</summary>
-public sealed record FlyDjYieldedSpeaker(string SpeakerIp, string SpeakerName, DateTimeOffset UntilUtc, string Reason);
+public sealed record FlyDjYieldedSpeaker(string SpeakerIp, string SpeakerName, DateTimeOffset UntilUtc, string Reason)
+{
+    public DateTimeOffset? ScheduleEndsUtc { get; init; }
+}
 
 /// <summary>One audited station with the evidence behind its probability of being chosen.</summary>
 /// <remarks>A failed audition has <see cref="Error"/> set, no brain score and probability zero.</remarks>
