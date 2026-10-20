@@ -239,7 +239,7 @@
 
                 @if (_state.Evidence.Count > 0)
                 {
-                    <div class="flydj-yielded" data-qa="flydj-evidence">
+                    <div class="flydj-evidence" data-qa="flydj-evidence">
                         <h4>Rolling audio evidence</h4>
                         <p class="flydj-muted">Window: @FormatNumber(_state.ObservationWindowSeconds / 60, "0.#") min. Each sample is counted once. @(_state.ObservationEndsAtUtc is { } end ? $"Initial observation ends at {FormatClock(end)}." : "All allowed stations continue to be sampled.")</p>
                         <ul>
