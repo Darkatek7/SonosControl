@@ -66,7 +66,7 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         Client.Setup(client => client.GetStateAsync(It.IsAny<CancellationToken>())).ReturnsAsync(State(true));
         Client.Setup(client => client.GetModelAsync(It.IsAny<CancellationToken>())).Returns(() => Task.FromResult(Model()));
         Client.Setup(client => client.AuditionAsync(It.IsAny<FlyDjAuditionRequest>(), It.IsAny<CancellationToken>()))
-            .Returns((FlyDjAuditionRequest request, CancellationToken _) => Task.FromResult(OnAudition(request)));
+            .Returns((FlyDjAuditionRequest request, CancellationToken _) => Task.FromResult(WithSampleMetadata(OnAudition(request))));
         Client.Setup(client => client.ListenAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .Returns((string? _, CancellationToken _) => Task.FromResult(new FlyDjListenResponse(true, null, Engagement, null, null)));
 
@@ -141,9 +141,17 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         return fixture;
     }
 
+    private FlyDjAuditionResponse WithSampleMetadata(FlyDjAuditionResponse response) => response with
+    {
+        Results = response.Results.Select(result => result.SampleId is not null ? result : result with
+        { SampleId = Guid.NewGuid().ToString("N"), SampledAtUtc = Time.GetUtcNow() }).ToArray()
+    };
+
+    public bool AutoAdvanceObservation { get; set; } = true;
+
     public static FlyDjAuditionResponse DefaultAudition(FlyDjAuditionRequest request)
         => new(request.Candidates.Select((candidate, index) => new FlyDjAuditionResult(
-                candidate.Id, true, null, index, new FlyDjAudioFeatures(0.3, 0.3, 0.3, 0.5, 2, 1500), null)).ToList(),
+                candidate.Id, true, null, int.Parse(candidate.Id[3..]) - 1, new FlyDjAudioFeatures(0.3, 0.3, 0.3, 0.5, 2, 1500), null)).ToList(),
             request.BioMs, new Dictionary<string, double>());
 
     public static FlyDjSimulationState State(bool running) => new(
@@ -169,7 +177,12 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         while (!(condition() && (!parked || Time.PendingTimers > 0)))
         {
             if (watch.ElapsedMilliseconds > timeoutMs) throw new TimeoutException($"Condition not met: {what ?? "?"}. Status={Store.Current.Status} {Store.Current.StatusMessage}");
-            if (advance is { } step && !condition() && Time.PendingTimers > 0) Time.Advance(step);
+            if (!condition() && Time.PendingTimers > 0)
+            {
+                if (AutoAdvanceObservation && Store.Current.ObservationEndsAtUtc is not null && Store.Current.ActiveSpeakerIps.Count == 0)
+                    Time.Advance(FlyDjObservationPlan.FromMinutes((await SettingsAsync()).FlyDj.MinDwellMinutes).SampleInterval);
+                else if (advance is { } step) Time.Advance(step);
+            }
             await Task.Delay(2);
         }
     }
@@ -192,6 +205,13 @@ internal sealed class FlyDjConductorFixture : IAsyncDisposable
         var mark = Time.TimersCreated;
         Time.Advance(by);
         await ParkedAsync(mark, what: $"conductor stepped after {by}");
+    }
+
+    public async Task AdvanceSamplingAsync(TimeSpan duration)
+    {
+        var interval = FlyDjObservationPlan.FromMinutes((await SettingsAsync()).FlyDj.MinDwellMinutes).SampleInterval;
+        while (duration >= interval) { await StepAsync(interval); duration -= interval; }
+        if (duration > TimeSpan.Zero) { await AdvanceAsync(duration); await ParkedAsync(); }
     }
 
     public async Task StartDjAsync() => await Conductor.StartAsync("tester", CancellationToken.None);
@@ -305,7 +325,7 @@ public class FlyDjConductorTests
         Assert.False(string.IsNullOrWhiteSpace(state.LastDecision.Reason));
         Assert.NotNull(state.NextDecisionAtUtc);
         Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.StartAsync)));
-        Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
+        Assert.Equal(22, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
         fixture.Client.Verify(client => client.ListenAsync(call.Scene.SourceUrl, It.IsAny<CancellationToken>()), Times.Once);
 
         var decision = Assert.Single(await fixture.DecisionsAsync());
@@ -387,7 +407,7 @@ public class FlyDjConductorTests
         };
 
         await fixture.StartDjAsync();
-        await applying.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await fixture.UntilAsync(() => applying.Task.IsCompleted, what: "playback lease entered");
         fixture.Time.Advance(TimeSpan.FromSeconds(1));
         var manual = await fixture.Commands.EnterManualAsync([FlyDjConductorFixture.KitchenIp]).WaitAsync(TimeSpan.FromSeconds(5));
         await manual.DisposeAsync();
@@ -410,7 +430,7 @@ public class FlyDjConductorTests
         };
 
         await fixture.StartDjAsync();
-        await applying.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await fixture.UntilAsync(() => applying.Task.IsCompleted, what: "playback lease entered");
         var stop = await fixture.Commands.EnterMandatoryStopAsync([FlyDjConductorFixture.KitchenIp, FlyDjConductorFixture.LivingIp])
             .WaitAsync(TimeSpan.FromSeconds(5));
         await stop.DisposeAsync();
@@ -569,7 +589,7 @@ public class FlyDjConductorTests
         fixture.Schedules.Setup(owner => owner.GetScheduleOwnedSpeakers(It.IsAny<SonosSettings>(), It.IsAny<DateTimeOffset>())).Returns([]);
         await fixture.UntilAsync(() => fixture.Store.Current.ActiveSpeakerIps.Count == 2, advance: TimeSpan.FromSeconds(5), what: "kitchen joins", parked: true);
 
-        Assert.Equal(2, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
+        Assert.True(fixture.Calls(nameof(IFlyDjClient.AuditionAsync)) >= 23);
     }
 
     [Fact]
@@ -672,7 +692,7 @@ public class FlyDjConductorTests
 
         ready = true;
         await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, advance: TimeSpan.FromSeconds(10), what: "ready and playing", parked: true);
-        Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
+        Assert.Equal(22, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
     }
 
     [Fact]
@@ -700,7 +720,7 @@ public class FlyDjConductorTests
         await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, advance: TimeSpan.FromSeconds(1), what: "playing after restart", parked: true);
 
         Assert.Equal(2, fixture.Calls(nameof(IFlyDjClient.StartAsync)));
-        Assert.Equal(2, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
+        Assert.True(fixture.Calls(nameof(IFlyDjClient.AuditionAsync)) >= 23);
     }
 
     [Fact]
@@ -755,63 +775,65 @@ public class FlyDjConductorTests
         Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.StartAsync)));
     }
 
-    [Fact]
-    public async Task StationIsKeptUntilMaxDwellThenReconsidered()
+    [Theory]
+    [InlineData(2, 3)]
+    [InlineData(5, 6)]
+    public async Task StationIsKeptUntilMaxDwellThenActuallyChanges(int minimum, int maximum)
     {
-        await using var fixture = await FlyDjConductorFixture.CreateAsync();
+        await using var fixture = await FlyDjConductorFixture.CreateAsync(settings => { settings.FlyDj.MinDwellMinutes = minimum; settings.FlyDj.MaxDwellMinutes = maximum; });
         await fixture.StartAndWaitForFirstPlayAsync();
-
-        for (var i = 0; i < 80; i++) await fixture.StepAsync(CheckInterval);   // 40 minutes of good engagement
-        Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
-        Assert.True(fixture.Calls(nameof(IFlyDjClient.ListenAsync)) > 40);   // engagement is checked every 30 s
-
-        await fixture.AdvanceAsync(TimeSpan.FromMinutes(6));
-        await fixture.UntilAsync(() => fixture.Calls(nameof(IFlyDjClient.AuditionAsync)) == 2, advance: TimeSpan.FromSeconds(1), what: "max dwell reached");
+        var first = fixture.Store.Current.CurrentStationUrl;
+        // Equal brain scores and priors remove the early-switch advantage.
+        fixture.OnAudition = request => FlyDjConductorFixture.DefaultAudition(request) with
+        { Results = request.Candidates.Select(candidate => new FlyDjAuditionResult(candidate.Id, true, null, 0, null, null)).ToArray() };
+        await fixture.AdvanceSamplingAsync(TimeSpan.FromMinutes(maximum).Subtract(TimeSpan.FromSeconds(6)));
+        Assert.Single(fixture.SceneCalls);
+        await fixture.AdvanceSamplingAsync(TimeSpan.FromSeconds(9));
+        Assert.Equal(2, fixture.SceneCalls.Count);
+        Assert.NotEqual(first, fixture.Store.Current.CurrentStationUrl);
     }
 
     [Fact]
-    public async Task SustainedLowEngagementSwitchesOnlyAfterMinDwell()
+    public async Task SuperiorAlternativeNeedsTwoFreshComparisonsAfterMinimumDwell()
     {
-        await using var fixture = await FlyDjConductorFixture.CreateAsync();
+        await using var fixture = await FlyDjConductorFixture.CreateAsync(settings => { settings.FlyDj.MinDwellMinutes = 1; settings.FlyDj.MaxDwellMinutes = 3; });
         await fixture.StartAndWaitForFirstPlayAsync();
-        fixture.Engagement = -0.8;
-
-        // Two bad checks inside the 8 minute minimum do not move the DJ.
-        for (var i = 0; i < 6; i++) await fixture.StepAsync(CheckInterval);
-        Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
-
-        // After the minimum, two consecutive checks below baseline trigger a new audition.
-        await fixture.AdvanceAsync(TimeSpan.FromMinutes(6));
-        await fixture.UntilAsync(() => fixture.Calls(nameof(IFlyDjClient.AuditionAsync)) == 2, advance: CheckInterval, what: "switch on low engagement");
+        var first = fixture.Store.Current.CurrentStationUrl;
+        fixture.OnAudition = request => FlyDjConductorFixture.DefaultAudition(request) with
+        { Results = request.Candidates.Select(candidate => new FlyDjAuditionResult(candidate.Id, true, null, candidate.Url == first ? -10 : 10, null, null)).ToArray() };
+        await fixture.AdvanceSamplingAsync(TimeSpan.FromSeconds(57));
+        Assert.Single(fixture.SceneCalls);
+        await fixture.StepAsync(TimeSpan.FromSeconds(3));
+        Assert.Single(fixture.SceneCalls); // first comparison only nominates a challenger
+        await fixture.StepAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, fixture.SceneCalls.Count);
+        Assert.NotEqual(first, fixture.Store.Current.CurrentStationUrl);
     }
 
     [Fact]
-    public async Task AnIsolatedLowEngagementCheckIsForgiven()
+    public async Task CachedLiveEngagementDoesNotCauseStationChanges()
     {
-        await using var fixture = await FlyDjConductorFixture.CreateAsync();
+        await using var fixture = await FlyDjConductorFixture.CreateAsync(settings => { settings.FlyDj.MinDwellMinutes = 1; settings.FlyDj.MaxDwellMinutes = 3; });
+        fixture.OnAudition = request => FlyDjConductorFixture.DefaultAudition(request) with
+        { Results = request.Candidates.Select(candidate => new FlyDjAuditionResult(candidate.Id, true, null, candidate.Id == "st-1" ? 100 : -100, null, null)).ToArray() };
         await fixture.StartAndWaitForFirstPlayAsync();
-        await fixture.StepAsync(TimeSpan.FromMinutes(9));
-
-        var alternate = 0;
-        fixture.Client.Setup(client => client.ListenAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-            .Returns(() => Task.FromResult(new FlyDjListenResponse(true, null, alternate++ % 2 == 0 ? -1.0 : 1.0, null, null)));
-        for (var i = 0; i < 20; i++) await fixture.StepAsync(CheckInterval);
-
-        Assert.Equal(1, fixture.Calls(nameof(IFlyDjClient.AuditionAsync)));
+        fixture.Engagement = -100;
+        await fixture.AdvanceSamplingAsync(TimeSpan.FromMinutes(2));
+        Assert.Single(fixture.SceneCalls);
     }
 
     [Fact]
-    public async Task FailedAuditionsAreExcludedAndAllFailuresFallBackToHabitsWithAnExplicitReason()
+    public async Task FailedAuditionsAreExcludedAndAllFailuresWaitWithoutStartingUntestedStreams()
     {
         await using var fixture = await FlyDjConductorFixture.CreateAsync();
-        fixture.OnAudition = request => new FlyDjAuditionResponse(request.Candidates.Select((candidate, index) => index == 0
+        fixture.OnAudition = request => new FlyDjAuditionResponse(request.Candidates.Select((candidate, index) => candidate.Id == "st-1"
             ? new FlyDjAuditionResult(candidate.Id, false, "fetch_failed", null, null, null)
             : new FlyDjAuditionResult(candidate.Id, true, null, index, null, null)).ToList(), 500, new Dictionary<string, double>());
         await fixture.StartAndWaitForFirstPlayAsync();
 
         var first = fixture.Store.Current.LastDecision!;
         var failed = first.Candidates.Single(candidate => candidate.Error is not null);
-        Assert.Equal("fetch_failed", failed.Error);
+        Assert.Contains("fetch_failed", failed.Error);
         Assert.Null(failed.BrainScore);
         Assert.Equal(0, failed.Probability);
         Assert.NotEqual(failed.Url, first.StationUrl);
@@ -820,15 +842,14 @@ public class FlyDjConductorTests
         await using var allFail = await FlyDjConductorFixture.CreateAsync();
         allFail.OnAudition = request => new FlyDjAuditionResponse(request.Candidates
             .Select(candidate => new FlyDjAuditionResult(candidate.Id, false, "timeout", null, null, null)).ToList(), 500, new Dictionary<string, double>());
-        await allFail.StartAndWaitForFirstPlayAsync();
-
-        var fallback = allFail.Store.Current.LastDecision!;
-        Assert.Contains("habits alone", fallback.Reason);
-        Assert.All(fallback.Candidates, candidate => Assert.Equal("timeout", candidate.Error));
-        Assert.Equal(1.0, allFail.Store.Current.LastDecision!.Candidates.Sum(candidate => candidate.Probability), 6);
-        var saved = Assert.Single(await allFail.DecisionsAsync());
-        Assert.Equal(0, saved.BrainWeight);
-        Assert.Equal(1, saved.PriorWeight);
+        allFail.AutoAdvanceObservation = false;
+        await allFail.StartDjAsync();
+        await allFail.UntilAsync(() => allFail.Store.Current.Status == FlyDjConductorStatus.Error,
+            advance: TimeSpan.FromSeconds(8), what: "failed observation window", parked: true);
+        Assert.Empty(allFail.SceneCalls);
+        Assert.Empty(await allFail.DecisionsAsync());
+        Assert.Contains("no untested station", allFail.Store.Current.StatusMessage);
+        Assert.All(allFail.Store.Current.Evidence, item => Assert.True(item.FailureCount > 0));
     }
 
     [Fact]

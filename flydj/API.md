@@ -91,12 +91,18 @@ reports how its output populations respond.
 Request:
 
 ```json
-{"candidates": [{"id": "st-1", "url": "stream.example.com/live.mp3"}], "bioMs": 500}
+{"candidates": [{"id": "st-1", "url": "stream.example.com/live.mp3"}], "bioMs": 500, "sampleSeconds": 10, "fresh": true}
 ```
 
 `url` may lack a scheme (`http://` is assumed); `.m3u`/`.pls` playlists are
-resolved. Only `http`/`https` is fetched, at most 4 s of audio and 2 MB per
-candidate. `bioMs` is clamped to `100..2000` (default `500`). At most 8 candidates.
+resolved. Only `http`/`https` is fetched, at most 2 MB per candidate with an
+18-second network budget per URL resolution. `sampleSeconds` requests 0.8 to
+10 seconds of decoded audio (default 4). `fresh: true` bypasses the 120-second
+feature cache; the default is false. At most two streams are fetched concurrently.
+`bioMs` is clamped to `100..2000` (default `500`). At most 8 candidates.
+SonosControl requests fresh samples in batches of at most two and keeps a rolling
+median for each allowed station. Update both images together: new SonosControl
+requires sample identities and timestamps and reports a clear error for old sidecars.
 
 Response:
 
@@ -108,6 +114,8 @@ Response:
       "ok": true,
       "error": null,
       "score": 1.27,
+      "sampleId": "b4c9800d54cd4ac989fa21155f137857",
+      "sampledAtUtc": "2026-10-20T06:23:20+00:00",
       "features": {"low": 0.41, "mid": 0.33, "high": 0.26, "loudness": 0.62, "onsetRate": 2.1, "centroidHz": 1840.0},
       "populationRates": {"approach": 14.2, "startle": 3.1, "arousal": 22.0}
     }
@@ -118,7 +126,10 @@ Response:
 ```
 
 `score = z(approach) - z(startle)` against the no-stimulus baseline. A failed
-candidate has `ok: false`, an `error` code and `score: null`.
+candidate has `ok: false`, an `error` code and `score: null`. Fresh requests also
+assign an identity and timestamp to failures so the UI can report failed probes.
+Successful cached responses retain the original measurement identity and time;
+repeated requests do not create new independent evidence.
 
 ### `POST /v1/listen`
 

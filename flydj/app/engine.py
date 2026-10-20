@@ -21,6 +21,9 @@ import asyncio
 import logging
 import math
 import threading
+from dataclasses import replace
+from datetime import datetime, timezone
+from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
@@ -92,9 +95,8 @@ class Engine:
     ) -> None:
         self.settings = settings
         self.cache = FeatureCache()
-        self.audio_sampler: Callable[[str], Features] = audio_sampler or (
-            lambda url: audio_mod.sample_stream(url, self.cache)
-        )
+        self.audio_sampler = audio_sampler
+        self._fetch_slots = asyncio.Semaphore(2)
         self.pool = ThreadPoolExecutor(max_workers=MAX_CANDIDATES, thread_name_prefix="flydj-audio")
 
         self.status = "loading"
@@ -385,10 +387,18 @@ class Engine:
 
     # ------------------------------------------------------------------ audio
 
-    async def _features_for(self, url: str) -> tuple[Features | None, str | None, str | None]:
+    async def _features_for(
+        self, url: str, sample_seconds: float = 4, fresh: bool = False,
+    ) -> tuple[Features | None, str | None, str | None]:
         loop = asyncio.get_running_loop()
         try:
-            features = await loop.run_in_executor(self.pool, self.audio_sampler, url)
+            def sample():
+                if self.audio_sampler is not None:
+                    features = self.audio_sampler(url)
+                    return replace(features, sample_id=uuid4().hex, sampled_at_utc=datetime.now(timezone.utc).isoformat())
+                return audio_mod.sample_stream(url, self.cache, sample_seconds=sample_seconds, fresh=fresh)
+            async with self._fetch_slots:
+                features = await loop.run_in_executor(self.pool, sample)
             return features, None, None
         except AudioError as exc:
             return None, exc.code, exc.message
@@ -413,7 +423,10 @@ class Engine:
         self._perf_sim = self.burst
         return population_rates(counts, self.model, self.model.output_keys(), bio_ms)
 
-    def _audition_blocking(self, items: list[tuple[str, Features | None, str | None]], bio_ms: float) -> list[dict]:
+    def _audition_blocking(
+        self, items: list[tuple[str, Features | None, str | None]],
+        bio_ms: float, fresh: bool = False,
+    ) -> list[dict]:
         assert self.baseline is not None
         results: list[dict] = []
         with self.burst.lock:  # type: ignore[union-attr]
@@ -443,16 +456,23 @@ class Engine:
                         "populationRates": {k: _round(v) for k, v in rates.items()},
                     }
                 )
+        for result, (_, features, _) in zip(results, items):
+            if features is not None or fresh:
+                result["sampleId"] = features.sample_id if features else uuid4().hex
+                result["sampledAtUtc"] = features.sampled_at_utc if features else datetime.now(timezone.utc).isoformat()
         return results
 
-    async def audition(self, candidates: list[tuple[str, str]], bio_ms: float) -> dict:
+    async def audition(
+        self, candidates: list[tuple[str, str]], bio_ms: float,
+        sample_seconds: float = 4, fresh: bool = False,
+    ) -> dict:
         self._require_ready()
         self._require_running()
         bio_ms = float(min(max(bio_ms, MIN_BIO_MS), MAX_BIO_MS))
-        fetched = await asyncio.gather(*(self._features_for(url) for _, url in candidates))
+        fetched = await asyncio.gather(*(self._features_for(url, sample_seconds, fresh) for _, url in candidates))
         self._require_running()
         items = [(cid, f, err) for (cid, _), (f, err, _msg) in zip(candidates, fetched)]
-        results = await asyncio.to_thread(self._audition_blocking, items, bio_ms)
+        results = await asyncio.to_thread(self._audition_blocking, items, bio_ms, fresh)
         assert self.baseline is not None
         return {
             "results": results,
@@ -466,6 +486,7 @@ class Engine:
             self.listen_rates = None
             self.listen_features = None
             self.engagement = None
+            self.output_rates = {key: 0.0 for key in (self.model.output_keys() if self.model else [])}
             self._stim_dirty = True
             return {"ok": True, "error": None, "engagement": None, "features": None, "populationRates": None}
         self._require_ready()

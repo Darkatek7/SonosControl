@@ -309,3 +309,46 @@ def test_model_loading_failure_reports_error(tmp_path):
         client.post("/v1/run/start")
         r = client.post("/v1/audition", json={"candidates": [{"id": "a", "url": "a.example/x"}]})
         assert r.status_code == 503
+
+
+def test_fresh_audition_has_distinct_timestamped_evidence_and_validates_duration(api):
+    client, _ = api
+    client.post("/v1/run/start")
+    request = {"candidates": [{"id": "a", "url": "a.example/loud"}, {"id": "b", "url": "a.example/bad"}], "sampleSeconds": 10, "fresh": True}
+    first = client.post("/v1/audition", json=request).json()["results"]
+    second = client.post("/v1/audition", json=request).json()["results"]
+    for a, b in zip(first, second):
+        assert a["sampleId"] and a["sampledAtUtc"]
+        assert a["sampleId"] != b["sampleId"]
+    for seconds in [0, 11, True, "ten", None]:
+        assert client.post("/v1/audition", json=request | {"sampleSeconds": seconds}).status_code == 400
+    assert client.post("/v1/audition", json=request | {"fresh": "yes"}).status_code == 400
+
+
+def test_audio_fetching_is_limited_to_two_concurrent_streams(fixture_model_path, tmp_path):
+    import threading
+    barrier = threading.Barrier(2)
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def sampler(url):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            barrier.wait(timeout=5)
+            return fake_features()
+        finally:
+            with lock:
+                active -= 1
+
+    client, _ = make_client(fixture_model_path, tmp_path, sampler=sampler)
+    with client:
+        wait_ready(client)
+        client.post("/v1/run/start")
+        response = client.post("/v1/audition", json={"candidates": [{"id": str(i), "url": f"radio{i}.example/live"} for i in range(8)], "fresh": True})
+        assert response.status_code == 200
+        assert all(result["ok"] for result in response.json()["results"])
+        assert peak == 2

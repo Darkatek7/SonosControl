@@ -29,7 +29,12 @@ public sealed record FlyDjCandidateScore(
     double FinalScore,
     double Probability,
     FlyDjAudioFeatures? Features,
-    string? Error);
+    string? Error)
+{
+    public int SampleCount { get; init; }
+    public int FailureCount { get; init; }
+    public DateTimeOffset? LastSampleAtUtc { get; init; }
+}
 
 public sealed record FlyDjDecisionView(
     long Id,
@@ -59,6 +64,9 @@ public sealed record FlyDjDashboardState(
     DateTimeOffset UpdatedUtc)
 {
     public bool IsScheduled { get; init; }
+    public IReadOnlyList<FlyDjStationEvidence> Evidence { get; init; } = [];
+    public DateTimeOffset? ObservationEndsAtUtc { get; init; }
+    public double ObservationWindowSeconds { get; init; }
 
     public static FlyDjDashboardState Initial(DateTimeOffset now) => new(
         FlyDjConductorStatus.Stopped, null, false, null, null, null, null,

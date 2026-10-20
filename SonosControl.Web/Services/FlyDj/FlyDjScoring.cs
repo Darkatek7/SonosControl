@@ -21,7 +21,7 @@ public static class FlyDjScoring
     public const double Temperature = 0.35;
 
     public static (int Index, double[] Probabilities, double[] Finals, double[] BrainZ, bool BrainUsed)
-        Score(IReadOnlyList<FlyDjCandidate> candidates, FlyDjAuditionResponse audition, DateTimeOffset decidedAt)
+        Score(IReadOnlyList<FlyDjCandidate> candidates, FlyDjAuditionResponse audition, DateTimeOffset decidedAt, IReadOnlySet<string>? eligibleUrls = null)
     {
         var byId = audition.Results.GroupBy(result => result.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -45,6 +45,8 @@ public static class FlyDjScoring
         foreach (var i in eligible)
             finals[i] = brainUsed ? BrainWeight * brainZ[i] + PriorWeight * candidates[i].Prior : candidates[i].Prior;
 
+        if (eligibleUrls is not null) eligible = eligible.Where(i => eligibleUrls.Contains(candidates[i].Url)).ToList();
+        if (eligible.Count == 0) throw new ArgumentException("No eligible station has usable evidence.", nameof(eligibleUrls));
         var max = eligible.Max(i => finals[i]);
         var sum = eligible.Sum(i => Math.Exp((finals[i] - max) / Temperature));
         foreach (var i in eligible) probabilities[i] = Math.Exp((finals[i] - max) / Temperature) / sum;
@@ -62,9 +64,9 @@ public static class FlyDjScoring
         return (index, probabilities, finals, brainZ, brainUsed);
     }
 
-    public static FlyDjScoredChoice Choose(IReadOnlyList<FlyDjCandidate> candidates, FlyDjAuditionResponse audition, DateTimeOffset decidedAt)
+    public static FlyDjScoredChoice Choose(IReadOnlyList<FlyDjCandidate> candidates, FlyDjAuditionResponse audition, DateTimeOffset decidedAt, IReadOnlySet<string>? eligibleUrls = null)
     {
-        var scored = Score(candidates, audition, decidedAt);
+        var scored = Score(candidates, audition, decidedAt, eligibleUrls);
         var byId = audition.Results.GroupBy(result => result.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var scores = new List<FlyDjCandidateScore>(candidates.Count);

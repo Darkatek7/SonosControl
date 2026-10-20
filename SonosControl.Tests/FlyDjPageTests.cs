@@ -47,6 +47,35 @@ public class FlyDjPageTests
         cut.WaitForAssertion(() => Assert.Contains("14.2 Hz", cut.Find("[data-qa='flydj-activity']").TextContent));
     }
 
+    [Fact]
+    public void RollingEvidenceShowsObservationDeadlineSampleCountAgeAndFailures()
+    {
+        using var harness = new Harness();
+        harness.Conductor.SetupGet(conductor => conductor.IsRunning).Returns(true);
+        var cut = harness.Render();
+        harness.Store.Update(state => state with
+        {
+            Status = FlyDjConductorStatus.Auditioning,
+            IsScheduled = true,
+            SidecarReachable = true,
+            ObservationWindowSeconds = 600,
+            ObservationEndsAtUtc = Moment.AddMinutes(10),
+            Evidence = [new FlyDjStationEvidence("Radio One", "radio.example/live", 4, 2, Moment, 1.25, false, "Collecting samples (4/6); last error: timeout")]
+        });
+        cut.WaitForAssertion(() =>
+        {
+            var text = cut.Find("[data-qa='flydj-evidence']").TextContent;
+            Assert.Contains("Radio One", text);
+            Assert.Contains("4 valid samples", text);
+            Assert.Contains("2 failed", text);
+            Assert.Contains("Insufficient evidence", text);
+            Assert.Contains("Initial observation ends", text);
+            Assert.Contains("timeout", text);
+            Assert.Contains("Observing stations before playback", cut.Markup);
+            Assert.DoesNotContain("FlyDJ is playing for a schedule", cut.Markup);
+        });
+    }
+
     private static readonly DateTimeOffset Moment = DateTimeOffset.UtcNow;
 
     private sealed class Harness : IDisposable

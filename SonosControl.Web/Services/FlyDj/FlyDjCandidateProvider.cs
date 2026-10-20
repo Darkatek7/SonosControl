@@ -25,7 +25,7 @@ public sealed class FlyDjCandidateProvider(ApplicationDbContext db, ConfiguredTi
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<IReadOnlyList<FlyDjCandidate>> GetCandidatesAsync(
-        SonosSettings settings, DateTimeOffset now, CancellationToken cancellationToken = default)
+        SonosSettings settings, DateTimeOffset now, CancellationToken cancellationToken = default, bool allStations = false)
     {
         var stations = ResolveLibrary(settings);
         if (stations.Count == 0) return [];
@@ -53,8 +53,8 @@ public sealed class FlyDjCandidateProvider(ApplicationDbContext db, ConfiguredTi
             .ThenBy(item => item.Station.Url, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var selected = ranked.Take(TopCount).ToList();
-        var rest = ranked.Skip(TopCount).ToList();
+        var selected = (allStations ? ranked : ranked.Take(TopCount)).ToList();
+        var rest = allStations ? [] : ranked.Skip(TopCount).ToList();
         TuneInStation? exploration = null;
         if (rest.Count > 0)
         {

@@ -40,7 +40,11 @@ public sealed record FlyDjSimulationState(
 
 public sealed record FlyDjAuditionCandidate(string Id, string Url);
 
-public sealed record FlyDjAuditionRequest(IReadOnlyList<FlyDjAuditionCandidate> Candidates, int BioMs = 500);
+public sealed record FlyDjAuditionRequest(IReadOnlyList<FlyDjAuditionCandidate> Candidates, int BioMs = 500)
+{
+    public double SampleSeconds { get; init; } = 4;
+    public bool Fresh { get; init; }
+}
 
 public sealed record FlyDjAuditionResult(
     string Id,
@@ -48,7 +52,11 @@ public sealed record FlyDjAuditionResult(
     string? Error,
     double? Score,
     FlyDjAudioFeatures? Features,
-    IReadOnlyDictionary<string, double>? PopulationRates);
+    IReadOnlyDictionary<string, double>? PopulationRates)
+{
+    public string? SampleId { get; init; }
+    public DateTimeOffset? SampledAtUtc { get; init; }
+}
 
 public sealed record FlyDjAuditionResponse(
     IReadOnlyList<FlyDjAuditionResult> Results,

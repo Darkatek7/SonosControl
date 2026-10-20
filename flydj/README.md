@@ -107,8 +107,18 @@ matches no neuron.
   `/v1/audition` and `/v1/listen`, `continuous` adds a paced live simulation
   while a WebSocket viewer is connected. Audition and listen run on a separate
   simulator state, so they never disturb the live picture.
+- SonosControl samples every allowed station using fresh, timestamped probes.
+  The rolling window is one sixth of minimum dwell, clamped to 30 seconds–10 minutes.
+  Sampling runs ten times per window; up to 10 seconds per probe, shortened for
+  short dwell or larger station sets. Six distinct, recent successes are needed
+  for a usable median. Initial playback waits for the window and sufficient
+  evidence; outages can extend that wait. Two leads of at least 0.3 normalized
+  points at successive comparisons are needed for an early change. At maximum
+  dwell another sufficiently measured station is chosen; without a usable
+  alternative the current station remains. Dwell starts at actual playback.
 - Safety of fetching: only http/https, no loopback, link-local (169.254/16,
   fe80::/10) or unspecified addresses (checked on every redirect hop), 2 MB and
-  8 s limits, at most 4 s of audio decoded, HLS is rejected.
+  an 18 s network budget per URL resolution, up to 10 s of audio decoded
+  (legacy requests default to 4 s), HLS is rejected. Only two fetches run concurrently.
 - Tests need no network. `tests/test_brian_parity.py` runs only if `brian2` is
   installed.

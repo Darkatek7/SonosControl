@@ -27,7 +27,18 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
 
     private const int AuditionBioMs = 500;
     private const int RecentDecisionLimit = 10;
-    private const int LowEngagementChecksToSwitch = 2;
+    private readonly FlyDjObservationWindow _observations = new();
+    private DateTimeOffset? _observationStartedAt;
+    private DateTimeOffset _nextSampleAt;
+    private DateTimeOffset _manualScanAt;
+    private DateTimeOffset _nextComparisonAt;
+    private string? _challenger;
+    private DateTimeOffset _challengerAt;
+    private FlyDjObservationPlan? _observationPlan;
+    private TimeSpan _slowestSamplingRound;
+    private sealed record ObservationBaseline(bool? Playing, string? Url, DateTimeOffset StartedAt);
+    private readonly ConcurrentDictionary<string, ObservationBaseline> _observationBaselines = new(StringComparer.OrdinalIgnoreCase);
+    private volatile bool _writingPlayback;
 
     internal static readonly TimeSpan SnapshotGrace = TimeSpan.FromSeconds(20);
     internal static readonly TimeSpan MinBackoff = TimeSpan.FromSeconds(15);
@@ -85,10 +96,6 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         string[] Rooms,
         DateTimeOffset DecidedAtUtc,
         DateTimeOffset LastCommandUtc,
-        DateTimeOffset MinDwellUntilUtc,
-        DateTimeOffset MaxDwellUntilUtc,
-        DateTimeOffset NextCheckUtc,
-        int LowEngagementStreak,
         bool Overridden);
 
     public FlyDjConductorService(
@@ -208,6 +215,15 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             _startedSchedules.Clear();
         }
         _modelReady = false;
+        _observations.Clear();
+        _observationBaselines.Clear();
+        _observationStartedAt = null;
+        _nextSampleAt = _nextComparisonAt = DateTimeOffset.MinValue;
+        _manualScanAt = _time.GetUtcNow();
+        _challenger = null;
+        _observationPlan = null;
+        _slowestSamplingRound = TimeSpan.Zero;
+        _state.Update(state => state with { Evidence = [], ObservationEndsAtUtc = null });
         _running = true;
         SetStatus(FlyDjConductorStatus.Starting, "Starting the fly brain...");
         await PersistWasRunningAsync(_manualRunning, cancellationToken);
@@ -263,6 +279,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         _modelReady = false;
         await PersistWasRunningAsync(false, cancellationToken);
         if (wasRunning) await LogAsync("FlyDjStopped", "FlyDJ stopped.", performedBy ?? DefaultActor);
+        _state.Update(state => state with { Evidence = [], ObservationEndsAtUtc = null });
         SetStatus(FlyDjConductorStatus.Stopped, null);
     }
 
@@ -356,6 +373,8 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         var now = _time.GetUtcNow();
         var settings = await LoadSettingsAsync(cancellationToken);
         var fly = settings.FlyDj;
+        var manualSince = _manualScanAt;
+        _manualScanAt = now.AddTicks(1);
         _speakerNames = settings.Speakers.Where(speaker => !string.IsNullOrWhiteSpace(speaker.IpAddress))
             .GroupBy(speaker => speaker.IpAddress.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
@@ -383,6 +402,14 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         owned.ExceptWith(scheduledRooms);
         // Manual playback later than the occurrence start keeps that room for the
         // rest of this window; switching stations must never reclaim it.
+        if (_active is null && _observationStartedAt is not null)
+        {
+            var taken = _commands.ManualSpeakersSince(manualSince).Where(ip => configured.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (taken.Length > 0)
+            {
+                await YieldRoomsAsync(taken, "Manual playback took over during observation", now, fly);
+            }
+        }
         foreach (var schedule in schedules)
             owned.UnionWith(_commands.ManualSpeakersSince(schedule.StartUtc).Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)));
         await ReleaseUnavailableActiveRoomsAsync(now, configured, owned);
@@ -414,40 +441,162 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
                     model.Message ?? string.Format(CultureInfo.InvariantCulture, "The fly brain is {0} ({1:0}%).", model.Status, percent), true);
                 return ModelPollInterval;
             }
+            await _client.ListenAsync(null, cancellationToken); // observation starts without a previous session's stimulus
             _modelReady = true;
         }
         _state.Update(state => state with { SidecarReachable = true });
 
-        var active = _active;
-        var needsDecision = active is null || available.Any(ip => !active.Rooms.Contains(ip, StringComparer.OrdinalIgnoreCase));
-        if (!needsDecision && active is not null)
+        var observationDelay = await ObserveAndChooseAsync(settings, available, cancellationToken);
+        return observationDelay + (_time.GetUtcNow() - now);
+    }
+
+    private async Task<TimeSpan> ObserveAndChooseAsync(SonosSettings settings, List<string> available, CancellationToken cancellationToken)
+    {
+        var now = _time.GetUtcNow();
+        var cycleStartedAt = now;
+        var basePlan = FlyDjObservationPlan.FromMinutes(settings.FlyDj.MinDwellMinutes);
+        if (_observationPlan != basePlan)
         {
-            if (now >= active.MaxDwellUntilUtc) needsDecision = true;
-            else if (now >= active.NextCheckUtc)
+            _observations.Clear();
+            _observationBaselines.Clear();
+            _observationStartedAt = now;
+            _nextSampleAt = now;
+            _nextComparisonAt = now;
+            _challenger = null;
+            _observationPlan = basePlan;
+            _slowestSamplingRound = TimeSpan.Zero;
+        }
+        var plan = basePlan.WithRoundDuration(_slowestSamplingRound);
+        _observationStartedAt ??= now;
+        if (_active is null)
+            foreach (var ip in available)
             {
-                var listen = await _client.ListenAsync(active.Url, cancellationToken);
-                var streak = listen.Ok && listen.Engagement is < 0 ? active.LowEngagementStreak + 1 : 0;
-                needsDecision = now >= active.MinDwellUntilUtc && streak >= LowEngagementChecksToSwitch;
-                var updated = active with
-                {
-                    LowEngagementStreak = streak,
-                    NextCheckUtc = now + TimeSpan.FromSeconds(fly.EngagementCheckSeconds)
-                };
-                lock (_stateLock)
-                    if (ReferenceEquals(_active, active)) _active = updated;
-                active = updated;
+                var snapshot = _snapshots.Get(ip);
+                _observationBaselines.TryAdd(ip, snapshot is { IsStale: false }
+                    ? new(snapshot.IsPlaying, snapshot.CurrentStationUrl, now) : new(null, null, now));
             }
-        }
-
-        if (needsDecision)
+        IReadOnlyList<FlyDjCandidate> candidates;
+        await using (var scope = _scopes.CreateAsyncScope())
+            candidates = await scope.ServiceProvider.GetRequiredService<FlyDjCandidateProvider>()
+                .GetCandidatesAsync(settings, now, cancellationToken, allStations: true);
+        if (candidates.Count == 0)
         {
-            var delay = await DecideAndPlayAsync(settings, available, now, cancellationToken);
-            if (delay is not null) return delay.Value;
-            active = _active;
+            SetStatus(FlyDjConductorStatus.Error, "FlyDJ needs at least one radio station in the library.");
+            return ScheduleRecheckInterval;
         }
-
-        var delayUntilNextCheck = ComputeDwellDelay(active);
-        return schedules.Count > 0 ? TimeSpan.FromTicks(Math.Min(delayUntilNextCheck.Ticks, ScheduleRecheckInterval.Ticks)) : delayUntilNextCheck;
+        _observations.Retain(candidates.Select(candidate => candidate.Url));
+        if (now >= _nextSampleAt)
+        {
+            // Two streams per request bounds both network fetching and time spent before checking ownership again.
+            foreach (var batch in candidates.Chunk(2))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var response = await _client.AuditionAsync(new(batch.Select(candidate => new FlyDjAuditionCandidate(candidate.Id, candidate.Url)).ToArray(), AuditionBioMs)
+                { SampleSeconds = basePlan.SampleSeconds(candidates.Count), Fresh = true }, cancellationToken);
+                var at = _time.GetUtcNow();
+                if (at - now > _slowestSamplingRound) _slowestSamplingRound = at - now;
+                plan = basePlan.WithRoundDuration(_slowestSamplingRound);
+                if (!_manualRunning && CurrentSchedules(settings, at).Count == 0) return ScheduleRecheckInterval;
+                foreach (var candidate in batch)
+                {
+                    var result = response.Results.FirstOrDefault(result => result.Id == candidate.Id);
+                    if (result is null) continue;
+                    if (result.SampleId is null || result.SampledAtUtc is null)
+                        throw new FlyDjUnavailableException("The FlyDJ sidecar does not support fresh sample evidence. Update both container images.");
+                    _observations.Add(candidate.Url, result, at, plan);
+                }
+            }
+            _nextSampleAt = now + plan.SampleInterval;
+        }
+        now = _time.GetUtcNow();
+        var (audition, evidence) = _observations.Summarize(candidates, now, plan);
+        var ready = evidence.Where(item => item.Ready).Select(item => item.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var active = _active;
+        var observationEnd = _observationStartedAt.Value + plan.Window;
+        _state.Update(state => state with { Evidence = evidence, ObservationEndsAtUtc = active is null ? observationEnd : null, ObservationWindowSeconds = plan.Window.TotalSeconds });
+        var next = _nextSampleAt > now ? _nextSampleAt - now : TimeSpan.FromSeconds(1);
+        if (active is null && (now < observationEnd || ready.Count == 0))
+        {
+            SetStatus(now >= observationEnd && ready.Count == 0 ? FlyDjConductorStatus.Error : FlyDjConductorStatus.Auditioning,
+                $"Observing {candidates.Count} stations over {FormatDelay(plan.Window)}; {ready.Count} have at least {FlyDjObservationPlan.RequiredSamples} fresh samples. " +
+                (now < observationEnd ? "Playback starts after the observation window." : "Waiting for sufficient fresh audio; no untested station will be started."));
+            SetNextDecision(now < observationEnd ? observationEnd : _nextSampleAt);
+            return next;
+        }
+        if (ready.Count == 0)
+        {
+            _challenger = null; // an observation outage interrupts consecutive comparisons
+            _nextComparisonAt = now + plan.ComparisonInterval;
+            SetStatus(FlyDjConductorStatus.Playing, "Keeping the current station while fresh audio evidence is unavailable.");
+            SetNextDecision(_nextSampleAt);
+            return next;
+        }
+        var selected = FlyDjScoring.Choose(candidates, audition, now);
+        IReadOnlySet<string>? eligible = null;
+        var selectionReason = active is null ? "Initial observation completed." : "Room availability changed.";
+        var change = active is null || available.Any(ip => !active.Rooms.Contains(ip, StringComparer.OrdinalIgnoreCase));
+        if (active is not null && !change)
+        {
+            // Apply edited dwell settings from the last actual station start.
+            var minimum = active.LastCommandUtc + TimeSpan.FromMinutes(settings.FlyDj.MinDwellMinutes);
+            var maximum = active.LastCommandUtc + TimeSpan.FromMinutes(settings.FlyDj.MaxDwellMinutes);
+            if (now >= maximum)
+            {
+                var alternatives = ready.Where(url => !MediaIdentity.Matches(url, active.Url)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                // A failed alternative must never force an untested stream onto the speakers.
+                if (alternatives.Count > 0) { eligible = alternatives; change = true; selectionReason = "Maximum dwell reached; choosing a different station with fresh evidence."; }
+                _nextComparisonAt = now + plan.ComparisonInterval;
+            }
+            else if (now >= minimum && now >= _nextComparisonAt)
+            {
+                var current = selected.Scores.FirstOrDefault(item => MediaIdentity.Matches(item.Url, active.Url) && item.Error is null);
+                var best = selected.Scores.Where(item => item.Error is null && !MediaIdentity.Matches(item.Url, active.Url)
+                    && current is not null && item.FinalScore >= current.FinalScore + FlyDjObservationPlan.SwitchMargin)
+                    .OrderByDescending(item => item.FinalScore).FirstOrDefault();
+                var last = best is null ? null : evidence.First(item => item.Url == best.Url).LastSampleAtUtc;
+                if (best is not null && _challenger == best.Url && last > _challengerAt)
+                { eligible = new HashSet<string>([best.Url], StringComparer.OrdinalIgnoreCase); change = true; selectionReason = "The alternative led by at least 0.3 normalized points at two comparisons with new samples."; }
+                else { _challenger = best?.Url; _challengerAt = now; }
+                _nextComparisonAt = now + plan.ComparisonInterval;
+            }
+            SetNextDecision(now < minimum ? minimum : _nextComparisonAt);
+        }
+        if (change)
+        {
+            var choice = FlyDjScoring.Choose(candidates, audition, now, eligible);
+            choice = choice with
+            {
+                Scores = choice.Scores.Select(score =>
+                {
+                    var item = evidence.First(item => item.Url == score.Url);
+                    return score with { SampleCount = item.SampleCount, FailureCount = item.FailureCount, LastSampleAtUtc = item.LastSampleAtUtc };
+                }).ToArray(),
+                Reason = selectionReason + " " + choice.Reason + $" Based on rolling medians over {FormatDelay(plan.Window)}; {evidence.First(item => item.Url == choice.Chosen.Url).SampleCount} distinct samples for the chosen station."
+            };
+            TimeSpan? delay;
+            _writingPlayback = true;
+            try { delay = await DecideAndPlayAsync(settings, available, cycleStartedAt, choice, cancellationToken); }
+            finally
+            {
+                // A failed/partial own write must not look like an external warmup takeover.
+                if (_active is null) foreach (var ip in available) _observationBaselines.TryRemove(ip, out _);
+                _writingPlayback = false;
+            }
+            _challenger = null;
+            if (_active is { } started)
+            {
+                _nextComparisonAt = started.LastCommandUtc + TimeSpan.FromMinutes(settings.FlyDj.MinDwellMinutes);
+                SetNextDecision(_nextComparisonAt);
+            }
+            if (delay is not null) return delay.Value;
+        }
+        else SetStatus(FlyDjConductorStatus.Playing, $"Playing {active!.Name}. Comparing rolling audio evidence from all allowed stations.");
+        // Listen only sets the live picture; its cached engagement never controls station changes.
+        if (_active is { } playing) await _client.ListenAsync(playing.Url, cancellationToken);
+        var boundary = _active is { } currentActive ? currentActive.LastCommandUtc + TimeSpan.FromMinutes(settings.FlyDj.MaxDwellMinutes) : now + next;
+        if (boundary > now) next = TimeSpan.FromTicks(Math.Min(next.Ticks, (boundary - now).Ticks));
+        if (_nextComparisonAt > now) next = TimeSpan.FromTicks(Math.Min(next.Ticks, (_nextComparisonAt - now).Ticks));
+        return next;
     }
 
     private IReadOnlyList<FlyDjSchedulePlayback> CurrentSchedules(SonosSettings settings, DateTimeOffset now)
@@ -458,19 +607,6 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         return (_scheduleOwnership?.GetFlyDjSchedules(settings, now) ?? [])
             .Where(schedule => keys.Contains(schedule.Key) && schedule.StartUtc <= now && now < schedule.StopUtc)
             .ToArray();
-    }
-
-    private TimeSpan ComputeDwellDelay(ActiveSelection? active)
-    {
-        var now = _time.GetUtcNow();
-        if (active is null)
-        {
-            SetNextDecision(null);
-            return TimeSpan.FromSeconds(1);
-        }
-        SetNextDecision(active.MaxDwellUntilUtc);
-        var next = active.NextCheckUtc < active.MaxDwellUntilUtc ? active.NextCheckUtc : active.MaxDwellUntilUtc;
-        return Max(next - now, TimeSpan.FromSeconds(1));
     }
 
     /// <summary>All target rooms are resting or owned by schedules: park the simulation.</summary>
@@ -519,28 +655,17 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
     // ---------------------------------------------------------------- decisions
 
     private async Task<TimeSpan?> DecideAndPlayAsync(
-        SonosSettings settings, List<string> available, DateTimeOffset now, CancellationToken cancellationToken)
+        SonosSettings settings, List<string> available, DateTimeOffset now, FlyDjScoredChoice choice, CancellationToken cancellationToken)
     {
         var fly = settings.FlyDj;
-        SetStatus(FlyDjConductorStatus.Auditioning, "Letting the fly brain listen to candidate stations...");
 
-        IReadOnlyList<FlyDjCandidate> candidates;
-        await using (var scope = _scopes.CreateAsyncScope())
-            candidates = await scope.ServiceProvider.GetRequiredService<FlyDjCandidateProvider>()
-                .GetCandidatesAsync(settings, now, cancellationToken);
-        if (candidates.Count == 0)
-        {
-            SetStatus(FlyDjConductorStatus.Error, "FlyDJ needs at least one radio station in the library.");
-            return ScheduleRecheckInterval;
-        }
-
-        var audition = await _client.AuditionAsync(new FlyDjAuditionRequest(
-            candidates.Select(candidate => new FlyDjAuditionCandidate(candidate.Id, candidate.Url)).ToList(), AuditionBioMs), cancellationToken);
         var decidedAt = _time.GetUtcNow();
-        var choice = FlyDjScoring.Choose(candidates, audition, decidedAt);
 
         // Manual priority: re-check just before touching any room.
-        var rooms = available.ToList();
+        await ProcessOverridesAsync(decidedAt, fly);
+        List<string> rooms;
+        lock (_stateLock) rooms = available.Where(ip => !_yielded.ContainsKey(ip)).ToList();
+        if (rooms.Count == 0) return TimeSpan.FromSeconds(1);
         var previous = _active;
         var manual = _commands.ManualSpeakersSince(now)
             .Where(ip => rooms.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToList();
@@ -590,10 +715,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         var selection = new ActiveSelection(
             decisionId, chosen.Name, chosen.Url, played.ToArray(), decidedAt,
             sameStation ? previous!.LastCommandUtc : commandAt,
-            decidedAt + TimeSpan.FromMinutes(fly.MinDwellMinutes),
-            commandAt + TimeSpan.FromMinutes(fly.MaxDwellMinutes),
-            commandAt + TimeSpan.FromSeconds(fly.EngagementCheckSeconds),
-            0, false);
+            false);
         lock (_stateLock) _active = selection;
         foreach (var ip in played) _pendingOverrides.TryRemove(ip, out _);
         PublishDecision(choice, decisionId, decidedAt, played);
@@ -612,9 +734,6 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 { _logger.LogWarning(ex, "FlyDJ could not register stop rules for its rooms."); }
             }
-            try { await _client.ListenAsync(chosen.Url, cancellationToken); }
-            catch (FlyDjException ex) when (ex is not FlyDjNotRunningException)
-            { _logger.LogDebug(ex, "FlyDJ could not set the continuous stimulus."); }
         }
         return null;
     }
@@ -728,6 +847,9 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         var active = _active;
         if (active is null)
         {
+            foreach (var group in _pendingOverrides.ToArray().Where(pair => _observationStartedAt is { } start && pair.Value.ObservedUtc >= start)
+                .GroupBy(pair => pair.Value.Reason, pair => pair.Key))
+                await YieldRoomsAsync(group.ToArray(), group.Key, now, fly);
             _pendingOverrides.Clear();
             return;
         }
@@ -769,7 +891,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
                         UntilUtc = now + TimeSpan.FromMinutes(fly.YieldCooldownMinutes),
                         YieldedAtUtc = now
                     };
-                else _yielded.Remove(pair.Key);
+                else { _yielded.Remove(pair.Key); _observationBaselines.TryRemove(pair.Key, out _); }
             }
         }
         PublishStation();
@@ -837,7 +959,29 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
     private void OnSnapshotsChanged()
     {
         var active = _active;
-        if (active is null || !_running) return;
+        if (!_running) return;
+        if (active is null)
+        {
+            if (_writingPlayback) return;
+            foreach (var (ip, baseline) in _observationBaselines)
+            {
+                lock (_stateLock) if (_yielded.ContainsKey(ip)) continue;
+                var snapshot = _snapshots.Get(ip);
+                if (snapshot is not { IsStale: false, LastSuccessfulRefreshUtc: { } at } || at <= baseline.StartedAt) continue;
+                if (baseline.Playing is null)
+                {
+                    _observationBaselines.TryUpdate(ip, new(snapshot.IsPlaying, snapshot.CurrentStationUrl, at), baseline);
+                    continue;
+                }
+                var changed = snapshot.IsPlaying != baseline.Playing
+                    || (!string.IsNullOrWhiteSpace(baseline.Url) && !string.IsNullOrWhiteSpace(snapshot.CurrentStationUrl)
+                        && !SnapshotMatchesStation(snapshot.CurrentStationUrl, baseline.Url));
+                if (!changed) continue; // volume and track metadata do not claim playback
+                _pendingOverrides[ip] = (at, "Playback changed from outside FlyDJ during observation");
+                Signal();
+            }
+            return;
+        }
         var wake = false;
         try
         {

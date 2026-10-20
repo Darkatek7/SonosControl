@@ -6,6 +6,7 @@ import asyncio
 import hmac
 import json
 import logging
+import math
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, WebSocket
@@ -167,7 +168,13 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
             bio_ms = DEFAULT_BIO_MS
         if not isinstance(bio_ms, (int, float)) or isinstance(bio_ms, bool) or bio_ms != bio_ms:
             raise ApiError(400, "invalid_request", "bioMs must be a number.")
-        return JSONResponse(await engine.audition(candidates, float(bio_ms)))
+        seconds = body.get("sampleSeconds", 4)
+        fresh = body.get("fresh", False)
+        if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not math.isfinite(seconds) or not 0.8 <= seconds <= 10:
+            raise ApiError(400, "invalid_request", "sampleSeconds must be between 0.8 and 10.")
+        if not isinstance(fresh, bool):
+            raise ApiError(400, "invalid_request", "fresh must be a boolean.")
+        return JSONResponse(await engine.audition(candidates, float(bio_ms), float(seconds), fresh))
 
     @app.post("/v1/listen")
     async def listen(request: Request):
