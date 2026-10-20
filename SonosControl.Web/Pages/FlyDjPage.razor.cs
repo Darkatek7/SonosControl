@@ -286,11 +286,15 @@ public partial class FlyDjPage : ComponentBase
             }
             if (IsRunning)
             {
+                if (_state.ObservationEndsAtUtc is { } observationEnd && _state.ActiveSpeakerIps.Count == 0)
+                    return observationEnd > DateTimeOffset.UtcNow
+                        ? $"Observing stations before playback. The initial observation ends at {FormatClock(observationEnd)}."
+                        : "Waiting for sufficient fresh audio measurements before starting playback.";
                 if (_state.IsScheduled) return "FlyDJ is playing for a schedule, using that schedule's rooms and volumes. Switching it off skips the current FlyDJ schedule occurrence.";
                 var rooms = string.Join(", ", SavedTargetRooms.Select(room => room.Name));
                 return $"FlyDJ is choosing music for {rooms}. Anything you play by hand takes priority.";
             }
-            return $"Starts auditioning your stations and plays the winner on {string.Join(", ", SavedTargetRooms.Select(room => room.Name))}.";
+            return $"Observes your stations first, then plays the winner on {string.Join(", ", SavedTargetRooms.Select(room => room.Name))}.";
         }
     }
 

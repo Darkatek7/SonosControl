@@ -291,3 +291,24 @@ def test_sample_stream_uses_the_cache(http_server):
     first = audio.sample_stream(url, cache, allow_loopback=True)
     # a second call must not hit the network (loopback is blocked now)
     assert audio.sample_stream(url, cache, allow_loopback=False) == first
+
+
+def test_fresh_sample_bypasses_cache_and_carries_identity(http_server):
+    cache = audio.FeatureCache()
+    url = f"http://{http_server}/stream.wav"
+    first = audio.sample_stream(url, cache, allow_loopback=True)
+    assert first.sample_id and first.sampled_at_utc
+    cached = audio.sample_stream(url, cache, allow_loopback=True)
+    assert cached.sample_id == first.sample_id
+    refreshed = audio.sample_stream(url, cache, allow_loopback=True, fresh=True)
+    assert refreshed.sample_id != first.sample_id
+
+
+def test_long_sample_analysis_uses_audio_after_the_old_four_second_limit():
+    import numpy as np
+    x = np.zeros(audio.SAMPLE_RATE * 10, dtype=np.float32)
+    t = np.arange(audio.SAMPLE_RATE * 6) / audio.SAMPLE_RATE
+    x[audio.SAMPLE_RATE * 4:] = 0.4 * np.sin(2 * np.pi * 100 * t)
+    assert audio.analyze(x).loudness == 0
+    long = audio.analyze(x, sample_seconds=10)
+    assert long.loudness > 0 and long.low > 0.9

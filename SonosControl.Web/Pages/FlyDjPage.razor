@@ -237,6 +237,24 @@
                     <p class="flydj-muted">@_state.StatusMessage</p>
                 }
 
+                @if (_state.Evidence.Count > 0)
+                {
+                    <div class="flydj-yielded" data-qa="flydj-evidence">
+                        <h4>Rolling audio evidence</h4>
+                        <p class="flydj-muted">Window: @FormatNumber(_state.ObservationWindowSeconds / 60, "0.#") min. Each sample is counted once. @(_state.ObservationEndsAtUtc is { } end ? $"Initial observation ends at {FormatClock(end)}." : "All allowed stations continue to be sampled.")</p>
+                        <ul>
+                            @foreach (var evidence in _state.Evidence)
+                            {
+                                <li>
+                                    <strong>@evidence.Name</strong>
+                                    <span>@evidence.SampleCount valid samples · @evidence.FailureCount failed · @(evidence.Ready ? "Ready" : "Insufficient evidence")</span>
+                                    <span>Median: @(evidence.MedianScore is { } median ? FormatNumber(median, "0.00") : "-") · Last sample: @(evidence.LastSampleAtUtc is { } at ? $"{FormatClock(at)} ({FormatRelative(at)})" : "none")</span>
+                                    @if (evidence.Error is not null) { <span>@evidence.Error</span> }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
                 @if (_state.YieldedSpeakers.Count > 0)
                 {
                     <div class="flydj-yielded" data-qa="flydj-yielded">
@@ -277,6 +295,7 @@
                                     <tr class="@(failed ? "is-failed" : null) @(IsChosen(decision, candidate) ? "is-chosen" : null)">
                                         <th scope="row">
                                             <span class="flydj-table__name">@candidate.Name</span>
+                                            @if (candidate.SampleCount > 0) { <span class="flydj-muted">@candidate.SampleCount distinct samples · @candidate.FailureCount failed</span> }
                                             @if (failed)
                                             {
                                                 <span class="flydj-table__error">Could not be heard: @candidate.Error</span>
@@ -408,6 +427,9 @@
                                     </div>
                                 </div>
 
+                                @{ var timing = FlyDjObservationPlan.FromMinutes(Math.Clamp(_draftMinDwell, 1, 240)); }
+                                <p class="form-text" data-qa="flydj-timing-preview">Planned observation: @FormatNumber(timing.Window.TotalMinutes, "0.#") min before playback, with fresh samples every @FormatNumber(timing.SampleInterval.TotalSeconds, "0.#") s. Slow streams can extend the observation window and sampling interval. Once minimum time is reached, compare every @FormatNumber(timing.ComparisonInterval.TotalSeconds, "0.#") s. At maximum time, choose another station when sufficient fresh evidence is available.</p>
+
                                 <div class="form-check form-switch flydj-check flydj-check--switch">
                                     <input class="form-check-input" type="checkbox" role="switch" id="flydj-auto-resume" @bind="_draftAutoResume" />
                                     <label class="form-check-label" for="flydj-auto-resume">Resume automatically after a restart</label>
@@ -432,6 +454,7 @@
                 <SectionCard Title="About FlyDJ" Icon="alert" Subtitle="An experiment, not a measurement." Id="flydj-about-title">
                 <div class="flydj-about" data-qa="flydj-about">
                     <p><strong>Experimental approximation.</strong> FlyDJ simulates a published map of a fruit fly's brain. The audio it hears is reduced to a few rough features, so the result is a playful guess about taste, not neuroscience.</p>
+                    <p class="flydj-muted">FlyDJ observes stations before starting. The planned observation window scales with minimum time per station (one sixth, between 30 seconds and 10 minutes), and extends when slow streams need more time. Between the minimum and maximum dwell, a better station must lead twice; at the maximum FlyDJ changes to another station with sufficient fresh evidence. Manual volume changes keep playback running.</p>
                     <ol class="flydj-steps">
                         <li><strong>Listen.</strong> A few seconds of each candidate station become loudness, rhythm and low, mid and high tone energy. These drive the neurons of the fly's hearing organ.</li>
                         <li><strong>Simulate.</strong> The signal spreads through the real wiring. Three output groups respond: approach, startle and arousal.</li>

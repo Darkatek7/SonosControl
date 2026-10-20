@@ -85,15 +85,18 @@ restarts.
 FlyDJ is an optional autonomous radio DJ in its own sidecar container. Its
 playback runs in an automation lane with these ownership rules:
 
-- Manual control always wins. Manual playback in SonosControl, in the Sonos app,
+- Manual transport/source control always wins. Volume changes preserve FlyDJ
+  playback and stop timers. Manual playback in SonosControl, in the Sonos app,
   or with the speaker's hardware buttons pauses FlyDJ for that room and starts a
   cooldown. External changes are detected through the playback snapshot monitor,
   so changes made outside the web app also count. When the cooldown ends, FlyDJ
   only takes the room back if it is quiet; while your own music is still
   playing, the cooldown starts over. When every room rests, the simulation is
   stopped so it uses no CPU.
-- Schedules own their rooms. FlyDJ does not start or change playback on a room
-  while a schedule or template owns it.
+- Ordinary schedules own their rooms. A schedule whose source is FlyDJ authorizes
+  FlyDJ in its own rooms and volumes. Manual takeover suppresses that room for
+  the rest of that FlyDJ occurrence. Its displayed end is the schedule boundary,
+  not a standalone cooldown retry.
 - Sleep timers and daily auto-stop rules still apply to rooms FlyDJ plays.
 - FlyDJ only chooses between radio stations from the library.
 

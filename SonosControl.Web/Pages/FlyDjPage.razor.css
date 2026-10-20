@@ -106,7 +106,7 @@
 /* Now and why */
 .flydj-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--spacing-xs); margin: 0; }
 .flydj-yielded ul, .flydj-recent ol { display: grid; gap: var(--spacing-xs); margin: 0; padding: 0; list-style: none; }
-.flydj-yielded li { display: grid; gap: 0.1rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--brand-warning) 40%, var(--border-subtle)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--brand-warning) 10%, var(--surface-1)); }
+.flydj-yielded li { min-width: 0; overflow-wrap: anywhere; display: grid; gap: 0.1rem; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in srgb, var(--brand-warning) 40%, var(--border-subtle)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--brand-warning) 10%, var(--surface-1)); }
 .flydj-yielded li span { color: var(--text-secondary); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .flydj-reason { margin: 0; padding: 0.6rem 0.8rem; border-left: 3px solid var(--brand-primary); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text-primary); overflow-wrap: anywhere; }
 .flydj-table-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }

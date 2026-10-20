@@ -137,6 +137,33 @@ Paused simulations hide retained activity measurements instead of presenting
 them as live values. If the server feature is disabled later, a saved
 FlyDJ schedule reports that FlyDJ must be enabled and sends no playback commands.
 
+Both container images must be updated for rolling audio evidence. At the start
+of a FlyDJ session there is an observation period: minimum dwell divided by six,
+clamped to 30 seconds–10 minutes. For example, 6/12-minute dwell observes for one
+minute; 30/60 observes for five; 60/120 observes for ten. Sampling runs every
+one tenth of that window. Probe duration adapts to cadence and station count
+(up to ten seconds), with two concurrent stream fetches. Every allowed station
+is sampled, instead of only a history-based shortlist. The page shows valid and
+failed probe counts, sample age, median and readiness. Audio is not retained;
+the web app keeps bounded in-memory measurements for the rolling window and
+persists evidence summaries with decisions. Restarting starts a new observation.
+
+At least six distinct successful probes and a latest sample no older than three
+sampling intervals are required. The latest probe must also succeed. Cached
+identities never count twice. Failed
+observations delay initial playback instead of selecting an untested stream.
+If slow streams make a sampling round longer than the planned interval, FlyDJ
+extends the cadence and rolling window to fit ten rounds with timing headroom.
+The dashboard shows that effective window; probe duration does not increase
+with network delays. This also allows short dwell settings with many stations.
+Once music starts, the configured dwell counts from that actual start. Early
+changes require a lead of at least 0.3 normalized score points at two successive
+comparisons with new evidence. Comparison spacing is minimum dwell divided by
+12, clamped to five seconds–five minutes. At maximum dwell FlyDJ chooses another
+station with sufficient evidence; if no alternative qualifies, playback stays
+on the current station and comparisons continue. Schedule end times and manual
+playback still take priority during observation and playback.
+
 FlyDJ is an optional, experimental radio DJ. It runs as a separate `flydj` Python container that is off by default and never published to the host: the web app reaches it at `http://flydj:8090` on the Compose network. The DJ chooses only between radio stations from your library and plays them on configured rooms. Its choices come from a simulation of the fruit-fly auditory connectome, which scores each candidate station by how the simulated brain responds to it. Manual control always wins; see [Operations and Observability](operations-and-observability.md#flydj-optional-experimental) for the playback ownership rules.
 
 ### Enable

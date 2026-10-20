@@ -25,17 +25,20 @@ import ssl
 import threading
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+from uuid import uuid4
 
 import numpy as np
 
 SAMPLE_RATE = 22050
-MAX_DECODE_SECONDS = 4.0
+MAX_DECODE_SECONDS = 10.0
+DEFAULT_SAMPLE_SECONDS = 4.0
 MAX_BYTES = 2 * 1024 * 1024
 MAX_PLAYLIST_BYTES = 64 * 1024
 CONNECT_TIMEOUT = 5.0
-TOTAL_TIMEOUT = 8.0
-READ_BUDGET = 5.0
+TOTAL_TIMEOUT = 18.0
+READ_BUDGET = 15.0
 MAX_REDIRECTS = 4
 CACHE_TTL_SECONDS = 120.0
 MIN_AUDIO_SECONDS = 0.8
@@ -77,6 +80,8 @@ class Features:
     onset_rate: float
     centroid_hz: float
     envelope: tuple[float, ...] = ()
+    sample_id: str | None = None
+    sampled_at_utc: str | None = None
 
     @property
     def onset(self) -> float:
@@ -253,7 +258,7 @@ def _read_limited(conn, response, limit: int, deadline: float, target: int | Non
         try:
             if conn.sock is not None:
                 conn.sock.settimeout(max(0.2, min(3.0, stop_at - now)))
-            block = response.read(min(16384, limit - total))
+            block = response.read(min(4096, limit - total))
         except socket.timeout:
             break
         except (OSError, http.client.HTTPException):
@@ -287,7 +292,10 @@ def is_hls_text(text: str) -> bool:
     return "#EXT-X-" in text or "#EXT-X-STREAM-INF" in text
 
 
-def fetch_bytes(url: str, allow_loopback: bool = False, _depth: int = 0) -> bytes:
+def fetch_bytes(
+    url: str, allow_loopback: bool = False, _depth: int = 0,
+    sample_seconds: float = DEFAULT_SAMPLE_SECONDS,
+) -> bytes:
     """Download the leading bytes of the stream behind ``url``.
 
     Follows redirects (validating every hop) and resolves ``.m3u``/``.pls``
@@ -324,14 +332,14 @@ def fetch_bytes(url: str, allow_loopback: bool = False, _depth: int = 0) -> byte
                 entry = parse_playlist(text, current)
                 if entry is None:
                     raise AudioError("unsupported_stream", "The playlist has no http(s) stream entry.")
-                return fetch_bytes(entry, allow_loopback, _depth + 1)
+                return fetch_bytes(entry, allow_loopback, _depth + 1, sample_seconds)
             target = None
             bitrate = response.getheader("icy-br")
             if bitrate and bitrate.split(",")[0].strip().isdigit():
                 kbps = min(max(int(bitrate.split(",")[0]), 16), 512)
-                target = int(kbps * 125 * (MAX_DECODE_SECONDS + 0.4))
+                target = int(kbps * 125 * (sample_seconds + 0.4))
             else:
-                target = 96 * 1024
+                target = int(512 * 125 * (sample_seconds + 0.4))
             data = _read_limited(conn, response, MAX_BYTES, deadline, target)
         finally:
             conn.close()
@@ -346,11 +354,11 @@ def fetch_bytes(url: str, allow_loopback: bool = False, _depth: int = 0) -> byte
 # ---------------------------------------------------------------------------
 
 
-def decode_audio(data: bytes) -> np.ndarray:
+def decode_audio(data: bytes, sample_seconds: float = DEFAULT_SAMPLE_SECONDS) -> np.ndarray:
     """Decode to mono float32 at ``SAMPLE_RATE`` (at most ``MAX_DECODE_SECONDS``)."""
     import av
 
-    max_samples = int(MAX_DECODE_SECONDS * SAMPLE_RATE)
+    max_samples = int(min(sample_seconds, MAX_DECODE_SECONDS) * SAMPLE_RATE)
     parts: list[np.ndarray] = []
     got = 0
     try:
@@ -380,10 +388,13 @@ def decode_audio(data: bytes) -> np.ndarray:
     return np.concatenate(parts)[:max_samples]
 
 
-def analyze(samples: np.ndarray, sample_rate: int = SAMPLE_RATE) -> Features:
+def analyze(
+    samples: np.ndarray, sample_rate: int = SAMPLE_RATE,
+    sample_seconds: float = DEFAULT_SAMPLE_SECONDS,
+) -> Features:
     """Band shares, loudness, onset rate and spectral centroid of ``samples``."""
     x = np.asarray(samples, dtype=np.float32).reshape(-1)
-    x = x[: int(MAX_DECODE_SECONDS * sample_rate)]
+    x = x[: int(min(sample_seconds, MAX_DECODE_SECONDS) * sample_rate)]
     duration = x.shape[0] / sample_rate
     if duration < MIN_AUDIO_SECONDS:
         raise AudioError("audio_too_short", "Less than a second of audio could be decoded.")
@@ -492,14 +503,22 @@ class FeatureCache:
                     del self._items[stale]
 
 
-def sample_stream(url: str, cache: FeatureCache | None = None, allow_loopback: bool = False) -> Features:
-    """Fetch, decode and analyse ``url`` (cached for 120 s)."""
+def sample_stream(
+    url: str, cache: FeatureCache | None = None, allow_loopback: bool = False,
+    sample_seconds: float = DEFAULT_SAMPLE_SECONDS, fresh: bool = False,
+) -> Features:
+    """Fetch and analyse a bounded live probe; fresh requests bypass cached evidence."""
     key = normalize_url(url)
-    if cache is not None:
-        hit = cache.get(key)
+    cache_key = key if sample_seconds == DEFAULT_SAMPLE_SECONDS else f"{key}|seconds={sample_seconds}"
+    if cache is not None and not fresh:
+        hit = cache.get(cache_key)
         if hit is not None:
             return hit
-    features = analyze(decode_audio(fetch_bytes(key, allow_loopback)))
+    data = fetch_bytes(key, allow_loopback, sample_seconds=sample_seconds)
+    samples = decode_audio(data, sample_seconds)
+    features = analyze(samples, sample_seconds=sample_seconds)
+    features = replace(features, sample_id=uuid4().hex, sampled_at_utc=datetime.now(timezone.utc).isoformat())
     if cache is not None:
-        cache.put(key, features)
+        cache.put(cache_key, features)
+        cache.put(key, features)  # the live view can reuse the latest audition without fetching again
     return features
