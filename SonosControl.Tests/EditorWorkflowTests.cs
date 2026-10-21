@@ -297,6 +297,40 @@ public class EditorWorkflowTests
         Assert.Equal(!canManage, cut.Find("#schedule-name").HasAttribute("disabled"));
     }
 
+    [Fact]
+    public void FlyDjPoolAndPrewarmingRoundTripAndEmptyPoolCannotBeSaved()
+    {
+        var settings = new SonosSettings
+        {
+            Speakers = [new() { Name = "Kitchen", IpAddress = "1.2.3.4" }],
+            Stations = [new() { Name = "One", Url = "https://one.example/live" }, new() { Name = "Two", Url = "https://two.example/live" }],
+            ScheduleWindows = [TemplateWithScene(new() { Id = "dj", Name = "FlyDJ", SourceType = SceneSourceType.FlyDj,
+                Actions = [new() { SpeakerIp = "1.2.3.4", IncludeInPlayback = true }] }, timed: true)]
+        };
+        using var ctx = CreateContext(settings);
+        var cut = ctx.Render<ScheduleWindowsPage>();
+        cut.Find(".schedule-window-select-link").Click();
+        Assert.Null(settings.ScheduleWindows[0].FlyDjCandidateStationUrls);
+        Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
+        cut.Find("#schedule-flydj-prewarm").Change(true);
+        Assert.True(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
+        cut.Find("#schedule-flydj-prewarm").Change(false);
+        Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
+        cut.Find("#schedule-flydj-custom-pool").Change(true);
+        cut.Find("#schedule-flydj-prewarm").Change(true);
+        cut.FindAll(".schedule-flydj-stations input")[0].Change(false);
+        cut.FindAll(".schedule-flydj-stations input")[1].Change(false);
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.Contains("Select at least one available station", cut.Markup));
+        Assert.Null(settings.ScheduleWindows[0].FlyDjCandidateStationUrls);
+        cut.FindAll(".schedule-flydj-stations input")[1].Change(true);
+        cut.Find(SaveButton).Click();
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "https://two.example/live" }, settings.ScheduleWindows[0].FlyDjCandidateStationUrls));
+        Assert.True(settings.ScheduleWindows[0].FlyDjPrewarm);
+        Assert.False(cut.FindComponent<UnsavedChangesGuard>().Instance.HasChanges);
+        AssertLabelledFields(cut);
+    }
+
     private static BunitContext CreateContext(SonosSettings settings, string role = "admin")
     {
         var ctx = new BunitContext();

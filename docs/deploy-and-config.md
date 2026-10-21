@@ -120,8 +120,32 @@ When FlyDJ is enabled on the server (`FLYDJ_ENABLED=true` or
 schedule's rooms, per-room volumes, synchronization and time window as usual;
 no source URL is needed. FlyDJ starts automatically during the winning time
 window, even if its standalone autopilot was off. It uses the candidate
-stations and decision preferences saved on the FlyDJ page. Multiple concurrent
-FlyDJ windows share station selection while retaining their own room settings.
+stations and decision preferences saved on the FlyDJ page. Windows without
+schedule-specific options continue to share station selection. In the schedule
+editor's **FlyDJ** section, enable **Use a separate station list for this schedule**
+to override the global pool. Select at least one available library station;
+turning the option off inherits the global pool again. A custom list never
+silently expands to every station if its entries disappear.
+
+Schedules with custom pools or preparation enabled run as independent playback
+contexts. They retain their own choices, rooms, volumes and dwell clocks. Shared
+stations reuse the same timestamped measurements; duplicate sample identities do
+not become additional evidence. **Playback context** on the FlyDJ page selects
+which context's measurements, decision and live stimulus are shown. Switching
+that view sends no speaker commands. Turning the global autopilot off skips all
+currently managed FlyDJ occurrences, including preparation; future occurrences
+can start again.
+
+**Listen before the schedule starts** is optional and off by default. Its planned
+lead is the observation window derived from minimum dwell. For 60/120-minute
+dwell, a 06:35 start prepares from 06:25. Preparation does not reserve rooms,
+set volume, group speakers or start playback. At the start, normal schedule
+priority and manual ownership checks apply again. Missing evidence delays music;
+preparation is not a guarantee of a punctual start. Editing, disabling, deleting
+or excluding an occurrence cancels or replans its preparation. The configured
+automation time zone, overnight windows and existing DST boundary rules apply.
+These schedule and stability additions require the updated SonosControl image;
+the sidecar's existing fresh-sample API is unchanged.
 
 Normal schedule priorities and date exclusions still apply per room. At the
 window's end the schedule stops its playback and releases its rooms. A manual
@@ -140,8 +164,12 @@ FlyDJ schedule reports that FlyDJ must be enabled and sends no playback commands
 Both container images must be updated for rolling audio evidence. At the start
 of a FlyDJ session there is an observation period: minimum dwell divided by six,
 clamped to 30 seconds–10 minutes. For example, 6/12-minute dwell observes for one
-minute; 30/60 observes for five; 60/120 observes for ten. Sampling runs every
-one tenth of that window. Probe duration adapts to cadence and station count
+minute; 30/60 observes for five; 60/120 observes for ten. Initial sampling runs every
+one tenth of that window. Once playing, the current station and the two best
+alternatives keep that cadence. Other ready stations with at least eight valid
+samples may use a 1.5-times longer interval; thinning stops when evidence becomes
+sparse or fails. Round order rotates to avoid always measuring the same station
+first. Probe duration adapts to cadence and station count
 (up to ten seconds), with two concurrent stream fetches. Every allowed station
 is sampled, instead of only a history-based shortlist. The page shows valid and
 failed probe counts, sample age, median and readiness. Audio is not retained;
@@ -157,8 +185,13 @@ extends the cadence and rolling window to fit ten rounds with timing headroom.
 The dashboard shows that effective window; probe duration does not increase
 with network delays. This also allows short dwell settings with many stations.
 Once music starts, the configured dwell counts from that actual start. Early
-changes require a lead of at least 0.3 normalized score points at two successive
-comparisons with new evidence. Comparison spacing is minimum dwell divided by
+changes require a lead at two successive comparisons with new evidence. The
+margin is the larger of 0.3 normalized points and the sum of both stations'
+typical score variations on the final scoring scale. Variation is 1.4826 times
+the median absolute deviation of successful raw scores; it is a robust measure
+of fluctuation, not a confidence interval. The page and stored decision summaries
+include it. Selection weights remain 70% normalized brain score and 30% listening
+habits; manual feedback, favourites and history retain their existing role. Comparison spacing is minimum dwell divided by
 12, clamped to five seconds–five minutes. At maximum dwell FlyDJ chooses another
 station with sufficient evidence; if no alternative qualifies, playback stays
 on the current station and comparisons continue. Schedule end times and manual

@@ -25,6 +25,9 @@ public class ScheduleWindow
     public List<DateOnly> AnnualExcludedDates { get; set; } = new();
     public string? SceneId { get; set; }
     public Scene? Playback { get; set; }
+    /// <summary>Null inherits the global FlyDJ pool. A custom pool must contain at least one library URL.</summary>
+    public List<string>? FlyDjCandidateStationUrls { get; set; }
+    public bool FlyDjPrewarm { get; set; }
     public int FadeInSeconds { get; set; }
     public int FadeOutSeconds { get; set; }
     public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;

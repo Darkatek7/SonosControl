@@ -46,6 +46,7 @@ public partial class FlyDjPage : ComponentBase
     private IDisposable? _viewer;
     private FlyDjDashboardState _state = FlyDjDashboardState.Initial(DateTimeOffset.UnixEpoch);
     private readonly List<ActivitySample> _history = [];
+    private string? _historySession;
 
     private bool _toggleBusy;
     private string? _actionError;
@@ -133,6 +134,8 @@ public partial class FlyDjPage : ComponentBase
 
     private void Capture(FlyDjDashboardState state)
     {
+        if (_historySession != state.SelectedSessionId) { _history.Clear(); _historySession = state.SelectedSessionId; }
+        if (SelectedContextPaused) { _history.Clear(); return; }
         if (state.Simulation is not { } simulation || !state.SidecarReachable || !simulation.Running
             || string.Equals(simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase))
         {
@@ -215,6 +218,7 @@ public partial class FlyDjPage : ComponentBase
                 return $"The brain model is being built ({FormatNumber(Math.Clamp(model.BuildProgress, 0, 1) * 100, "0")}%)";
             if (_brainMode == BrainMode.Webgl && _geometryState == "failed") return "Brain geometry unavailable. Retrying...";
             if (_brainMode == BrainMode.Webgl && _geometryState != "ready") return "Loading the brain...";
+            if (SelectedContextPaused) return "This playback context is resting. Other FlyDJ contexts can keep running.";
             if (string.Equals(_state.Simulation?.Mode, "stopped", StringComparison.OrdinalIgnoreCase))
             {
                 if (!IsRunning) return "Simulation paused. Turn on FlyDJ to watch it think.";
@@ -286,16 +290,26 @@ public partial class FlyDjPage : ComponentBase
             }
             if (IsRunning)
             {
+                if (_state.IsPrewarming && _state.ScheduledStartUtc is { } start) return $"Listening before the schedule starts at {FormatClock(start)}. Speakers remain untouched during preparation.";
                 if (_state.ObservationEndsAtUtc is { } observationEnd && _state.ActiveSpeakerIps.Count == 0)
-                    return observationEnd > DateTimeOffset.UtcNow
+                    return observationEnd > Time.GetUtcNow()
                         ? $"Observing stations before playback. The initial observation ends at {FormatClock(observationEnd)}."
                         : "Waiting for sufficient fresh audio measurements before starting playback.";
-                if (_state.IsScheduled) return "FlyDJ is playing for a schedule, using that schedule's rooms and volumes. Switching it off skips the current FlyDJ schedule occurrence.";
+                if (_state.IsScheduled) return _state.Sessions.Count > 1
+                    ? "FlyDJ is playing for schedules, using their rooms and volumes. Switching it off skips all current FlyDJ schedule occurrences."
+                    : "FlyDJ is playing for a schedule, using that schedule's rooms and volumes. Switching it off skips the current FlyDJ schedule occurrence.";
                 var rooms = string.Join(", ", SavedTargetRooms.Select(room => room.Name));
                 return $"FlyDJ is choosing music for {rooms}. Anything you play by hand takes priority.";
             }
             return $"Observes your stations first, then plays the winner on {string.Join(", ", SavedTargetRooms.Select(room => room.Name))}.";
         }
+    }
+
+    private async Task SelectSessionAsync(ChangeEventArgs args)
+    {
+        if (_conductor is null || args.Value is not string key) return;
+        try { await _conductor.SelectSessionAsync(key); _actionError = null; }
+        catch (Exception ex) { _actionError = $"Could not select the FlyDJ context: {ex.Message}"; }
     }
 
     private async Task ToggleAsync()
@@ -339,7 +353,9 @@ public partial class FlyDjPage : ComponentBase
 
     // ---- activity and statistics --------------------------------------------------------
 
-    private bool HasActivity => _state.SidecarReachable && _state.Simulation is { Running: true }
+    private bool SelectedContextPaused => _state.Sessions.Count > 1 && _state.Status is FlyDjConductorStatus.Stopped or FlyDjConductorStatus.Yielded;
+
+    private bool HasActivity => !SelectedContextPaused && _state.SidecarReachable && _state.Simulation is { Running: true }
         && !string.Equals(_state.Simulation.Mode, "stopped", StringComparison.OrdinalIgnoreCase);
 
     private IEnumerable<(string Key, double Rate)> OutputPopulations

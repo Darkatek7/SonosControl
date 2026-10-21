@@ -44,6 +44,8 @@ public sealed record FlyDjAuditionRequest(IReadOnlyList<FlyDjAuditionCandidate> 
 {
     public double SampleSeconds { get; init; } = 4;
     public bool Fresh { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public TimeSpan ReuseWithin { get; init; }
 }
 
 public sealed record FlyDjAuditionResult(
@@ -54,6 +56,7 @@ public sealed record FlyDjAuditionResult(
     FlyDjAudioFeatures? Features,
     IReadOnlyDictionary<string, double>? PopulationRates)
 {
+    public double? ScoreVariation { get; init; }
     public string? SampleId { get; init; }
     public DateTimeOffset? SampledAtUtc { get; init; }
 }

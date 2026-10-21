@@ -14,6 +14,7 @@ public interface IFlyDjConductor
     bool IsRunning { get; }
     Task StartAsync(string? performedBy, CancellationToken cancellationToken = default);
     Task StopAsync(string? performedBy, CancellationToken cancellationToken = default);
+    Task SelectSessionAsync(string sessionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 /// <summary>
@@ -21,13 +22,14 @@ public interface IFlyDjConductor
 /// While running it auditions library stations on the sidecar, plays the winner on the automation
 /// lane, watches engagement, and steps away from any room that a person or a schedule takes over.
 /// </summary>
-public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, IFlyDjScheduleConductor
+public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjConductor, IFlyDjScheduleConductor
 {
     public const string DefaultActor = "flydj";
 
     private const int AuditionBioMs = 500;
     private const int RecentDecisionLimit = 10;
     private readonly FlyDjObservationWindow _observations = new();
+    private readonly FlyDjSamplingSchedule _sampling = new();
     private DateTimeOffset? _observationStartedAt;
     private DateTimeOffset _nextSampleAt;
     private DateTimeOffset _manualScanAt;
@@ -113,14 +115,17 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         _scopes = scopes;
         _commands = commands;
         _snapshots = snapshots;
-        _state = state;
-        _client = client;
+        _dashboard = state;
+        _shared = new FlyDjSharedSidecar(client, time);
+        _state = new FlyDjStateStore(client, time, Microsoft.Extensions.Logging.Abstractions.NullLogger<FlyDjStateStore>.Instance);
+        _state.Changed += PublishDashboard;
+        _client = _shared.ForSession("standalone");
         _logger = logger;
         _scheduleOwnership = scheduleOwnership;
         _autoStop = autoStop;
     }
 
-    public bool IsRunning => _running;
+    public bool IsRunning => _running || _workers.Values.Any(worker => worker.IsRunning);
 
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -136,11 +141,20 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         await _shutdown.CancelAsync();
+        foreach (var worker in _workers.Values) await worker.StopAsync(cancellationToken);
         await base.StopAsync(cancellationToken);
+        if (_sidecarActive)
+        {
+            try { await _client.StopAsync(cancellationToken); }
+            catch (FlyDjException ex) { _logger.LogWarning(ex, "FlyDJ could not release the sidecar during shutdown."); }
+            _sidecarActive = false;
+        }
     }
 
     public override void Dispose()
     {
+        foreach (var worker in _workers.Values) worker.Dispose();
+        _state.Dispose();
         _shutdown.Dispose();
         base.Dispose();
     }
@@ -151,7 +165,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         try
         {
             await LoadRecentDecisionsAsync(stoppingToken);
-            await TryAutoResumeAsync(stoppingToken);
+            if (!_isWorker) await TryAutoResumeAsync(stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Stopped: no timers, no network. Only a Start signal wakes the loop.
@@ -183,13 +197,14 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         }
     }
 
-    public async Task StartAsync(string? performedBy, CancellationToken cancellationToken = default)
+    private async Task StartOwnAsync(string? performedBy, CancellationToken cancellationToken = default)
     {
         await _lifecycle.WaitAsync(cancellationToken);
         try
         {
             _manualRunning = true;
             _suppressedSchedules.Clear();
+            _suppressedManaged.Clear();
             await StartSessionAsync(performedBy, cancellationToken);
         }
         finally { _lifecycle.Release(); }
@@ -216,6 +231,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         }
         _modelReady = false;
         _observations.Clear();
+        _sampling.Clear();
         _observationBaselines.Clear();
         _observationStartedAt = null;
         _nextSampleAt = _nextComparisonAt = DateTimeOffset.MinValue;
@@ -231,12 +247,14 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         _startSignal.Release();
     }
 
-    public async Task StopAsync(string? performedBy, CancellationToken cancellationToken = default)
+    private async Task StopOwnAsync(string? performedBy, CancellationToken cancellationToken = default)
     {
         await _lifecycle.WaitAsync(cancellationToken);
         try
         {
             _manualRunning = false;
+            foreach (var schedule in _managedSchedules) _suppressedManaged.Add(schedule.Key);
+            foreach (var worker in _workers.Values) await worker.StopAsync(performedBy, cancellationToken);
             foreach (var schedule in _schedules) _suppressedSchedules.Add(schedule.Key);
             await StopSessionAsync(performedBy, cancellationToken);
         }
@@ -283,7 +301,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         SetStatus(FlyDjConductorStatus.Stopped, null);
     }
 
-    public async Task UpdateSchedulesAsync(IReadOnlyList<FlyDjSchedulePlayback> schedules, CancellationToken cancellationToken = default)
+    private async Task UpdateOwnSchedulesAsync(IReadOnlyList<FlyDjSchedulePlayback> schedules, CancellationToken cancellationToken = default)
     {
         await _lifecycle.WaitAsync(cancellationToken);
         try
@@ -299,13 +317,14 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             }
             // Finish in-flight auditions/writes before replacing schedule rooms or volumes.
             // A user stopping FlyDJ suppresses this occurrence, not tomorrow's schedule.
-            if (_running) await StopSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning);
+            if (_running) await StopSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning || _isWorker);
+            var previousKeys = _schedules.Select(schedule => schedule.Key).ToHashSet(StringComparer.Ordinal);
             _schedules = enabled;
             _scheduleRevision = revision;
             lock (_stateLock)
-                foreach (var ip in enabled.SelectMany(schedule => schedule.Targets)) _yielded.Remove(ip);
+                foreach (var ip in enabled.Where(schedule => !previousKeys.Contains(schedule.Key)).SelectMany(schedule => schedule.Targets)) _yielded.Remove(ip);
             if (_manualRunning || enabled.Length > 0)
-                await StartSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning);
+                await StartSessionAsync(DefaultActor, cancellationToken, preserveYielded: _manualRunning || _isWorker);
         }
         finally { _lifecycle.Release(); }
     }
@@ -389,6 +408,16 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             .Select(ip => _speakerNames.Keys.FirstOrDefault(known => string.Equals(known, ip, StringComparison.OrdinalIgnoreCase)))
             .Where(ip => ip is not null).Select(ip => ip!)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var upcoming = CurrentSchedules(settings, now, includeUpcoming: true).Where(schedule => schedule.StartUtc > now).ToArray();
+        if (configured.Count == 0 && upcoming.Length > 0)
+        {
+            if (!await EnsureModelAsync(cancellationToken)) return ModelPollInterval;
+            var start = upcoming.Min(schedule => schedule.StartUtc);
+            _state.Update(state => state with { IsPrewarming = true, ScheduledStartUtc = start });
+            var delay = await ObserveAndChooseAsync(settings, [], cancellationToken, start);
+            return delay + (_time.GetUtcNow() - now);
+        }
+        _state.Update(state => state with { IsPrewarming = false, ScheduledStartUtc = schedules.Count > 0 ? schedules.Min(schedule => schedule.StartUtc) : null });
         if (configured.Count == 0)
         {
             await DeactivateSidecarAsync(now, cancellationToken);
@@ -419,6 +448,14 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             available = configured.Where(ip => !_yielded.ContainsKey(ip) && !owned.Contains(ip)).ToList();
         if (available.Count == 0) return await RestAsync(now, configured, owned, cancellationToken);
 
+        if (!await EnsureModelAsync(cancellationToken)) return ModelPollInterval;
+
+        var observationDelay = await ObserveAndChooseAsync(settings, available, cancellationToken);
+        return observationDelay + (_time.GetUtcNow() - now);
+    }
+
+    private async Task<bool> EnsureModelAsync(CancellationToken cancellationToken)
+    {
         if (!_sidecarActive)
         {
             await _client.StartAsync(cancellationToken);
@@ -432,25 +469,24 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             if (string.Equals(model.Status, "error", StringComparison.OrdinalIgnoreCase))
             {
                 SetStatus(FlyDjConductorStatus.Error, model.Message ?? "The fly brain model failed to load.", true);
-                return ModelPollInterval;
+                return false;
             }
             if (!string.Equals(model.Status, "ready", StringComparison.OrdinalIgnoreCase))
             {
                 var percent = Math.Clamp(model.BuildProgress, 0, 1) * 100;
                 SetStatus(FlyDjConductorStatus.Starting,
                     model.Message ?? string.Format(CultureInfo.InvariantCulture, "The fly brain is {0} ({1:0}%).", model.Status, percent), true);
-                return ModelPollInterval;
+                return false;
             }
             await _client.ListenAsync(null, cancellationToken); // observation starts without a previous session's stimulus
             _modelReady = true;
         }
         _state.Update(state => state with { SidecarReachable = true });
+        return true;
 
-        var observationDelay = await ObserveAndChooseAsync(settings, available, cancellationToken);
-        return observationDelay + (_time.GetUtcNow() - now);
     }
 
-    private async Task<TimeSpan> ObserveAndChooseAsync(SonosSettings settings, List<string> available, CancellationToken cancellationToken)
+    private async Task<TimeSpan> ObserveAndChooseAsync(SonosSettings settings, List<string> available, CancellationToken cancellationToken, DateTimeOffset? prewarmStart = null)
     {
         var now = _time.GetUtcNow();
         var cycleStartedAt = now;
@@ -458,6 +494,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         if (_observationPlan != basePlan)
         {
             _observations.Clear();
+            _sampling.Clear();
             _observationBaselines.Clear();
             _observationStartedAt = now;
             _nextSampleAt = now;
@@ -468,7 +505,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         }
         var plan = basePlan.WithRoundDuration(_slowestSamplingRound);
         _observationStartedAt ??= now;
-        if (_active is null)
+        if (_active is null && prewarmStart is null)
             foreach (var ip in available)
             {
                 var snapshot = _snapshots.Get(ip);
@@ -485,20 +522,28 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             return ScheduleRecheckInterval;
         }
         _observations.Retain(candidates.Select(candidate => candidate.Url));
+        var before = _observations.Summarize(candidates, now, plan);
+        var priority = before.Evidence.Any(item => item.Ready)
+            ? FlyDjScoring.Choose(candidates, before.Audition, now).Scores.Where(item => item.Error is null)
+                .Where(item => _active is null || !MediaIdentity.Matches(item.Url, _active.Url))
+                .OrderByDescending(item => item.FinalScore).Take(2).Select(item => item.Url).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (_active is { } currentStation) priority.Add(currentStation.Url);
         if (now >= _nextSampleAt)
         {
             // Two streams per request bounds both network fetching and time spent before checking ownership again.
-            foreach (var batch in candidates.Chunk(2))
+            foreach (var batch in _sampling.Due(candidates, priority, before.Evidence, plan, now, _active is not null).Chunk(2))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var response = await _client.AuditionAsync(new(batch.Select(candidate => new FlyDjAuditionCandidate(candidate.Id, candidate.Url)).ToArray(), AuditionBioMs)
-                { SampleSeconds = basePlan.SampleSeconds(candidates.Count), Fresh = true }, cancellationToken);
+                { SampleSeconds = basePlan.SampleSeconds(settings.Stations.Count), Fresh = true, ReuseWithin = plan.SampleInterval * 0.95 }, cancellationToken);
                 var at = _time.GetUtcNow();
                 if (at - now > _slowestSamplingRound) _slowestSamplingRound = at - now;
                 plan = basePlan.WithRoundDuration(_slowestSamplingRound);
-                if (!_manualRunning && CurrentSchedules(settings, at).Count == 0) return ScheduleRecheckInterval;
+                if (!_manualRunning && CurrentSchedules(settings, at, includeUpcoming: prewarmStart is not null).Count == 0) return ScheduleRecheckInterval;
                 foreach (var candidate in batch)
                 {
+                    _sampling.Record(candidate.Url, at);
                     var result = response.Results.FirstOrDefault(result => result.Id == candidate.Id);
                     if (result is null) continue;
                     if (result.SampleId is null || result.SampledAtUtc is null)
@@ -506,15 +551,22 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
                     _observations.Add(candidate.Url, result, at, plan);
                 }
             }
-            _nextSampleAt = now + plan.SampleInterval;
+            _nextSampleAt = _sampling.Next(candidates, priority, before.Evidence, plan, _time.GetUtcNow(), _active is not null);
         }
         now = _time.GetUtcNow();
         var (audition, evidence) = _observations.Summarize(candidates, now, plan);
         var ready = evidence.Where(item => item.Ready).Select(item => item.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var active = _active;
         var observationEnd = _observationStartedAt.Value + plan.Window;
+        if (prewarmStart is { } scheduledStart) observationEnd = scheduledStart > observationEnd ? scheduledStart : observationEnd;
         _state.Update(state => state with { Evidence = evidence, ObservationEndsAtUtc = active is null ? observationEnd : null, ObservationWindowSeconds = plan.Window.TotalSeconds });
         var next = _nextSampleAt > now ? _nextSampleAt - now : TimeSpan.FromSeconds(1);
+        if (prewarmStart is { } boundaryStart)
+        {
+            SetStatus(FlyDjConductorStatus.Auditioning, $"Observing stations before the schedule starts at {FormatClock(boundaryStart)}; no speaker commands are sent during preparation.");
+            SetNextDecision(boundaryStart);
+            return TimeSpan.FromTicks(Math.Max(1, Math.Min(next.Ticks, (boundaryStart - now).Ticks)));
+        }
         if (active is null && (now < observationEnd || ready.Count == 0))
         {
             SetStatus(now >= observationEnd && ready.Count == 0 ? FlyDjConductorStatus.Error : FlyDjConductorStatus.Auditioning,
@@ -551,11 +603,11 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             {
                 var current = selected.Scores.FirstOrDefault(item => MediaIdentity.Matches(item.Url, active.Url) && item.Error is null);
                 var best = selected.Scores.Where(item => item.Error is null && !MediaIdentity.Matches(item.Url, active.Url)
-                    && current is not null && item.FinalScore >= current.FinalScore + FlyDjObservationPlan.SwitchMargin)
+                    && current is not null && FlyDjScoring.HasStableLead(current, item))
                     .OrderByDescending(item => item.FinalScore).FirstOrDefault();
                 var last = best is null ? null : evidence.First(item => item.Url == best.Url).LastSampleAtUtc;
                 if (best is not null && _challenger == best.Url && last > _challengerAt)
-                { eligible = new HashSet<string>([best.Url], StringComparer.OrdinalIgnoreCase); change = true; selectionReason = "The alternative led by at least 0.3 normalized points at two comparisons with new samples."; }
+                { eligible = new HashSet<string>([best.Url], StringComparer.OrdinalIgnoreCase); change = true; selectionReason = "The alternative led beyond the normal measurement variation and the minimum margin at two comparisons with new samples."; }
                 else { _challenger = best?.Url; _challengerAt = now; }
                 _nextComparisonAt = now + plan.ComparisonInterval;
             }
@@ -569,7 +621,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
                 Scores = choice.Scores.Select(score =>
                 {
                     var item = evidence.First(item => item.Url == score.Url);
-                    return score with { SampleCount = item.SampleCount, FailureCount = item.FailureCount, LastSampleAtUtc = item.LastSampleAtUtc };
+                    return score with { SessionKey = _sessionKey, SampleCount = item.SampleCount, FailureCount = item.FailureCount, LastSampleAtUtc = item.LastSampleAtUtc };
                 }).ToArray(),
                 Reason = selectionReason + " " + choice.Reason + $" Based on rolling medians over {FormatDelay(plan.Window)}; {evidence.First(item => item.Url == choice.Chosen.Url).SampleCount} distinct samples for the chosen station."
             };
@@ -599,13 +651,13 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         return next;
     }
 
-    private IReadOnlyList<FlyDjSchedulePlayback> CurrentSchedules(SonosSettings settings, DateTimeOffset now)
+    private IReadOnlyList<FlyDjSchedulePlayback> CurrentSchedules(SonosSettings settings, DateTimeOffset now, bool includeUpcoming = false)
     {
         // Re-evaluate before device writes as an audition can cross a boundary or
         // race an edit. A scheduler poll authorizes starts, never stale windows.
         var keys = _schedules.Select(schedule => schedule.Key).ToHashSet(StringComparer.Ordinal);
         return (_scheduleOwnership?.GetFlyDjSchedules(settings, now) ?? [])
-            .Where(schedule => keys.Contains(schedule.Key) && schedule.StartUtc <= now && now < schedule.StopUtc)
+            .Where(schedule => keys.Contains(schedule.Key) && (schedule.StartUtc <= now || (includeUpcoming && schedule.Window.FlyDjPrewarm)) && now < schedule.StopUtc)
             .ToArray();
     }
 
@@ -1058,11 +1110,19 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
         settings.Stations ??= new();
         settings.FlyDj ??= new FlyDjSettings();
         settings.FlyDj.Normalize();
+        if (_poolOverride is not null)
+        {
+            settings.FlyDj = SettingsChanges.MergeEntity(settings.FlyDj, settings.FlyDj, settings.FlyDj);
+            settings.FlyDj.CandidateStationUrls = _poolOverride.ToList();
+            // An explicit empty custom pool is invalid, never an implicit expansion to all stations.
+            if (_poolOverride.Count == 0) settings.Stations = [];
+        }
         return settings;
     }
 
     private async Task PersistWasRunningAsync(bool value, CancellationToken cancellationToken)
     {
+        if (_isWorker) return;
         try
         {
             using var scope = _scopes.CreateScope();
@@ -1157,7 +1217,7 @@ public sealed class FlyDjConductorService : BackgroundService, IFlyDjConductor, 
             var rows = await db.FlyDjDecisions.AsNoTracking()
                 .OrderByDescending(decision => decision.DecidedAtUtc).ThenByDescending(decision => decision.Id)
                 .Take(RecentDecisionLimit).ToListAsync(cancellationToken);
-            lock (_stateLock) _recent = rows.Select(ToView).ToList();
+            lock (_stateLock) _recent = rows.Select(ToView).Where(view => _sessionKey is null || view.Candidates.Any(candidate => candidate.SessionKey == _sessionKey)).ToList();
             PublishStation();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

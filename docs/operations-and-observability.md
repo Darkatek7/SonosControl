@@ -98,7 +98,21 @@ playback runs in an automation lane with these ownership rules:
   the rest of that FlyDJ occurrence. Its displayed end is the schedule boundary,
   not a standalone cooldown retry.
 - Sleep timers and daily auto-stop rules still apply to rooms FlyDJ plays.
-- FlyDJ only chooses between radio stations from the library.
+- FlyDJ only chooses between radio stations from the library. A schedule may
+  override the global candidate pool. Independent contexts share stream probes
+  and sidecar lifetime; stopping one does not pause another context's brain.
+- Optional preparation observes ahead of a schedule but never touches speakers
+  before its start. Look for **Preparing** in the context selector. The page's
+  sample counts, median, typical variation and last-sample age belong to the
+  selected context. Selection weights remain 70% brain and 30% listening habits.
+  The variation is a robust description of recent measurements, not a prediction
+  of listener approval or a statistical confidence interval.
+- If a station appears to stop receiving probes, check its evidence count and
+  freshness. Non-leading stations may be sampled less often once playing;
+  insufficient evidence returns them to the regular cadence. All contexts share
+  a two-stream fetch limit. Cancelling preparation cancels its in-flight request.
+  Context selection changes the live picture; the global autopilot switch stops
+  all currently managed contexts.
 
 The sidecar runs in one of three load modes. See the
 [sidecar API contract](../flydj/API.md#load-modes) for details.
