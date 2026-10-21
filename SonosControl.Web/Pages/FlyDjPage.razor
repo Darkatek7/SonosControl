@@ -30,6 +30,20 @@
         </div>
     </header>
 
+    @if (_state.Sessions.Count > 0)
+    {
+        <div class="flydj-session-picker" data-qa="flydj-session-picker">
+            <label for="flydj-session">Playback context</label>
+            <select id="flydj-session" class="form-select" value="@_state.SelectedSessionId" @onchange="SelectSessionAsync" disabled="@(_state.Sessions.Count < 2 || _toggleBusy)">
+                @foreach (var session in _state.Sessions)
+                {
+                    <option value="@session.Id">@session.Name @(session.IsPrewarming ? "· Preparing" : "")</option>
+                }
+            </select>
+            <p class="form-text">The live view and measurements follow this context. Each schedule keeps its own station selection.</p>
+        </div>
+    }
+
     <section class="flydj-control" aria-label="FlyDJ autopilot">
         <div class="flydj-control__copy">
             <strong id="flydj-toggle-label">FlyDJ autopilot</strong>
@@ -249,6 +263,7 @@
                                     <strong>@evidence.Name</strong>
                                     <span>@evidence.SampleCount valid samples · @evidence.FailureCount failed · @(evidence.Ready ? "Ready" : "Insufficient evidence")</span>
                                     <span>Median: @(evidence.MedianScore is { } median ? FormatNumber(median, "0.00") : "-") · Last sample: @(evidence.LastSampleAtUtc is { } at ? $"{FormatClock(at)} ({FormatRelative(at)})" : "none")</span>
+                                    @if (evidence.ScoreVariation is { } variation) { <span>Typical score variation: ±@FormatNumber(variation, "0.00")</span> }
                                     @if (evidence.Error is not null) { <span>@evidence.Error</span> }
                                 </li>
                             }
@@ -305,7 +320,7 @@
                                                 <span class="flydj-table__chosen">Chosen</span>
                                             }
                                         </th>
-                                        <td class="num">@(candidate.BrainScore is { } brain ? FormatNumber(brain, "0.00") : "-")</td>
+                                        <td class="num">@(candidate.BrainScore is { } brain ? FormatNumber(brain, "0.00") : "-")@if (candidate.ScoreVariation is { } variation) { <span class="flydj-score-variation">±@FormatNumber(variation, "0.00")</span> }</td>
                                         <td class="num flydj-col-detail">@FormatNumber(candidate.PriorScore, "0.00")</td>
                                         <td class="num">@(failed ? "-" : FormatNumber(candidate.FinalScore, "0.00"))</td>
                                         <td class="num">@FormatPercent(candidate.Probability)</td>
@@ -454,7 +469,7 @@
                 <SectionCard Title="About FlyDJ" Icon="alert" Subtitle="An experiment, not a measurement." Id="flydj-about-title">
                 <div class="flydj-about" data-qa="flydj-about">
                     <p><strong>Experimental approximation.</strong> FlyDJ simulates a published map of a fruit fly's brain. The audio it hears is reduced to a few rough features, so the result is a playful guess about taste, not neuroscience.</p>
-                    <p class="flydj-muted">FlyDJ observes stations before starting. The planned observation window scales with minimum time per station (one sixth, between 30 seconds and 10 minutes), and extends when slow streams need more time. Between the minimum and maximum dwell, a better station must lead twice; at the maximum FlyDJ changes to another station with sufficient fresh evidence. Manual volume changes keep playback running.</p>
+                    <p class="flydj-muted">FlyDJ observes stations before starting. The planned observation window scales with minimum time per station (one sixth, between 30 seconds and 10 minutes), and extends when slow streams need more time. Between the minimum and maximum dwell, a better station must lead beyond the normal score variation twice; at the maximum FlyDJ changes to another station with sufficient fresh evidence. Manual volume changes keep playback running.</p>
                     <ol class="flydj-steps">
                         <li><strong>Listen.</strong> A few seconds of each candidate station become loudness, rhythm and low, mid and high tone energy. These drive the neurons of the fly's hearing organ.</li>
                         <li><strong>Simulate.</strong> The signal spreads through the real wiring. Three output groups respond: approach, startle and arousal.</li>

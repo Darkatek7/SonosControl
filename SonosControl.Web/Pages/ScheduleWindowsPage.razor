@@ -190,6 +190,36 @@
                             <PlaybackPayloadEditor Settings="_settings" Playback="_editingWindow.Playback" CanEdit="_canManage" AllowFlyDj="_editingWindow.HasTimeSchedule" OnChanged="PlaybackChanged" />
                         }
 
+                        @if (_editingWindow.HasTimeSchedule && _editingWindow.Playback?.SourceType == SceneSourceType.FlyDj)
+                        {
+                            <section class="schedule-editor-card schedule-flydj" aria-label="FlyDJ schedule settings" data-qa="schedule-flydj-settings">
+                                <h3>FlyDJ</h3>
+                                <div class="form-check form-switch">
+                                    <input id="schedule-flydj-custom-pool" class="form-check-input" type="checkbox" role="switch" checked="@(_editingWindow.FlyDjCandidateStationUrls is not null)" @onchange="SetFlyDjCustomPool" disabled="@(!_canManage)" />
+                                    <label class="form-check-label" for="schedule-flydj-custom-pool">Use a separate station list for this schedule</label>
+                                </div>
+                                @if (_editingWindow.FlyDjCandidateStationUrls is not null)
+                                {
+                                    <fieldset class="schedule-flydj-stations">
+                                        <legend>Allowed stations</legend>
+                                        @foreach (var station in _settings.Stations.Where(station => !string.IsNullOrWhiteSpace(station.Url)))
+                                        {
+                                            <label class="form-check">
+                                                <input class="form-check-input" type="checkbox" checked="@_editingWindow.FlyDjCandidateStationUrls.Contains(station.Url, StringComparer.OrdinalIgnoreCase)" @onchange="args => SetFlyDjStation(station.Url, args.Value is true)" disabled="@(!_canManage)" />
+                                                <span>@station.Name</span>
+                                            </label>
+                                        }
+                                    </fieldset>
+                                }
+                                else { <p class="form-text">Uses the global candidate stations from FlyDJ settings.</p> }
+                                <div class="form-check form-switch">
+                                    <input id="schedule-flydj-prewarm" class="form-check-input" type="checkbox" role="switch" @bind="_editingWindow.FlyDjPrewarm" disabled="@(!_canManage)" />
+                                    <label class="form-check-label" for="schedule-flydj-prewarm">Listen before the schedule starts</label>
+                                </div>
+                                <p class="form-text">Plans @SonosControl.Web.Services.FlyDj.FlyDjObservationPlan.FromMinutes(_settings.FlyDj.MinDwellMinutes).Window.TotalMinutes.ToString("0.#", CultureInfo.InvariantCulture) minutes of preparation. Speakers start at the scheduled time when enough fresh evidence is available. Slow streams may need longer.</p>
+                            </section>
+                        }
+
                         <details class="schedule-editor-card schedule-advanced" data-qa="schedule-advanced">
                             <summary class="schedule-advanced__summary"><h3><Icon Name="timer" Size="16" /> Advanced</h3><span>Priority@(_editingWindow.HasTimeSchedule ? ", dates, fades, exclusions" : "")</span></summary>
                             <div class="schedule-form-grid">
@@ -307,7 +337,9 @@
     {
         Window = DraftTracker.Values(window),
         Excluded = window.ExcludedDates.Order(),
-        Annual = window.AnnualExcludedDates.Order()
+        Annual = window.AnnualExcludedDates.Order(),
+        window.FlyDjPrewarm,
+        FlyDjStations = window.FlyDjCandidateStationUrls?.Order(StringComparer.OrdinalIgnoreCase).ToArray()
     };
 
     private void SetTimeControl(ChangeEventArgs args)
@@ -364,6 +396,9 @@
         if (string.IsNullOrWhiteSpace(window.Name)) return "Enter a name.";
         if (window.Priority is < 0 or > 1000) return "Priority must be between 0 and 1000.";
         if (!window.HasTimeSchedule && window.Playback?.SourceType == SceneSourceType.FlyDj) return "FlyDJ requires a time schedule. Choose another source for a manual template.";
+        if (window.Playback?.SourceType == SceneSourceType.FlyDj && window.FlyDjCandidateStationUrls is { } pool
+            && !pool.Any(url => _settings!.Stations.Any(station => string.Equals(station.Url, url, StringComparison.OrdinalIgnoreCase))))
+            return "Select at least one available station for this FlyDJ schedule.";
         if (!window.HasTimeSchedule) return null;
         if (window.RecurrenceType == ScheduleRecurrenceType.CustomDays && window.DaysOfWeek.Count == 0) return "Choose at least one day for custom recurrence.";
         if (window.StartDate.HasValue && window.EndDate.HasValue && window.EndDate < window.StartDate) return "End date must be on or after the start date.";
@@ -454,6 +489,20 @@
             Volume = speaker.StartupVolume
         }).ToList() ?? new()
     };
+
+    private void SetFlyDjCustomPool(ChangeEventArgs args)
+    {
+        if (_editingWindow is null || !_canManage || _settings is null) return;
+        _editingWindow.FlyDjCandidateStationUrls = args.Value is true
+            ? (_settings.FlyDj.CandidateStationUrls.Count > 0 ? _settings.FlyDj.CandidateStationUrls.ToList() : _settings.Stations.Select(station => station.Url).ToList())
+            : null;
+    }
+    private void SetFlyDjStation(string url, bool selected)
+    {
+        if (!_canManage || _editingWindow?.FlyDjCandidateStationUrls is not { } pool) return;
+        pool.RemoveAll(item => item.Equals(url, StringComparison.OrdinalIgnoreCase));
+        if (selected) pool.Add(url);
+    }
 
     private void PlaybackChanged() => StateHasChanged();
 
@@ -762,6 +811,8 @@
             SceneId = source.SceneId,
             HasTimeSchedule = source.HasTimeSchedule,
             Playback = source.Playback is null ? null : CloneScene(source.Playback),
+            FlyDjCandidateStationUrls = source.FlyDjCandidateStationUrls?.ToList(),
+            FlyDjPrewarm = source.FlyDjPrewarm,
             FadeInSeconds = source.FadeInSeconds,
             FadeOutSeconds = source.FadeOutSeconds,
             LastModifiedUtc = source.LastModifiedUtc

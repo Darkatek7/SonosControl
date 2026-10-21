@@ -150,6 +150,12 @@ public sealed class SettingsEditingService(ISettingsRepo repository)
         Check(!window.IsEnabled || window.Playback is { Enabled: true }, "An enabled schedule must include enabled playback.");
         if (window.Playback is not null)
         {
+            if (window.Playback.SourceType == SceneSourceType.FlyDj && window.FlyDjCandidateStationUrls is { } pool)
+            {
+                window.FlyDjCandidateStationUrls = pool.Where(url => !string.IsNullOrWhiteSpace(url)).Select(url => url.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                Check(window.FlyDjCandidateStationUrls.Count > 0, "Select at least one station for the FlyDJ schedule.");
+                Check(window.FlyDjCandidateStationUrls.All(url => settings.Stations.Any(station => Equal(station.Url, url))), "A FlyDJ schedule station is no longer in the library.");
+            }
             Check(window.HasTimeSchedule || window.Playback.SourceType != SceneSourceType.FlyDj, "FlyDJ requires a time schedule.");
             Check(window.Playback.SpeakerIps?.Count > 0 || window.Playback.Actions?.Any(a => !string.IsNullOrWhiteSpace(a.SpeakerIp)) == true, "Select at least one speaker for schedule playback.");
             ValidateScene(window.Playback, settings, checkUniqueName: false);

@@ -78,6 +78,30 @@ public class FlyDjPageTests
 
     private static readonly DateTimeOffset Moment = DateTimeOffset.UtcNow;
 
+    [Fact]
+    public void ContextSelectionAndMeasurementVariationAreShownWithoutDeviceCommands()
+    {
+        using var harness = new Harness();
+        harness.Conductor.SetupGet(conductor => conductor.IsRunning).Returns(true);
+        harness.Conductor.Setup(conductor => conductor.SelectSessionAsync("second", It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var cut = harness.Render();
+        Publish(harness, FlyDjConductorStatus.Auditioning, state => state with
+        {
+            IsScheduled = true,
+            IsPrewarming = true,
+            ScheduledStartUtc = Moment.AddMinutes(5),
+            SelectedSessionId = "first",
+            Sessions = [new("first", "Morning", FlyDjConductorStatus.Auditioning, true, null, []), new("second", "Office", FlyDjConductorStatus.Playing, false, "Radio Two", ["10.0.0.2"])],
+            Evidence = [new("Radio One", "url", 10, 0, Moment, 1.2, true, null) { ScoreVariation = .25 }]
+        });
+        cut.WaitForAssertion(() => Assert.Contains("Typical score variation", cut.Find("[data-qa='flydj-evidence']").TextContent));
+        Assert.Contains("Listening before the schedule starts", cut.Markup);
+        cut.Find("#flydj-session").Change("second");
+        harness.Conductor.Verify(conductor => conductor.SelectSessionAsync("second", It.IsAny<CancellationToken>()), Times.Once);
+        harness.Conductor.Verify(conductor => conductor.StartAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        harness.Conductor.Verify(conductor => conductor.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private sealed class Harness : IDisposable
     {
         public BunitContext Context { get; } = new();

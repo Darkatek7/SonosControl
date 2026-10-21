@@ -112,10 +112,18 @@ matches no neuron.
   Sampling runs ten times per window; up to 10 seconds per probe, shortened for
   short dwell or larger station sets. Six distinct, recent successes are needed
   for a usable median. Initial playback waits for the window and sufficient
-  evidence; outages can extend that wait. Two leads of at least 0.3 normalized
-  points at successive comparisons are needed for an early change. At maximum
+  evidence; outages can extend that wait. Early leads must exceed both 0.3
+  normalized points and the combined robust score variation at two successive
+  comparisons. Variation is computed by the web app from median absolute
+  deviations; the 70% brain / 30% history weighting is unchanged. At maximum
   dwell another sufficiently measured station is chosen; without a usable
   alternative the current station remains. Dwell starts at actual playback.
+- The web app supports independent schedule pools and optional preparation
+  before a schedule. Shared probes retain their original identity and timestamp;
+  they are counted once in each context. Current and leading stations keep the
+  normal sampling cadence; other sufficiently measured stations may be probed
+  less often. Only the selected context drives the live picture. Sidecar API and
+  image changes are not required for these additions.
 - Safety of fetching: only http/https, no loopback, link-local (169.254/16,
   fe80::/10) or unspecified addresses (checked on every redirect hop), 2 MB and
   an 18 s network budget per URL resolution, up to 10 s of audio decoded

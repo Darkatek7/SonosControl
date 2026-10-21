@@ -180,3 +180,9 @@
     .flydj-switch.is-on .flydj-switch__track { background: Highlight; }
     .flydj-bar { border: 1px solid CanvasText; }
 }
+
+.flydj-session-picker { margin-bottom: var(--spacing-md); min-width: 0; }
+.flydj-session-picker label { display: block; margin-bottom: var(--spacing-xs); font-weight: 600; }
+.flydj-session-picker select { width: 100%; min-width: 0; }
+.flydj-session-picker .form-text { color: var(--text-secondary); }
+.flydj-score-variation { display: block; color: var(--text-secondary); font-size: var(--font-size-xs); }

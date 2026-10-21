@@ -20,7 +20,10 @@ public sealed record FlyDjObservationPlan(TimeSpan Window, TimeSpan SampleInterv
 }
 
 public sealed record FlyDjStationEvidence(string Name, string Url, int SampleCount, int FailureCount,
-    DateTimeOffset? LastSampleAtUtc, double? MedianScore, bool Ready, string? Error);
+    DateTimeOffset? LastSampleAtUtc, double? MedianScore, bool Ready, string? Error)
+{
+    public double? ScoreVariation { get; init; }
+}
 
 /// <summary>Bounded rolling evidence. Cached samples are never counted twice, even under another request id.</summary>
 public sealed class FlyDjObservationWindow
@@ -62,11 +65,18 @@ public sealed class FlyDjObservationWindow
             var median = valid.Length == 0 ? (double?)null : (valid[(valid.Length - 1) / 2].Score!.Value + valid[valid.Length / 2].Score!.Value) / 2;
             var error = ready ? null : items.MaxBy(item => item.At)?.Error is not null ? "Latest audio probe failed"
                 : !fresh ? "No fresh audio measurement" : $"Collecting samples ({valid.Length}/{FlyDjObservationPlan.RequiredSamples})";
+            var variation = median is null ? (double?)null : Median(valid.Select(item => Math.Abs(item.Score!.Value - median.Value))) * 1.4826;
             var failures = items.Count(item => item.Score is null);
             if (!ready && items.LastOrDefault(item => item.Error is not null)?.Error is { } failure) error += $"; last error: {failure}";
-            evidence.Add(new(candidate.Name, candidate.Url, valid.Length, failures, last?.At, median, ready, error));
-            results.Add(new(candidate.Id, ready, error, ready ? median : null, last?.Features, null));
+            evidence.Add(new(candidate.Name, candidate.Url, valid.Length, failures, last?.At, median, ready, error) { ScoreVariation = variation });
+            results.Add(new(candidate.Id, ready, error, ready ? median : null, last?.Features, null) { ScoreVariation = variation });
         }
         return (new(results, 500, new Dictionary<string, double>()), evidence);
     }
+    private static double Median(IEnumerable<double> values)
+    {
+        var sorted = values.Order().ToArray();
+        return sorted.Length == 0 ? 0 : (sorted[(sorted.Length - 1) / 2] + sorted[sorted.Length / 2]) / 2;
+    }
+
 }

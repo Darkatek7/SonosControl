@@ -467,3 +467,9 @@ html:not([data-theme='dark']) .schedule-active-strip {
     .schedule-field--wide { grid-column: auto; }
     .schedule-exclusions__add { grid-template-columns: 1fr; }
 }
+
+.schedule-flydj-stations { min-width: 0; margin: var(--spacing-md) 0; padding: 0; border: 0; }
+.schedule-flydj-stations legend { font-size: 1rem; font-weight: 600; }
+.schedule-flydj-stations .form-check { min-height: 2.75rem; display: flex; gap: var(--spacing-sm); align-items: center; }
+.schedule-flydj-stations span { min-width: 0; overflow-wrap: anywhere; }
+.schedule-flydj .form-text { color: var(--text-secondary); }

@@ -20,6 +20,10 @@ public static class FlyDjScoring
     public const double PriorWeight = 0.3;
     public const double Temperature = 0.35;
 
+    public static bool HasStableLead(FlyDjCandidateScore current, FlyDjCandidateScore challenger)
+        => current.Error is null && challenger.Error is null
+            && challenger.FinalScore >= current.FinalScore + Math.Max(FlyDjObservationPlan.SwitchMargin, current.FinalVariation + challenger.FinalVariation);
+
     public static (int Index, double[] Probabilities, double[] Finals, double[] BrainZ, bool BrainUsed)
         Score(IReadOnlyList<FlyDjCandidate> candidates, FlyDjAuditionResponse audition, DateTimeOffset decidedAt, IReadOnlySet<string>? eligibleUrls = null)
     {
@@ -69,6 +73,9 @@ public static class FlyDjScoring
         var scored = Score(candidates, audition, decidedAt, eligibleUrls);
         var byId = audition.Results.GroupBy(result => result.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var usable = audition.Results.Where(item => item.Ok && item.Score is { } value && double.IsFinite(value)).Select(item => item.Score!.Value).ToArray();
+        var mean = usable.Length == 0 ? 0 : usable.Average();
+        var spread = usable.Length == 0 ? 1 : Math.Max(1e-9, Math.Sqrt(usable.Average(value => Math.Pow(value - mean, 2))));
         var scores = new List<FlyDjCandidateScore>(candidates.Count);
         for (var i = 0; i < candidates.Count; i++)
         {
@@ -81,7 +88,11 @@ public static class FlyDjScoring
                 scored.Finals[i],
                 scored.Probabilities[i],
                 result?.Features,
-                ok ? null : result?.Error ?? (result is null ? "not auditioned" : "audition failed")));
+                ok ? null : result?.Error ?? (result is null ? "not auditioned" : "audition failed"))
+            {
+                ScoreVariation = result?.ScoreVariation,
+                FinalVariation = ok ? BrainWeight * (result?.ScoreVariation ?? 0) / spread : 0
+            });
         }
         var chosen = candidates[scored.Index];
         var reason = BuildReason(candidates, scores, scored.Index, scored.BrainUsed);

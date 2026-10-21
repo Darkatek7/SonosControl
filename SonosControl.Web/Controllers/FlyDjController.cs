@@ -47,6 +47,17 @@ public sealed class FlyDjController(
         return Ok(state.Current);
     }
 
+    public sealed record SessionSelection(string SessionId);
+
+    [HttpPost("session")]
+    public async Task<ActionResult<FlyDjDashboardState>> SelectSession(SessionSelection selection, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(selection.SessionId)) return BadRequest("Choose a FlyDJ context.");
+        try { await conductor.SelectSessionAsync(selection.SessionId, cancellationToken); }
+        catch (ArgumentException ex) { return BadRequest(ex.Message); }
+        return Ok(state.Current);
+    }
+
     /// <summary>Proxies the brain geometry with ETag revalidation so browsers download it once.</summary>
     [HttpGet("geometry")]
     public async Task<IActionResult> GetGeometry(CancellationToken cancellationToken)

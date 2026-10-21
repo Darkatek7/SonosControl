@@ -31,6 +31,9 @@ public sealed record FlyDjCandidateScore(
     FlyDjAudioFeatures? Features,
     string? Error)
 {
+    public string? SessionKey { get; init; }
+    public double? ScoreVariation { get; init; }
+    public double FinalVariation { get; init; }
     public int SampleCount { get; init; }
     public int FailureCount { get; init; }
     public DateTimeOffset? LastSampleAtUtc { get; init; }
@@ -63,6 +66,10 @@ public sealed record FlyDjDashboardState(
     DateTimeOffset? NextDecisionAtUtc,
     DateTimeOffset UpdatedUtc)
 {
+    public IReadOnlyList<FlyDjSessionView> Sessions { get; init; } = [];
+    public string? SelectedSessionId { get; init; }
+    public bool IsPrewarming { get; init; }
+    public DateTimeOffset? ScheduledStartUtc { get; init; }
     public bool IsScheduled { get; init; }
     public IReadOnlyList<FlyDjStationEvidence> Evidence { get; init; } = [];
     public DateTimeOffset? ObservationEndsAtUtc { get; init; }
@@ -78,3 +85,5 @@ public sealed record FlyDjGeometryResult(byte[]? Content, string? ETag, bool Not
 
 /// <summary>Outcome of the sidecar health probe. Never thrown, so callers can degrade gracefully.</summary>
 public sealed record FlyDjHealth(bool Reachable, bool Ok, string? ModelStatus, string? Message);
+
+public sealed record FlyDjSessionView(string Id, string Name, FlyDjConductorStatus Status, bool IsPrewarming, string? StationName, IReadOnlyList<string> SpeakerIps);

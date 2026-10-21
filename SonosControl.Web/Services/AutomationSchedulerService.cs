@@ -171,11 +171,27 @@ public sealed class AutomationSchedulerService : BackgroundService, IAutomationS
     {
         if (settings.SettingsSchemaVersion < SonosSettings.CurrentSettingsSchemaVersion) return [];
         var localNow = TimeZoneInfo.ConvertTime(utcNow, _timeZone);
-        return SelectWinningWindows(GetEligibleWindows(settings), localNow, settings)
+        var eligible = GetEligibleWindows(settings);
+        var result = SelectWinningWindows(eligible, localNow, settings)
             .Where(item => item.Window.Playback?.SourceType == SceneSourceType.FlyDj)
             .Select(item => new FlyDjSchedulePlayback(item.Window, item.Targets.ToArray(),
-                ResolveWindowStartUtc(item.Window, localNow), ResolveWindowEndUtc(item.Window, localNow)))
-            .ToArray();
+                ResolveWindowStartUtc(item.Window, localNow), ResolveWindowEndUtc(item.Window, localNow))).ToList();
+        var lead = FlyDjObservationPlan.FromMinutes(settings.FlyDj?.MinDwellMinutes ?? FlyDjSettings.DefaultMinDwellMinutes).Window;
+        foreach (var window in eligible.Where(window => window.FlyDjPrewarm && window.Playback?.SourceType == SceneSourceType.FlyDj))
+            for (var day = 0; day <= 1; day++)
+            {
+                var localStart = DateOnly.FromDateTime(localNow.DateTime).AddDays(day).ToDateTime(window.StartTime);
+                while (_timeZone.IsInvalidTime(localStart)) localStart = localStart.AddMinutes(1);
+                var start = _timeZone.IsAmbiguousTime(localStart)
+                    ? new DateTimeOffset(localStart, _timeZone.GetAmbiguousTimeOffsets(localStart).Max()).ToUniversalTime()
+                    : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localStart, _timeZone));
+                if (start <= utcNow || start - utcNow > lead) continue;
+                var startLocal = TimeZoneInfo.ConvertTime(start, _timeZone);
+                var winning = SelectWinningWindows(eligible, startLocal, settings).FirstOrDefault(item => item.Window.Id == window.Id);
+                if (winning.Window is null) continue;
+                result.Add(new(window, winning.Targets.ToArray(), start, ResolveWindowEndUtc(window, startLocal)));
+            }
+        return result.DistinctBy(schedule => schedule.Key).ToArray();
     }
 
     private static List<(ScheduleWindow Window, List<string> Targets)> SelectWinningWindows(
