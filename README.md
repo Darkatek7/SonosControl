@@ -132,6 +132,7 @@ Then open `http://localhost:5107`.
 - [Operations and Observability](docs/operations-and-observability.md)
 - [Testing and Troubleshooting](docs/testing-and-troubleshooting.md)
 - [Warning triage notes](docs/quality-warning-triage.md)
+- [Changelog](CHANGELOG.md)
 - [Contributing Guide](CONTRIBUTING.md)
 
 ## Contributing

@@ -65,6 +65,19 @@ public class AdministrationPageNavigationTests
         });
     }
 
+    [Fact]
+    public void AdministrationPage_ShowsTheBuildVersion()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureServices(ctx);
+
+        var cut = ctx.Render<AdministrationPage>();
+
+        Assert.Equal($"Version {AppVersion.Current}", cut.Find("[data-qa='app-version']").TextContent.Trim());
+        Assert.NotEqual("unknown", AppVersion.Current);
+    }
+
     private static void ConfigureServices(BunitContext ctx)
     {
         RepositoryTestServices.Register(ctx.Services);

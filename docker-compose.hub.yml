@@ -1,6 +1,7 @@
 # Use with docker-compose.yml and --no-build to run published images.
+# Set SONOSCONTROL_VERSION (for example 1.2.0, 1.2 or 1) in .env to pin a release.
 services:
   sonos:
-    image: darkatek7/sonoscontrol:latest
+    image: darkatek7/sonoscontrol:${SONOSCONTROL_VERSION:-latest}
   flydj:
-    image: darkatek7/sonoscontrol-flydj:latest
+    image: darkatek7/sonoscontrol-flydj:${SONOSCONTROL_VERSION:-latest}

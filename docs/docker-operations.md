@@ -38,6 +38,23 @@ The `latest` tags are published only after the CI workflow succeeds for a push
 to `main`; `nightly` tags follow the same rule for the `nightly` branch. A red
 CI run leaves the previously published images in place.
 
+### Pin a release
+
+Releases are also published under their version. Set `SONOSCONTROL_VERSION`
+in `.env` to choose the tag that `docker-compose.hub.yml` pulls for both images:
+
+| Value | Pulls |
+|---|---|
+| `latest` (default) | The newest commit on `main` that passed CI |
+| `1.2.0` | Exactly that release |
+| `1.2` | The newest `1.2.x` release |
+| `1` | The newest `1.x.y` release |
+
+Prereleases such as `1.3.0-rc.1` are published only under their full version.
+The running version appears on the Administration page. Release notes are on the
+[GitHub releases page](https://github.com/Darkatek7/SonosControl/releases) and in
+[CHANGELOG.md](../CHANGELOG.md).
+
 If pulling reports `pull access denied`, check that the Docker Hub repository
 is public, or use `docker login` with an account granted access.
 
