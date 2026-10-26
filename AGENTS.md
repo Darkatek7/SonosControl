@@ -121,4 +121,5 @@ Validation summary
 ## Maintenance Rule
 
 - When CI workflows, verification scripts, or required checks change, update `AGENTS.md`, `.github/workflows/docs-quality.yml`, and `.markdownlint-cli2.jsonc` in the same change.
+- Docker Hub publishing (`dockerhubpush.yml`, `nightly-build.yml`) runs only after a successful `CI` push run on `main` or `nightly` and builds that run's commit. Keep the `CI` workflow enabled and its name unchanged, or publishing stops.
 - GitHub Actions JavaScript actions should stay on Node 24-ready major versions when available, and CI should install the SDK version targeted by the projects.

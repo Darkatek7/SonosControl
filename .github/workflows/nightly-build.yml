@@ -1,14 +1,32 @@
 name: Dockerhub Nightly
 
+# Publishes only commits whose CI run on nightly succeeded.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches:
       - 'nightly'
 
+concurrency:
+  group: dockerhub-nightly
+  cancel-in-progress: true
+
 jobs:
   docker:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
+      -
+        name: Checkout tested commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -25,7 +43,7 @@ jobs:
         name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: "{{defaultContext}}:"
+          context: .
           platforms: linux/amd64
           push: true
           tags: darkatek7/sonoscontrol:nightly
@@ -33,7 +51,7 @@ jobs:
         name: Build and push FlyDJ sidecar
         uses: docker/build-push-action@v7
         with:
-          context: "{{defaultContext}}:flydj"
+          context: ./flydj
           platforms: linux/amd64,linux/arm64
           push: true
           tags: darkatek7/sonoscontrol-flydj:nightly
