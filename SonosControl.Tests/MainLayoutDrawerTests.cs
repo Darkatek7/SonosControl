@@ -159,7 +159,8 @@ public class MainLayoutDrawerTests
             Assert.DoesNotContain("app-shell--without-player", cut.Find(".app-shell").ClassList);
         });
         cut.Find(".player-surface__open").Click();
-        Assert.Single(cut.FindAll(".player-sheet"));
+        // Opening loads the queue asynchronously, so the sheet may render after Click returns.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".player-sheet")));
 
         settings.Speakers.Clear();
         await cut.InvokeAsync(playback.InitializeAsync);
