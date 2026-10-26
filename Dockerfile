@@ -10,6 +10,8 @@ RUN apt-get update \
 EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG APP_VERSION=0.0.0-dev
+ARG APP_REVISION=
 WORKDIR /src
 COPY ["SonosControl.Web/SonosControl.Web.csproj", "SonosControl.Web/"]
 COPY ["SonosControl.DAL/SonosControl.DAL.csproj", "SonosControl.DAL/"]
@@ -17,10 +19,12 @@ COPY ["SonosControl.Tests/SonosControl.Tests.csproj", "SonosControl.Tests/"]
 RUN dotnet restore "SonosControl.Web/SonosControl.Web.csproj"
 COPY . .
 WORKDIR "/src/SonosControl.Web"
-RUN dotnet build "SonosControl.Web.csproj" -c Release -o /app/build
+RUN dotnet build "SonosControl.Web.csproj" -c Release -o /app/build -p:Version="$APP_VERSION" -p:SourceRevisionId="$APP_REVISION"
 
 FROM build AS publish
-RUN dotnet publish "SonosControl.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false
+ARG APP_VERSION=0.0.0-dev
+ARG APP_REVISION=
+RUN dotnet publish "SonosControl.Web.csproj" -c Release -o /app/publish /p:UseAppHost=false -p:Version="$APP_VERSION" -p:SourceRevisionId="$APP_REVISION"
 
 FROM base AS final
 WORKDIR /app

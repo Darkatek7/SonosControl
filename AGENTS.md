@@ -22,7 +22,7 @@
 | `SonosControl.Web/**`, `SonosControl.DAL/**`, `SonosControl.Tests/**`, `*.cs`, `*.csproj`, `SonosControl.sln` | Run `dotnet test SonosControl.sln --verbosity minimal` |
 | `SonosControl.Web/Pages/**`, `SonosControl.Web/Shared/**`, `SonosControl.Web/wwwroot/css/**`, `*.razor`, `*.razor.css` | Run `python3 verify_mobile_smoke.py` on macOS/Linux or `.\run-mobile-smoke.ps1` on Windows |
 | `*.cs`, `*.csproj`, `*.razor`, `*.razor.cs`, `SonosControl.sln` | Run `dotnet format SonosControl.sln --verify-no-changes --no-restore` and the NuGet audit command below |
-| `README.md`, `docs/**`, `flydj/*.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md`, `SonosControl.Web/wwwroot/css/README.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
+| `README.md`, `docs/**`, `flydj/*.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `.markdownlint-cli2.jsonc`, `scripts/check_markdown_links.py`, `AGENTS.md`, `SonosControl.Web/wwwroot/css/README.md` | Run markdown lint and markdown link validation commands from the Required Verification Commands section |
 | `flydj/**` | Run `python3 -m pytest flydj/tests -q` inside a venv with `flydj/requirements-dev.txt` (locally `artifacts/flydj-venv`) |
 | `docs/assets/readme/**`, `capture_readme_screenshots.py`, `run-readme-screenshots.ps1`, and any UI paths from above | Recommend `.\run-readme-screenshots.ps1` and review image diffs |
 
@@ -61,17 +61,17 @@ artifacts/flydj-venv/bin/python -m pytest flydj/tests -q
 ```
 
 ```powershell
-markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CHANGELOG.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 If `markdownlint-cli2` is not installed globally, use:
 
 ```powershell
-npx --yes markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+npx --yes markdownlint-cli2 README.md "docs/**/*.md" "flydj/*.md" CONTRIBUTING.md CHANGELOG.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 ```powershell
-python scripts/check_markdown_links.py README.md docs flydj/API.md flydj/NOTICE.md flydj/README.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
+python scripts/check_markdown_links.py README.md docs flydj/API.md flydj/NOTICE.md flydj/README.md CONTRIBUTING.md CHANGELOG.md CODE_OF_CONDUCT.md SECURITY.md AGENTS.md SonosControl.Web/wwwroot/css/README.md
 ```
 
 ## Optional Verification Commands
@@ -122,4 +122,6 @@ Validation summary
 
 - When CI workflows, verification scripts, or required checks change, update `AGENTS.md`, `.github/workflows/docs-quality.yml`, and `.markdownlint-cli2.jsonc` in the same change.
 - Docker Hub publishing (`dockerhubpush.yml`, `nightly-build.yml`) runs only after a successful `CI` push run on `main` or `nightly` and builds that run's commit. Keep the `CI` workflow enabled and its name unchanged, or publishing stops.
+- All Docker builds go through the reusable `docker-publish.yml`. `release.yml` runs on `vX.Y.Z` tags: it calls `ci.yml` (`workflow_call`), then `docker-publish.yml`, then creates the GitHub release from the matching `CHANGELOG.md` section. Release steps are in `CONTRIBUTING.md#releases`.
+- Record user-facing changes under `## [Unreleased]` in `CHANGELOG.md` in the same change.
 - GitHub Actions JavaScript actions should stay on Node 24-ready major versions when available, and CI should install the SDK version targeted by the projects.

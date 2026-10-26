@@ -1,0 +1,74 @@
+name: Release
+
+# Pushing a tag like v1.2.3 runs CI on that commit, publishes versioned Docker images
+# and creates the GitHub release from the matching CHANGELOG.md section.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions: {}
+
+jobs:
+  ci:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  docker:
+    needs: ci
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      ref: ${{ github.ref_name }}
+      channel: release
+    secrets: inherit
+
+  github-release:
+    needs: docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Write release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          # Section between "## [<version>]" and the next "## [" heading.
+          awk -v heading="## [$version]" '
+            index($0, "## [") == 1 { if (found) exit; if (index($0, heading) == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > section.md
+          if ! grep -q '[^[:space:]]' section.md; then
+            echo "::warning::CHANGELOG.md has no section for [$version]; the release lists commits only."
+          fi
+          {
+            cat section.md
+            echo
+            echo "## Docker images"
+            echo
+            echo "- \`darkatek7/sonoscontrol:$version\`"
+            echo "- \`darkatek7/sonoscontrol-flydj:$version\`"
+            if previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$TAG^" 2>/dev/null); then
+              echo
+              echo "## Commits since $previous"
+              echo
+              git log --no-merges --format='- %s (%h)' "$previous..$TAG"
+            fi
+          } > notes.md
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          prerelease=()
+          if [[ "$TAG" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$TAG" --verify-tag --title "SonosControl ${TAG#v}" --notes-file notes.md "${prerelease[@]}"
