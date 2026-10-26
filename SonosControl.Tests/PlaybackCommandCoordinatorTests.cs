@@ -30,15 +30,16 @@ public sealed class PlaybackCommandCoordinatorTests
         var coordinator = new PlaybackCommandCoordinator(TimeProvider.System);
         var automation = await coordinator.EnterAutomationAsync(["room-a"], DateTimeOffset.UtcNow.AddMinutes(-1));
         Assert.NotNull(automation);
-        var canceled = false;
-        using var registration = automation.CancellationToken.Register(() => canceled = true);
+        var canceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = automation.CancellationToken.Register(() => canceled.TrySetResult());
 
         var manualTask = coordinator.EnterManualAsync(["ROOM-A"]);
-        await Task.Delay(20);
+        // Callbacks run asynchronously after CancelAsync, so wait for them instead of a fixed delay.
+        await canceled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(manualTask.IsCompleted);
         await automation.DisposeAsync();
         await using var manual = await manualTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.True(canceled);
         Assert.True(automation.WasPreempted);
         Assert.Contains("ROOM-A", coordinator.ManualSpeakersSince(DateTimeOffset.UtcNow.AddMinutes(-1)));
     }

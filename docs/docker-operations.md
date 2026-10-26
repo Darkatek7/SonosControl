@@ -34,6 +34,10 @@ to update. The override uses `darkatek7/sonoscontrol:latest` and
 images. FlyDJ supports Linux AMD64 and ARM64; the published web application
 currently supports AMD64 only (ARM64 hosts need AMD64 emulation for it).
 
+The `latest` tags are published only after the CI workflow succeeds for a push
+to `main`; `nightly` tags follow the same rule for the `nightly` branch. A red
+CI run leaves the previously published images in place.
+
 If pulling reports `pull access denied`, check that the Docker Hub repository
 is public, or use `docker login` with an account granted access.
 
