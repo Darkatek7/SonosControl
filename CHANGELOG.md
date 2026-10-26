@@ -8,7 +8,21 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
-First versioned release of the existing feature set.
+## [1.0.0] - 2026-10-26
+
+First versioned release of the existing feature set:
+
+- Home player with a sticky mini-player for queue, rooms, groups, sync, sleep
+  timer and volume.
+- One Library for TuneIn, Spotify, YouTube and YouTube Music sources, Radio
+  Browser discovery, favourites and temporary MP3 uploads.
+- Unified Schedules with per-room sources and volumes, synced playback, date
+  exceptions, fades, manual templates and per-speaker daily auto-stop rules.
+- Listening statistics, an activity trail, role-based access and recoverable
+  configuration backups.
+- Health and metrics endpoints (`/healthz`, `/metricsz`).
+- Optional, experimental FlyDJ sidecar that picks radio stations from your
+  library and always yields to manual control.
 
 ### Added
 
@@ -23,7 +37,3 @@ First versioned release of the existing feature set.
 
 - Docker Hub images for `main` and `nightly` are published only after CI passes
   for that commit.
-
-### Fixed
-
-- A manual playback preemption test no longer depends on thread pool timing.
