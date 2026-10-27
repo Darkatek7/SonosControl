@@ -8,6 +8,8 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
 ### Added
 
 - Live speaker events (on by default, `SONOS_EVENTS_ENABLED`): speakers report
@@ -30,7 +32,6 @@ see [Releases](CONTRIBUTING.md#releases).
 - Radio titles no longer show `ZPSTR_CONNECTING` or `ZPSTR_BUFFERING`, and the
   last song title stays visible while a stream reconnects instead of the stream
   file name.
-
 - FlyDJ now takes rooms back once "Stay away after manual control" has passed
   since the last manual command, even if music started by hand is still
   playing. The same cooldown applies inside FlyDJ schedules, capped at the end
