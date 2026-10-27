@@ -73,10 +73,34 @@ public class SonosEventParserTests
         Assert.Equal("DEXTER TROY - Abducted", SonosMetadataParser.ParseTrackMetadata(result.TrackMetadata!, "192.0.2.10").StreamContent);
     }
 
+    public static TheoryData<string, string, string?> RecordedPlaybackSequence => new()
+    {
+        { SonosEventFixtures.Era100AvTransportStoppedAfterPause, "STOPPED", null },
+        // Sonos puts a placeholder into streamContent while it connects to the stream.
+        { SonosEventFixtures.Era100AvTransportTransitioningAfterPlay, "TRANSITIONING", "ZPSTR_CONNECTING" },
+        { SonosEventFixtures.Era100AvTransportPlayingWithoutStreamTitle, "PLAYING", null }
+    };
+
+    [Theory]
+    [MemberData(nameof(RecordedPlaybackSequence))]
+    public void Parse_RecordedPauseAndPlay_ReportsEachTransportState(string body, string expectedState, string? expectedStreamContent)
+    {
+        var result = SonosEventParser.Parse(SonosEventService.AVTransport, body);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedState, result.TransportState);
+        Assert.Null(result.TransportUri);
+        Assert.Equal("aac://http://radiorecord.hostingradio.ru/summerparty96.aacp", result.TrackUri);
+        var track = SonosMetadataParser.ParseTrackMetadata(result.TrackMetadata!, "192.0.2.10");
+        Assert.Equal("summerparty96.aacp", track.Title);
+        Assert.Equal(expectedStreamContent, string.IsNullOrEmpty(track.StreamContent) ? null : track.StreamContent);
+    }
+
     public static TheoryData<string, int> RecordedVolumeEvents => new()
     {
         { SonosEventFixtures.Play1RenderingControlInitial, 14 },
-        { SonosEventFixtures.Era100RenderingControlInitial, 8 }
+        { SonosEventFixtures.Era100RenderingControlInitial, 8 },
+        { SonosEventFixtures.Era100RenderingControlVolumeChange, 10 }
     };
 
     [Theory]

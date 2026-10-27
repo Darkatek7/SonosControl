@@ -40,7 +40,11 @@ Recorded with a Play:1 and an Era 100 on Sonos OS 85.0 (`Server: Linux UPnP/1.0 
 - Follow-up events are partial. The `SEQ 1` event omitted `AVTransportURI` and all transport capability fields, so the Task 4 merge must keep unreported fields.
 - A radio stream title change produces an `AVTransport` event (`SEQ 1`) with new `CurrentTrackMetaData`. Radio "now playing" updates arrive live without polling.
 - Radio metadata uses the stream file name as `dc:title` and the real title in `r:streamContent`. `CurrentTrackURI` (`aac://http://...`) differs from `AVTransportURI` (`x-rincon-mp3radio://...`). Station identity must keep coming from `TransportUri`.
-- Not covered yet: play/pause, volume changes, a cleared queue, a speaker reboot, Docker networking. The two speakers belong to different Sonos households, so group behaviour (decision 2) is still open and needs two speakers from one household.
+- A second run sent Pause, Play and a volume change (8 → 10 → 8) to the Era 100 over SOAP. Each `NOTIFY` arrived within about 10 ms of the command.
+- Pause on a radio stream reports `STOPPED`, because radio cannot pause. Play goes through `TRANSITIONING` with `r:streamContent` `ZPSTR_CONNECTING`, then `TRANSITIONING` with `ZPSTR_BUFFERING`, then `PLAYING` with an empty stream title, and finally `PLAYING` with the real title, about 3.6 s in total.
+- Follow-up `RenderingControl` events carry only the volume channels (`Master`, `LF`, `RF`).
+- Not covered yet: a cleared queue, a speaker reboot, Docker networking, groups. The two speakers belong to different Sonos households, and they cannot be moved because the Sonos app cannot reach the cloud from this network (TLS inspection) and the speakers are in a different VLAN than the WLAN. Groups are therefore handled by design instead of by test (see decision 2).
+- The speakers reached the Mac on its address in the speaker VLAN, so this test did not cross a firewall between VLANs. In production the speaker VLAN must reach the SonosControl host on its app port. YouTube and MP3 playback already need the same path.
 
 ## Global Constraints
 
@@ -71,7 +75,7 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 ## Decisions to Confirm
 
 1. **Offline detection gets slower.** Without a lost event there is nothing to notice an unplugged speaker except the reconciliation probe and failed renewals. With `ReconcileSeconds = 30`, an evented speaker goes stale after 75 s (2.5 × reconcile) instead of 15 s. Recommendation: accept this. The alternative, a one-call `GetTransportInfo` liveness probe every 10 s, keeps most of the polling load.
-2. **Group members.** Polling queries every configured IP today, and the plan subscribes per configured IP to keep the same semantics. Whether a grouped member's `AVTransport` events mirror the coordinator's transport state must be checked on real hardware (see Task 8). If they do not, Task 9 maps members to their coordinator.
+2. **Group members.** Decided: do not depend on what a member reports. A member's own `AVTransport` event names its coordinator (`AVTransportURI` = `x-rincon:RINCON_<coordinator>`). While that is the case, the member's transport state, track and station come from the coordinator's snapshot when the coordinator is configured. Volume stays per speaker, because `RenderingControl` is per device. This is part of Task 4, so the hardware check no longer gates it.
 3. **Default on.** PR 2 ships the feature off by default. PR 3 turns it on after the hardware check, because the polling fallback makes a misconfigured network harmless.
 
 ---
@@ -121,7 +125,11 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - [ ] Make sure `UseHttpsRedirection` and antiforgery never touch this route.
 - [ ] `SonosEventDispatcher` (hosted, singleton) reads the channel, parses with `SonosEventParser`, checks `SEQ` (a gap requests a reconciliation probe), turns `TrackMetadata` into `SonosTrackInfo` through `ISonosConnectorRepo.ResolveTrackInfoAsync` in a scope, and merges into the store.
 - [ ] Add `PlaybackSnapshotStore.TryApplyEvent(string ip, long epoch, Func<PlaybackSnapshot, PlaybackSnapshot> merge, DateTimeOffset now)`. It calls `BeginProbe`, merges into the current snapshot, sets `IsStale = false`, `LastSuccessfulRefreshUtc = now`, clears `Error` and writes through the generation check. It returns false if there is no snapshot yet, and the dispatcher then requests a full probe.
-- [ ] Tests: event wins over an older in-flight probe; a probe started after the event wins over it; partial events keep the other fields; unknown speaker or old epoch is ignored; `Changed` fires once per applied event.
+- [ ] Merge rules from the hardware findings:
+  - `TRANSITIONING` counts as playing, so the UI does not show "Paused" for two seconds after Play or a track skip. `STOPPED` and `PAUSED_PLAYBACK` count as not playing.
+  - Stream titles starting with `ZPSTR_` (`ZPSTR_CONNECTING`, `ZPSTR_BUFFERING`) are placeholders. Treat them as empty, and keep the previous display title while the track URI is unchanged and the new stream title is empty or a placeholder. Apply the same placeholder filter to polled metadata through `SonosTrackInfo.IsValidMetadata`.
+  - A member whose `TransportUri` is `x-rincon:RINCON_<coordinator>` takes transport state, track and station from the coordinator's snapshot (decision 2).
+- [ ] Tests: event wins over an older in-flight probe; a probe started after the event wins over it; partial events keep the other fields; unknown speaker or old epoch is ignored; `Changed` fires once per applied event; the recorded Pause/Play sequence in `SonosEventFixtures` ends as playing with the real title and never shows a placeholder; a member follows its coordinator.
 
 ### Task 5: Subscription manager
 
@@ -167,12 +175,12 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - [ ] Devices page: per speaker "Live events" or "Polling", with the last event time and the last subscription error.
 - [ ] Smoke fake speaker: add `do_SUBSCRIBE` and `do_UNSUBSCRIBE`, remember callbacks, and send `NOTIFY` with `LastChange` bodies from `set_external_state`. The owned configured fixture sets `SonosEvents__CallbackBaseUrl` to the app's loopback URL and checks external Play/Pause and volume within 3 s instead of 10 s. Add a variant where `SUBSCRIBE` answers 501 and the existing 10 s checks still pass through polling.
 - [ ] Docs: callback reachability (the speaker must reach `CallbackBaseUrl`; a firewall or an authenticating reverse proxy forces polling), the new settings, the diagnostics. Sync `AGENTS.md` with the new smoke behaviour.
-- [ ] Real hardware checklist before default on: a single room, a group coordinator and a member, a stereo pair, radio, Spotify, YouTube session playback, a speaker reboot, an unplugged speaker, an app restart (old subscriptions expire on their own), Docker bridge networking with the published port.
+- [ ] Docs also cover separate VLANs: the speaker VLAN must reach `CallbackBaseUrl`, the same path YouTube and MP3 playback already need.
+- [ ] Real hardware checklist before default on. Done on 2026-10-27: single rooms on two models, radio, play/pause, volume, subscription renewal and expiry. Still open: Spotify, YouTube session playback, a cleared queue, a speaker reboot, an unplugged speaker, an app restart (old subscriptions expire on their own), Docker bridge networking with the published port, and a group or stereo pair where hardware in one household is available.
 
 ### Task 9 (optional, follow-up): Topology events
 
-- [ ] Subscribe to `/ZoneGroupTopology/Event` on one speaker, keep a coordinator map and route member state to the coordinator if Task 8 shows that member events diverge.
-- [ ] Use topology changes to refresh the group and sync UI without waiting for a probe.
+- [ ] Subscribe to `/ZoneGroupTopology/Event` on one speaker per household and use topology changes to refresh the group and sync UI without waiting for a probe. Member routing itself is already covered by Task 4.
 
 ## Delivery
 
