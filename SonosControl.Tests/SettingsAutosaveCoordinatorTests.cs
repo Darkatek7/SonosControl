@@ -52,6 +52,38 @@ public class SettingsAutosaveCoordinatorTests
         Assert.Equal(42, repository.Writes[0].Volume);
     }
 
+    [Fact]
+    public async Task Dispose_WritesAnEditStillWaitingForItsDebounce()
+    {
+        var repository = new RecordingSettingsRepo();
+        var coordinator = new SettingsAutosaveCoordinator(repository, NullLogger<SettingsAutosaveCoordinator>.Instance);
+        var settings = SettingsChanges.Track(new SonosSettings { MaxVolume = 40 });
+        settings.MaxVolume = 100;
+
+        var pending = coordinator.QueueSaveAsync(settings);
+        coordinator.Dispose();
+        await pending;
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (repository.Writes.Count == 0 && DateTime.UtcNow < deadline) await Task.Delay(10);
+        Assert.Equal(100, Assert.Single(repository.Writes).MaxVolume);
+    }
+
+    [Fact]
+    public async Task Dispose_DoesNotWriteAgainAfterTheEditWasSaved()
+    {
+        var repository = new RecordingSettingsRepo();
+        var coordinator = new SettingsAutosaveCoordinator(repository, NullLogger<SettingsAutosaveCoordinator>.Instance);
+        var settings = SettingsChanges.Track(new SonosSettings { MaxVolume = 40 });
+        settings.MaxVolume = 100;
+        await coordinator.QueueSaveAsync(settings, immediate: true);
+
+        coordinator.Dispose();
+        await Task.Delay(100);
+
+        Assert.Single(repository.Writes);
+    }
+
     private sealed class RecordingSettingsRepo : ISettingsRepo
     {
         public bool FailNextWrite { get; set; }

@@ -8,6 +8,11 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+### Fixed
+
+- A System settings change made less than half a second before closing the
+  tab is saved instead of dropped.
+
 ## [1.1.1] - 2026-10-27
 
 ### Changed
