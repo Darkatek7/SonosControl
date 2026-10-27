@@ -22,6 +22,7 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
     private SonosSettings? _pendingSource;
     private SettingsChanges? _lastFailedChanges;
     private long _generation;
+    private long _savedGeneration;
 
     public SettingsAutosaveCoordinator(ISettingsRepo settingsRepo, ILogger<SettingsAutosaveCoordinator> logger)
     {
@@ -101,6 +102,7 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
                 if (source is not null) SettingsChanges.Accept(source, changes);
                 lock (_sync)
                 {
+                    _savedGeneration = Math.Max(_savedGeneration, generation);
                     if (generation == _generation)
                     {
                         _lastFailedChanges = null;
@@ -139,13 +141,19 @@ public sealed class SettingsAutosaveCoordinator : IDisposable
 
     public void Dispose()
     {
+        long? unsaved = null;
         lock (_sync)
         {
             _debounceCts?.Cancel();
             _debounceCts?.Dispose();
             _debounceCts = null;
+            // An edit still waiting for its debounce is written now rather than dropped, for example when the
+            // tab closes right after the change. A failed save stays failed; the user already saw that error.
+            if (_pendingChanges is not null && State == SettingsSaveState.Saving && _savedGeneration < _generation)
+                unsaved = _generation;
         }
 
+        if (unsaved is { } generation) _ = SaveGenerationAsync(generation, TimeSpan.Zero, CancellationToken.None);
         // In-flight saves still release the gate after disposal.
     }
 }

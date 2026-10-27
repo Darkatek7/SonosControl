@@ -1079,10 +1079,9 @@ def verify_editor_workflows(page, output_dir, browser):
     page.locator("#maxVolume").press("Tab")
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("100")
-    save_status = page.get_by_role("status", name="Configuration save status")
     page.locator("#maxVolume").fill("40")
     expect(page.locator("#maxVolume")).to_have_value("40")
-    expect(save_status).to_have_text("Saved")
+    wait_for_settings_saved(page)
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("40")
     page.goto(f"{BASE_URL}/automation?tab=schedules", wait_until="networkidle")
@@ -1102,7 +1101,7 @@ def verify_editor_workflows(page, output_dir, browser):
     expect(cap_editor.get_by_text("Schedule window saved.", exact=True)).to_be_visible()
     page.goto(f"{BASE_URL}/administration/settings", wait_until="networkidle")
     page.locator("#maxVolume").fill("100")
-    expect(page.get_by_role("status", name="Configuration save status")).to_have_text("Saved")
+    wait_for_settings_saved(page)
     page.reload(wait_until="networkidle")
     expect(page.locator("#maxVolume")).to_have_value("100")
 
@@ -1158,6 +1157,15 @@ def verify_editor_workflows(page, output_dir, browser):
     assert room_reason == player_reason == "Daily auto-stop", f"Unexpected stop reasons: {room_reason!r}, {player_reason!r}"
     print("Editor workflows passed: real saves, time control round trip, advanced section, labels, focus, draft protection, browser back/reload, resizing, 200% text and compact Home.")
     print("Editor and playback checks passed: empty targets, legacy scenes, volume caps, bounded typing, nullable volumes, broken-cover fallback and stop-rule 'Stops at' on room card and player.")
+
+
+def wait_for_settings_saved(page):
+    """Wait for a real autosave cycle. The status already reads "Saved" before the change reaches the server,
+    so waiting for "Saved" alone can pass before the debounced save has started."""
+    page.wait_for_function(
+        "() => document.querySelector(\"[aria-label='Configuration save status']\")?.textContent.includes('Saving')",
+        timeout=10000)
+    expect(page.get_by_role("status", name="Configuration save status")).to_have_text("Saved", timeout=10000)
 
 
 def verify_volume_input(field):
