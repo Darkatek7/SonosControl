@@ -45,6 +45,17 @@ public sealed class SonosEventSubscriptionManagerTests
 
     private static SonosCommandException Rejected(HttpStatusCode status) => new(Ip, "AVTransport", "Subscribe", status, null, "rejected");
 
+    /// <summary>ExecuteAsync runs in the background, so wait for the state instead of a subscription callback.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The subscription manager did not reach the expected state.");
+            await Task.Delay(10);
+        }
+    }
+
     [Fact]
     public async Task ReconcileOnce_SubscribesAllServicesWithTokenCallbacks()
     {
@@ -206,13 +217,9 @@ public sealed class SonosEventSubscriptionManagerTests
     {
         var manager = Manager();
         Assert.Null(manager.GetStatus(Ip));
-        var subscribed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _client.Setup(client => client.SubscribeAsync(Ip, SonosEventService.RenderingControl, It.IsAny<Uri>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
-            .Callback(() => subscribed.TrySetResult())
-            .ReturnsAsync(new SonosEventSubscription("uuid:sub-rc", TimeSpan.FromSeconds(600)));
 
         await manager.StartAsync(CancellationToken.None);
-        await subscribed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => manager.GetStatus(Ip)?.Live == true);
         var status = manager.GetStatus(Ip);
         await manager.StopAsync(CancellationToken.None);
 
@@ -226,13 +233,11 @@ public sealed class SonosEventSubscriptionManagerTests
     public async Task Stopping_UnsubscribesEverything()
     {
         var manager = Manager();
-        var subscribed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _client.Setup(client => client.SubscribeAsync(Ip, SonosEventService.RenderingControl, It.IsAny<Uri>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
-            .Callback(() => subscribed.TrySetResult())
             .ReturnsAsync(new SonosEventSubscription("uuid:sub-rc", TimeSpan.FromSeconds(600)));
 
         await manager.StartAsync(CancellationToken.None);
-        await subscribed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => manager.IsHealthy(Ip));
         await manager.StopAsync(CancellationToken.None);
 
         _client.Verify(client => client.UnsubscribeAsync(Ip, SonosEventService.AVTransport, "uuid:sub-1", It.IsAny<CancellationToken>()), Times.Once);
