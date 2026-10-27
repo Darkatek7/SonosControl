@@ -89,14 +89,15 @@ playback runs in an automation lane with these ownership rules:
   playback and stop timers. Manual playback in SonosControl, in the Sonos app,
   or with the speaker's hardware buttons pauses FlyDJ for that room and starts a
   cooldown. External changes are detected through the playback snapshot monitor,
-  so changes made outside the web app also count. When the cooldown ends, FlyDJ
-  only takes the room back if it is quiet; while your own music is still
-  playing, the cooldown starts over. When every room rests, the simulation is
-  stopped so it uses no CPU.
+  so changes made outside the web app also count. The cooldown counts from the
+  last manual command in the room; another manual start during the rest starts
+  it over. When it ends, FlyDJ takes the room back even if music started by hand
+  is still playing. When every room rests, the simulation is stopped so it uses
+  no CPU.
 - Ordinary schedules own their rooms. A schedule whose source is FlyDJ authorizes
-  FlyDJ in its own rooms and volumes. Manual takeover suppresses that room for
-  the rest of that FlyDJ occurrence. Its displayed end is the schedule boundary,
-  not a standalone cooldown retry.
+  FlyDJ in its own rooms and volumes. Manual takeover rests that room for the
+  same cooldown, capped at the end of that FlyDJ occurrence. When the window
+  ends first, the displayed end is the schedule boundary.
 - Sleep timers and daily auto-stop rules still apply to rooms FlyDJ plays.
 - FlyDJ only chooses between radio stations from the library. A schedule may
   override the global candidate pool. Independent contexts share stream probes

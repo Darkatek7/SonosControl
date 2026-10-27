@@ -142,10 +142,43 @@ public sealed class FlyDjScheduleTests
         await fixture.StepAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(FlyDjConductorStatus.Yielded, fixture.Store.Current.Status);
         Assert.Null(fixture.Store.Current.NextDecisionAtUtc);
-        Assert.Contains("rest of this schedule", fixture.Store.Current.StatusMessage);
+        Assert.Contains("until this schedule ends", fixture.Store.Current.StatusMessage);
         Assert.Equal(2, fixture.Store.Current.YieldedSpeakers.Count);
         Assert.All(fixture.Store.Current.YieldedSpeakers, room => Assert.Equal(FlyDjConductorFixture.StartTime.AddHours(1), room.ScheduleEndsUtc));
     }
+
+    [Fact]
+    public async Task ScheduledManualTakeoverEndsAfterTheCooldownWhileTheWindowRuns()
+    {
+        var window = Window();
+        window.StopTime = new(16, 0);
+        await using var fixture = await FixtureAsync(window);
+        await fixture.Scheduler.EvaluateNowAsync();
+        await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, parked: true);
+        await fixture.AdvanceAsync(TimeSpan.FromSeconds(1));
+        await fixture.TakeManualControlAsync(FlyDjConductorFixture.KitchenIp, FlyDjConductorFixture.LivingIp);
+        var takenAt = fixture.Time.GetUtcNow();
+        await fixture.StepAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(FlyDjConductorStatus.Yielded, fixture.Store.Current.Status);
+        Assert.Equal(takenAt.AddMinutes(60), fixture.Store.Current.NextDecisionAtUtc);
+        Assert.All(fixture.Store.Current.YieldedSpeakers, room => Assert.Null(room.ScheduleEndsUtc));
+        var before = fixture.SceneCalls.Count;
+
+        // The person's music is still playing, but the cooldown is over: FlyDJ takes the rooms back.
+        PublishPlaying(fixture, FlyDjConductorFixture.KitchenIp);
+        PublishPlaying(fixture, FlyDjConductorFixture.LivingIp);
+        for (var minutes = 0; minutes < 61; minutes++) await fixture.AdvanceAsync(TimeSpan.FromMinutes(1));
+        await fixture.Scheduler.EvaluateNowAsync();
+        await fixture.UntilAsync(() => fixture.SceneCalls.Count > before, advance: TimeSpan.FromSeconds(30), what: "scheduled rooms taken back");
+        await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, what: "playing again", parked: true);
+        Assert.Equal(2, fixture.SceneCalls.Last().Targets!.Count);
+        Assert.Empty(fixture.Store.Current.YieldedSpeakers);
+    }
+
+    private static void PublishPlaying(FlyDjConductorFixture fixture, string ip) =>
+        fixture.Snapshots.Set(new PlaybackSnapshot(ip, ip, true, 10, "x-sonos-spotify:spotify%3atrack%3a1", null, false,
+            fixture.Time.GetUtcNow(), fixture.Time.GetUtcNow(), null));
 
     [Fact]
     public async Task VolumeAdjustmentDoesNotYieldScheduledPlayback()

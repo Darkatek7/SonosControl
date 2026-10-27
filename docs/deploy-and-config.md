@@ -149,14 +149,15 @@ the sidecar's existing fresh-sample API is unchanged.
 
 Normal schedule priorities and date exclusions still apply per room. At the
 window's end the schedule stops its playback and releases its rooms. A manual
-start during the window keeps that room away from FlyDJ for the rest of the
-occurrence. Turning FlyDJ off on its page skips the current FlyDJ occurrence;
+start during the window keeps that room away from FlyDJ for the configured
+"Stay away after manual control" time after the last manual command, but never
+beyond the end of the occurrence. Turning FlyDJ off on its page skips the current FlyDJ occurrence;
 future occurrences can start again. FlyDJ is available only for timed schedules,
 not manual playback templates. Changing a room's volume does not take over its
 playback or cancel its stop timer; FlyDJ can keep choosing stations. Successful play/pause,
 next-track and volume commands from the app are recorded in Insights → Activity
-with the user and affected room. A room taken over by manual playback is shown
-as skipped for the rest of its schedule, without a misleading cooldown retry.
+with the user and affected room. A room taken over by manual playback shows when FlyDJ takes it back, or that it
+is skipped for the rest of its schedule when the window ends first.
 Paused simulations hide retained activity measurements instead of presenting
 them as live values. If the server feature is disabled later, a saved
 FlyDJ schedule reports that FlyDJ must be enabled and sends no playback commands.

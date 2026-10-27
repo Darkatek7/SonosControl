@@ -429,24 +429,35 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
         var owned = (_scheduleOwnership?.GetScheduleOwnedSpeakers(settings, now) ?? [])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         owned.ExceptWith(scheduledRooms);
-        // Manual playback later than the occurrence start keeps that room for the
-        // rest of this window; switching stations must never reclaim it.
+        // Manual playback later than the occurrence start keeps that room for the cooldown
+        // (at most until the window ends); switching stations must never reclaim it earlier.
         if (_active is null && _observationStartedAt is not null)
         {
-            var taken = _commands.ManualSpeakersSince(manualSince).Where(ip => configured.Contains(ip, StringComparer.OrdinalIgnoreCase)).ToArray();
+            // Resting rooms are excluded: ExpireYields already counted their manual commands, and
+            // yielding them again here would restart the cooldown from this step instead.
+            string[] taken;
+            lock (_stateLock)
+                taken = _commands.ManualSpeakersSince(manualSince)
+                    .Where(ip => configured.Contains(ip, StringComparer.OrdinalIgnoreCase) && !_yielded.ContainsKey(ip)).ToArray();
             if (taken.Length > 0)
             {
                 await YieldRoomsAsync(taken, "Manual playback took over during observation", now, fly);
             }
         }
+        DateTimeOffset? claimEnds = null;
         foreach (var schedule in schedules)
-            owned.UnionWith(_commands.ManualSpeakersSince(schedule.StartUtc).Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)));
+            foreach (var ip in _commands.ManualSpeakersSince(ManualClaimSince(schedule, now, fly)).Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)))
+            {
+                owned.Add(ip);
+                var ends = _commands.LastManualStart(ip) + TimeSpan.FromMinutes(fly.YieldCooldownMinutes);
+                if (ends < schedule.StopUtc && (claimEnds is null || ends < claimEnds)) claimEnds = ends;
+            }
         await ReleaseUnavailableActiveRoomsAsync(now, configured, owned);
 
         List<string> available;
         lock (_stateLock)
             available = configured.Where(ip => !_yielded.ContainsKey(ip) && !owned.Contains(ip)).ToList();
-        if (available.Count == 0) return await RestAsync(now, configured, owned, cancellationToken);
+        if (available.Count == 0) return await RestAsync(now, configured, owned, claimEnds, cancellationToken);
 
         if (!await EnsureModelAsync(cancellationToken)) return ModelPollInterval;
 
@@ -661,22 +672,29 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
             .ToArray();
     }
 
+    /// <summary>Manual playback keeps a scheduled room for the cooldown, never beyond its own occurrence.</summary>
+    private static DateTimeOffset ManualClaimSince(FlyDjSchedulePlayback schedule, DateTimeOffset now, FlyDjSettings fly)
+    {
+        var cooldownStart = now - TimeSpan.FromMinutes(fly.YieldCooldownMinutes);
+        return cooldownStart > schedule.StartUtc ? cooldownStart : schedule.StartUtc;
+    }
+
     /// <summary>All target rooms are resting or owned by schedules: park the simulation.</summary>
-    private async Task<TimeSpan> RestAsync(DateTimeOffset now, List<string> configured, HashSet<string> owned, CancellationToken cancellationToken)
+    private async Task<TimeSpan> RestAsync(DateTimeOffset now, List<string> configured, HashSet<string> owned, DateTimeOffset? claimEnds, CancellationToken cancellationToken)
     {
         await DeactivateSidecarAsync(now, cancellationToken);
         DateTimeOffset? earliest;
         bool scheduleBlocked;
         lock (_stateLock)
         {
-            earliest = _yielded.Values.Where(item => item.ScheduleEndsUtc is null).Select(item => (DateTimeOffset?)item.UntilUtc).Min();
+            earliest = _yielded.Values.Where(item => item.ScheduleEndsUtc is null).Select(item => (DateTimeOffset?)item.UntilUtc).Append(claimEnds).Min();
             scheduleBlocked = configured.Any(ip => owned.Contains(ip));
         }
         string message;
         if (earliest is null && _schedules.Count > 0 && configured.All(ip => _schedules.Any(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase))))
-            message = "Manual playback took over the scheduled rooms. FlyDJ skips those rooms for the rest of this schedule; the next scheduled occurrence can start again.";
+            message = "Manual playback took over the scheduled rooms. FlyDJ skips those rooms until this schedule ends; the next scheduled occurrence can start again.";
         else if (earliest is not null)
-            message = $"Every FlyDJ room is resting after a takeover. FlyDJ resumes at {FormatClock(earliest.Value)} unless someone is still playing.";
+            message = $"Every FlyDJ room is resting after a takeover. FlyDJ resumes at {FormatClock(earliest.Value)}; manual control in a room restarts its rest.";
         else
             message = "Every FlyDJ room is currently used by a schedule. FlyDJ waits for it to end.";
         SetStatus(FlyDjConductorStatus.Yielded, message);
@@ -803,7 +821,7 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
         var played = new List<string>();
         foreach (var schedule in schedules)
         {
-            var manual = _commands.ManualSpeakersSince(schedule.StartUtc).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var manual = _commands.ManualSpeakersSince(ManualClaimSince(schedule, now, settings.FlyDj)).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var targets = rooms.Where(ip => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase) && !manual.Contains(ip)).ToList();
             var remaining = schedule.StopUtc - _time.GetUtcNow();
             if (targets.Count == 0 || remaining <= TimeSpan.Zero) continue;
@@ -929,20 +947,15 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
         if (due.Count == 0) return;
         foreach (var pair in due)
         {
-            // Someone played in the room while it rested, or their music is still playing (FlyDJ has
-            // stopped commanding this room, so any playback is theirs): the rest starts over.
-            var snapshot = _snapshots.Get(pair.Key);
-            var retaken = _commands.ManualSpeakersSince(pair.Value.YieldedAtUtc.AddTicks(1))
-                .Contains(pair.Key, StringComparer.OrdinalIgnoreCase)
-                || snapshot is { IsStale: false, IsPlaying: true };
+            // The cooldown counts from the last manual command in the room. Music that a person
+            // started earlier and that is still playing does not extend it: FlyDJ takes the room back.
+            var until = _commands.LastManualStart(pair.Key) is { } manual && manual > pair.Value.YieldedAtUtc
+                ? manual + TimeSpan.FromMinutes(fly.YieldCooldownMinutes)
+                : (DateTimeOffset?)null;
             lock (_stateLock)
             {
-                if (retaken)
-                    _yielded[pair.Key] = pair.Value with
-                    {
-                        UntilUtc = now + TimeSpan.FromMinutes(fly.YieldCooldownMinutes),
-                        YieldedAtUtc = now
-                    };
+                if (until > now && pair.Value.ScheduleEndsUtc is null)
+                    _yielded[pair.Key] = NewYield(pair.Key, pair.Value.Reason, now, until.Value);
                 else { _yielded.Remove(pair.Key); _observationBaselines.TryRemove(pair.Key, out _); }
             }
         }
@@ -976,11 +989,7 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
         ActiveSelection? flagged = null;
         lock (_stateLock)
         {
-            foreach (var ip in rooms)
-            {
-                var scheduleEnd = _schedules.FirstOrDefault(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase) && schedule.StopUtc > now)?.StopUtc;
-                _yielded[ip] = new YieldInfo(_speakerNames.GetValueOrDefault(ip, ip), scheduleEnd ?? now + cooldown, now, reason, scheduleEnd);
-            }
+            foreach (var ip in rooms) _yielded[ip] = NewYield(ip, reason, now, now + cooldown);
             var active = _active;
             if (active is not null)
             {
@@ -1003,9 +1012,22 @@ public sealed partial class FlyDjConductorService : BackgroundService, IFlyDjCon
         if (ended is not null) await EndDecisionAsync(ended, now);
         else if (flagged is not null) await UpdateDecisionAsync(flagged.DecisionId, decision => decision.OverriddenByUser = true);
         var names = string.Join(", ", rooms.Select(ip => _speakerNames.GetValueOrDefault(ip, ip)));
-        var scheduled = rooms.Any(ip => _schedules.Any(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase)));
-        await LogAsync("FlyDjYielded", $"{reason} in {names}; " + (scheduled ? "FlyDJ skips scheduled rooms for the rest of their occurrence." : $"FlyDJ steps away for {fly.YieldCooldownMinutes} min."), DefaultActor);
+        bool restOfSchedule;
+        lock (_stateLock) restOfSchedule = rooms.All(ip => _yielded.TryGetValue(ip, out var item) && item.ScheduleEndsUtc is not null);
+        await LogAsync("FlyDjYielded", $"{reason} in {names}; " + (restOfSchedule
+            ? "FlyDJ skips these rooms for the rest of their schedule."
+            : $"FlyDJ steps away for {fly.YieldCooldownMinutes} min after the last manual control."), DefaultActor);
         PublishStation();
+    }
+
+    /// <summary>A rest ends after the cooldown; inside a FlyDJ schedule it never outlasts the occurrence.</summary>
+    private YieldInfo NewYield(string ip, string reason, DateTimeOffset yieldedAt, DateTimeOffset until)
+    {
+        var scheduleEnd = _schedules.Where(schedule => schedule.Targets.Contains(ip, StringComparer.OrdinalIgnoreCase) && schedule.StopUtc > yieldedAt)
+            .Select(schedule => (DateTimeOffset?)schedule.StopUtc).Min();
+        return scheduleEnd is { } end && end <= until
+            ? new YieldInfo(_speakerNames.GetValueOrDefault(ip, ip), end, yieldedAt, reason, end)
+            : new YieldInfo(_speakerNames.GetValueOrDefault(ip, ip), until, yieldedAt, reason);
     }
 
     private void OnSnapshotsChanged()

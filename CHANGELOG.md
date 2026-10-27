@@ -8,6 +8,13 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+### Fixed
+
+- FlyDJ now takes rooms back once "Stay away after manual control" has passed
+  since the last manual command, even if music started by hand is still
+  playing. The same cooldown applies inside FlyDJ schedules, capped at the end
+  of the occurrence.
+
 ## [1.0.0] - 2026-10-26
 
 First versioned release of the existing feature set:

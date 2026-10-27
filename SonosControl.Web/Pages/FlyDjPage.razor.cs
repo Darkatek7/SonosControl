@@ -282,11 +282,11 @@ public partial class FlyDjPage : ComponentBase
             if (ToggleDisabledReason is { } reason) return reason;
             if (IsRunning && _state.Status == FlyDjConductorStatus.Yielded)
             {
-                if (_state.IsScheduled) return "Manual playback took over the scheduled rooms. FlyDJ skips those rooms for the rest of this schedule.";
+                if (_state.NextDecisionAtUtc is { } resume && (_state.IsScheduled || _state.YieldedSpeakers.Count > 0))
+                    return $"Playback was taken over, so FlyDJ is resting until {FormatClock(resume)}. Switch it off to stop for good.";
+                if (_state.IsScheduled) return "Manual playback took over the scheduled rooms. FlyDJ skips those rooms until this schedule ends.";
                 if (_state.YieldedSpeakers.Count == 0) return "Schedules currently own the selected rooms. FlyDJ waits until they end.";
-                return _state.NextDecisionAtUtc is { } resume
-                    ? $"Playback was taken over, so FlyDJ is resting until {FormatClock(resume)}. Switch it off to stop for good."
-                    : "Playback was taken over, so FlyDJ is resting. Switch it off to stop for good.";
+                return "Playback was taken over, so FlyDJ is resting. Switch it off to stop for good.";
             }
             if (IsRunning)
             {

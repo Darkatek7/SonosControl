@@ -157,6 +157,11 @@ public sealed class PlaybackCommandCoordinator(TimeProvider time)
         lock (_manualSync) return _manualStarts.Where(pair => pair.Value >= since).Select(pair => pair.Key).ToList();
     }
 
+    public DateTimeOffset? LastManualStart(string speakerIp)
+    {
+        lock (_manualSync) return _manualStarts.TryGetValue(speakerIp.Trim(), out var started) ? started : null;
+    }
+
     private async Task<SemaphoreSlim[]> AcquireGatesAsync(IEnumerable<string> speakers, CancellationToken token)
     {
         var gates = new List<SemaphoreSlim>();

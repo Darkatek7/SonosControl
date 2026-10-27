@@ -519,7 +519,7 @@ public class FlyDjConductorTests
     }
 
     [Fact]
-    public async Task RoomStillPlayingTheUsersMusicStaysYieldedAfterTheCooldown()
+    public async Task RoomStillPlayingTheUsersMusicIsTakenBackAfterTheCooldown()
     {
         await using var fixture = await FlyDjConductorFixture.CreateAsync(settings =>
             settings.FlyDj.TargetSpeakerIps = [FlyDjConductorFixture.KitchenIp]);
@@ -528,25 +528,12 @@ public class FlyDjConductorTests
         await fixture.TakeManualControlAsync(FlyDjConductorFixture.KitchenIp);
         await fixture.AdvanceAsync(CheckInterval);
         await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Yielded, what: "resting", parked: true);
-        var startsBefore = fixture.Calls(nameof(IFlyDjClient.StartAsync));
 
-        // The person's own music is still playing when the cooldown ends: FlyDJ must not take the room back.
+        // The person's own music is still playing when the cooldown ends. The setting is
+        // "stay away after manual control", so FlyDJ takes the room back anyway.
         PublishSnapshot(fixture, FlyDjConductorFixture.KitchenIp, "Kitchen", true, "x-sonos-spotify:spotify%3atrack%3a1");
-        var firstRest = Assert.Single(fixture.Store.Current.YieldedSpeakers);
         await fixture.AdvanceAsync(TimeSpan.FromMinutes(61));
-        await fixture.UntilAsync(() => fixture.Store.Current.YieldedSpeakers.SingleOrDefault()?.UntilUtc > firstRest.UntilUtc,
-            what: "cooldown restarted", parked: true);
-
-        var rest = Assert.Single(fixture.Store.Current.YieldedSpeakers);
-        Assert.Equal(fixture.Time.GetUtcNow().AddMinutes(60), rest.UntilUtc);
-        Assert.Single(fixture.SceneCalls);
-        Assert.Equal(startsBefore, fixture.Calls(nameof(IFlyDjClient.StartAsync)));
-        Assert.Equal(FlyDjConductorStatus.Yielded, fixture.Store.Current.Status);
-
-        // Once the room is quiet, the next cooldown ends with FlyDJ taking it back.
-        PublishSnapshot(fixture, FlyDjConductorFixture.KitchenIp, "Kitchen", false, "x-sonos-spotify:spotify%3atrack%3a1");
-        await fixture.AdvanceAsync(TimeSpan.FromMinutes(61));
-        await fixture.UntilAsync(() => fixture.SceneCalls.Count == 2, advance: TimeSpan.FromMinutes(1), what: "resumed once the room is quiet");
+        await fixture.UntilAsync(() => fixture.SceneCalls.Count == 2, advance: TimeSpan.FromMinutes(1), what: "resumed after the cooldown");
         await fixture.UntilAsync(() => fixture.Store.Current.Status == FlyDjConductorStatus.Playing, what: "playing again", parked: true);
         Assert.Empty(fixture.Store.Current.YieldedSpeakers);
         Assert.Equal([FlyDjConductorFixture.KitchenIp], fixture.SceneCalls.Last().Targets);
@@ -565,6 +552,7 @@ public class FlyDjConductorTests
 
         await fixture.AdvanceAsync(TimeSpan.FromMinutes(30));
         await fixture.TakeManualControlAsync(FlyDjConductorFixture.KitchenIp);   // someone is still playing
+        var lastManual = fixture.Time.GetUtcNow();
         await fixture.AdvanceAsync(TimeSpan.FromMinutes(35));                    // original cooldown has ended
         await fixture.UntilAsync(() => fixture.Store.Current.YieldedSpeakers.SingleOrDefault()?.UntilUtc > fixture.Time.GetUtcNow(),
             what: "rest restarted", parked: true);
@@ -572,7 +560,8 @@ public class FlyDjConductorTests
         Assert.Single(fixture.SceneCalls);
         Assert.Equal(FlyDjConductorStatus.Yielded, fixture.Store.Current.Status);
         var rest = Assert.Single(fixture.Store.Current.YieldedSpeakers);
-        Assert.True(rest.UntilUtc > fixture.Time.GetUtcNow());
+        // The new rest counts from the last manual command, not from when the old one ended.
+        Assert.Equal(lastManual.AddMinutes(60), rest.UntilUtc);
     }
 
     [Fact]
