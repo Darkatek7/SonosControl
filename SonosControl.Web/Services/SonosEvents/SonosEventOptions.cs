@@ -8,4 +8,7 @@ public sealed class SonosEventOptions
     public string? CallbackBaseUrl { get; set; }
 
     public int SubscriptionTimeoutSeconds { get; set; } = 1800;
+
+    /// <summary>Full probe interval for speakers with working events. Their status goes stale after 2.5 intervals.</summary>
+    public int ReconcileSeconds { get; set; } = 30;
 }

@@ -63,6 +63,7 @@ builder.Services.AddSingleton<ISonosEventSubscriptionClient, SonosEventSubscript
 builder.Services.AddSingleton<SonosEventSubscriptionRegistry>();
 builder.Services.AddSingleton<SonosEventDispatcher>();
 builder.Services.AddSingleton<SonosEventSubscriptionManager>();
+builder.Services.AddSingleton<ISonosEventHealth>(sp => sp.GetRequiredService<SonosEventSubscriptionManager>());
 if (builder.Configuration.GetValue("PlaybackSnapshots:Enabled", builder.Configuration.GetValue("BackgroundServices:Enabled", true)))
 {
     builder.Services.AddHostedService(sp => sp.GetRequiredService<PlaybackSnapshotMonitorService>());

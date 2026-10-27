@@ -20,6 +20,21 @@ public static class PlaybackSnapshotMerge
         return next;
     }
 
+    private const string GroupMemberPrefix = "x-rincon:";
+
+    /// <summary>The coordinator UUID of a group member's transport URI (<c>x-rincon:RINCON_...</c>), or null.</summary>
+    public static string? CoordinatorUuid(string? transportUri)
+        => transportUri?.StartsWith(GroupMemberPrefix, StringComparison.OrdinalIgnoreCase) == true
+            ? NormalizeUuid(transportUri[GroupMemberPrefix.Length..])
+            : null;
+
+    public static string? NormalizeUuid(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        value = value.Trim();
+        return value.StartsWith("uuid:", StringComparison.OrdinalIgnoreCase) ? value[5..] : value;
+    }
+
     /// <summary>A group member plays whatever its coordinator plays; volume and source URI stay its own.</summary>
     public static PlaybackSnapshot FollowCoordinator(PlaybackSnapshot member, PlaybackSnapshot coordinator)
         => member with { IsPlaying = coordinator.IsPlaying, TrackInfo = coordinator.TrackInfo };

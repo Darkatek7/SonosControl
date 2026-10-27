@@ -49,6 +49,9 @@ public sealed class PlaybackSnapshotStore
     public event Action? SettingsChanged;
     public long ConfigurationEpoch { get { lock (_snapshotSync) return _configurationEpoch; } }
 
+    /// <summary>True once the snapshot monitor has applied the configured speakers, so the snapshots are being maintained.</summary>
+    public bool HasConfiguration { get { lock (_snapshotSync) return _hasConfiguration; } }
+
     public (long Sequence, long MutationVersion) BeginConfigurationRead()
     {
         lock (_snapshotSync) return (++_configurationReadSequence, _settingsMutationVersion);
@@ -175,7 +178,10 @@ public sealed class PlaybackSnapshotStore
         Changed?.Invoke();
     }
 
-    public void MarkExpiredStale(DateTimeOffset now, TimeSpan staleAfter)
+    public void MarkExpiredStale(DateTimeOffset now, TimeSpan staleAfter) => MarkExpiredStale(now, _ => staleAfter);
+
+    /// <summary>Marks snapshots stale whose last refresh is older than the threshold of their speaker.</summary>
+    public void MarkExpiredStale(DateTimeOffset now, Func<string, TimeSpan> staleAfter)
     {
         var changed = false;
         lock (_snapshotSync)
@@ -183,7 +189,7 @@ public sealed class PlaybackSnapshotStore
             foreach (var pair in _snapshots)
             {
                 var snapshot = pair.Value;
-                if (!snapshot.IsStale && now - snapshot.LastSuccessfulRefreshUtc.GetValueOrDefault(DateTimeOffset.MinValue) >= staleAfter)
+                if (!snapshot.IsStale && now - snapshot.LastSuccessfulRefreshUtc.GetValueOrDefault(DateTimeOffset.MinValue) >= staleAfter(pair.Key))
                 {
                     _snapshots[pair.Key] = snapshot with { IsStale = true, LastCheckedUtc = now, Error = "Playback status is delayed" };
                     changed = true;
@@ -193,11 +199,13 @@ public sealed class PlaybackSnapshotStore
         if (changed) Changed?.Invoke();
     }
 
-    public DateTimeOffset? GetNextStaleDeadline(TimeSpan staleAfter)
+    public DateTimeOffset? GetNextStaleDeadline(TimeSpan staleAfter) => GetNextStaleDeadline(_ => staleAfter);
+
+    public DateTimeOffset? GetNextStaleDeadline(Func<string, TimeSpan> staleAfter)
     {
         lock (_snapshotSync)
-            return _snapshots.Values.Where(snapshot => !snapshot.IsStale && snapshot.LastSuccessfulRefreshUtc.HasValue)
-                .Select(snapshot => snapshot.LastSuccessfulRefreshUtc!.Value + staleAfter)
+            return _snapshots.Where(pair => !pair.Value.IsStale && pair.Value.LastSuccessfulRefreshUtc.HasValue)
+                .Select(pair => pair.Value.LastSuccessfulRefreshUtc!.Value + staleAfter(pair.Key))
                 .OrderBy(deadline => deadline).Cast<DateTimeOffset?>().FirstOrDefault();
     }
 

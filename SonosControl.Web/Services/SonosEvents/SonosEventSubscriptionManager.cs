@@ -13,7 +13,7 @@ public sealed class SonosEventSubscriptionManager(
     IOptions<SonosEventOptions> options,
     IOptions<YouTubePlaybackOptions> playbackOptions,
     ILogger<SonosEventSubscriptionManager> logger,
-    TimeProvider timeProvider) : BackgroundService
+    TimeProvider timeProvider) : BackgroundService, ISonosEventHealth
 {
     internal static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan MinBackoff = TimeSpan.FromSeconds(15);
@@ -35,6 +35,8 @@ public sealed class SonosEventSubscriptionManager(
     }
 
     private TimeSpan SubscriptionTimeout => TimeSpan.FromSeconds(Math.Clamp(options.Value.SubscriptionTimeoutSeconds, 60, 86400));
+
+    public TimeSpan ReconcileInterval => TimeSpan.FromSeconds(Math.Clamp(options.Value.ReconcileSeconds, 10, 300));
 
     /// <summary>The callback base URL, or null when neither SonosEvents:CallbackBaseUrl nor Playback:PublicBaseUrl is usable.</summary>
     public Uri? CallbackBase

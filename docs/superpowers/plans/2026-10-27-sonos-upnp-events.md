@@ -158,12 +158,12 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - Modify: `SonosControl.Web/Services/PlaybackSnapshotMonitorService.cs`, `SonosControl.Web/Services/PlaybackSnapshotStore.cs`
 - Test: `SonosControl.Tests/PlaybackSnapshotMonitorServiceTests.cs`, `SonosControl.Tests/DeviceHealthPlaybackSnapshotTests.cs`
 
-- [ ] Keep the 5 s loop, because it also detects settings changes, but skip the four-call probe for a speaker whose subscriptions are healthy and whose last full probe is newer than `ReconcileSeconds`.
-- [ ] Make the stale threshold per speaker: 15 s for polled speakers, 2.5 × `ReconcileSeconds` for evented ones. `MarkExpiredStale` and `GetNextStaleDeadline` take a threshold lookup instead of one `TimeSpan`.
-- [ ] `RefreshNowAsync` keeps probing every speaker, so command follow-ups stay exact.
+- [x] Keep the 5 s loop, because it also detects settings changes, but skip the four-call probe for a speaker whose subscriptions are healthy and whose last full probe is newer than `ReconcileSeconds`.
+- [x] Make the stale threshold per speaker: 15 s for polled speakers, 2.5 × `ReconcileSeconds` for evented ones. `MarkExpiredStale` and `GetNextStaleDeadline` take a threshold lookup instead of one `TimeSpan`. The stale heartbeat now sleeps at most one 5 s poll interval, because a speaker that loses its events switches to the shorter threshold.
+- [x] `RefreshNowAsync` keeps probing every speaker, so command follow-ups stay exact.
 - [x] A reconciliation request from the dispatcher (SEQ gap, missing snapshot) probes that speaker immediately. Done in PR 2 through `PlaybackSnapshotMonitorService.ProbeSpeakerAsync`.
-- [ ] Apply the coordinator rule to probes too. In PR 2 the 5 s poll of a group member still writes what the member itself reports.
-- [ ] Tests: evented speakers are skipped and reconciled on time; a subscription turning unhealthy brings the speaker back to 5 s polling; per-speaker staleness; device health still reports offline after the longer threshold.
+- [x] Apply the coordinator rule to probes too. A polled member follows its coordinator when the coordinator is configured and its snapshot is fresh.
+- [x] Tests: evented speakers are skipped and reconciled on time; a subscription turning unhealthy brings the speaker back to 5 s polling; per-speaker staleness; a polled member follows its coordinator. Device health reads `IsStale` from the snapshot, so the staleness tests cover its longer offline threshold.
 
 ### Task 7: Move listening statistics onto the store
 
@@ -171,9 +171,11 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - Modify: `SonosControl.Web/Services/PlaybackMonitorService.cs`
 - Test: `SonosControl.Tests/PlaybackMonitorServiceTests.cs`
 
-- [ ] When the snapshot store is registered, read `IsPlaying`, `TrackInfo` and `CurrentStationUrl` from fresh snapshots instead of calling the connector. Keep the 15 s cycle for duration bookkeeping and `MaxObservationGap`. Stale snapshots count as "not observed".
-- [ ] Keep the connector path when snapshots are disabled, as `DeviceHealthMonitorService` already does.
-- [ ] Tests: sessions start, change track and end from snapshot data; stale snapshots do not end a session early.
+- [x] When the snapshot monitor maintains the store (`PlaybackSnapshotStore.HasConfiguration`), read `IsPlaying`, `TrackInfo` and `CurrentStationUrl` from fresh snapshots instead of calling the connector. Checking for a running monitor instead of a registered store keeps statistics working when `PlaybackSnapshots:Enabled` is false. Keep the 15 s cycle for duration bookkeeping and `MaxObservationGap`. Stale snapshots count as "not observed".
+- [x] Keep the connector path when snapshots are disabled, as `DeviceHealthMonitorService` already does.
+- [x] Tests: sessions start, change track and end from snapshot data; stale snapshots do not end a session early; an unmonitored store falls back to device calls.
+
+Live check on 2026-10-27 with both speakers, 65 s each: 62 and 52 SOAP requests with events off, 9 and 8 with events on (about 85 % fewer), five `NOTIFY` requests answered with 200, no warnings, all subscriptions ended on shutdown.
 
 ### Task 8: Diagnostics, smoke test, docs, real hardware
 
