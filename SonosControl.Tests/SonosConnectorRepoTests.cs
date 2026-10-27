@@ -904,4 +904,68 @@ public class SonosConnectorRepoTests
         await Assert.ThrowsAsync<SonosCommandException>(Invoke);
     }
 
+    [Fact]
+    public async Task ResolveTrackInfoAsync_FromEvent_MatchesGetTrackInfoAsync()
+    {
+        const string trackUri = "x-rincon-mp3radio://stream.example/live?a=1&b=2";
+        var handler = new QueueHttpMessageHandler();
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($"""
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+  <s:Body>
+    <u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+      <Track>1</Track>
+      <TrackMetaData>{WebUtility.HtmlEncode(SonosEventParserTests.RadioDidl)}</TrackMetaData>
+      <TrackURI>{WebUtility.HtmlEncode(trackUri)}</TrackURI>
+    </u:GetPositionInfoResponse>
+  </s:Body>
+</s:Envelope>
+""")
+        });
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(new HttpClient(handler)), Mock.Of<ISettingsRepo>());
+        var playbackEvent = SonosEventParser.Parse(SonosEventService.AVTransport, SonosEventParserTests.AvTransportBody(
+            $"<CurrentTrack val=\"1\"/><CurrentTrackURI val=\"{SonosEventParserTests.Attribute(trackUri)}\"/><CurrentTrackMetaData val=\"{SonosEventParserTests.Attribute(SonosEventParserTests.RadioDidl)}\"/>"));
+
+        var polled = await repo.GetTrackInfoAsync("192.0.2.10");
+        var evented = await repo.ResolveTrackInfoAsync("192.0.2.10", playbackEvent!.TrackMetadata, playbackEvent.TrackUri, playbackEvent.TrackNumber);
+
+        Assert.NotNull(polled);
+        Assert.NotNull(evented);
+        Assert.Equal(polled.Title, evented.Title);
+        Assert.Equal(polled.Artist, evented.Artist);
+        Assert.Equal(polled.Album, evented.Album);
+        Assert.Equal(polled.StreamContent, evented.StreamContent);
+        Assert.Equal(polled.AlbumArtUri, evented.AlbumArtUri);
+        Assert.Equal("http://192.0.2.10:1400/getaa?s=1&u=x-rincon-mp3radio", evented.AlbumArtUri);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task ResolveTrackInfoAsync_UsesYouTubeSessionMetadataWithoutDeviceCalls()
+    {
+        var handler = new QueueHttpMessageHandler();
+        var playbackService = new Mock<IYouTubePlaybackService>();
+        playbackService.Setup(service => service.GetQueueItemAsync("session1", 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new YouTubePlaybackQueueItem { Index = 2, Title = "Lovergirl", Artist = "Sabrina Carpenter Channel" });
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(new HttpClient(handler)), Mock.Of<ISettingsRepo>(), playbackService.Object);
+
+        var result = await repo.ResolveTrackInfoAsync("192.0.2.10", "<DIDL-Lite><item><dc:title>0</dc:title></item></DIDL-Lite>",
+            "http://192.0.2.50:8080/api/youtube-audio/session1/2", 3);
+
+        Assert.NotNull(result);
+        Assert.Equal("Lovergirl", result.Title);
+        Assert.Equal("Sabrina Carpenter Channel", result.Artist);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task ResolveTrackInfoAsync_WithoutMetadata_ReturnsNull()
+    {
+        var handler = new QueueHttpMessageHandler();
+        var repo = new SonosConnectorRepo(new TestHttpClientFactory(new HttpClient(handler)), Mock.Of<ISettingsRepo>());
+
+        Assert.Null(await repo.ResolveTrackInfoAsync("192.0.2.10", null, null, null));
+        Assert.Empty(handler.Requests);
+    }
 }

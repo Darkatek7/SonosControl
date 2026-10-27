@@ -224,63 +224,14 @@ namespace SonosControl.DAL.Repos
 
                 // Extract <TrackMetaData> content
                 var match = Regex.Match(xml, @"<TrackMetaData>(.*?)</TrackMetaData>", RegexOptions.Singleline);
-
-                if (match.Success)
+                if (!match.Success)
                 {
-                    var metadataXml = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
-
-                    var titleMatch = Regex.Match(metadataXml, @"<dc:title>(.*?)</dc:title>");
-                    var creatorMatch = Regex.Match(metadataXml, @"<dc:creator>(.*?)</dc:creator>");
-                    var artistMatch = Regex.Match(metadataXml, @"<upnp:artist>(.*?)</upnp:artist>");
-                    var albumMatch = Regex.Match(metadataXml, @"<upnp:album>(.*?)</upnp:album>");
-                    var streamContentMatch = Regex.Match(metadataXml, @"<r:streamContent>(.*?)</r:streamContent>");
-                    var albumArtMatch = Regex.Match(metadataXml, @"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
-                    var trackUriMatch = Regex.Match(xml, @"<TrackURI>(.*?)</TrackURI>", RegexOptions.Singleline);
-                    var trackUri = trackUriMatch.Success ? DecodeMetadataText(trackUriMatch.Groups[1].Value) : null;
-
-                    var trackInfo = new SonosTrackInfo
-                    {
-                        Title = titleMatch.Success ? DecodeMetadataText(titleMatch.Groups[1].Value) : "",
-                        Artist = artistMatch.Success
-                            ? DecodeMetadataText(artistMatch.Groups[1].Value)
-                            : creatorMatch.Success ? DecodeMetadataText(creatorMatch.Groups[1].Value) : "",
-                        Album = albumMatch.Success ? DecodeMetadataText(albumMatch.Groups[1].Value) : "",
-                        StreamContent = streamContentMatch.Success ? DecodeMetadataText(streamContentMatch.Groups[1].Value) : null
-                    };
-
-                    if (albumArtMatch.Success)
-                    {
-                        var artUri = DecodeMetadataText(albumArtMatch.Groups[1].Value);
-                        if (!string.IsNullOrWhiteSpace(artUri))
-                        {
-                            // If it's a relative path, prepend the speaker's address
-                            if (artUri.StartsWith("/"))
-                            {
-                                trackInfo.AlbumArtUri = $"http://{ip}:1400{artUri}";
-                            }
-                            else
-                            {
-                                trackInfo.AlbumArtUri = artUri;
-                            }
-                        }
-                    }
-
-                    var youTubeSessionFallback = await TryGetYouTubeSessionTrackInfoFallbackAsync(trackInfo, trackUri, cancellationToken);
-                    if (youTubeSessionFallback is not null)
-                    {
-                        return youTubeSessionFallback;
-                    }
-
-                    var queueFallback = await TryGetQueueTrackInfoFallbackAsync(ip, trackInfo, trackNumber, cancellationToken);
-                    if (queueFallback is not null)
-                    {
-                        return queueFallback;
-                    }
-
-                    return trackInfo;
+                    return null;
                 }
 
-                return null;
+                var trackUriMatch = Regex.Match(xml, @"<TrackURI>(.*?)</TrackURI>", RegexOptions.Singleline);
+                var trackUri = trackUriMatch.Success ? DecodeMetadataText(trackUriMatch.Groups[1].Value) : null;
+                return await ResolveTrackInfoAsync(ip, WebUtility.HtmlDecode(match.Groups[1].Value), trackUri, trackNumber, cancellationToken);
             }
             catch (OperationCanceledException) { throw; }
             catch (HttpRequestException) { throw; }
@@ -289,6 +240,24 @@ namespace SonosControl.DAL.Repos
                 _logger.LogDebug(ex, "Could not read track metadata from {SpeakerIp}.", ip);
                 return null;
             }
+        }
+
+        public async Task<SonosTrackInfo?> ResolveTrackInfoAsync(
+            string ip,
+            string? trackMetadata,
+            string? trackUri,
+            int? trackNumber,
+            CancellationToken cancellationToken = default)
+        {
+            if (trackMetadata is null)
+            {
+                return null;
+            }
+
+            var trackInfo = ParseTrackMetadata(trackMetadata, ip);
+            return await TryGetYouTubeSessionTrackInfoFallbackAsync(trackInfo, trackUri, cancellationToken)
+                ?? await TryGetQueueTrackInfoFallbackAsync(ip, trackInfo, trackNumber, cancellationToken)
+                ?? trackInfo;
         }
 
         private async Task<SonosTrackInfo?> TryGetYouTubeSessionTrackInfoFallbackAsync(

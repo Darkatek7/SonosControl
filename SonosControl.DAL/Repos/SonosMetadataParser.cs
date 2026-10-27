@@ -276,6 +276,33 @@ internal static class SonosMetadataParser
     }
 
 
+    /// <summary>Reads the current track from decoded DIDL-Lite metadata, as reported by GetPositionInfo or an AVTransport event.</summary>
+    internal static SonosTrackInfo ParseTrackMetadata(string metadataXml, string speakerIp)
+    {
+        string? Find(string pattern)
+        {
+            var match = Regex.Match(metadataXml, pattern);
+            return match.Success ? DecodeMetadataText(match.Groups[1].Value) : null;
+        }
+
+        var trackInfo = new SonosTrackInfo
+        {
+            Title = Find(@"<dc:title>(.*?)</dc:title>") ?? "",
+            Artist = Find(@"<upnp:artist>(.*?)</upnp:artist>") ?? Find(@"<dc:creator>(.*?)</dc:creator>") ?? "",
+            Album = Find(@"<upnp:album>(.*?)</upnp:album>") ?? "",
+            StreamContent = Find(@"<r:streamContent>(.*?)</r:streamContent>")
+        };
+
+        var artUri = Find(@"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
+        if (!string.IsNullOrWhiteSpace(artUri))
+        {
+            // Relative art paths are served by the speaker itself.
+            trackInfo.AlbumArtUri = artUri.StartsWith('/') ? $"http://{speakerIp}:1400{artUri}" : artUri;
+        }
+
+        return trackInfo;
+    }
+
     internal static string DecodeMetadataText(string? value)
     {
         return WebUtility.HtmlDecode(value)?.Trim() ?? string.Empty;
