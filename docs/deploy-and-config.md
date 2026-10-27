@@ -205,7 +205,7 @@ typical score variations on the final scoring scale. Variation is 1.4826 times
 the median absolute deviation of successful raw scores; it is a robust measure
 of fluctuation, not a confidence interval. The page and stored decision summaries
 include it. Selection weights remain 70% normalized brain score and 30% listening
-habits; manual feedback, favourites and history retain their existing role. Comparison spacing is minimum dwell divided by
+habits from history and manual feedback. Personal favourites do not count, because they belong to individual users while FlyDJ plays to a shared room. Comparison spacing is minimum dwell divided by
 12, clamped to five seconds–five minutes. At maximum dwell FlyDJ chooses another
 station with sufficient evidence; if no alternative qualifies, playback stays
 on the current station and comparisons continue. Schedule end times and manual

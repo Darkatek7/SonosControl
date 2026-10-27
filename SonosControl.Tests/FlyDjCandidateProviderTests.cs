@@ -34,7 +34,7 @@ public class FlyDjCandidateProviderTests
         => new() { TrackName = station, Artist = "Live Stream", MediaType = mediaType, StartTime = start.UtcDateTime, DurationSeconds = seconds };
 
     [Fact]
-    public async Task PriorFavoursStationsHeardNearThisHourAndFavourites()
+    public async Task PriorFavoursStationsHeardNearThisHourButIgnoresPersonalFavourites()
     {
         using var db = NewDb();
         db.PlaybackStats.AddRange(
@@ -50,7 +50,8 @@ public class FlyDjCandidateProviderTests
         var order = candidates.OrderByDescending(candidate => candidate.Prior).Select(candidate => candidate.Name).ToList();
         Assert.Equal("Station 3", order[0]);
         Assert.True(candidates.Single(c => c.Name == "Station 2").Prior > candidates.Single(c => c.Name == "Station 4").Prior);
-        Assert.True(candidates.Single(c => c.Name == "Station 5").Prior > candidates.Single(c => c.Name == "Station 1").Prior);
+        // Station 5 is one user's favourite, which must not move a shared room.
+        Assert.Equal(candidates.Single(c => c.Name == "Station 1").Prior, candidates.Single(c => c.Name == "Station 5").Prior);
         Assert.Equal(candidates.Single(c => c.Name == "Station 4").Prior, candidates.Single(c => c.Name == "Station 1").Prior);
     }
 
