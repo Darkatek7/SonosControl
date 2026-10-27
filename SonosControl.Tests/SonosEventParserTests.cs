@@ -45,6 +45,50 @@ public class SonosEventParserTests
     }
 
     [Fact]
+    public void Parse_RecordedPlay1InitialEvent_ReadsRadioState()
+    {
+        var result = SonosEventParser.Parse(SonosEventService.AVTransport, SonosEventFixtures.Play1AvTransportInitial);
+
+        Assert.NotNull(result);
+        Assert.Equal("PLAYING", result.TransportState);
+        Assert.Equal("x-rincon-mp3radio://radiorecord.hostingradio.ru/summerparty96.aacp", result.TransportUri);
+        Assert.Equal("aac://http://radiorecord.hostingradio.ru/summerparty96.aacp", result.TrackUri);
+        Assert.Equal(1, result.TrackNumber);
+        var track = SonosMetadataParser.ParseTrackMetadata(result.TrackMetadata!, "192.0.2.10");
+        Assert.Equal("summerparty96.aacp", track.Title);
+        Assert.Equal("FISHER/LAUREL - Staring At The Sun", track.StreamContent);
+        Assert.Equal("FISHER/LAUREL - Staring At The Sun", track.GetDisplayString());
+        Assert.Null(track.AlbumArtUri);
+    }
+
+    [Fact]
+    public void Parse_RecordedStreamTitleChange_OmitsTransportUri()
+    {
+        var result = SonosEventParser.Parse(SonosEventService.AVTransport, SonosEventFixtures.Play1AvTransportStreamTitleChange);
+
+        Assert.NotNull(result);
+        Assert.Equal("PLAYING", result.TransportState);
+        Assert.Null(result.TransportUri);
+        Assert.Equal("aac://http://radiorecord.hostingradio.ru/summerparty96.aacp", result.TrackUri);
+        Assert.Equal("DEXTER TROY - Abducted", SonosMetadataParser.ParseTrackMetadata(result.TrackMetadata!, "192.0.2.10").StreamContent);
+    }
+
+    public static TheoryData<string, int> RecordedVolumeEvents => new()
+    {
+        { SonosEventFixtures.Play1RenderingControlInitial, 14 },
+        { SonosEventFixtures.Era100RenderingControlInitial, 8 }
+    };
+
+    [Theory]
+    [MemberData(nameof(RecordedVolumeEvents))]
+    public void Parse_RecordedRenderingControlEvents_ReadMasterVolume(string body, int expected)
+    {
+        var result = SonosEventParser.Parse(SonosEventService.RenderingControl, body);
+
+        Assert.Equal(expected, result?.Volume);
+    }
+
+    [Fact]
     public void Parse_TrackChangeOnly_LeavesUnreportedFieldsNull()
     {
         var body = AvTransportBody($"<CurrentTrack val=\"4\"/><CurrentTrackMetaData val=\"{Attribute(RadioDidl)}\"/>");
