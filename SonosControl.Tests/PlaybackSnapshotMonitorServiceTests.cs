@@ -4,12 +4,152 @@ using Moq;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
 using SonosControl.Web.Services;
+using Microsoft.Extensions.Time.Testing;
+using SonosControl.Web.Services.SonosEvents;
 using Xunit;
 
 namespace SonosControl.Tests;
 
 public sealed class PlaybackSnapshotMonitorServiceTests
 {
+    private sealed class FakeEventHealth : ISonosEventHealth
+    {
+        public HashSet<string> Healthy { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public TimeSpan ReconcileInterval { get; } = TimeSpan.FromSeconds(30);
+        public bool IsHealthy(string speakerIp) => Healthy.Contains(speakerIp);
+    }
+
+    private sealed class EventedFixture : IAsyncDisposable
+    {
+        private readonly ServiceProvider _provider;
+
+        public EventedFixture(params SonosSpeaker[] speakers)
+        {
+            var settingsRepo = new Mock<ISettingsRepo>();
+            settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(new SonosSettings { Speakers = [.. speakers] });
+            foreach (var speaker in speakers)
+            {
+                var ip = speaker.IpAddress;
+                Connector.Setup(repo => repo.GetVolume(ip, It.IsAny<CancellationToken>())).ReturnsAsync(10);
+                Connector.Setup(repo => repo.IsPlaying(ip, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+                Connector.Setup(repo => repo.GetCurrentStationAsync(ip, It.IsAny<CancellationToken>())).ReturnsAsync("x-rincon-mp3radio://radio.test/live");
+                Connector.Setup(repo => repo.GetTrackInfoAsync(ip, It.IsAny<CancellationToken>())).ReturnsAsync(new SonosTrackInfo { Title = "Song" });
+            }
+            var services = new ServiceCollection();
+            services.AddSingleton(settingsRepo.Object);
+            services.AddScoped(_ => Connector.Object);
+            _provider = services.BuildServiceProvider();
+            Monitor = new PlaybackSnapshotMonitorService(_provider.GetRequiredService<IServiceScopeFactory>(), Store,
+                NullLogger<PlaybackSnapshotMonitorService>.Instance, Time, Health);
+        }
+
+        public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 10, 27, 10, 0, 0, TimeSpan.Zero));
+        public FakeEventHealth Health { get; } = new();
+        public Mock<ISonosConnectorRepo> Connector { get; } = new();
+        public PlaybackSnapshotStore Store { get; } = new();
+        public PlaybackSnapshotMonitorService Monitor { get; }
+
+        public int Probes(string ip) => Connector.Invocations.Count(call => call.Method.Name == nameof(ISonosConnectorRepo.GetVolume) && Equals(call.Arguments[0], ip));
+
+        public ValueTask DisposeAsync() => _provider.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task EventedSpeakersAreOnlyReconciledWhilePolledSpeakersArePolledEveryCycle()
+    {
+        await using var fixture = new EventedFixture(
+            new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" },
+            new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.2" });
+        fixture.Health.Healthy.Add("10.0.0.1");
+
+        await fixture.Monitor.PollOnceAsync();
+        for (var cycle = 0; cycle < 5; cycle++)
+        {
+            fixture.Time.Advance(TimeSpan.FromSeconds(5));
+            await fixture.Monitor.PollOnceAsync();
+        }
+        Assert.Equal(1, fixture.Probes("10.0.0.1"));
+        Assert.Equal(6, fixture.Probes("10.0.0.2"));
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Monitor.PollOnceAsync();
+        Assert.Equal(2, fixture.Probes("10.0.0.1"));
+    }
+
+    [Fact]
+    public async Task LosingEventsReturnsTheSpeakerToRegularPolling()
+    {
+        await using var fixture = new EventedFixture(new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" });
+        fixture.Health.Healthy.Add("10.0.0.1");
+        await fixture.Monitor.PollOnceAsync();
+        fixture.Time.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Monitor.PollOnceAsync();
+        Assert.Equal(1, fixture.Probes("10.0.0.1"));
+
+        fixture.Health.Healthy.Clear();
+        fixture.Time.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Monitor.PollOnceAsync();
+
+        Assert.Equal(2, fixture.Probes("10.0.0.1"));
+        Assert.Equal(TimeSpan.FromSeconds(15), fixture.Monitor.StaleAfterFor("10.0.0.1"));
+    }
+
+    [Fact]
+    public async Task RefreshNowProbesEventedSpeakersToo()
+    {
+        await using var fixture = new EventedFixture(new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" });
+        fixture.Health.Healthy.Add("10.0.0.1");
+        await fixture.Monitor.PollOnceAsync();
+
+        await fixture.Monitor.RefreshNowAsync();
+
+        Assert.Equal(2, fixture.Probes("10.0.0.1"));
+    }
+
+    [Fact]
+    public async Task EventedSpeakersGoStaleAfterSeveralMissedReconciliations()
+    {
+        await using var fixture = new EventedFixture(
+            new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" },
+            new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.2" });
+        fixture.Health.Healthy.Add("10.0.0.1");
+        await fixture.Monitor.PollOnceAsync();
+        var start = fixture.Time.GetUtcNow();
+        Assert.Equal(TimeSpan.FromSeconds(75), fixture.Monitor.StaleAfterFor("10.0.0.1"));
+        Assert.Equal(start + TimeSpan.FromSeconds(15), fixture.Store.GetNextStaleDeadline(fixture.Monitor.StaleAfterFor));
+
+        fixture.Store.MarkExpiredStale(start + TimeSpan.FromSeconds(20), fixture.Monitor.StaleAfterFor);
+        Assert.False(fixture.Store.Get("10.0.0.1")!.IsStale);
+        Assert.True(fixture.Store.Get("10.0.0.2")!.IsStale);
+
+        fixture.Store.MarkExpiredStale(start + TimeSpan.FromSeconds(75), fixture.Monitor.StaleAfterFor);
+        Assert.True(fixture.Store.Get("10.0.0.1")!.IsStale);
+    }
+
+    [Fact]
+    public async Task PolledGroupMemberFollowsItsFreshCoordinator()
+    {
+        await using var fixture = new EventedFixture(
+            new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1", Uuid = "RINCON_C" },
+            new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.2", Uuid = "RINCON_M" });
+        fixture.Connector.Setup(repo => repo.GetTrackInfoAsync("10.0.0.1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosTrackInfo { Title = "live.aacp", StreamContent = "Band - Song" });
+        fixture.Connector.Setup(repo => repo.IsPlaying("10.0.0.2", It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        fixture.Connector.Setup(repo => repo.GetVolume("10.0.0.2", It.IsAny<CancellationToken>())).ReturnsAsync(4);
+        fixture.Connector.Setup(repo => repo.GetCurrentStationAsync("10.0.0.2", It.IsAny<CancellationToken>())).ReturnsAsync("x-rincon:uuid:RINCON_C");
+        fixture.Connector.Setup(repo => repo.GetTrackInfoAsync("10.0.0.2", It.IsAny<CancellationToken>())).ReturnsAsync((SonosTrackInfo?)null);
+
+        await fixture.Monitor.PollOnceAsync();
+        fixture.Time.Advance(TimeSpan.FromSeconds(5));
+        await fixture.Monitor.PollOnceAsync();
+
+        var member = fixture.Store.Get("10.0.0.2")!;
+        Assert.True(member.IsPlaying);
+        Assert.Equal("Band - Song", member.TrackInfo?.GetDisplayString());
+        Assert.Equal(4, member.Volume);
+        Assert.Equal("x-rincon:uuid:RINCON_C", member.CurrentStationUrl);
+    }
+
     [Fact]
     public async Task PollOnceKeepsTheRadioTitleWhileTheStreamReconnects()
     {
@@ -298,7 +438,8 @@ public sealed class PlaybackSnapshotMonitorServiceTests
         {
             var timer = new ManualTimer(this, callback, state, _now + dueTime);
             _timers.Add(timer);
-            if (dueTime == TimeSpan.FromSeconds(15)) StaleTimerStarted.TrySetResult();
+            // The stale heartbeat sleeps until the next deadline, at most one 5 s poll interval.
+            if (dueTime == TimeSpan.FromSeconds(5)) StaleTimerStarted.TrySetResult();
             return timer;
         }
         public void Advance(TimeSpan amount)

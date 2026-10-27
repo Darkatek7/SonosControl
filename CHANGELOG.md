@@ -12,8 +12,14 @@ see [Releases](CONTRIBUTING.md#releases).
 
 - Experimental live speaker events (`SonosEvents__Enabled`, off by default):
   speakers report playback, track and volume changes to the app as they
-  happen. Polling stays on as a fallback. See
+  happen. Speakers with working events are only reconciled every 30 seconds
+  instead of being polled every 5 seconds; the others keep polling. See
   [Live Speaker Events](docs/deploy-and-config.md#live-speaker-events-experimental-off-by-default).
+
+### Changed
+
+- Listening statistics read the shared playback status instead of querying
+  every speaker again every 15 seconds.
 
 ### Fixed
 

@@ -21,6 +21,7 @@ namespace SonosControl.Web.Services
         private readonly ILogger<PlaybackMonitorService> _logger;
         private readonly IMetricsCollector _metricsCollector;
         private readonly TimeProvider _timeProvider;
+        private readonly PlaybackSnapshotStore? _playbackSnapshots;
         private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan DurationPersistInterval = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan MaxObservationGap = TimeSpan.FromMinutes(2);
@@ -37,12 +38,14 @@ namespace SonosControl.Web.Services
             IServiceScopeFactory scopeFactory,
             ILogger<PlaybackMonitorService> logger,
             IMetricsCollector metricsCollector,
-            TimeProvider? timeProvider = null)
+            TimeProvider? timeProvider = null,
+            PlaybackSnapshotStore? playbackSnapshots = null)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
             _metricsCollector = metricsCollector;
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _playbackSnapshots = playbackSnapshots;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -133,21 +136,20 @@ namespace SonosControl.Web.Services
                 // A laptop sleep, outage, or stalled poll must not become listening time.
                 gapWrites = await CloseSessionIfExists(ip, db, lastObserved, token);
             }
-            var isPlaying = await sonosConnectorRepo.IsPlaying(ip);
+            var observation = await ObserveAsync(ip, sonosConnectorRepo, token);
+            if (observation is null)
+            {
+                // Without a fresh observation the session neither grows nor ends; the gap rule above closes it later.
+                return gapWrites;
+            }
 
-            if (!isPlaying)
+            if (!observation.IsPlaying)
             {
                 return gapWrites + await CloseSessionIfExists(ip, db, nowUtc, token);
             }
 
-            // Fetch info
-            var trackInfoTask = sonosConnectorRepo.GetTrackInfoAsync(ip, token);
-            var stationUrlTask = sonosConnectorRepo.GetCurrentStationAsync(ip, token);
-
-            await Task.WhenAll(trackInfoTask, stationUrlTask);
-
-            var trackInfo = await trackInfoTask;
-            var stationUrl = (await stationUrlTask) ?? string.Empty;
+            var trackInfo = observation.TrackInfo;
+            var stationUrl = observation.StationUrl;
             var cleanStationUrl = NormalizeStationUrl(stationUrl);
 
             // Determine what's playing
@@ -246,6 +248,30 @@ namespace SonosControl.Web.Services
             }
 
             return gapWrites;
+        }
+
+        private sealed record Observation(bool IsPlaying, SonosTrackInfo? TrackInfo, string StationUrl);
+
+        private async Task<Observation?> ObserveAsync(string ip, ISonosConnectorRepo sonosConnectorRepo, CancellationToken token)
+        {
+            if (_playbackSnapshots?.HasConfiguration == true)
+            {
+                // The shared snapshot monitor and live events already track every speaker, so read instead of polling again.
+                var snapshot = _playbackSnapshots.Get(ip);
+                return snapshot is { IsStale: false, LastSuccessfulRefreshUtc: not null }
+                    ? new Observation(snapshot.IsPlaying, snapshot.TrackInfo, snapshot.CurrentStationUrl ?? string.Empty)
+                    : null;
+            }
+
+            if (!await sonosConnectorRepo.IsPlaying(ip))
+            {
+                return new Observation(false, null, string.Empty);
+            }
+
+            var trackInfoTask = sonosConnectorRepo.GetTrackInfoAsync(ip, token);
+            var stationUrlTask = sonosConnectorRepo.GetCurrentStationAsync(ip, token);
+            await Task.WhenAll(trackInfoTask, stationUrlTask);
+            return new Observation(true, await trackInfoTask, (await stationUrlTask) ?? string.Empty);
         }
 
         private bool ShouldPersistSessionDuration(string ip, DateTime nowUtc)

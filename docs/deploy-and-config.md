@@ -114,13 +114,14 @@ Configure these values in `appsettings.json` or with environment variables:
 
 ## Live Speaker Events (experimental, off by default)
 
-With `SonosEvents__Enabled=true`, the app subscribes to UPnP events on every configured speaker. Speakers then report playback, track and volume changes to `/api/sonos-events/<token>`, and the shared playback status updates within about a second. Polling keeps running unchanged as a fallback; a later release will reduce it for speakers with working events.
+With `SonosEvents__Enabled=true`, the app subscribes to UPnP events on every configured speaker. Speakers then report playback, track and volume changes to `/api/sonos-events/<token>`, and the shared playback status updates within about a second. Speakers with working events are only probed in full every `SonosEvents__ReconcileSeconds`, which cut the requests to each speaker by about 85 % in a test with two speakers. Speakers without working events keep being polled every 5 seconds. Listening statistics read the shared playback status instead of querying the speakers again.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `SonosEvents__Enabled` | `false` | Turns event subscriptions on. Requires the shared playback status (`PlaybackSnapshots__Enabled`, on by default). |
 | `SonosEvents__CallbackBaseUrl` | `Playback__PublicBaseUrl` | URL the speakers use to reach the app. Set it when the public URL goes through an authenticating reverse proxy. |
 | `SonosEvents__SubscriptionTimeoutSeconds` | `1800` | Requested subscription lifetime (60–86400). The app renews at half the granted lifetime. |
+| `SonosEvents__ReconcileSeconds` | `30` | Full probe interval for speakers with working events (10–300). Their status counts as delayed after 2.5 intervals without an update, instead of 15 seconds. |
 
 The speakers must reach the callback URL directly, also across VLANs, the same way they already fetch YouTube and MP3 audio. The callback is anonymous and accepts only the unguessable token of an active subscription. Without a usable callback URL the app logs this once and keeps polling.
 

@@ -1,24 +1,42 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Microsoft.Extensions.Hosting;
 using SonosControl.DAL.Interfaces;
 using SonosControl.DAL.Models;
+using SonosControl.Web.Services.SonosEvents;
 
 namespace SonosControl.Web.Services;
 
-/// <summary>Runs one bounded, server-owned playback poller for all connected UI circuits.</summary>
+/// <summary>
+/// Runs one bounded, server-owned playback poller for all connected UI circuits. Speakers with working
+/// live events are only reconciled now and then; all others are polled every cycle.
+/// </summary>
 public sealed class PlaybackSnapshotMonitorService(
     IServiceScopeFactory scopeFactory,
     PlaybackSnapshotStore store,
     ILogger<PlaybackSnapshotMonitorService> logger,
-    TimeProvider timeProvider) : BackgroundService
+    TimeProvider timeProvider,
+    ISonosEventHealth? eventHealth = null) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DeviceTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(15);
+    private const double EventedStaleFactor = 2.5;
     private readonly SemaphoreSlim _parallelism = new(4, 4);
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly object _inFlightSync = new();
     private readonly Dictionary<string, Task> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastProbeStarted = new(StringComparer.OrdinalIgnoreCase);
+    private volatile IReadOnlyDictionary<string, string> _speakerIpsByUuid = new Dictionary<string, string>();
+
+    /// <summary>Evented speakers only go stale after several missed reconciliations; polled ones after 15 s.</summary>
+    internal TimeSpan StaleAfterFor(string speakerIp)
+        => eventHealth?.IsHealthy(speakerIp) == true ? eventHealth.ReconcileInterval * EventedStaleFactor : StaleAfter;
+
+    private bool NeedsProbe(string speakerIp, DateTimeOffset now)
+        => eventHealth?.IsHealthy(speakerIp) != true
+            || !_lastProbeStarted.TryGetValue(speakerIp, out var last)
+            || now - last >= eventHealth.ReconcileInterval;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -45,10 +63,11 @@ public sealed class PlaybackSnapshotMonitorService(
         while (!token.IsCancellationRequested)
         {
             var now = timeProvider.GetUtcNow();
-            store.MarkExpiredStale(now, StaleAfter);
-            var deadline = store.GetNextStaleDeadline(StaleAfter);
+            store.MarkExpiredStale(now, StaleAfterFor);
+            var deadline = store.GetNextStaleDeadline(StaleAfterFor);
+            // Thresholds shrink when a speaker loses its events, so never sleep longer than one poll interval.
             var delay = deadline is { } next && next > now
-                ? next - now
+                ? TimeSpan.FromTicks(Math.Min((next - now).Ticks, PollInterval.Ticks))
                 : deadline is null ? PollInterval : TimeSpan.Zero;
             try
             {
@@ -59,12 +78,13 @@ public sealed class PlaybackSnapshotMonitorService(
         }
     }
 
+    /// <summary>One regular cycle: probes polled speakers and evented speakers that are due for reconciliation.</summary>
     public async Task PollOnceAsync(CancellationToken cancellationToken = default)
     {
-        await PollCycleCoreAsync(cancellationToken);
+        await PollCycleCoreAsync(probeAll: false, cancellationToken);
     }
 
-    private async Task PollCycleCoreAsync(CancellationToken cancellationToken)
+    private async Task PollCycleCoreAsync(bool probeAll, CancellationToken cancellationToken)
     {
         var read = store.BeginConfigurationRead();
         SonosSettings settings;
@@ -86,7 +106,14 @@ public sealed class PlaybackSnapshotMonitorService(
         if (!store.TryApplyConfiguration(read.Sequence, read.MutationVersion, speakers.Select(speaker => speaker.IpAddress), out var epoch)) return;
         store.NotifySettingsChanged(CreateFingerprint(settings));
         store.RemoveExcept(speakers.Select(speaker => speaker.IpAddress));
-        await Task.WhenAll(speakers.Select(speaker => PollSpeakerAsync(speaker, epoch, cancellationToken)));
+        _speakerIpsByUuid = speakers
+            .Select(speaker => (Uuid: PlaybackSnapshotMerge.NormalizeUuid(speaker.Uuid), speaker.IpAddress))
+            .Where(item => item.Uuid is not null)
+            .DistinctBy(item => item.Uuid, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(item => item.Uuid!, item => item.IpAddress, StringComparer.OrdinalIgnoreCase);
+        var now = timeProvider.GetUtcNow();
+        await Task.WhenAll(speakers.Where(speaker => probeAll || NeedsProbe(speaker.IpAddress, now))
+            .Select(speaker => PollSpeakerAsync(speaker, epoch, cancellationToken)));
     }
 
     public async Task RefreshNowAsync(CancellationToken cancellationToken = default)
@@ -104,7 +131,8 @@ public sealed class PlaybackSnapshotMonitorService(
                 catch when (!cancellationToken.IsCancellationRequested) { }
                 cancellationToken.ThrowIfCancellationRequested();
             }
-            await PollCycleCoreAsync(cancellationToken);
+            // A command follow-up must see every speaker, evented or not.
+            await PollCycleCoreAsync(probeAll: true, cancellationToken);
         }
         finally { _refreshGate.Release(); }
     }
@@ -158,6 +186,7 @@ public sealed class PlaybackSnapshotMonitorService(
             await _parallelism.WaitAsync(cancellationToken);
             acquired = true;
             if (!store.IsConfigured(speaker.IpAddress, epoch) || !store.IsCurrentProbe(speaker.IpAddress, generation)) return;
+            _lastProbeStarted[speaker.IpAddress] = timeProvider.GetUtcNow();
             using var timeout = new CancellationTokenSource(DeviceTimeout, timeProvider);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
             try
@@ -172,8 +201,11 @@ public sealed class PlaybackSnapshotMonitorService(
                 await Task.WhenAll(volumeTask, playingTask, stationTask, trackTask);
                 var now = timeProvider.GetUtcNow();
                 var track = PlaybackSnapshotMerge.KeepStreamTitle(store.Get(ip)?.TrackInfo, trackTask.Result);
-                store.TrySet(new PlaybackSnapshot(ip, speaker.Name, playingTask.Result, volumeTask.Result,
-                    stationTask.Result, track, false, now, now, null), generation, epoch);
+                var snapshot = new PlaybackSnapshot(ip, speaker.Name, playingTask.Result, volumeTask.Result,
+                    stationTask.Result, track, false, now, now, null);
+                if (FreshCoordinatorSnapshot(ip, stationTask.Result) is { } coordinator)
+                    snapshot = PlaybackSnapshotMerge.FollowCoordinator(snapshot, coordinator);
+                store.TrySet(snapshot, generation, epoch);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
@@ -195,6 +227,15 @@ public sealed class PlaybackSnapshotMonitorService(
                 if (_inFlight.TryGetValue(key, out var active) && ReferenceEquals(active, completion.Task)) _inFlight.Remove(key);
             completion.TrySetResult();
         }
+    }
+
+    /// <summary>The snapshot of the configured coordinator a group member points at, if it is fresh.</summary>
+    private PlaybackSnapshot? FreshCoordinatorSnapshot(string memberIp, string? transportUri)
+    {
+        if (PlaybackSnapshotMerge.CoordinatorUuid(transportUri) is not { } uuid
+            || !_speakerIpsByUuid.TryGetValue(uuid, out var coordinatorIp)
+            || string.Equals(coordinatorIp, memberIp, StringComparison.OrdinalIgnoreCase)) return null;
+        return store.Get(coordinatorIp) is { IsStale: false } coordinator ? coordinator : null;
     }
 
     private static string CreateFingerprint(SonosSettings settings)

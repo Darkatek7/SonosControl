@@ -139,6 +139,81 @@ public sealed class PlaybackMonitorServiceTests
         Assert.Equal(0, history[1].DurationSeconds);
     }
 
+    private static PlaybackSnapshotStore MonitoredStore()
+    {
+        var store = new PlaybackSnapshotStore();
+        store.RemoveExcept(["10.0.0.1"]); // What the snapshot monitor does on its first cycle.
+        return store;
+    }
+
+    private static void Observe(PlaybackSnapshotStore store, DateTimeOffset at, bool playing, string title, bool stale = false)
+        => store.Set(new PlaybackSnapshot("10.0.0.1", "Kitchen", playing, 20, "spotify:track:demo",
+            new SonosTrackInfo { Title = title, Artist = "An artist" }, stale, at, at, null));
+
+    [Fact]
+    public async Task SharedSnapshots_DriveSessionsWithoutDeviceCalls()
+    {
+        var store = MonitoredStore();
+        using var fixture = new MonitorFixture(store);
+        var start = fixture.Clock.Now;
+        Observe(store, start, true, "First song");
+        await fixture.Poll();
+        fixture.Clock.Now = start.AddSeconds(15);
+        Observe(store, fixture.Clock.Now, true, "First song");
+        await fixture.Poll();
+        fixture.Clock.Now = start.AddSeconds(30);
+        Observe(store, fixture.Clock.Now, true, "Second song");
+        await fixture.Poll();
+        fixture.Clock.Now = start.AddSeconds(45);
+        Observe(store, fixture.Clock.Now, false, "Second song");
+        await fixture.Poll();
+
+        var history = await fixture.History();
+        Assert.Equal(["First song", "Second song"], history.Select(item => item.TrackName));
+        Assert.Equal(30, history[0].DurationSeconds);
+        Assert.Equal(15, history[1].DurationSeconds);
+        fixture.Connector.Verify(connector => connector.IsPlaying(It.IsAny<string>()), Times.Never);
+        fixture.Connector.Verify(connector => connector.GetTrackInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task StaleSnapshots_NeitherExtendNorEndASession()
+    {
+        var store = MonitoredStore();
+        using var fixture = new MonitorFixture(store);
+        var start = fixture.Clock.Now;
+        Observe(store, start, true, "A song");
+        await fixture.Poll();
+        fixture.Clock.Now = start.AddSeconds(15);
+        Observe(store, fixture.Clock.Now, true, "A song");
+        await fixture.Poll();
+
+        Observe(store, start.AddSeconds(15), true, "A song", stale: true);
+        for (var seconds = 30; seconds <= 105; seconds += 15)
+        {
+            fixture.Clock.Now = start.AddSeconds(seconds);
+            await fixture.Poll();
+        }
+        // Still the one open session, and stale polls added no time to it.
+        Assert.True(Assert.Single(await fixture.History()).DurationSeconds <= 15);
+
+        fixture.Clock.Now = start.AddSeconds(120);
+        Observe(store, fixture.Clock.Now, true, "A song");
+        await fixture.Poll();
+        Assert.Equal(120, Assert.Single(await fixture.History()).DurationSeconds);
+    }
+
+    [Fact]
+    public async Task UnmonitoredStore_FallsBackToDeviceCalls()
+    {
+        using var fixture = new MonitorFixture(new PlaybackSnapshotStore());
+
+        await fixture.Poll();
+
+        fixture.Connector.Verify(connector => connector.IsPlaying("10.0.0.1"), Times.Once);
+        Assert.Single(await fixture.History());
+    }
+
     private sealed class MonitorFixture : IDisposable
     {
         public MutableClock Clock { get; } = new();
@@ -150,7 +225,7 @@ public sealed class PlaybackMonitorServiceTests
         private readonly ServiceProvider _provider;
         private readonly PlaybackMonitorService _monitor;
 
-        public MonitorFixture()
+        public MonitorFixture(PlaybackSnapshotStore? snapshots = null)
         {
             Connector.Setup(connector => connector.IsPlaying(It.IsAny<string>())).ReturnsAsync(true);
             Connector.Setup(connector => connector.GetTrackInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -167,7 +242,7 @@ public sealed class PlaybackMonitorServiceTests
                 .AddDbContext<ApplicationDbContext>(options => options.UseInMemoryDatabase(databaseName))
                 .BuildServiceProvider();
             _monitor = new PlaybackMonitorService(_provider.GetRequiredService<IServiceScopeFactory>(),
-                NullLogger<PlaybackMonitorService>.Instance, Mock.Of<IMetricsCollector>(), Clock);
+                NullLogger<PlaybackMonitorService>.Instance, Mock.Of<IMetricsCollector>(), Clock, snapshots);
         }
 
         public Task Poll() => (Task)typeof(PlaybackMonitorService)

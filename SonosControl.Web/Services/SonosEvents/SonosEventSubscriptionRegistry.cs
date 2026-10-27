@@ -64,7 +64,7 @@ public sealed class SonosEventSubscriptionRegistry
         while (true)
         {
             var registration = new SonosEventRegistration(Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)),
-                speakerIp, NormalizeUuid(speakerUuid), service);
+                speakerIp, PlaybackSnapshotMerge.NormalizeUuid(speakerUuid), service);
             if (_registrations.TryAdd(registration.Token, registration)) return registration;
         }
     }
@@ -79,7 +79,7 @@ public sealed class SonosEventSubscriptionRegistry
         => ((ICollection<KeyValuePair<string, SonosEventRegistration>>)_registrations).Remove(new(registration.Token, registration));
 
     public string? FindSpeakerIp(string speakerUuid)
-        => _registrations.Values.FirstOrDefault(item => string.Equals(item.SpeakerUuid, NormalizeUuid(speakerUuid), StringComparison.OrdinalIgnoreCase))?.SpeakerIp;
+        => _registrations.Values.FirstOrDefault(item => string.Equals(item.SpeakerUuid, PlaybackSnapshotMerge.NormalizeUuid(speakerUuid), StringComparison.OrdinalIgnoreCase))?.SpeakerIp;
 
     public string? FindSpeakerUuid(string speakerIp)
         => _registrations.Values.FirstOrDefault(item => string.Equals(item.SpeakerIp, speakerIp, StringComparison.OrdinalIgnoreCase))?.SpeakerUuid;
@@ -87,11 +87,4 @@ public sealed class SonosEventSubscriptionRegistry
     public DateTimeOffset? LastEventUtc(string speakerIp)
         => _registrations.Values.Where(item => string.Equals(item.SpeakerIp, speakerIp, StringComparison.OrdinalIgnoreCase))
             .Select(item => item.LastEventUtc).Max();
-
-    internal static string? NormalizeUuid(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        value = value.Trim();
-        return value.StartsWith("uuid:", StringComparison.OrdinalIgnoreCase) ? value[5..] : value;
-    }
 }

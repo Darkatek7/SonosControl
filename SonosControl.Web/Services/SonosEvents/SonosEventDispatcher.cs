@@ -20,7 +20,6 @@ public sealed class SonosEventDispatcher(
     ILogger<SonosEventDispatcher> logger,
     TimeProvider timeProvider) : BackgroundService
 {
-    private const string GroupMemberPrefix = "x-rincon:";
     private readonly Channel<SonosEventNotification> _queue = Channel.CreateBounded<SonosEventNotification>(
         new BoundedChannelOptions(256) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
     // Speaker IP -> UUID of the coordinator it follows, taken from its x-rincon: transport URI.
@@ -116,8 +115,8 @@ public sealed class SonosEventDispatcher(
     private void TrackCoordinator(string ip, string? transportUri)
     {
         if (transportUri is null) return;
-        if (transportUri.StartsWith(GroupMemberPrefix, StringComparison.OrdinalIgnoreCase))
-            _coordinators[ip] = SonosEventSubscriptionRegistry.NormalizeUuid(transportUri[GroupMemberPrefix.Length..]) ?? string.Empty;
+        if (PlaybackSnapshotMerge.CoordinatorUuid(transportUri) is { } uuid)
+            _coordinators[ip] = uuid;
         else
             _coordinators.TryRemove(ip, out _);
     }
