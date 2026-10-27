@@ -30,6 +30,18 @@ Today one speaker costs about 60 SOAP requests per minute (48 from the snapshot 
 - The speaker sends an initial `NOTIFY` with the full state (`SEQ: 0`) right after subscribing, and it can arrive before the `SUBSCRIBE` response. Routing by a per-subscription token in the callback path, created before the request is sent, avoids that race.
 - `SEQ` increases by one per event. A gap means a lost event and triggers an immediate reconciliation probe for that speaker.
 
+## Hardware Findings (2026-10-27)
+
+Recorded with a Play:1 and an Era 100 on Sonos OS 85.0 (`Server: Linux UPnP/1.0 Sonos/85.0-66270 (ZPS12)`), both playing the same AAC radio stream. The recorded bodies are in `SonosControl.Tests/SonosEventFixtures.cs`.
+
+- `SUBSCRIBE`, renewal, `412` for an unknown `SID` and `UNSUBSCRIBE` behave as described above. The granted `TIMEOUT` equals the requested one (300 s and 600 s tested). `SID` values look like `uuid:RINCON_<device>_sub<counter>`.
+- The initial `NOTIFY` arrives within a few milliseconds, in one case before the `SUBSCRIBE` response of the speaker's next service. Token routing is required, not optional.
+- The `NOTIFY` source address is the speaker. The `HOST` header is the callback host, so the speaker used the callback address it was given and routing worked across the Mac's two interfaces.
+- Follow-up events are partial. The `SEQ 1` event omitted `AVTransportURI` and all transport capability fields, so the Task 4 merge must keep unreported fields.
+- A radio stream title change produces an `AVTransport` event (`SEQ 1`) with new `CurrentTrackMetaData`. Radio "now playing" updates arrive live without polling.
+- Radio metadata uses the stream file name as `dc:title` and the real title in `r:streamContent`. `CurrentTrackURI` (`aac://http://...`) differs from `AVTransportURI` (`x-rincon-mp3radio://...`). Station identity must keep coming from `TransportUri`.
+- Not covered yet: play/pause, volume changes, a cleared queue, a speaker reboot, Docker networking. The two speakers belong to different Sonos households, so group behaviour (decision 2) is still open and needs two speakers from one household.
+
 ## Global Constraints
 
 - `PlaybackSnapshotStore` remains the only shared playback state. No consumer talks to the event layer directly.
@@ -79,7 +91,7 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 
 **Files:**
 - Create: `SonosControl.DAL/Repos/SonosEventParser.cs`, `SonosControl.DAL/Models/SonosPlaybackEvent.cs`
-- Test: `SonosControl.Tests/SonosEventParserTests.cs` with inline fixtures in the documented Sonos event format. Replace or extend them with bodies recorded from a real speaker during the Task 8 hardware check.
+- Test: `SonosControl.Tests/SonosEventParserTests.cs` with handwritten edge cases and bodies recorded from real speakers in `SonosControl.Tests/SonosEventFixtures.cs`. Add recordings for play/pause, volume and a cleared queue during the Task 8 hardware check.
 
 - [x] `SonosPlaybackEvent` holds nullable fields: `TransportState`, `TransportUri`, `TrackUri`, `TrackNumber`, `TrackMetadata`, `Volume`. Null means "not part of this event".
 - [x] `SonosEventParser.Parse(SonosEventService service, string? body)` reads `propertyset` → `LastChange` → `InstanceID val="0"` with `XDocument` (DTDs prohibited, bodies above 256 KB rejected). Use `RenderingControl` only for the `Master` channel. Ignore unknown elements. Return null for malformed XML; never throw into the endpoint.
