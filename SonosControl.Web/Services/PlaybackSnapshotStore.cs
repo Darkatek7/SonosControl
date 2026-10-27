@@ -140,6 +140,31 @@ public sealed class PlaybackSnapshotStore
         return true;
     }
 
+    /// <summary>
+    /// Merges an event into the current snapshot of a configured speaker. The write takes a new generation,
+    /// so a probe that started earlier cannot overwrite it. Returns false when there is no snapshot to merge into.
+    /// </summary>
+    public bool TryApplyEvent(string speakerIp, Func<PlaybackSnapshot, PlaybackSnapshot> merge, DateTimeOffset now)
+    {
+        lock (_snapshotSync)
+        {
+            if ((_hasConfiguration && !_configuredIps.Contains(speakerIp)) || !_snapshots.TryGetValue(speakerIp, out var current)) return false;
+            var generation = _generations.AddOrUpdate(speakerIp, 1, (_, value) => value + 1);
+            var merged = merge(current.Copy()) with
+            {
+                SpeakerIp = current.SpeakerIp,
+                IsStale = false,
+                LastCheckedUtc = now,
+                LastSuccessfulRefreshUtc = now,
+                Error = null,
+                Generation = generation
+            };
+            _snapshots[speakerIp] = merged.Copy();
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
     public void Set(PlaybackSnapshot snapshot)
     {
         lock (_snapshotSync)

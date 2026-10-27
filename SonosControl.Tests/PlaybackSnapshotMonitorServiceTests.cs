@@ -11,6 +11,38 @@ namespace SonosControl.Tests;
 public sealed class PlaybackSnapshotMonitorServiceTests
 {
     [Fact]
+    public async Task PollOnceKeepsTheRadioTitleWhileTheStreamReconnects()
+    {
+        var settingsRepo = new Mock<ISettingsRepo>();
+        settingsRepo.Setup(repo => repo.GetSettings()).ReturnsAsync(new SonosSettings
+        {
+            Speakers = [new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" }]
+        });
+        var connector = new Mock<ISonosConnectorRepo>();
+        connector.Setup(repo => repo.GetVolume("10.0.0.1", It.IsAny<CancellationToken>())).ReturnsAsync(8);
+        connector.Setup(repo => repo.IsPlaying("10.0.0.1", It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        connector.Setup(repo => repo.GetCurrentStationAsync("10.0.0.1", It.IsAny<CancellationToken>())).ReturnsAsync("x-rincon-mp3radio://radio.test/live");
+        connector.SetupSequence(repo => repo.GetTrackInfoAsync("10.0.0.1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SonosTrackInfo { Title = "live.aacp", StreamContent = "Band - Song" })
+            .ReturnsAsync(new SonosTrackInfo { Title = "live.aacp" })
+            .ReturnsAsync(new SonosTrackInfo { Title = "live.aacp", StreamContent = "Band - Next Song" });
+        var services = new ServiceCollection();
+        services.AddSingleton(settingsRepo.Object);
+        services.AddScoped(_ => connector.Object);
+        await using var provider = services.BuildServiceProvider();
+        var store = new PlaybackSnapshotStore();
+        var monitor = new PlaybackSnapshotMonitorService(provider.GetRequiredService<IServiceScopeFactory>(), store,
+            NullLogger<PlaybackSnapshotMonitorService>.Instance, TimeProvider.System);
+
+        await monitor.PollOnceAsync();
+        await monitor.PollOnceAsync();
+        Assert.Equal("Band - Song", store.Get("10.0.0.1")?.TrackInfo?.GetDisplayString());
+
+        await monitor.PollOnceAsync();
+        Assert.Equal("Band - Next Song", store.Get("10.0.0.1")?.TrackInfo?.GetDisplayString());
+    }
+
+    [Fact]
     public async Task PollOncePublishesCurrentPlaybackAndSettingsChanges()
     {
         var settings = new SonosSettings

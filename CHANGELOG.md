@@ -8,7 +8,18 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+### Added
+
+- Experimental live speaker events (`SonosEvents__Enabled`, off by default):
+  speakers report playback, track and volume changes to the app as they
+  happen. Polling stays on as a fallback. See
+  [Live Speaker Events](docs/deploy-and-config.md#live-speaker-events-experimental-off-by-default).
+
 ### Fixed
+
+- Radio titles no longer show `ZPSTR_CONNECTING` or `ZPSTR_BUFFERING`, and the
+  last song title stays visible while a stream reconnects instead of the stream
+  file name.
 
 - FlyDJ now takes rooms back once "Stay away after manual control" has passed
   since the last manual command, even if music started by hand is still

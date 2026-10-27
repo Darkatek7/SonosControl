@@ -60,4 +60,17 @@ public class SonosMetadataParserTests
         Assert.Null(track.AlbumArtUri);
         Assert.False(track.IsValidMetadata());
     }
+
+    [Theory]
+    [InlineData("ZPSTR_CONNECTING")]
+    [InlineData("ZPSTR_BUFFERING")]
+    public void ParseTrackMetadata_DropsConnectionPlaceholders(string placeholder)
+    {
+        var didl = $"<DIDL-Lite><item><r:streamContent>{placeholder}</r:streamContent><dc:title>live.aacp</dc:title></item></DIDL-Lite>";
+
+        var track = SonosMetadataParser.ParseTrackMetadata(didl, "192.0.2.10");
+
+        Assert.Null(track.StreamContent);
+        Assert.DoesNotContain("ZPSTR", track.GetDisplayString());
+    }
 }

@@ -76,8 +76,8 @@ public class SonosEventParserTests
     public static TheoryData<string, string, string?> RecordedPlaybackSequence => new()
     {
         { SonosEventFixtures.Era100AvTransportStoppedAfterPause, "STOPPED", null },
-        // Sonos puts a placeholder into streamContent while it connects to the stream.
-        { SonosEventFixtures.Era100AvTransportTransitioningAfterPlay, "TRANSITIONING", "ZPSTR_CONNECTING" },
+        // The recorded stream title is the placeholder ZPSTR_CONNECTING, which the parser drops.
+        { SonosEventFixtures.Era100AvTransportTransitioningAfterPlay, "TRANSITIONING", null },
         { SonosEventFixtures.Era100AvTransportPlayingWithoutStreamTitle, "PLAYING", null }
     };
 

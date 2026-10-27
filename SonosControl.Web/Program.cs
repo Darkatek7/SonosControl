@@ -3,6 +3,7 @@ using SonosControl.DAL.Repos;
 using SonosControl.Web.Services;
 using SonosControl.Web.Services.FlyDj;
 using SonosControl.Web.Services.HealthChecks;
+using SonosControl.Web.Services.SonosEvents;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -53,8 +54,25 @@ builder.Services.AddSingleton<PlaybackCommandCoordinator>();
 builder.Services.AddScoped<ManualPlaybackService>();
 builder.Services.AddSingleton<PlaybackSnapshotStore>();
 builder.Services.AddSingleton<PlaybackSnapshotMonitorService>();
+builder.Services.Configure<SonosEventOptions>(builder.Configuration.GetSection("SonosEvents"));
+builder.Services.AddHttpClient(nameof(SonosEventSubscriptionClient), client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+builder.Services.AddSingleton<ISonosEventSubscriptionClient, SonosEventSubscriptionClient>();
+builder.Services.AddSingleton<SonosEventSubscriptionRegistry>();
+builder.Services.AddSingleton<SonosEventDispatcher>();
+builder.Services.AddSingleton<SonosEventSubscriptionManager>();
 if (builder.Configuration.GetValue("PlaybackSnapshots:Enabled", builder.Configuration.GetValue("BackgroundServices:Enabled", true)))
+{
     builder.Services.AddHostedService(sp => sp.GetRequiredService<PlaybackSnapshotMonitorService>());
+    // Events only complement the shared snapshot monitor; without it there is nothing to merge into.
+    if (builder.Configuration.GetValue("SonosEvents:Enabled", false))
+    {
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<SonosEventDispatcher>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<SonosEventSubscriptionManager>());
+    }
+}
 builder.Services.AddSingleton<SleepTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SleepTimerService>());
 builder.Services.AddSingleton<ManualAutoStopService>();
@@ -198,7 +216,8 @@ app.Use(async (context, next) =>
     }
 });
 
-app.UseHttpsRedirection();
+// Speakers cannot follow a redirect for event callbacks.
+app.UseWhen(context => !context.Request.Path.StartsWithSegments("/api/sonos-events"), branch => branch.UseHttpsRedirection());
 
 app.UseStaticFiles();
 

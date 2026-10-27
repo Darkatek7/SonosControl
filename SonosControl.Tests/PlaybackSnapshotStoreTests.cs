@@ -6,6 +6,61 @@ namespace SonosControl.Tests;
 
 public sealed class PlaybackSnapshotStoreTests
 {
+    private static PlaybackSnapshot Snapshot(string ip, bool playing, int volume, DateTimeOffset at)
+        => new(ip, "Office", playing, volume, "uri", new SonosTrackInfo { Title = "Song" }, false, at, at, null);
+
+    [Fact]
+    public void TryApplyEventMergesIntoTheCurrentSnapshotAndMarksItFresh()
+    {
+        var store = new PlaybackSnapshotStore();
+        var earlier = DateTimeOffset.UtcNow.AddMinutes(-1);
+        store.Set(Snapshot("10.0.0.1", true, 30, earlier) with { IsStale = true, Error = "Playback status is delayed" });
+        var changed = 0;
+        store.Changed += () => changed++;
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.True(store.TryApplyEvent("10.0.0.1", current => current with { Volume = 12 }, now));
+
+        var result = store.Get("10.0.0.1")!;
+        Assert.Equal(12, result.Volume);
+        Assert.True(result.IsPlaying);
+        Assert.False(result.IsStale);
+        Assert.Null(result.Error);
+        Assert.Equal(now, result.LastSuccessfulRefreshUtc);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
+    public void TryApplyEventNeedsAnExistingSnapshotOfAConfiguredSpeaker()
+    {
+        var store = new PlaybackSnapshotStore();
+        var now = DateTimeOffset.UtcNow;
+        Assert.False(store.TryApplyEvent("10.0.0.1", current => current, now));
+
+        store.Set(Snapshot("10.0.0.2", true, 30, now));
+        store.RemoveExcept(["10.0.0.1"]);
+
+        Assert.False(store.TryApplyEvent("10.0.0.2", current => current, now));
+        Assert.Null(store.Get("10.0.0.2"));
+    }
+
+    [Fact]
+    public void TryApplyEventWinsOverAnOlderProbeButNotOverANewerOne()
+    {
+        var store = new PlaybackSnapshotStore();
+        var now = DateTimeOffset.UtcNow;
+        store.Set(Snapshot("10.0.0.1", true, 30, now));
+        var olderProbe = store.BeginProbe("10.0.0.1");
+
+        store.TryApplyEvent("10.0.0.1", current => current with { IsPlaying = false }, now);
+        Assert.False(store.TrySet(Snapshot("10.0.0.1", true, 30, now), olderProbe));
+        Assert.False(store.Get("10.0.0.1")!.IsPlaying);
+
+        var newerProbe = store.BeginProbe("10.0.0.1");
+        Assert.True(store.TrySet(Snapshot("10.0.0.1", true, 31, now), newerProbe));
+        Assert.Equal(31, store.Get("10.0.0.1")!.Volume);
+    }
+
     [Fact]
     public void ConsumersCannotMutateStoredTrackMetadataAndExplicitSettingsChangesBroadcast()
     {
