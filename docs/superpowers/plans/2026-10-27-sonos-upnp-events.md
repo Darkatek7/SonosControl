@@ -182,16 +182,25 @@ Live check on 2026-10-27 with both speakers, 65 s each: 62 and 52 SOAP requests 
 **Files:**
 - Modify: `SonosControl.Web/Services/MetricsCollector.cs`, `SonosControl.Web/Pages/DevicesPage.razor`, `verify_mobile_smoke.py`, `docker-compose.yml`, `docker-compose.hub.yml`, `docs/deploy-and-config.md`, `docs/operations-and-observability.md`, `docs/testing-and-troubleshooting.md`, `AGENTS.md`, `CHANGELOG.md`
 
-- [ ] `/metricsz`: active subscriptions, events received, renewal failures, reconciliation probes, polled speakers.
-- [ ] Devices page: per speaker "Live events" or "Polling", with the last event time and the last subscription error.
-- [ ] Smoke fake speaker: add `do_SUBSCRIBE` and `do_UNSUBSCRIBE`, remember callbacks, and send `NOTIFY` with `LastChange` bodies from `set_external_state`. The owned configured fixture sets `SonosEvents__CallbackBaseUrl` to the app's loopback URL and checks external Play/Pause and volume within 3 s instead of 10 s. Add a variant where `SUBSCRIBE` answers 501 and the existing 10 s checks still pass through polling.
-- [ ] Docs: callback reachability (the speaker must reach `CallbackBaseUrl`; a firewall or an authenticating reverse proxy forces polling), the new settings, the diagnostics. Sync `AGENTS.md` with the new smoke behaviour.
-- [ ] Docs also cover separate VLANs: the speaker VLAN must reach `CallbackBaseUrl`, the same path YouTube and MP3 playback already need.
-- [ ] Real hardware checklist before default on. Done on 2026-10-27: single rooms on two models, radio, play/pause, volume, subscription renewal and expiry. Still open: Spotify, YouTube session playback, a cleared queue, a speaker reboot, an unplugged speaker, an app restart (old subscriptions expire on their own), Docker bridge networking with the published port, and a group or stereo pair where hardware in one household is available.
+- [x] `/metricsz`: active subscriptions, events received, renewal failures, reconciliation probes, polled speakers.
+- [x] Devices page: per speaker "Live events" or "Polling", with the last event time and the last subscription error.
+- [x] Smoke fake speaker: add `do_SUBSCRIBE` and `do_UNSUBSCRIBE`, remember callbacks, and send `NOTIFY` with `LastChange` bodies from `set_external_state`. The owned configured fixture sets `SonosEvents__CallbackBaseUrl` to the app's loopback URL and checks external Play/Pause and volume within 3 s instead of 10 s. Add a variant where `SUBSCRIBE` answers 501 and the existing 10 s checks still pass through polling.
+- [x] Docs: callback reachability (the speaker must reach `CallbackBaseUrl`; a firewall or an authenticating reverse proxy forces polling), the new settings, the diagnostics. Sync `AGENTS.md` with the new smoke behaviour.
+- [x] Docs also cover separate VLANs: the speaker VLAN must reach `CallbackBaseUrl`, the same path YouTube and MP3 playback already need.
+- [ ] Real hardware checklist before default on. Done on 2026-10-27: single rooms on two models, radio, play/pause, volume, subscription renewal and expiry, unsubscribe on app shutdown, and the request reduction. Still open: Spotify, YouTube session playback, a cleared queue, a speaker reboot, an unplugged speaker, an app restart (old subscriptions expire on their own), Docker bridge networking with the published port, and a group or stereo pair where hardware in one household is available.
 
 ### Task 9 (optional, follow-up): Topology events
 
-- [ ] Subscribe to `/ZoneGroupTopology/Event` on one speaker per household and use topology changes to refresh the group and sync UI without waiting for a probe. Member routing itself is already covered by Task 4.
+- [x] Subscribe to `/ZoneGroupTopology/Event` and use topology changes to refresh the group and sync UI without waiting for a probe. Member routing itself is already covered by Task 4.
+
+### Implementation notes for PR 4 (Tasks 8 and 9)
+
+- Events are on by default (`SonosEvents:Enabled`, `SONOS_EVENTS_ENABLED`), although the hardware checklist above is not complete. Decision 3 accepted this risk because a speaker without working events falls back to 5 s polling; the Devices page and `/metricsz` make that visible.
+- `/metricsz` gains a `sonosEvents` block. Active subscriptions and the evented and polled speaker counts come from the last subscription cycle. Topology refreshes count as probes.
+- The Devices page shows "Live updates, last HH:mm:ss" or "Polling every 5 s" with the last subscription error, through `ISonosEventStatusProvider`. While events are off it shows nothing.
+- `docker-compose.hub.yml` only overrides the images and inherits the environment from `docker-compose.yml`, so it needed no change. `.env.example` documents the two new variables.
+- The smoke runner has four configurations now. The configured fixture runs with live events and expects external changes within 3 s. A new short polling configuration answers `SUBSCRIBE` with 501 and expects them within 10 s. On machines where the installed Chrome cannot start headless, `PLAYWRIGHT_CHROME_PATH` can point to Playwright's `chrome-headless-shell`.
+- Every configured speaker subscribes to topology events, because household membership is not known in advance. Only a changed group layout counts: the dispatcher compares a fingerprint of coordinators and members, ignores the first event of each subscription, and coalesces the reports of all speakers into one `RefreshNowAsync` after one second. Topology subscriptions do not count for speaker health.
 
 ## Delivery
 
@@ -199,8 +208,8 @@ Live check on 2026-10-27 with both speakers, 65 s each: 62 and 52 SOAP requests 
 |---|---|---|
 | 1 | Task 1 and Task 2 | None |
 | 2 | Tasks 3–5, metrics and diagnostics from Task 8, `SonosEvents:Enabled = false` | Only when switched on |
-| 3 | Tasks 6–8, hardware checklist, default on, docs and changelog | Release 1.1.0 |
-| 4 | Task 9 if needed | Group changes live |
+| 3 | Tasks 6 and 7 | Only when switched on |
+| 4 | Task 8, Task 9, default on | Release 1.1.0 |
 
 ## Out of Scope
 

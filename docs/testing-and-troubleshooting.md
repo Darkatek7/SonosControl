@@ -29,8 +29,9 @@ artifacts/ui-smoke-venv/bin/python verify_mobile_smoke.py
 The auto-start path creates disposable settings and SQLite directories under
 `artifacts`, disables background services, and checks all primary pages in
 light and dark themes at 390, 768, and 1280 pixels in two configurations:
-empty setup and a configured simulated speaker, both with FlyDJ disabled. A
-third FlyDJ configuration starts the app with `FlyDj__Enabled=true` against a
+empty setup and a configured simulated speaker with live UPnP events, both with
+FlyDJ disabled. A short polling configuration checks the fallback for speakers
+that reject event subscriptions. A FlyDJ configuration starts the app with `FlyDj__Enabled=true` against a
 stub sidecar the runner serves on a free loopback port, then checks the
 `FlyDJ` nav link, the `/flydj` page (3D view or 2D fallback, statistics,
 activity, switch, settings), and a clean browser console. The simulation uses
@@ -42,12 +43,19 @@ console errors, horizontal overflow, or content hidden behind the player.
 The floating player must stay at its configured bottom inset, and mobile
 content clearance includes both the dock height and the inset.
 
-Only the runner-owned configured fixture enables the shared playback snapshot
-monitor. It polls its loopback speaker every five seconds, and a snapshot is
-marked stale after fifteen seconds without a successful refresh. The smoke
-changes the fake speaker's Play/Pause and volume state outside the app, then
-checks that Home, the dock, and the active room card show those changes within
-ten seconds. Empty setup disables the monitor. A caller-supplied running app
+The speaker configurations enable the shared playback snapshot monitor. In the
+configured fixture the simulated speaker accepts UPnP `SUBSCRIBE`, renewal and
+`UNSUBSCRIBE`, and sends `NOTIFY` to the app (`SonosEvents__CallbackBaseUrl` is
+the app's own URL) on every external or app-driven change. The app then
+reconciles it every 30 seconds and marks its snapshot stale after 75 seconds
+without an update. The smoke checks that the Devices page reports live
+updates, changes the fake speaker's Play/Pause and volume state outside the
+app, and checks that Home, the dock, and the active room card show those
+changes within three seconds. The polling configuration answers `SUBSCRIBE`
+with 501: the Devices page must report polling, the app polls every five
+seconds with snapshots stale after fifteen seconds, and the same external
+changes must arrive within ten seconds. Empty setup disables the monitor, and
+the empty and FlyDJ configurations turn live events off. A caller-supplied running app
 is only inspected; the runner never enables services, changes playback, or
 performs the writing workflows there.
 
@@ -149,6 +157,8 @@ Optional:
 | A synchronized schedule reports grouping unavailable | Speakers cannot join the requested Sonos group, for example because they belong to separate Sonos systems | Playback falls back to independent speakers and logs `SceneGroupingUnavailable`; place speakers in the same Sonos system to synchronize them |
 | Tests fail with locked DLL on Windows | App still running during build/test | Stop running `dotnet run` processes, then rerun tests |
 | Cookies invalid after restart | Data protection keys not persisted | Persist `DataProtectionKeys` directory in deployment |
+| Devices shows "Polling every 5 s" for a speaker | The speaker cannot subscribe or reach the callback URL, for example across a firewall between VLANs or through an authenticating reverse proxy | Check the error next to the status, make `PLAYBACK_PUBLIC_BASE_URL` or `SONOS_EVENTS_CALLBACK_BASE_URL` reachable from the speaker network on the app port, then wait for the next retry (at most 5 minutes) |
+| Local smoke fails with `Failed to get the path for 1001` | The installed Google Chrome cannot start headless in this environment | Set `PLAYWRIGHT_CHROME_PATH` to Playwright's `chrome-headless-shell` under `~/Library/Caches/ms-playwright` |
 | Local smoke fails writing `/root` on macOS | Data protection keys point to a Linux path | Let `verify_mobile_smoke.py` use `artifacts/mobile_smoke_dataprotection_keys` or set `DataProtection__KeysDirectory` |
 | README screenshot script cannot log in against a manually started app | Missing credentials in env/args | Pass `-Username/-Password` explicitly |
 

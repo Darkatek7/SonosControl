@@ -22,6 +22,10 @@ public sealed class MetricsCollector : IMetricsCollector
     private readonly Counter<long> _playbackSessionWritesCounter = Meter.CreateCounter<long>("playback_session_writes_total");
     private readonly Counter<long> _playbackSessionWriteSkipsCounter = Meter.CreateCounter<long>("playback_session_write_skips_total");
 
+    private readonly Counter<long> _sonosEventsCounter = Meter.CreateCounter<long>("sonos_events_total");
+    private readonly Counter<long> _sonosEventProbesCounter = Meter.CreateCounter<long>("sonos_event_probes_total");
+    private readonly Counter<long> _sonosSubscriptionFailuresCounter = Meter.CreateCounter<long>("sonos_event_subscription_failures_total");
+
     private long _dashboardRefreshSuccesses;
     private long _dashboardRefreshFailures;
     private long _dashboardSlowLaneRuns;
@@ -36,6 +40,14 @@ public sealed class MetricsCollector : IMetricsCollector
     private long _playbackMonitorCycleDurationMsMax;
     private long _playbackSessionWrites;
     private long _playbackSessionWriteSkips;
+
+    private long _sonosEventsReceived;
+    private long _sonosEventsDropped;
+    private long _sonosEventProbes;
+    private long _sonosSubscriptionFailures;
+    private long _sonosActiveSubscriptions;
+    private long _sonosEventedSpeakers;
+    private long _sonosPolledSpeakers;
 
     private readonly ConcurrentDictionary<string, long> _sonosCommandErrorsByCommand = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _dashboardDurationBuckets = new(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +114,31 @@ public sealed class MetricsCollector : IMetricsCollector
         _playbackSessionWritesCounter.Add(1);
     }
 
+    public void RecordSonosEventReceived(bool queued)
+    {
+        Interlocked.Increment(ref queued ? ref _sonosEventsReceived : ref _sonosEventsDropped);
+        _sonosEventsCounter.Add(1, new KeyValuePair<string, object?>("outcome", queued ? "queued" : "dropped"));
+    }
+
+    public void RecordSonosEventProbe()
+    {
+        Interlocked.Increment(ref _sonosEventProbes);
+        _sonosEventProbesCounter.Add(1);
+    }
+
+    public void RecordSonosSubscriptionFailure()
+    {
+        Interlocked.Increment(ref _sonosSubscriptionFailures);
+        _sonosSubscriptionFailuresCounter.Add(1);
+    }
+
+    public void SetSonosEventSpeakers(int activeSubscriptions, int eventedSpeakers, int polledSpeakers)
+    {
+        Interlocked.Exchange(ref _sonosActiveSubscriptions, Math.Max(0, activeSubscriptions));
+        Interlocked.Exchange(ref _sonosEventedSpeakers, Math.Max(0, eventedSpeakers));
+        Interlocked.Exchange(ref _sonosPolledSpeakers, Math.Max(0, polledSpeakers));
+    }
+
     public AppMetricsSnapshot GetSnapshot()
     {
         var dashboardSuccesses = Interlocked.Read(ref _dashboardRefreshSuccesses);
@@ -136,7 +173,15 @@ public sealed class MetricsCollector : IMetricsCollector
                 AverageCycleDurationMs: playbackAverageDurationMs,
                 MaxCycleDurationMs: Interlocked.Read(ref _playbackMonitorCycleDurationMsMax),
                 CycleDurationBuckets: SnapshotDictionary(_playbackCycleDurationBuckets),
-                AverageSpeakersPerCycle: averageSpeakers));
+                AverageSpeakersPerCycle: averageSpeakers),
+            SonosEvents: new SonosEventMetrics(
+                EventsReceived: Interlocked.Read(ref _sonosEventsReceived),
+                EventsDropped: Interlocked.Read(ref _sonosEventsDropped),
+                ProbesRequested: Interlocked.Read(ref _sonosEventProbes),
+                SubscriptionFailures: Interlocked.Read(ref _sonosSubscriptionFailures),
+                ActiveSubscriptions: Interlocked.Read(ref _sonosActiveSubscriptions),
+                EventedSpeakers: Interlocked.Read(ref _sonosEventedSpeakers),
+                PolledSpeakers: Interlocked.Read(ref _sonosPolledSpeakers)));
     }
 
     private static IReadOnlyDictionary<string, long> SnapshotDictionary(ConcurrentDictionary<string, long> source)

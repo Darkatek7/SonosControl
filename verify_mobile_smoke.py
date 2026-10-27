@@ -12,6 +12,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import platform
+import queue
 import re
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.error import URLError, HTTPError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from playwright.sync_api import sync_playwright, expect, Error
 
@@ -53,10 +54,20 @@ ROUTES = [
 
 
 class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
+    # A successful HTTP response with non-image content reproduces a broken Sonos cover.
+    TRACK_METADATA = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist><upnp:albumArtURI>http://127.0.0.1:1400/missing-art</upnp:albumArtURI></item></DIDL-Lite>'
+    STREAM_URI = "http://127.0.0.1:1400/stream"
+    TOPOLOGY = '<ZoneGroup Coordinator="RINCON_00000000000101400"><ZoneGroupMember UUID="RINCON_00000000000101400" Location="http://127.0.0.1:1400/xml/device_description.xml" /></ZoneGroup>'
     transport_state = "PAUSED_PLAYBACK"
     volume = 34
     device_command_count = 0
     state_lock = threading.Lock()
+    # UPnP event subscriptions: SID -> callback URL, service and next SEQ.
+    events_supported = True
+    subscriptions = {}
+    subscription_counter = 0
+    notifications = queue.Queue()
+    notifier = None
 
     @classmethod
     def reset(cls):
@@ -66,6 +77,17 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
             cls.device_command_count = 0
 
     @classmethod
+    def start_fixture(cls, *, events_supported):
+        """Forget subscriptions from an earlier configuration and choose whether SUBSCRIBE works."""
+        cls.reset()
+        with cls.state_lock:
+            cls.events_supported = events_supported
+            cls.subscriptions.clear()
+        if cls.notifier is None:
+            cls.notifier = threading.Thread(target=cls.deliver_notifications, daemon=True)
+            cls.notifier.start()
+
+    @classmethod
     def set_external_state(cls, *, playing=None, volume=None):
         """Change the simulated room without sending a command from the app."""
         with cls.state_lock:
@@ -73,6 +95,80 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
                 cls.transport_state = "PLAYING" if playing else "PAUSED_PLAYBACK"
             if volume is not None:
                 cls.volume = max(0, min(100, int(volume)))
+        changed = (["AVTransport"] if playing is not None else []) + (["RenderingControl"] if volume is not None else [])
+        cls.notify(changed)
+
+    @classmethod
+    def last_change(cls, service):
+        with cls.state_lock:
+            transport_state, volume = cls.transport_state, cls.volume
+        if service == "ZoneGroupTopology":
+            return f'<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property><ZoneGroupState>{html.escape("<ZoneGroupState><ZoneGroups>" + cls.TOPOLOGY + "</ZoneGroups></ZoneGroupState>")}</ZoneGroupState></e:property></e:propertyset>'
+        if service == "RenderingControl":
+            event = f'<Event xmlns="urn:schemas-upnp-org:metadata-1-0/RCS/"><InstanceID val="0"><Volume channel="Master" val="{volume}"/></InstanceID></Event>'
+        else:
+            event = ('<Event xmlns="urn:schemas-upnp-org:metadata-1-0/AVT/"><InstanceID val="0">'
+                     f'<TransportState val="{transport_state}"/><CurrentTrack val="1"/><CurrentTrackURI val="{cls.STREAM_URI}"/>'
+                     f'<CurrentTrackMetaData val="{html.escape(cls.TRACK_METADATA)}"/><AVTransportURI val="{cls.STREAM_URI}"/></InstanceID></Event>')
+        return f'<e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0"><e:property><LastChange>{html.escape(event)}</LastChange></e:property></e:propertyset>'
+
+    @classmethod
+    def notify(cls, services, only_sid=None):
+        with cls.state_lock:
+            targets = []
+            for sid, subscription in cls.subscriptions.items():
+                if subscription["service"] in services and only_sid in (None, sid):
+                    targets.append((sid, subscription["callback"], subscription["service"], subscription["seq"]))
+                    subscription["seq"] += 1
+        for sid, callback, service, seq in targets:
+            cls.notifications.put((sid, callback, seq, cls.last_change(service)))
+
+    @classmethod
+    def deliver_notifications(cls):
+        # One worker keeps the SEQ order a real speaker guarantees.
+        while True:
+            sid, callback, seq, body = cls.notifications.get()
+            request = Request(callback, data=body.encode("utf-8"), method="NOTIFY", headers={
+                "Content-Type": 'text/xml; charset="utf-8"', "NT": "upnp:event", "NTS": "upnp:propchange", "SID": sid, "SEQ": str(seq)})
+            try:
+                with urlopen(request, timeout=5):
+                    pass
+            except (URLError, HTTPError, OSError):
+                pass
+
+    def respond_event(self, status, sid=None, timeout=None):
+        self.send_response(status)
+        if sid:
+            self.send_header("SID", sid)
+            self.send_header("TIMEOUT", timeout or "Second-1800")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_SUBSCRIBE(self):
+        cls = type(self)
+        service = next((name for name in ("RenderingControl", "ZoneGroupTopology") if name in self.path), "AVTransport")
+        sid = self.headers.get("SID")
+        timeout = self.headers.get("TIMEOUT") or "Second-1800"
+        created = False
+        with cls.state_lock:
+            if not cls.events_supported:
+                status = 501
+            elif sid:
+                status = 200 if sid in cls.subscriptions else 412
+            else:
+                cls.subscription_counter += 1
+                sid = f"uuid:RINCON_00000000000101400_sub{cls.subscription_counter:010d}"
+                cls.subscriptions[sid] = {"callback": (self.headers.get("CALLBACK") or "").strip().strip("<>"), "service": service, "seq": 0}
+                status, created = 200, True
+        self.respond_event(status, sid if status == 200 else None, timeout)
+        if created:
+            cls.notify([service], only_sid=sid)
+
+    def do_UNSUBSCRIBE(self):
+        cls = type(self)
+        with cls.state_lock:
+            known = cls.subscriptions.pop(self.headers.get("SID"), None) is not None
+        self.respond_event(200 if known else 412)
 
     @classmethod
     def command_count(cls):
@@ -97,7 +193,9 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8")
         action = self.headers.get("SOAPACTION", "").strip('"').split("#")[-1]
         cls = type(self)
+        changed = []
         if action not in {"GetVolume", "GetTransportInfo", "GetPositionInfo", "GetMediaInfo", "Browse", "GetZoneGroupState"}:
+            changed = ["RenderingControl"] if action == "SetVolume" else ["AVTransport"]
             with cls.state_lock:
                 cls.device_command_count += 1
                 if action == "Play":
@@ -111,9 +209,8 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         with cls.state_lock:
             volume = cls.volume
             transport_state = cls.transport_state
-        # A successful HTTP response with non-image content reproduces a broken Sonos cover.
-        metadata = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist><upnp:albumArtURI>http://127.0.0.1:1400/missing-art</upnp:albumArtURI></item></DIDL-Lite>'
-        topology = '<ZoneGroups><ZoneGroup Coordinator="RINCON_00000000000101400"><ZoneGroupMember UUID="RINCON_00000000000101400" Location="http://127.0.0.1:1400/xml/device_description.xml" /></ZoneGroup></ZoneGroups>'
+        metadata = cls.TRACK_METADATA
+        topology = f"<ZoneGroups>{cls.TOPOLOGY}</ZoneGroups>"
         fields = {
             "GetVolume": f"<CurrentVolume>{volume}</CurrentVolume>",
             "GetTransportInfo": f"<CurrentTransportState>{transport_state}</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>",
@@ -124,6 +221,8 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         }.get(action, "")
         service = "RenderingControl" if "Volume" in action else "AVTransport"
         self.respond(f'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><u:{action}Response xmlns:u="urn:schemas-upnp-org:service:{service}:1">{fields}</u:{action}Response></s:Body></s:Envelope>')
+        if changed:
+            cls.notify(changed)
 
 
 FLYDJ_POPULATIONS = [
@@ -369,7 +468,7 @@ def wait_for_server_ready(timeout_seconds, process=None):
     return False
 
 
-def start_local_server(with_speaker=False, flydj_url=None):
+def start_local_server(with_speaker=False, flydj_url=None, sonos_events=False):
     artifacts_dir = Path("artifacts")
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     log_path = artifacts_dir / "mobile_smoke_server.log"
@@ -408,6 +507,9 @@ def start_local_server(with_speaker=False, flydj_url=None):
             "BackgroundServices__Enabled": "false",
             "Automation__TimeZone": "UTC",
             "PlaybackSnapshots__Enabled": "true" if with_speaker else "false",
+            # Live events need the app's own URL as callback; other configurations keep plain polling.
+            "SonosEvents__Enabled": "true" if sonos_events else "false",
+            **({"SonosEvents__CallbackBaseUrl": BASE_URL} if sonos_events else {}),
             "Settings__DataDirectory": str(settings_dir),
             "ConnectionStrings__DefaultConnection": f"Data Source={runtime_dir / 'app.db'}",
             "ADMIN_USERNAME": os.getenv("ADMIN_USERNAME", "admin"),
@@ -1058,23 +1160,56 @@ def verify_volume_input(field):
     expect(field).to_have_value("100")
 
 
-def verify_external_snapshot_updates(page):
+def verify_external_snapshot_updates(page, timeout=10000):
+    """External changes reach Home, dock and room cards; with live events within 3 s, with polling within 10 s."""
     page.goto(f"{BASE_URL}/", wait_until="networkidle")
     SimulatedSpeakerHandler.set_external_state(playing=True, volume=63)
     hero_state = page.locator(".np-hero__playback-state")
-    expect(hero_state).to_have_text("Playing", timeout=10000)
-    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Pause playback", timeout=10000)
-    expect(page.locator("#home-now-playing-volume-number")).to_have_value("63", timeout=10000)
-    expect(page.locator("#global-player-volume-number")).to_have_value("63", timeout=10000)
-    expect(page.locator(".room-card--active input[type='number']")).to_have_value("63", timeout=10000)
+    expect(hero_state).to_have_text("Playing", timeout=timeout)
+    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Pause playback", timeout=timeout)
+    expect(page.locator("#home-now-playing-volume-number")).to_have_value("63", timeout=timeout)
+    expect(page.locator("#global-player-volume-number")).to_have_value("63", timeout=timeout)
+    expect(page.locator(".room-card--active input[type='number']")).to_have_value("63", timeout=timeout)
 
     SimulatedSpeakerHandler.set_external_state(playing=False, volume=22)
-    expect(hero_state).to_have_text("Paused", timeout=10000)
-    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Start playback", timeout=10000)
-    expect(page.locator("#home-now-playing-volume-number")).to_have_value("22", timeout=10000)
-    expect(page.locator("#global-player-volume-number")).to_have_value("22", timeout=10000)
-    expect(page.locator(".room-card--active input[type='number']")).to_have_value("22", timeout=10000)
+    expect(hero_state).to_have_text("Paused", timeout=timeout)
+    expect(page.locator("[data-qa='home-player-toggle']")).to_have_attribute("aria-label", "Start playback", timeout=timeout)
+    expect(page.locator("#home-now-playing-volume-number")).to_have_value("22", timeout=timeout)
+    expect(page.locator("#global-player-volume-number")).to_have_value("22", timeout=timeout)
+    expect(page.locator(".room-card--active input[type='number']")).to_have_value("22", timeout=timeout)
     SimulatedSpeakerHandler.set_external_state(playing=False, volume=34)
+
+
+def verify_device_event_status(page, expected):
+    # The Devices page renders the status once, so reload until the subscription cycle has caught up.
+    status = page.locator("[data-qa='device-event-status']")
+    for _ in range(10):
+        page.goto(f"{BASE_URL}/administration/devices", wait_until="networkidle")
+        if status.count() and expected in status.first.inner_text():
+            break
+        page.wait_for_timeout(1000)
+    expect(status).to_contain_text(expected, timeout=1000)
+    page.goto(f"{BASE_URL}/", wait_until="networkidle")
+
+
+def verify_polling_fallback(playwright, output_dir):
+    """A speaker that rejects SUBSCRIBE keeps working through 5 s polling."""
+    browser = launch_chromium(playwright)
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    try:
+        page = context.new_page()
+        browser_errors = []
+        page.on("console", lambda message: browser_errors.append(f"console: {message.text}") if message.type == "error" else None)
+        page.on("pageerror", lambda error: browser_errors.append(f"pageerror: {error}"))
+        login_or_fail(page, output_dir)
+        expect(page.locator("[data-qa='home-dashboard']")).to_be_visible(timeout=10000)
+        verify_device_event_status(page, "Polling every 5 s")
+        SimulatedSpeakerHandler.reset()
+        verify_external_snapshot_updates(page)
+        assert not browser_errors, "Browser errors during the polling fallback: " + "; ".join(browser_errors)
+        print("Polling fallback passed: SUBSCRIBE answered 501, the Devices page reports polling, and external changes arrived through polling.")
+    finally:
+        browser.close()
 
 
 def verify_sleep_timer_workflow(page, browser, output_dir):
@@ -1292,8 +1427,10 @@ def verify_application(playwright, output_dir, expected_speaker_state=None, expe
             assert with_speaker == expected_speaker_state, "Isolated speaker fixture did not match the expected configuration."
         secondary_context = None
         if expected_speaker_state is True:
+            # The owned configured fixture runs with live events, so external changes must arrive within 3 s.
+            verify_device_event_status(page, "Live updates")
             SimulatedSpeakerHandler.reset()
-            verify_external_snapshot_updates(page)
+            verify_external_snapshot_updates(page, timeout=3000)
             secondary_context = verify_sleep_timer_workflow(page, browser, output_dir)
         verify_responsive_home(page, output_dir, with_speaker)
         for viewport_slug, width, height in VIEWPORTS:
@@ -1369,13 +1506,13 @@ def run():
             return
         if not AUTO_START_SERVER:
             raise RuntimeError(f"App is not reachable at {BASE_URL}. Start the app or enable auto-start.")
-        for configuration in ["empty", "speaker", "flydj"]:
+        for configuration in ["empty", "speaker", "polling", "flydj"]:
             with_speaker = configuration != "empty"
             speaker = sidecar = None
             process = log_stream = runtime_dir = None
             try:
                 if with_speaker:
-                    SimulatedSpeakerHandler.reset()
+                    SimulatedSpeakerHandler.start_fixture(events_supported=configuration != "polling")
                     speaker = ThreadingHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
                     threading.Thread(target=speaker.serve_forever, daemon=True).start()
                 flydj_url = None
@@ -1384,11 +1521,13 @@ def run():
                     sidecar = ThreadingHTTPServer(("127.0.0.1", 0), FlyDjStubHandler)
                     threading.Thread(target=sidecar.serve_forever, daemon=True).start()
                     flydj_url = f"http://127.0.0.1:{sidecar.server_address[1]}"
-                process, log_stream, log_path, runtime_dir = start_local_server(with_speaker, flydj_url)
+                process, log_stream, log_path, runtime_dir = start_local_server(with_speaker, flydj_url, sonos_events=configuration in ("speaker", "polling"))
                 if not wait_for_server_ready(SERVER_START_TIMEOUT_SECONDS, process):
                     raise RuntimeError(f"Timed out waiting for {BASE_URL} (exit code: {process.poll()}). Check {log_path}")
                 if configuration == "flydj":
                     verify_flydj_application(playwright, output_dir)
+                elif configuration == "polling":
+                    verify_polling_fallback(playwright, output_dir)
                 else:
                     verify_application(playwright, output_dir, with_speaker, expect_flydj_disabled=True)
             finally:

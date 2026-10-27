@@ -121,6 +121,7 @@ Then open `http://localhost:5107`.
 - Role-based access (`operator`, `admin`, `superadmin`) with registration control.
 - Responsive listening statistics and a searchable read-only activity trail.
 - Separate administration areas for devices, system settings, users, and recoverable configuration backups.
+- Live speaker updates through UPnP events, so changes from the Sonos app or the speaker buttons appear within about a second; speakers that cannot send events keep polling.
 - Health and metrics endpoints (`/healthz`, `/metricsz`) for basic monitoring.
 - Docker image includes `ffmpeg` and `yt-dlp` for YouTube audio playback. The core app needs no extra sidecar containers.
 - Optional, experimental FlyDJ: an autonomous radio DJ driven by a fruit-fly connectome simulation, running as its own `flydj` container and off by default. It chooses only between your library's radio stations and always yields to manual control.

@@ -1,10 +1,12 @@
 @inject ISettingsRepo _settingsRepo
 @* Routed through AdministrationPage. *@
 @using SonosControl.Web.Services
+@using SonosControl.Web.Services.SonosEvents
 @inject ISonosDeviceDiscoveryService DiscoveryService
 @inject IDeviceHealthSnapshotStore DeviceHealthSnapshotStore
 @inject ConfiguredTimeZoneService AppTimeZone
 @inject PlaybackUiStateService PlaybackState
+@inject ISonosEventStatusProvider EventStatus
 @attribute [Authorize(Roles = "admin,superadmin")]
 
 <PageTitle>Devices - Sonos Control</PageTitle>
@@ -104,6 +106,10 @@
                                 <div class="device-card__status">
                                     <span class="device-status-pill @GetHealthClass(health)">@GetHealthLabel(health)</span>
                                     <small>@FormatLastSeen(health)</small>
+                                    @if (EventStatus.GetStatus(speaker.IpAddress) is { } events)
+                                    {
+                                        <small class="device-card__updates @(events.Live ? "is-live" : null)" data-qa="device-event-status">@FormatEventStatus(events)</small>
+                                    }
                                 </div>
                                 <div class="device-card__settings">
                                     <label>
@@ -260,6 +266,16 @@
         }
 
         return health.IsOnline ? "is-online" : "is-offline";
+    }
+
+    private string FormatEventStatus(SonosEventSpeakerStatus events)
+    {
+        if (!events.Live)
+        {
+            return string.IsNullOrWhiteSpace(events.LastError) ? "Polling every 5 s" : $"Polling every 5 s: {events.LastError}";
+        }
+
+        return events.LastEventUtc is { } lastEvent ? $"Live updates, last {AppTimeZone.Format(lastEvent, "HH:mm:ss")}" : "Live updates";
     }
 
     private string FormatLastSeen(DeviceHealthStatus? health)

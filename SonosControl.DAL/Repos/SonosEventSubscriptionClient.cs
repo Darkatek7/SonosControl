@@ -62,6 +62,7 @@ public sealed class SonosEventSubscriptionClient(IHttpClientFactory httpClientFa
     {
         SonosEventService.AVTransport => "/MediaRenderer/AVTransport/Event",
         SonosEventService.RenderingControl => "/MediaRenderer/RenderingControl/Event",
+        SonosEventService.ZoneGroupTopology => "/ZoneGroupTopology/Event",
         _ => throw new ArgumentOutOfRangeException(nameof(service), service, null)
     };
 

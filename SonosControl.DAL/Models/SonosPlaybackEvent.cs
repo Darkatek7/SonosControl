@@ -3,7 +3,8 @@ namespace SonosControl.DAL.Models;
 public enum SonosEventService
 {
     AVTransport,
-    RenderingControl
+    RenderingControl,
+    ZoneGroupTopology
 }
 
 /// <summary>

@@ -16,6 +16,8 @@ services:
       Playback__PublicBaseUrl: ${PLAYBACK_PUBLIC_BASE_URL:-http://192.168.1.50:8080}
       Playback__ArtifactDirectory: /app/artifacts/youtube-audio
       Playback__SessionTtlMinutes: ${PLAYBACK_SESSION_TTL_MINUTES:-30}
+      SonosEvents__Enabled: ${SONOS_EVENTS_ENABLED:-true}
+      SonosEvents__CallbackBaseUrl: ${SONOS_EVENTS_CALLBACK_BASE_URL:-}
       ConnectionStrings__DefaultConnection: Data Source=/app/Data/app.db
       ASPNETCORE_URLS: http://+:8080
       DataProtection__KeysDirectory: /app/DataProtectionKeys

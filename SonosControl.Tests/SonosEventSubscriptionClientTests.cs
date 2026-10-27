@@ -26,6 +26,15 @@ public sealed class SonosEventSubscriptionClientTests
         Assert.Equal(new SonosEventSubscription("uuid:RINCON_TEST_sub0000000609", TimeSpan.FromSeconds(600)), result);
     }
 
+    [Theory]
+    [InlineData(SonosEventService.AVTransport, "/MediaRenderer/AVTransport/Event")]
+    [InlineData(SonosEventService.RenderingControl, "/MediaRenderer/RenderingControl/Event")]
+    [InlineData(SonosEventService.ZoneGroupTopology, "/ZoneGroupTopology/Event")]
+    public void EventPath_MatchesTheSpeakerServices(SonosEventService service, string expected)
+    {
+        Assert.Equal(expected, SonosEventSubscriptionClient.EventPath(service));
+    }
+
     [Fact]
     public async Task RenewAsync_SendsSidWithoutCallback()
     {

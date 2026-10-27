@@ -217,6 +217,16 @@
     color: var(--brand-danger);
 }
 
+.device-card__status .device-card__updates {
+    max-width: 16rem;
+    overflow-wrap: anywhere;
+    text-align: end;
+}
+
+.device-card__status .device-card__updates.is-live {
+    color: color-mix(in srgb, var(--brand-success) 68%, var(--text-primary));
+}
+
 .device-card__status {
     display: grid;
     justify-items: end;
