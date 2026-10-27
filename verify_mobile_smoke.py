@@ -53,6 +53,13 @@ ROUTES = [
 ]
 
 
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    """Accepts bursts of parallel connections. The default backlog of 5 drops some of the app's concurrent
+    probe, refresh and subscription requests, which then fail as prematurely ended responses."""
+    request_queue_size = 64
+    daemon_threads = True
+
+
 class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
     # A successful HTTP response with non-image content reproduces a broken Sonos cover.
     TRACK_METADATA = '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/"><item><dc:title>Smoke test track</dc:title><upnp:artist>Local fixture</upnp:artist><upnp:albumArtURI>http://127.0.0.1:1400/missing-art</upnp:albumArtURI></item></DIDL-Lite>'
@@ -142,6 +149,7 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
             self.send_header("SID", sid)
             self.send_header("TIMEOUT", timeout or "Second-1800")
         self.send_header("Content-Length", "0")
+        self.send_header("Connection", "close")
         self.end_headers()
 
     def do_SUBSCRIBE(self):
@@ -183,6 +191,8 @@ class SimulatedSpeakerHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/xml; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
+        # Each request gets its own connection; say so, so clients never reuse one the server already closed.
+        self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -1513,12 +1523,12 @@ def run():
             try:
                 if with_speaker:
                     SimulatedSpeakerHandler.start_fixture(events_supported=configuration != "polling")
-                    speaker = ThreadingHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
+                    speaker = LoopbackHTTPServer(("127.0.0.1", 1400), SimulatedSpeakerHandler)
                     threading.Thread(target=speaker.serve_forever, daemon=True).start()
                 flydj_url = None
                 if configuration == "flydj":
                     FlyDjStubHandler.reset()
-                    sidecar = ThreadingHTTPServer(("127.0.0.1", 0), FlyDjStubHandler)
+                    sidecar = LoopbackHTTPServer(("127.0.0.1", 0), FlyDjStubHandler)
                     threading.Thread(target=sidecar.serve_forever, daemon=True).start()
                     flydj_url = f"http://127.0.0.1:{sidecar.server_address[1]}"
                 process, log_stream, log_path, runtime_dir = start_local_server(with_speaker, flydj_url, sonos_events=configuration in ("speaker", "polling"))
