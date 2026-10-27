@@ -8,6 +8,8 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-27
+
 ### Changed
 
 - FlyDJ no longer prefers stations that individual users marked as favourites.
