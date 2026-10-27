@@ -13,6 +13,7 @@ using SonosControl.Web.Data;
 using SonosControl.Web.Models;
 using SonosControl.Web.Pages;
 using SonosControl.Web.Services;
+using SonosControl.Web.Services.SonosEvents;
 using SonosControl.Web.Shared;
 using Xunit;
 
@@ -245,6 +246,55 @@ public class MainLayoutDrawerTests
             Assert.Same(player, layout.FindComponent<GlobalPlayerBar>().Instance);
             Assert.Contains("pauses at", layout.Find(".player-sheet__timer").TextContent);
         });
+    }
+
+    private sealed class FixedEventStatus(Dictionary<string, SonosEventSpeakerStatus> statuses) : ISonosEventStatusProvider
+    {
+        public SonosEventSpeakerStatus? GetStatus(string speakerIp) => statuses.GetValueOrDefault(speakerIp);
+    }
+
+    [Fact]
+    public void DevicesPage_ShowsWhetherEachSpeakerSendsLiveEvents()
+    {
+        using var ctx = new BunitContext();
+        ctx.Services.AddSingleton<ISonosEventStatusProvider>(new FixedEventStatus(new()
+        {
+            ["10.0.0.1"] = new(true, new DateTimeOffset(2026, 10, 27, 9, 41, 7, TimeSpan.Zero), null),
+            ["10.0.0.2"] = new(false, null, "Sonos AVTransport.Subscribe on 10.0.0.2 failed (HTTP 501)")
+        }));
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureAuthAndTheme(ctx, new SonosSettings
+        {
+            IP_Adress = "10.0.0.1",
+            Speakers = [new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" }, new SonosSpeaker { Name = "Kitchen", IpAddress = "10.0.0.2" }]
+        });
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.Services.AddSingleton(Mock.Of<ISonosDeviceDiscoveryService>());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
+
+        var devices = ctx.Render<DevicesPage>();
+
+        var statuses = devices.FindAll("[data-qa='device-event-status']");
+        Assert.Equal(2, statuses.Count);
+        Assert.Equal("Polling every 5 s: Sonos AVTransport.Subscribe on 10.0.0.2 failed (HTTP 501)", statuses[0].TextContent);
+        Assert.Equal("Live updates, last 09:41:07", statuses[1].TextContent);
+        Assert.Contains("is-live", statuses[1].ClassList);
+    }
+
+    [Fact]
+    public void DevicesPage_HidesEventStatusWhileLiveEventsAreOff()
+    {
+        using var ctx = new BunitContext();
+        RepositoryTestServices.AddDefaults(ctx.Services);
+        ConfigureAuthAndTheme(ctx);
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+        ctx.Services.AddSingleton(Mock.Of<ISonosDeviceDiscoveryService>());
+        ctx.Services.AddSingleton<IDeviceHealthSnapshotStore>(new DeviceHealthSnapshotStore());
+
+        var devices = ctx.Render<DevicesPage>();
+
+        Assert.NotEmpty(devices.FindAll(".device-card"));
+        Assert.Empty(devices.FindAll("[data-qa='device-event-status']"));
     }
 
     private static void ConfigureAuthAndTheme(BunitContext ctx, params string[] roles)

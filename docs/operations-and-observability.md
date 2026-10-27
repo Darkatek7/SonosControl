@@ -14,13 +14,17 @@ This guide summarizes runtime checks, telemetry endpoints, and day-2 operational
 - Endpoint: `GET /metricsz`
 - Purpose: returns lightweight app counters and timing snapshots
 - Toggle: `Observability:EnableMetrics` (default `true`)
+- `sonosEvents` reports live speaker events: `eventsReceived` and `eventsDropped` (queue full),
+  `probesRequested` (full probes after a lost or unreadable event), `subscriptionFailures`, and from the
+  last subscription cycle `activeSubscriptions`, `eventedSpeakers` and `polledSpeakers`.
 
 ## What to Monitor
 1. Dashboard refresh failures and stale states
 2. Sonos command failures
 3. Playback monitor cycle duration
 4. Session update/write rates
-5. Database growth (`Data/app.db`)
+5. Speakers that fall back to polling (`sonosEvents.polledSpeakers`, Administration > Devices)
+6. Database growth (`Data/app.db`)
 
 ## Logging
 - UI logs are stored in SQLite and exposed through the Logs page.

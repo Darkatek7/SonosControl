@@ -5,7 +5,7 @@ using SonosControl.DAL.Repos;
 
 namespace SonosControl.Web.Services.SonosEvents;
 
-/// <summary>Keeps one AVTransport and one RenderingControl subscription alive per configured speaker.</summary>
+/// <summary>Keeps AVTransport, RenderingControl and ZoneGroupTopology subscriptions alive per configured speaker.</summary>
 public sealed class SonosEventSubscriptionManager(
     IServiceScopeFactory scopeFactory,
     ISonosEventSubscriptionClient client,
@@ -13,15 +13,19 @@ public sealed class SonosEventSubscriptionManager(
     IOptions<SonosEventOptions> options,
     IOptions<YouTubePlaybackOptions> playbackOptions,
     ILogger<SonosEventSubscriptionManager> logger,
-    TimeProvider timeProvider) : BackgroundService, ISonosEventHealth
+    TimeProvider timeProvider,
+    IMetricsCollector? metrics = null) : BackgroundService, ISonosEventHealth, ISonosEventStatusProvider
 {
     internal static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan MinBackoff = TimeSpan.FromSeconds(15);
     internal static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan ShutdownTimeout = TimeSpan.FromSeconds(3);
-    private static readonly SonosEventService[] Services = [SonosEventService.AVTransport, SonosEventService.RenderingControl];
+    // Playback state needs both of these; topology only speeds up group changes and does not count for health.
+    private static readonly SonosEventService[] PlaybackServices = [SonosEventService.AVTransport, SonosEventService.RenderingControl];
+    private static readonly SonosEventService[] SubscribedServices = [.. PlaybackServices, SonosEventService.ZoneGroupTopology];
     private readonly object _sync = new();
     private readonly Dictionary<(string Ip, SonosEventService Service), Slot> _slots = new();
+    private volatile bool _active;
 
     private sealed class Slot
     {
@@ -55,15 +59,18 @@ public sealed class SonosEventSubscriptionManager(
     {
         var now = timeProvider.GetUtcNow();
         lock (_sync)
-            return Services.All(service => _slots.TryGetValue((speakerIp, service), out var slot) && slot.Active is not null && now < slot.ExpiresAt);
+            return PlaybackServices.All(service => _slots.TryGetValue((speakerIp, service), out var slot) && slot.Active is not null && now < slot.ExpiresAt);
     }
 
     public string? LastError(string speakerIp)
     {
         lock (_sync)
-            return Services.Select(service => _slots.TryGetValue((speakerIp, service), out var slot) ? slot.LastError : null)
+            return SubscribedServices.Select(service => _slots.TryGetValue((speakerIp, service), out var slot) ? slot.LastError : null)
                 .FirstOrDefault(error => error is not null);
     }
+
+    public SonosEventSpeakerStatus? GetStatus(string speakerIp)
+        => _active ? new SonosEventSpeakerStatus(IsHealthy(speakerIp), registry.LastEventUtc(speakerIp), LastError(speakerIp)) : null;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -72,6 +79,8 @@ public sealed class SonosEventSubscriptionManager(
             logger.LogInformation("Sonos events are enabled but no callback URL is configured; playback keeps polling. Set SonosEvents:CallbackBaseUrl or Playback:PublicBaseUrl.");
             return;
         }
+
+        _active = true;
 
         try
         {
@@ -86,6 +95,7 @@ public sealed class SonosEventSubscriptionManager(
         }
         finally
         {
+            _active = false;
             using var timeout = new CancellationTokenSource(ShutdownTimeout, timeProvider);
             await UnsubscribeAllAsync(timeout.Token);
         }
@@ -111,7 +121,7 @@ public sealed class SonosEventSubscriptionManager(
         }
         foreach (var (key, slot) in removed) await EndAsync(key, slot, cancellationToken);
 
-        foreach (var (speaker, service) in speakers.Values.SelectMany(speaker => Services.Select(service => (speaker, service))))
+        foreach (var (speaker, service) in speakers.Values.SelectMany(speaker => SubscribedServices.Select(service => (speaker, service))))
         {
             var key = (speaker.IpAddress, service);
             Slot slot;
@@ -129,6 +139,11 @@ public sealed class SonosEventSubscriptionManager(
                 await RenewAsync(key, speaker.Uuid, slot, callbackBase, cancellationToken);
             }
         }
+
+        int active;
+        lock (_sync) active = _slots.Values.Count(slot => slot.Active is not null);
+        var evented = speakers.Keys.Count(IsHealthy);
+        metrics?.SetSonosEventSpeakers(active, evented, speakers.Count - evented);
     }
 
     private async Task StartAsync((string Ip, SonosEventService Service) key, string? uuid, Slot slot, Uri callbackBase, CancellationToken cancellationToken)
@@ -221,5 +236,6 @@ public sealed class SonosEventSubscriptionManager(
             slot.RetryAt = timeProvider.GetUtcNow() + slot.Backoff;
             slot.LastError = error;
         }
+        metrics?.RecordSonosSubscriptionFailure();
     }
 }

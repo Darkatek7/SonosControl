@@ -2,7 +2,7 @@ namespace SonosControl.Web.Services.SonosEvents;
 
 public sealed class SonosEventOptions
 {
-    public bool Enabled { get; set; }
+    public bool Enabled { get; set; } = true;
 
     /// <summary>Base URL the speakers use for NOTIFY callbacks. Falls back to Playback:PublicBaseUrl.</summary>
     public string? CallbackBaseUrl { get; set; }

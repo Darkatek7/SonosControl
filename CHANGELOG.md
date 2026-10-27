@@ -10,11 +10,15 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ### Added
 
-- Experimental live speaker events (`SonosEvents__Enabled`, off by default):
-  speakers report playback, track and volume changes to the app as they
-  happen. Speakers with working events are only reconciled every 30 seconds
-  instead of being polled every 5 seconds; the others keep polling. See
-  [Live Speaker Events](docs/deploy-and-config.md#live-speaker-events-experimental-off-by-default).
+- Live speaker events (on by default, `SONOS_EVENTS_ENABLED`): speakers report
+  playback, track and volume changes to the app as they happen, using
+  `PLAYBACK_PUBLIC_BASE_URL` or `SONOS_EVENTS_CALLBACK_BASE_URL` as callback.
+  Speakers with working events are only reconciled every 30 seconds instead of
+  being polled every 5 seconds; the others keep polling. See
+  [Live Speaker Events](docs/deploy-and-config.md#live-speaker-events).
+  When speakers report a changed group layout, all rooms refresh right away.
+- Administration > Devices shows whether each speaker sends live updates or is
+  polled, and `/metricsz` reports event counters and the speaker split.
 
 ### Changed
 

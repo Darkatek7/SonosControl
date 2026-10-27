@@ -112,6 +112,36 @@ public class SonosEventParserTests
         Assert.Equal(expected, result?.Volume);
     }
 
+    internal static string TopologyBody(string zoneGroups, string extra = "")
+        => $"<e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\"><e:property><ZoneGroupState>{WebUtility.HtmlEncode($"<ZoneGroupState><ZoneGroups>{zoneGroups}</ZoneGroups></ZoneGroupState>")}</ZoneGroupState></e:property>{extra}</e:propertyset>";
+
+    [Fact]
+    public void ParseZoneGroupFingerprint_IgnoresMemberOrderAndOtherProperties()
+    {
+        var first = SonosEventParserTests.TopologyBody(
+            "<ZoneGroup Coordinator=\"RINCON_C\"><ZoneGroupMember UUID=\"RINCON_C\"/><ZoneGroupMember UUID=\"RINCON_M\"/></ZoneGroup><ZoneGroup Coordinator=\"RINCON_X\"><ZoneGroupMember UUID=\"RINCON_X\"/></ZoneGroup>");
+        var reordered = SonosEventParserTests.TopologyBody(
+            "<ZoneGroup Coordinator=\"RINCON_X\"><ZoneGroupMember UUID=\"RINCON_X\"/></ZoneGroup><ZoneGroup Coordinator=\"RINCON_C\"><ZoneGroupMember UUID=\"RINCON_M\"/><ZoneGroupMember UUID=\"RINCON_C\"/></ZoneGroup>",
+            "<e:property><AvailableSoftwareUpdate>x</AvailableSoftwareUpdate></e:property>");
+        var regrouped = SonosEventParserTests.TopologyBody(
+            "<ZoneGroup Coordinator=\"RINCON_C\"><ZoneGroupMember UUID=\"RINCON_C\"/></ZoneGroup><ZoneGroup Coordinator=\"RINCON_M\"><ZoneGroupMember UUID=\"RINCON_M\"/></ZoneGroup>");
+
+        var fingerprint = SonosEventParser.ParseZoneGroupFingerprint(first);
+
+        Assert.Equal("RINCON_C:RINCON_C,RINCON_M|RINCON_X:RINCON_X", fingerprint);
+        Assert.Equal(fingerprint, SonosEventParser.ParseZoneGroupFingerprint(reordered));
+        Assert.NotEqual(fingerprint, SonosEventParser.ParseZoneGroupFingerprint(regrouped));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("<e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\"><e:property><AvailableSoftwareUpdate>x</AvailableSoftwareUpdate></e:property></e:propertyset>")]
+    [InlineData("<e:propertyset xmlns:e=\"urn:schemas-upnp-org:event-1-0\"><e:property><ZoneGroupState>&lt;broken</ZoneGroupState></e:property></e:propertyset>")]
+    public void ParseZoneGroupFingerprint_ReturnsNullWithoutReadableGroups(string? body)
+    {
+        Assert.Null(SonosEventParser.ParseZoneGroupFingerprint(body));
+    }
+
     [Fact]
     public void Parse_TrackChangeOnly_LeavesUnreportedFieldsNull()
     {

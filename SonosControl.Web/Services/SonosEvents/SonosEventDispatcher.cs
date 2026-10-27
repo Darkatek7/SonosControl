@@ -18,18 +18,25 @@ public sealed class SonosEventDispatcher(
     PlaybackSnapshotMonitorService monitor,
     SonosEventSubscriptionRegistry registry,
     ILogger<SonosEventDispatcher> logger,
-    TimeProvider timeProvider) : BackgroundService
+    TimeProvider timeProvider,
+    IMetricsCollector? metrics = null) : BackgroundService
 {
     private readonly Channel<SonosEventNotification> _queue = Channel.CreateBounded<SonosEventNotification>(
         new BoundedChannelOptions(256) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
+    private static readonly TimeSpan TopologyRefreshDelay = TimeSpan.FromSeconds(1);
     // Speaker IP -> UUID of the coordinator it follows, taken from its x-rincon: transport URI.
     private readonly ConcurrentDictionary<string, string> _coordinators = new(StringComparer.OrdinalIgnoreCase);
+    // Subscription token -> last group fingerprint that speaker reported.
+    private readonly ConcurrentDictionary<string, string> _topologies = new(StringComparer.Ordinal);
+    private int _topologyRefreshPending;
 
     internal int PendingCount => _queue.Reader.Count;
 
     public bool Enqueue(SonosEventNotification notification)
     {
-        if (_queue.Writer.TryWrite(notification)) return true;
+        var queued = _queue.Writer.TryWrite(notification);
+        metrics?.RecordSonosEventReceived(queued);
+        if (queued) return true;
         logger.LogWarning("Sonos event queue is full; dropping an event from {SpeakerIp}.", notification.Registration.SpeakerIp);
         RequestProbe(notification.Registration.SpeakerIp);
         return false;
@@ -60,6 +67,11 @@ public sealed class SonosEventDispatcher(
         if (!registry.IsActive(registration)) return;
         var sequence = registration.Observe(notification.Sequence, notification.ReceivedUtc);
         if (sequence == SonosEventSequence.Stale) return;
+        if (registration.Service == SonosEventService.ZoneGroupTopology)
+        {
+            ApplyTopology(registration, notification.Body);
+            return;
+        }
         if (sequence == SonosEventSequence.Gap) RequestProbe(ip);
 
         var playbackEvent = SonosEventParser.Parse(registration.Service, notification.Body);
@@ -90,6 +102,37 @@ public sealed class SonosEventDispatcher(
         {
             foreach (var member in _coordinators.Where(pair => string.Equals(pair.Value, uuid, StringComparison.OrdinalIgnoreCase)).Select(pair => pair.Key))
                 store.TryApplyEvent(member, current => PlaybackSnapshotMerge.FollowCoordinator(current, leader), now);
+        }
+    }
+
+    /// <summary>
+    /// A changed group layout refreshes every speaker once, so members and coordinators show their new
+    /// state without waiting for reconciliation. The first event of a subscription only records the layout.
+    /// </summary>
+    private void ApplyTopology(SonosEventRegistration registration, string body)
+    {
+        if (SonosEventParser.ParseZoneGroupFingerprint(body) is not { } fingerprint) return;
+        var previous = _topologies.TryGetValue(registration.Token, out var known) ? known : null;
+        _topologies[registration.Token] = fingerprint;
+        if (previous is null || previous == fingerprint) return;
+        // Every speaker in the household reports the same change, so coalesce them into one refresh.
+        if (Interlocked.Exchange(ref _topologyRefreshPending, 1) == 1) return;
+        metrics?.RecordSonosEventProbe();
+        _ = RefreshAsync();
+
+        async Task RefreshAsync()
+        {
+            try
+            {
+                await Task.Delay(TopologyRefreshDelay, timeProvider);
+                Interlocked.Exchange(ref _topologyRefreshPending, 0);
+                await monitor.RefreshNowAsync();
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Exchange(ref _topologyRefreshPending, 0);
+                logger.LogDebug(ex, "Playback refresh after a Sonos group change failed.");
+            }
         }
     }
 
@@ -130,6 +173,7 @@ public sealed class SonosEventDispatcher(
 
     private void RequestProbe(string ip)
     {
+        metrics?.RecordSonosEventProbe();
         _ = ProbeAsync();
 
         async Task ProbeAsync()

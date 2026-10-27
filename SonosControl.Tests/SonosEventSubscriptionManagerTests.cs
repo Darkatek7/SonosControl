@@ -30,6 +30,8 @@ public sealed class SonosEventSubscriptionManagerTests
             .ReturnsAsync(() => new SonosEventSubscription($"uuid:sub-{++_sidCounter}", TimeSpan.FromSeconds(600)));
     }
 
+    private readonly Mock<IMetricsCollector> _metrics = new();
+
     private SonosEventSubscriptionManager Manager(string? callbackBaseUrl = "http://192.0.2.50:8080", string? publicBaseUrl = null)
     {
         var settingsRepo = new Mock<ISettingsRepo>();
@@ -38,19 +40,30 @@ public sealed class SonosEventSubscriptionManagerTests
         return new SonosEventSubscriptionManager(scopes, _client.Object, _registry,
             Options.Create(new SonosEventOptions { Enabled = true, CallbackBaseUrl = callbackBaseUrl, SubscriptionTimeoutSeconds = 600 }),
             Options.Create(new YouTubePlaybackOptions { PublicBaseUrl = publicBaseUrl }),
-            NullLogger<SonosEventSubscriptionManager>.Instance, _time);
+            NullLogger<SonosEventSubscriptionManager>.Instance, _time, _metrics.Object);
     }
 
     private static SonosCommandException Rejected(HttpStatusCode status) => new(Ip, "AVTransport", "Subscribe", status, null, "rejected");
 
+    /// <summary>ExecuteAsync runs in the background, so wait for the state instead of a subscription callback.</summary>
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The subscription manager did not reach the expected state.");
+            await Task.Delay(10);
+        }
+    }
+
     [Fact]
-    public async Task ReconcileOnce_SubscribesBothServicesWithTokenCallbacks()
+    public async Task ReconcileOnce_SubscribesAllServicesWithTokenCallbacks()
     {
         var manager = Manager();
 
         await manager.ReconcileOnceAsync();
 
-        Assert.Equal([SonosEventService.AVTransport, SonosEventService.RenderingControl], _subscribed.Select(item => item.Service));
+        Assert.Equal([SonosEventService.AVTransport, SonosEventService.RenderingControl, SonosEventService.ZoneGroupTopology], _subscribed.Select(item => item.Service));
         foreach (var (_, callback) in _subscribed)
         {
             Assert.StartsWith("http://192.0.2.50:8080/api/sonos-events/", callback.AbsoluteUri);
@@ -58,14 +71,14 @@ public sealed class SonosEventSubscriptionManagerTests
             Assert.Equal(32, token.Length);
             Assert.True(_registry.TryGet(token, out var registration));
             Assert.Equal(Ip, registration.SpeakerIp);
-            Assert.True(registration.MatchesSid("uuid:sub-1") || registration.MatchesSid("uuid:sub-2"));
+            Assert.True(registration.MatchesSid("uuid:sub-1") || registration.MatchesSid("uuid:sub-2") || registration.MatchesSid("uuid:sub-3"));
             Assert.False(registration.MatchesSid("uuid:other"));
         }
         Assert.Equal(Ip, _registry.FindSpeakerIp("uuid:RINCON_C"));
         Assert.True(manager.IsHealthy(Ip));
 
         await manager.ReconcileOnceAsync();
-        Assert.Equal(2, _subscribed.Count);
+        Assert.Equal(3, _subscribed.Count);
     }
 
     [Theory]
@@ -129,9 +142,9 @@ public sealed class SonosEventSubscriptionManagerTests
         _time.Advance(TimeSpan.FromSeconds(300));
         await manager.ReconcileOnceAsync();
 
-        Assert.Equal(4, _subscribed.Count);
+        Assert.Equal(6, _subscribed.Count);
         Assert.All(oldTokens, token => Assert.False(_registry.TryGet(token, out _)));
-        Assert.All(_subscribed.Skip(2), item => Assert.True(_registry.TryGet(item.Callback.Segments[^1], out _)));
+        Assert.All(_subscribed.Skip(3), item => Assert.True(_registry.TryGet(item.Callback.Segments[^1], out _)));
         Assert.True(manager.IsHealthy(Ip));
     }
 
@@ -144,26 +157,26 @@ public sealed class SonosEventSubscriptionManagerTests
         var manager = Manager();
 
         await manager.ReconcileOnceAsync();
-        Assert.Equal(2, _subscribed.Count);
+        Assert.Equal(3, _subscribed.Count);
         Assert.False(manager.IsHealthy(Ip));
         Assert.Contains("rejected", manager.LastError(Ip));
         Assert.All(_subscribed, item => Assert.False(_registry.TryGet(item.Callback.Segments[^1], out _)));
 
         _time.Advance(SonosEventSubscriptionManager.MinBackoff - TimeSpan.FromSeconds(1));
         await manager.ReconcileOnceAsync();
-        Assert.Equal(2, _subscribed.Count);
+        Assert.Equal(3, _subscribed.Count);
 
         _time.Advance(TimeSpan.FromSeconds(1));
         await manager.ReconcileOnceAsync();
-        Assert.Equal(4, _subscribed.Count);
+        Assert.Equal(6, _subscribed.Count);
 
         // The second failure doubles the wait.
         _time.Advance(SonosEventSubscriptionManager.MinBackoff);
         await manager.ReconcileOnceAsync();
-        Assert.Equal(4, _subscribed.Count);
+        Assert.Equal(6, _subscribed.Count);
         _time.Advance(SonosEventSubscriptionManager.MinBackoff);
         await manager.ReconcileOnceAsync();
-        Assert.Equal(6, _subscribed.Count);
+        Assert.Equal(9, _subscribed.Count);
     }
 
     [Fact]
@@ -178,21 +191,53 @@ public sealed class SonosEventSubscriptionManagerTests
 
         _client.Verify(client => client.UnsubscribeAsync(Ip, SonosEventService.AVTransport, "uuid:sub-1", It.IsAny<CancellationToken>()), Times.Once);
         _client.Verify(client => client.UnsubscribeAsync(Ip, SonosEventService.RenderingControl, "uuid:sub-2", It.IsAny<CancellationToken>()), Times.Once);
+        _client.Verify(client => client.UnsubscribeAsync(Ip, SonosEventService.ZoneGroupTopology, "uuid:sub-3", It.IsAny<CancellationToken>()), Times.Once);
         Assert.All(tokens, token => Assert.False(_registry.TryGet(token, out _)));
         Assert.False(manager.IsHealthy(Ip));
+    }
+
+    [Fact]
+    public async Task ReconcileOnce_ReportsTheSpeakerSplitAndFailures()
+    {
+        var manager = Manager();
+        await manager.ReconcileOnceAsync();
+        _metrics.Verify(metrics => metrics.SetSonosEventSpeakers(3, 1, 0), Times.Once);
+
+        _client.Setup(client => client.RenewAsync(Ip, It.IsAny<SonosEventService>(), It.IsAny<string>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Rejected(HttpStatusCode.InternalServerError));
+        _time.Advance(TimeSpan.FromSeconds(300));
+        await manager.ReconcileOnceAsync();
+
+        _metrics.Verify(metrics => metrics.RecordSonosSubscriptionFailure(), Times.Exactly(3));
+        _metrics.Verify(metrics => metrics.SetSonosEventSpeakers(0, 0, 1), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetStatus_IsNullUntilTheManagerRunsAndThenReportsLiveSpeakers()
+    {
+        var manager = Manager();
+        Assert.Null(manager.GetStatus(Ip));
+
+        await manager.StartAsync(CancellationToken.None);
+        await WaitUntilAsync(() => manager.GetStatus(Ip)?.Live == true);
+        var status = manager.GetStatus(Ip);
+        await manager.StopAsync(CancellationToken.None);
+
+        Assert.NotNull(status);
+        Assert.True(status.Live);
+        Assert.Null(status.LastError);
+        Assert.Null(manager.GetStatus(Ip));
     }
 
     [Fact]
     public async Task Stopping_UnsubscribesEverything()
     {
         var manager = Manager();
-        var subscribed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _client.Setup(client => client.SubscribeAsync(Ip, SonosEventService.RenderingControl, It.IsAny<Uri>(), It.IsAny<TimeSpan>(), It.IsAny<CancellationToken>()))
-            .Callback(() => subscribed.TrySetResult())
             .ReturnsAsync(new SonosEventSubscription("uuid:sub-rc", TimeSpan.FromSeconds(600)));
 
         await manager.StartAsync(CancellationToken.None);
-        await subscribed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => manager.IsHealthy(Ip));
         await manager.StopAsync(CancellationToken.None);
 
         _client.Verify(client => client.UnsubscribeAsync(Ip, SonosEventService.AVTransport, "uuid:sub-1", It.IsAny<CancellationToken>()), Times.Once);

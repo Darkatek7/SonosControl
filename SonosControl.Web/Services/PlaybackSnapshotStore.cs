@@ -35,6 +35,8 @@ public sealed class PlaybackSnapshotStore
 {
     private readonly ConcurrentDictionary<string, PlaybackSnapshot> _snapshots = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, long> _generations = new(StringComparer.OrdinalIgnoreCase);
+    // Speaker IP -> generation of the latest event write.
+    private readonly ConcurrentDictionary<string, long> _eventGenerations = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _snapshotSync = new();
     private readonly object _settingsSync = new();
     private string? _settingsFingerprint;
@@ -153,6 +155,7 @@ public sealed class PlaybackSnapshotStore
         {
             if ((_hasConfiguration && !_configuredIps.Contains(speakerIp)) || !_snapshots.TryGetValue(speakerIp, out var current)) return false;
             var generation = _generations.AddOrUpdate(speakerIp, 1, (_, value) => value + 1);
+            _eventGenerations[speakerIp] = generation;
             var merged = merge(current.Copy()) with
             {
                 SpeakerIp = current.SpeakerIp,
@@ -166,6 +169,17 @@ public sealed class PlaybackSnapshotStore
         }
         Changed?.Invoke();
         return true;
+    }
+
+    /// <summary>
+    /// True when an event replaced the snapshot after the given probe began and nothing newer followed. The event
+    /// may describe an older state than the probe read, so the probe result is uncertain rather than outdated.
+    /// </summary>
+    public bool IsSupersededByEvent(string speakerIp, long probeGeneration)
+    {
+        lock (_snapshotSync)
+            return _generations.TryGetValue(speakerIp, out var current) && current > probeGeneration
+                && _eventGenerations.TryGetValue(speakerIp, out var eventGeneration) && eventGeneration == current;
     }
 
     public void Set(PlaybackSnapshot snapshot)

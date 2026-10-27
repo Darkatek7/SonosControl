@@ -39,9 +39,10 @@ public sealed class SonosEventDispatcherTests
             _provider = services.BuildServiceProvider();
             var scopes = _provider.GetRequiredService<IServiceScopeFactory>();
             Monitor = new PlaybackSnapshotMonitorService(scopes, Store, NullLogger<PlaybackSnapshotMonitorService>.Instance, TimeProvider.System);
-            Dispatcher = new SonosEventDispatcher(scopes, Store, Monitor, Registry, NullLogger<SonosEventDispatcher>.Instance, TimeProvider.System);
+            Dispatcher = new SonosEventDispatcher(scopes, Store, Monitor, Registry, NullLogger<SonosEventDispatcher>.Instance, TimeProvider.System, Metrics.Object);
         }
 
+        public Mock<IMetricsCollector> Metrics { get; } = new();
         public PlaybackSnapshotStore Store { get; } = new();
         public SonosEventSubscriptionRegistry Registry { get; } = new();
         public PlaybackSnapshotMonitorService Monitor { get; }
@@ -166,6 +167,38 @@ public sealed class SonosEventDispatcherTests
     }
 
     [Fact]
+    public async Task ChangedGroupLayout_RefreshesEverySpeakerOnce()
+    {
+        var connector = new Mock<ISonosConnectorRepo>();
+        var probes = 0;
+        var refreshed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connector.Setup(repo => repo.GetVolume(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback(() => { if (Interlocked.Increment(ref probes) == 2) refreshed.TrySetResult(); }).ReturnsAsync(9);
+        connector.Setup(repo => repo.IsPlaying(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        connector.Setup(repo => repo.GetCurrentStationAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("uri");
+        connector.Setup(repo => repo.GetTrackInfoAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(new SonosTrackInfo { Title = "Song" });
+        await using var fixture = new Fixture(connector.Object);
+        var office = fixture.Registry.Register(Ip, "RINCON_C", SonosEventService.ZoneGroupTopology);
+        var kitchen = fixture.Registry.Register(MemberIp, "RINCON_M", SonosEventService.ZoneGroupTopology);
+        var separate = SonosEventParserTests.TopologyBody("<ZoneGroup Coordinator=\"RINCON_C\"><ZoneGroupMember UUID=\"RINCON_C\"/></ZoneGroup><ZoneGroup Coordinator=\"RINCON_M\"><ZoneGroupMember UUID=\"RINCON_M\"/></ZoneGroup>");
+        var grouped = SonosEventParserTests.TopologyBody("<ZoneGroup Coordinator=\"RINCON_C\"><ZoneGroupMember UUID=\"RINCON_C\"/><ZoneGroupMember UUID=\"RINCON_M\"/></ZoneGroup>");
+
+        await fixture.ApplyAsync(office, 0, separate);
+        await fixture.ApplyAsync(kitchen, 0, separate);
+        await fixture.ApplyAsync(office, 1, separate);
+        Assert.Equal(0, probes);
+
+        await fixture.ApplyAsync(office, 2, grouped);
+        await fixture.ApplyAsync(kitchen, 1, grouped);
+        await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(200);
+
+        // One refresh covers both speakers, although both reported the change.
+        Assert.Equal(2, probes);
+        fixture.Metrics.Verify(metrics => metrics.RecordSonosEventProbe(), Times.Once);
+    }
+
+    [Fact]
     public async Task LeavingAGroup_StopsFollowingTheCoordinator()
     {
         await using var fixture = new Fixture(OfflineConnector());
@@ -195,5 +228,8 @@ public sealed class SonosEventDispatcherTests
 
         Assert.False(fixture.Dispatcher.Enqueue(notification));
         Assert.Equal(256, fixture.Dispatcher.PendingCount);
+        fixture.Metrics.Verify(metrics => metrics.RecordSonosEventReceived(true), Times.Exactly(256));
+        fixture.Metrics.Verify(metrics => metrics.RecordSonosEventReceived(false), Times.Once);
+        fixture.Metrics.Verify(metrics => metrics.RecordSonosEventProbe(), Times.Once);
     }
 }

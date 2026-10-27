@@ -5,6 +5,7 @@ using Moq;
 using System.Linq.Expressions;
 using SonosControl.DAL.Interfaces;
 using SonosControl.Web.Services;
+using SonosControl.Web.Services.SonosEvents;
 
 namespace SonosControl.Tests;
 
@@ -42,6 +43,7 @@ internal static class RepositoryTestServices
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(new ConfiguredTimeZoneService(TimeZoneInfo.Utc));
         services.TryAddSingleton<IManualAutoStopStatusProvider, NullManualAutoStopStatusProvider>();
+        services.TryAddSingleton<ISonosEventStatusProvider, NullSonosEventStatusProvider>();
         services.TryAddSingleton<ISceneOrchestrationService>(_ =>
         {
             var orchestration = new Mock<ISceneOrchestrationService>();
@@ -70,6 +72,11 @@ internal static class RepositoryTestServices
     }
 
     public static SceneTimerService CreateTimers() => new(Mock.Of<IServiceScopeFactory>(), TimeProvider.System, NullLogger<SceneTimerService>.Instance);
+}
+
+internal sealed class NullSonosEventStatusProvider : ISonosEventStatusProvider
+{
+    public SonosEventSpeakerStatus? GetStatus(string speakerIp) => null;
 }
 
 internal sealed class NullManualAutoStopStatusProvider : IManualAutoStopStatusProvider

@@ -40,6 +40,32 @@ public static class SonosEventParser
         }
     }
 
+    /// <summary>
+    /// Reads the groups from a ZoneGroupTopology NOTIFY as a stable fingerprint ("coordinator:member,member|..."),
+    /// or null when the event carries no readable ZoneGroupState. Other topology properties do not change it.
+    /// </summary>
+    public static string? ParseZoneGroupFingerprint(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body) || body.Length > MaxBodyLength) return null;
+        try
+        {
+            var state = Child(XDocument.Parse(body).Root, "ZoneGroupState", descendants: true)?.Value;
+            if (string.IsNullOrWhiteSpace(state)) return null;
+            var groups = XDocument.Parse(state).Descendants()
+                .Where(element => element.Name.LocalName == "ZoneGroup")
+                .Select(group => (group.Attribute("Coordinator")?.Value ?? "") + ":" + string.Join(",", group.Elements()
+                    .Where(member => member.Name.LocalName == "ZoneGroupMember")
+                    .Select(member => member.Attribute("UUID")?.Value ?? "")
+                    .Order(StringComparer.OrdinalIgnoreCase)))
+                .Order(StringComparer.OrdinalIgnoreCase);
+            return string.Join("|", groups);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     private static int? ParseVolume(XElement instance)
     {
         var master = instance.Elements().FirstOrDefault(element => element.Name.LocalName == "Volume"

@@ -149,7 +149,7 @@ public sealed class PlaybackSnapshotMonitorService(
             store.ConfigurationEpoch, cancellationToken);
     }
 
-    private Task PollSpeakerAsync(SonosSpeaker speaker, long epoch, CancellationToken cancellationToken)
+    private Task PollSpeakerAsync(SonosSpeaker speaker, long epoch, CancellationToken cancellationToken, bool confirmConflicts = true)
     {
         var key = $"{epoch}:{speaker.IpAddress}";
         TaskCompletionSource? owner = null;
@@ -173,14 +173,16 @@ public sealed class PlaybackSnapshotMonitorService(
                     if (_inFlight.TryGetValue(key, out var active) && ReferenceEquals(active, owner.Task)) _inFlight.Remove(key);
                 owner.TrySetResult();
             }
-            else _ = PollSpeakerCoreAsync(speaker, epoch, generation, key, cancellationToken, owner);
+            else _ = PollSpeakerCoreAsync(speaker, epoch, generation, key, cancellationToken, owner, confirmConflicts);
         }
         return existing.WaitAsync(cancellationToken);
     }
 
-    private async Task PollSpeakerCoreAsync(SonosSpeaker speaker, long epoch, long generation, string key, CancellationToken cancellationToken, TaskCompletionSource completion)
+    private async Task PollSpeakerCoreAsync(SonosSpeaker speaker, long epoch, long generation, string key, CancellationToken cancellationToken,
+        TaskCompletionSource completion, bool confirmConflicts)
     {
         var acquired = false;
+        var confirm = false;
         try
         {
             await _parallelism.WaitAsync(cancellationToken);
@@ -205,7 +207,9 @@ public sealed class PlaybackSnapshotMonitorService(
                     stationTask.Result, track, false, now, now, null);
                 if (FreshCoordinatorSnapshot(ip, stationTask.Result) is { } coordinator)
                     snapshot = PlaybackSnapshotMerge.FollowCoordinator(snapshot, coordinator);
-                store.TrySet(snapshot, generation, epoch);
+                // An event that lands during the probe can be older than what the probe read, for example a delayed
+                // Pause notification after a Play command. Read the speaker once more instead of trusting either side.
+                confirm = !store.TrySet(snapshot, generation, epoch) && confirmConflicts && store.IsSupersededByEvent(ip, generation);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)
@@ -226,6 +230,12 @@ public sealed class PlaybackSnapshotMonitorService(
             lock (_inFlightSync)
                 if (_inFlight.TryGetValue(key, out var active) && ReferenceEquals(active, completion.Task)) _inFlight.Remove(key);
             completion.TrySetResult();
+        }
+
+        if (confirm)
+        {
+            logger.LogDebug("Confirming playback of {SpeakerIp} after an event raced a probe.", speaker.IpAddress);
+            _ = PollSpeakerAsync(speaker, epoch, cancellationToken, confirmConflicts: false);
         }
     }
 
