@@ -109,6 +109,18 @@ public sealed class PlaybackSnapshotMonitorService(
         finally { _refreshGate.Release(); }
     }
 
+    /// <summary>Probes one configured speaker now, for example after a lost or unreadable event.</summary>
+    public async Task ProbeSpeakerAsync(string speakerIp, CancellationToken cancellationToken = default)
+    {
+        SonosSpeaker? speaker;
+        using (var scope = scopeFactory.CreateScope())
+            speaker = (await scope.ServiceProvider.GetRequiredService<ISettingsRepo>().GetSettings())?.Speakers?
+                .FirstOrDefault(item => string.Equals(item.IpAddress, speakerIp, StringComparison.OrdinalIgnoreCase));
+        if (speaker is null) return;
+        await PollSpeakerAsync(new SonosSpeaker { IpAddress = speaker.IpAddress, Name = speaker.Name, Uuid = speaker.Uuid },
+            store.ConfigurationEpoch, cancellationToken);
+    }
+
     private Task PollSpeakerAsync(SonosSpeaker speaker, long epoch, CancellationToken cancellationToken)
     {
         var key = $"{epoch}:{speaker.IpAddress}";
@@ -159,8 +171,9 @@ public sealed class PlaybackSnapshotMonitorService(
                 var trackTask = connector.GetTrackInfoAsync(ip, linked.Token);
                 await Task.WhenAll(volumeTask, playingTask, stationTask, trackTask);
                 var now = timeProvider.GetUtcNow();
+                var track = PlaybackSnapshotMerge.KeepStreamTitle(store.Get(ip)?.TrackInfo, trackTask.Result);
                 store.TrySet(new PlaybackSnapshot(ip, speaker.Name, playingTask.Result, volumeTask.Result,
-                    stationTask.Result, trackTask.Result, false, now, now, null), generation, epoch);
+                    stationTask.Result, track, false, now, now, null), generation, epoch);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex)

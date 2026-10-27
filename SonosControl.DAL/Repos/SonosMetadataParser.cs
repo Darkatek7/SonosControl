@@ -293,6 +293,12 @@ internal static class SonosMetadataParser
             StreamContent = Find(@"<r:streamContent>(.*?)</r:streamContent>")
         };
 
+        // While a stream connects, Sonos reports placeholders such as ZPSTR_CONNECTING and ZPSTR_BUFFERING.
+        if (trackInfo.StreamContent?.StartsWith("ZPSTR_", StringComparison.Ordinal) == true)
+        {
+            trackInfo.StreamContent = null;
+        }
+
         var artUri = Find(@"<upnp:albumArtURI>(.*?)</upnp:albumArtURI>");
         if (!string.IsNullOrWhiteSpace(artUri))
         {

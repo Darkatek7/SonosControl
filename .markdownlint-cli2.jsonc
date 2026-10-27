@@ -5,6 +5,8 @@
     "default": true,
     "MD013": false,
     "MD022": false,
+    // CHANGELOG.md repeats Added/Changed/Fixed under every version (Keep a Changelog).
+    "MD024": { "siblings_only": true },
     "MD031": false,
     "MD032": false,
     "MD033": false,

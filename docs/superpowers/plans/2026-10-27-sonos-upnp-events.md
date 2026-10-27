@@ -109,10 +109,10 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - Modify: `SonosControl.Web/Program.cs` (named `HttpClient`, 5 s timeout)
 - Test: `SonosControl.Tests/SonosEventSubscriptionClientTests.cs` with a fake `HttpMessageHandler`
 
-- [ ] `SubscribeAsync(ip, service, callbackUrl, timeout)` returns `(Sid, GrantedTimeout)`. `RenewAsync(ip, service, sid, timeout)` returns the granted timeout or a `SubscriptionLost` result on 412. `UnsubscribeAsync(ip, service, sid)` is best effort.
-- [ ] Use `new HttpMethod("SUBSCRIBE")` and `new HttpMethod("UNSUBSCRIBE")`. Set `CALLBACK`, `NT`, `SID` and `TIMEOUT` without header validation (`TryAddWithoutValidation`).
-- [ ] Log failures in the same shape as `SonosSoapTransport`: service, speaker IP, HTTP status.
-- [ ] Tests: exact request headers for subscribe, renew and unsubscribe; `Second-infinite` and missing `TIMEOUT` handling; 412; 501 (the fake speaker today); timeouts.
+- [x] `SubscribeAsync(ip, service, callbackUrl, timeout)` returns `(Sid, GrantedTimeout)`. `RenewAsync(ip, service, sid, timeout)` returns the granted timeout or a `SubscriptionLost` result on 412. `UnsubscribeAsync(ip, service, sid)` is best effort.
+- [x] Use `new HttpMethod("SUBSCRIBE")` and `new HttpMethod("UNSUBSCRIBE")`. Set `CALLBACK`, `NT`, `SID` and `TIMEOUT` without header validation (`TryAddWithoutValidation`).
+- [x] Log failures in the same shape as `SonosSoapTransport`: service, speaker IP, HTTP status.
+- [x] Tests: exact request headers for subscribe, renew and unsubscribe; `Second-infinite` and missing `TIMEOUT` handling; 412; 501 (the fake speaker today); timeouts.
 
 ### Task 4: NOTIFY endpoint and event pipeline
 
@@ -121,15 +121,15 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - Modify: `SonosControl.Web/Services/PlaybackSnapshotStore.cs`
 - Test: `SonosControl.Tests/SonosEventsControllerTests.cs`, `SonosControl.Tests/SonosEventDispatcherTests.cs`, `SonosControl.Tests/PlaybackSnapshotStoreTests.cs`
 
-- [ ] `[AllowAnonymous]`, `[Route("api/sonos-events")]`, `[AcceptVerbs("NOTIFY", Route = "{token}")]`. Check: token known (404 otherwise), `SID` matches the token's subscription once known (412 otherwise), `NT`/`NTS` present (400), body at most 256 KB (413). Read the body, enqueue `(token, sid, seq, body)` on a bounded `Channel` and return 200.
-- [ ] Make sure `UseHttpsRedirection` and antiforgery never touch this route.
-- [ ] `SonosEventDispatcher` (hosted, singleton) reads the channel, parses with `SonosEventParser`, checks `SEQ` (a gap requests a reconciliation probe), turns `TrackMetadata` into `SonosTrackInfo` through `ISonosConnectorRepo.ResolveTrackInfoAsync` in a scope, and merges into the store.
-- [ ] Add `PlaybackSnapshotStore.TryApplyEvent(string ip, long epoch, Func<PlaybackSnapshot, PlaybackSnapshot> merge, DateTimeOffset now)`. It calls `BeginProbe`, merges into the current snapshot, sets `IsStale = false`, `LastSuccessfulRefreshUtc = now`, clears `Error` and writes through the generation check. It returns false if there is no snapshot yet, and the dispatcher then requests a full probe.
-- [ ] Merge rules from the hardware findings:
+- [x] `[AllowAnonymous]`, `[Route("api/sonos-events")]`, `[AcceptVerbs("NOTIFY", Route = "{token}")]`. Check: token known (404 otherwise), `SID` matches the token's subscription once known (412 otherwise), `NT`/`NTS` present (400), body at most 256 KB (413). Read the body, enqueue `(token, sid, seq, body)` on a bounded `Channel` and return 200.
+- [x] Make sure `UseHttpsRedirection` and antiforgery never touch this route.
+- [x] `SonosEventDispatcher` (hosted, singleton) reads the channel, parses with `SonosEventParser`, checks `SEQ` (a gap requests a reconciliation probe), turns `TrackMetadata` into `SonosTrackInfo` through `ISonosConnectorRepo.ResolveTrackInfoAsync` in a scope, and merges into the store.
+- [x] Add `PlaybackSnapshotStore.TryApplyEvent(string ip, Func<PlaybackSnapshot, PlaybackSnapshot> merge, DateTimeOffset now)`. It checks that the speaker is still configured instead of taking an epoch, because the subscription manager reads settings on its own schedule. It calls `BeginProbe`, merges into the current snapshot, sets `IsStale = false`, `LastSuccessfulRefreshUtc = now`, clears `Error` and writes through the generation check. It returns false if there is no snapshot yet, and the dispatcher then requests a full probe.
+- [x] Merge rules from the hardware findings:
   - `TRANSITIONING` counts as playing, so the UI does not show "Paused" for two seconds after Play or a track skip. `STOPPED` and `PAUSED_PLAYBACK` count as not playing.
   - Stream titles starting with `ZPSTR_` (`ZPSTR_CONNECTING`, `ZPSTR_BUFFERING`) are placeholders. Treat them as empty, and keep the previous display title while the track URI is unchanged and the new stream title is empty or a placeholder. Apply the same placeholder filter to polled metadata through `SonosTrackInfo.IsValidMetadata`.
   - A member whose `TransportUri` is `x-rincon:RINCON_<coordinator>` takes transport state, track and station from the coordinator's snapshot (decision 2).
-- [ ] Tests: event wins over an older in-flight probe; a probe started after the event wins over it; partial events keep the other fields; unknown speaker or old epoch is ignored; `Changed` fires once per applied event; the recorded Pause/Play sequence in `SonosEventFixtures` ends as playing with the real title and never shows a placeholder; a member follows its coordinator.
+- [x] Tests: event wins over an older in-flight probe; a probe started after the event wins over it; partial events keep the other fields; unknown speaker or old epoch is ignored; `Changed` fires once per applied event; the recorded Pause/Play sequence in `SonosEventFixtures` ends as playing with the real title and never shows a placeholder; a member follows its coordinator.
 
 ### Task 5: Subscription manager
 
@@ -138,11 +138,19 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - Modify: `SonosControl.Web/Program.cs`, `SonosControl.Web/appsettings.json`
 - Test: `SonosControl.Tests/SonosEventSubscriptionManagerTests.cs` with `FakeTimeProvider`
 
-- [ ] Hosted service, registered only when background playback snapshots are enabled (same condition as `PlaybackSnapshotMonitorService`) and a callback base URL resolves.
-- [ ] Desired state comes from the configured speakers in the store (`ConfigurationEpoch`). For each speaker × service: create a random token, subscribe with `{base}/api/sonos-events/{token}`, renew at half the granted timeout, resubscribe on 412, back off from 15 s to 5 min on errors.
-- [ ] Removed speakers or a new epoch: unsubscribe and drop their tokens. Shutdown: unsubscribe all, best effort with a short timeout.
-- [ ] Expose `IsHealthy(ip)` (both services subscribed, last renewal or event within the timeout), `LastEventUtc(ip)` and counters for metrics.
-- [ ] Tests: renew timing, 412 recovery, backoff, epoch change, shutdown unsubscribe, no subscriptions without a callback URL.
+- [x] Hosted service, registered only when background playback snapshots are enabled (same condition as `PlaybackSnapshotMonitorService`) and a callback base URL resolves.
+- [x] Desired state comes from the configured speakers in settings. For each speaker × service: create a random token, subscribe with `{base}/api/sonos-events/{token}`, renew at half the granted timeout, resubscribe on 412, back off from 15 s to 5 min on errors.
+- [x] Removed speakers: unsubscribe and drop their tokens. Shutdown: unsubscribe all, best effort with a short timeout.
+- [x] Expose `IsHealthy(ip)` (both services subscribed, last renewal or event within the timeout), `LastError(ip)`, and `LastEventUtc(ip)` on the registry. Metrics counters move to Task 8.
+- [x] Tests: renew timing, 412 recovery, backoff, removed speakers, shutdown unsubscribe, no subscriptions without a callback URL.
+
+### Implementation notes for PR 2 (Tasks 3–5)
+
+- The `ZPSTR_` placeholder filter sits in `SonosMetadataParser.ParseTrackMetadata` instead of `SonosTrackInfo.IsValidMetadata`, so polling and events both drop placeholders at the source.
+- `PlaybackSnapshotMerge.KeepStreamTitle` applies to polled snapshots as well, so a reconnecting stream no longer flashes its file name during the remaining 5 s polling.
+- A group member that follows its coordinator keeps its own `CurrentStationUrl` (`x-rincon:...`), because `FlyDjConductorService.SnapshotMatchesStation` relies on it.
+- The subscription manager reads the configured speakers from settings, like the snapshot monitor. Hosted services are registered only when both `PlaybackSnapshots:Enabled` and `SonosEvents:Enabled` are true; the controller and singletons always exist, so unknown tokens get 404.
+- Live check on 2026-10-27 against the Play:1 and Era 100: four subscriptions, four initial `NOTIFY` requests answered with 200, four renewals, and four `UNSUBSCRIBE` requests answered with 200 on shutdown.
 
 ### Task 6: Adaptive polling and freshness
 
@@ -153,7 +161,8 @@ Docker Compose gets `SonosEvents__Enabled` and `SonosEvents__CallbackBaseUrl` wi
 - [ ] Keep the 5 s loop, because it also detects settings changes, but skip the four-call probe for a speaker whose subscriptions are healthy and whose last full probe is newer than `ReconcileSeconds`.
 - [ ] Make the stale threshold per speaker: 15 s for polled speakers, 2.5 × `ReconcileSeconds` for evented ones. `MarkExpiredStale` and `GetNextStaleDeadline` take a threshold lookup instead of one `TimeSpan`.
 - [ ] `RefreshNowAsync` keeps probing every speaker, so command follow-ups stay exact.
-- [ ] A reconciliation request from the dispatcher (SEQ gap, missing snapshot) probes that speaker immediately.
+- [x] A reconciliation request from the dispatcher (SEQ gap, missing snapshot) probes that speaker immediately. Done in PR 2 through `PlaybackSnapshotMonitorService.ProbeSpeakerAsync`.
+- [ ] Apply the coordinator rule to probes too. In PR 2 the 5 s poll of a group member still writes what the member itself reports.
 - [ ] Tests: evented speakers are skipped and reconciled on time; a subscription turning unhealthy brings the speaker back to 5 s polling; per-speaker staleness; device health still reports offline after the longer threshold.
 
 ### Task 7: Move listening statistics onto the store

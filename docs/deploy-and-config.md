@@ -112,6 +112,18 @@ Configure these values in `appsettings.json` or with environment variables:
 
 `Playback__PublicBaseUrl` must point to the app's LAN address and include any reverse proxy path prefix. Sonos fetches audio without a login using an unguessable temporary URL; byte-range requests are supported. Cleanup requires `BackgroundServices__Enabled=true` (the default). Retention is fixed per file at upload time; changing defaults affects future uploads.
 
+## Live Speaker Events (experimental, off by default)
+
+With `SonosEvents__Enabled=true`, the app subscribes to UPnP events on every configured speaker. Speakers then report playback, track and volume changes to `/api/sonos-events/<token>`, and the shared playback status updates within about a second. Polling keeps running unchanged as a fallback; a later release will reduce it for speakers with working events.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SonosEvents__Enabled` | `false` | Turns event subscriptions on. Requires the shared playback status (`PlaybackSnapshots__Enabled`, on by default). |
+| `SonosEvents__CallbackBaseUrl` | `Playback__PublicBaseUrl` | URL the speakers use to reach the app. Set it when the public URL goes through an authenticating reverse proxy. |
+| `SonosEvents__SubscriptionTimeoutSeconds` | `1800` | Requested subscription lifetime (60–86400). The app renews at half the granted lifetime. |
+
+The speakers must reach the callback URL directly, also across VLANs, the same way they already fetch YouTube and MP3 audio. The callback is anonymous and accepts only the unguessable token of an active subscription. Without a usable callback URL the app logs this once and keeps polling.
+
 ## FlyDJ (optional, experimental)
 
 When FlyDJ is enabled on the server (`FLYDJ_ENABLED=true` or
