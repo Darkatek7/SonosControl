@@ -11,7 +11,8 @@ public sealed record FlyDjCandidate(string Id, string Name, string Url, double P
 
 /// <summary>
 /// Chooses which library stations the brain should audition. Stations are ranked by a behaviour
-/// prior (listening history near this hour, favourites, FlyDJ's own past outcomes). The top
+/// prior (listening history near this hour and FlyDJ's own past outcomes). Personal favourites do not count:
+/// they belong to individual users, while FlyDJ plays to a shared room. The top
 /// <see cref="TopCount"/> are always included, plus one exploration station that has gone the
 /// longest without an audition. Selection is deterministic for a given database state.
 /// </summary>
@@ -34,18 +35,16 @@ public sealed class FlyDjCandidateProvider(ApplicationDbContext db, ConfiguredTi
         var localHour = timeZone.Convert(now).Hour;
 
         var listened = await LoadListenedSecondsAsync(since, localHour, cancellationToken);
-        var favourites = await LoadFavouriteUrlsAsync(cancellationToken);
         var feedback = await LoadFeedbackAsync(since, Math.Max(1, settings.FlyDj?.MaxDwellMinutes ?? FlyDjSettings.DefaultMaxDwellMinutes), cancellationToken);
 
         var raw = stations.Select(station =>
         {
             listened.TryGetValue(station.Name.Trim(), out var seconds);
             var listenScore = Math.Log(1 + seconds / 60.0);
-            var favourite = favourites.Contains(FavouriteSourceIdentity.NormalizeUrl(station.Url)) ? 1.0 : 0.0;
             var feedbackScore = feedback.TryGetValue(station.Url.Trim(), out var stats)
                 ? stats.AverageDwellRatio - 1.5 * stats.OverrideRate
                 : 0.0;
-            return (Station: station, Score: listenScore + 0.8 * favourite + feedbackScore);
+            return (Station: station, Score: listenScore + feedbackScore);
         }).ToList();
 
         var ranked = raw.OrderByDescending(item => item.Score)
@@ -123,15 +122,6 @@ public sealed class FlyDjCandidateProvider(ApplicationDbContext db, ConfiguredTi
             result[key] = result.GetValueOrDefault(key) + row.DurationSeconds;
         }
         return result;
-    }
-
-    private async Task<HashSet<string>> LoadFavouriteUrlsAsync(CancellationToken cancellationToken)
-    {
-        var urls = await db.UserFavouriteSources.AsNoTracking()
-            .Where(item => item.SourceType == "radio")
-            .Select(item => item.SourceUrl)
-            .ToListAsync(cancellationToken);
-        return urls.Select(FavouriteSourceIdentity.NormalizeUrl).ToHashSet(StringComparer.Ordinal);
     }
 
     private sealed record Feedback(double AverageDwellRatio, double OverrideRate);

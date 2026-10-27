@@ -8,6 +8,12 @@ see [Releases](CONTRIBUTING.md#releases).
 
 ## [Unreleased]
 
+### Changed
+
+- FlyDJ no longer prefers stations that individual users marked as favourites.
+  Its listening prior now uses only shared listening history and FlyDJ's own
+  outcomes, since FlyDJ plays to a shared room.
+
 ## [1.1.0] - 2026-10-27
 
 ### Added
