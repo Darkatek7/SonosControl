@@ -201,6 +201,7 @@ Live check on 2026-10-27 with both speakers, 65 s each: 62 and 52 SOAP requests 
 - `docker-compose.hub.yml` only overrides the images and inherits the environment from `docker-compose.yml`, so it needed no change. `.env.example` documents the two new variables.
 - The smoke runner has four configurations now. The configured fixture runs with live events and expects external changes within 3 s. A new short polling configuration answers `SUBSCRIBE` with 501 and expects them within 10 s. On machines where the installed Chrome cannot start headless, `PLAYWRIGHT_CHROME_PATH` can point to Playwright's `chrome-headless-shell`.
 - Every configured speaker subscribes to topology events, because household membership is not known in advance. Only a changed group layout counts: the dispatcher compares a fingerprint of coordinators and members, ignores the first event of each subscription, and coalesces the reports of all speakers into one `RefreshNowAsync` after one second. Topology subscriptions do not count for speaker health.
+- An event can land while a probe runs and describe an older state than the probe read, for example a delayed Pause notification during the probe after a Play command. The event wins the generation check, and an evented speaker would then show the old state until the next reconciliation. The CI smoke run hit this once under load. `PlaybackSnapshotStore.IsSupersededByEvent` detects the case, and the monitor then probes that speaker once more. Confirmation probes never trigger further confirmations.
 
 ## Delivery
 
