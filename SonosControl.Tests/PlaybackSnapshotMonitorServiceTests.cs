@@ -54,6 +54,71 @@ public sealed class PlaybackSnapshotMonitorServiceTests
         public ValueTask DisposeAsync() => _provider.DisposeAsync();
     }
 
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The monitor did not reach the expected state.");
+            await Task.Delay(10);
+        }
+    }
+
+    [Fact]
+    public async Task ProbeThatLosesToAConcurrentEventIsConfirmedOnce()
+    {
+        await using var fixture = new EventedFixture(new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" });
+        await fixture.Monitor.PollOnceAsync();
+        var raced = 0;
+        // A delayed Pause event lands while the probe after a Play command reads PLAYING.
+        fixture.Connector.Setup(repo => repo.GetVolume("10.0.0.1", It.IsAny<CancellationToken>()))
+            .Callback(() =>
+            {
+                if (Interlocked.Increment(ref raced) == 1)
+                    fixture.Store.TryApplyEvent("10.0.0.1", current => current with { IsPlaying = false }, fixture.Time.GetUtcNow());
+            })
+            .ReturnsAsync(10);
+
+        await fixture.Monitor.RefreshNowAsync();
+        await WaitUntilAsync(() => fixture.Probes("10.0.0.1") == 3 && fixture.Store.Get("10.0.0.1")!.IsPlaying);
+
+        Assert.True(fixture.Store.Get("10.0.0.1")!.IsPlaying);
+        await Task.Delay(100);
+        Assert.Equal(3, fixture.Probes("10.0.0.1"));
+    }
+
+    [Fact]
+    public async Task ConfirmationProbesDoNotChainWhenEventsKeepRacing()
+    {
+        await using var fixture = new EventedFixture(new SonosSpeaker { Name = "Office", IpAddress = "10.0.0.1" });
+        await fixture.Monitor.PollOnceAsync();
+        fixture.Connector.Setup(repo => repo.GetVolume("10.0.0.1", It.IsAny<CancellationToken>()))
+            .Callback(() => fixture.Store.TryApplyEvent("10.0.0.1", current => current with { IsPlaying = false }, fixture.Time.GetUtcNow()))
+            .ReturnsAsync(10);
+
+        await fixture.Monitor.RefreshNowAsync();
+        await WaitUntilAsync(() => fixture.Probes("10.0.0.1") == 3);
+        await Task.Delay(200);
+
+        Assert.Equal(3, fixture.Probes("10.0.0.1"));
+    }
+
+    [Fact]
+    public void IsSupersededByEventOnlyReportsAnEventAsTheLatestWrite()
+    {
+        var store = new PlaybackSnapshotStore();
+        var now = DateTimeOffset.UtcNow;
+        store.Set(new PlaybackSnapshot("10.0.0.1", "Office", true, 20, null, null, false, now, now, null));
+        var probe = store.BeginProbe("10.0.0.1");
+        Assert.False(store.IsSupersededByEvent("10.0.0.1", probe));
+
+        store.TryApplyEvent("10.0.0.1", current => current, now);
+        Assert.True(store.IsSupersededByEvent("10.0.0.1", probe));
+
+        store.BeginProbe("10.0.0.1");
+        Assert.False(store.IsSupersededByEvent("10.0.0.1", probe));
+    }
+
     [Fact]
     public async Task EventedSpeakersAreOnlyReconciledWhilePolledSpeakersArePolledEveryCycle()
     {
